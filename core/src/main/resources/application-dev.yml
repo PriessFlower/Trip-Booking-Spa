@@ -125,5 +125,7 @@ aichotels:
     hotelList: /content/public/hotelinfo_list
     singleHotel: /content/public/single_hotel
     cityList: /content/public/city_list
+    roomsUrl: /content/public/hotel_rooms
+    availability: /rate/public/cache/room_availability
   apiClientKey: BaoShengTest
   secret: UBiz3ZX58INhgioxv9ToAK2VqbQRe3f3Fp8v

@@ -1,8 +1,10 @@
 package com.bingo.hotel.spa.intl.core.api.aichotels.bean.price.prebook;
 
+import com.bingo.hotel.spa.intl.core.api.common.asynchttp.BaseResponse;
+
 import java.util.List;
 
-public class PreBookResponse {
+public class PreBookResponse  implements BaseResponse {
 
     /**
      * result : {"return_status":{"success":"true","exception":""}}
@@ -26,6 +28,16 @@ public class PreBookResponse {
 
     public void setRoom_list(List<RoomListBean> room_list) {
         this.room_list = room_list;
+    }
+
+    @Override
+    public boolean isSucc() {
+        return true;
+    }
+
+    @Override
+    public boolean isEmptyResult() {
+        return false;
     }
 
     public static class ResultBean {
