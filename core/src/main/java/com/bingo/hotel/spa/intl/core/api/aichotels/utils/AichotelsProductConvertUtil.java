@@ -19,7 +19,7 @@ public class AichotelsProductConvertUtil {
         availabilityResponse.getRoom_list().forEach(roomVO ->
                 roomVO.getRates_and_cancellation_policies().forEach(productVO -> respDTOList.add(
                         ProductRespDTO.builder()
-                                .productId(productVO.getRate_plan_code())
+                                .productId(productVO.getRoom_key())
                                 .currencyType(productVO.getCurrency())
                                 .supplierId(SupplierSourceEnum.TRAVELCONNECT.getCode())
                                 .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomVO.getRoom_name()).build())
