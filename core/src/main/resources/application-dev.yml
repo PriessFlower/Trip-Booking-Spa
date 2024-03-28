@@ -1,0 +1,129 @@
+server:
+  port: 8081
+
+spring:
+  datasource:
+    host: 8.146.211.133
+    port: 3306
+    name: bg_admin
+    username: bystest
+    password: bystest
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries = true&nullCatalogMeansCurrent=true&serverTimezone=GMT%2B8
+  redis:
+    host: 8.146.211.133
+    port: 6379
+    password:
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 32
+        min-idle: 4
+  cloud:
+    nacos:
+      discovery:
+        server-addr: mse-00eb2a72-p.nacos-ans.mse.aliyuncs.com # Nacos 服务发现地址
+        access-key: LTAI5tGbuCAyu93gUo9abSDG
+        secret-key: cYPSEwvEB3jFhrEs5TikxOGc0NSldp
+      config:
+        server-addr: mse-00eb2a72-p.nacos-ans.mse.aliyuncs.com  # Nacos服务器地址
+        file-extension: yaml         # 配置文件格式
+        namespace: dev               # 命名空间ID，通常用于隔离不同的环境配置
+        group:         # 配置分组
+        prefix: bingo-hotel-spa-intl      # 配置前缀，通常是应用名
+
+  schedulerx2:
+    endpoint: acm.aliyun.com
+    namespace: 5da3a313-f372-45f4-af32-e5474a74a218
+    groupId: bingo-hotel-spa
+    appKey: daeI3PeZuBC6sPjh+IhuVg==
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus
+
+#apollo相关配置 开始#
+app:
+  # 与Apollo Portal上面创建的app id保持一致
+  id: hotel-spa
+# 项目启动时需要添加启动参数 -Denv=DEV 来指定 apollo环境
+apollo:
+  # 就是apollo config server的地址
+  meta: 8.146.211.133:8080
+  bootstrap:
+    # 是否开启 Apollo
+    enabled: true
+    eagerLoad:
+      # 将 Apollo 加载提到初始化日志系统之前，如果设置为false，则配置中心中修改日志信息不会生效
+      enabled: true
+    namespaces: application
+  cacheDir: ./config
+  # 刷新时间,单位：分钟，默认5
+  refreshInterval: 5
+#对应apollo配置中心环境
+env: dev
+#apollo相关配置 结束#
+
+rocketmq:
+  name-server: 8.146.211.133:9876
+  producer:
+    # 发送同一类消息的设置为同一个group，保证唯一
+    group: springboot_producer_group
+    # 发送消息超时时间，默认3000
+    sendMessageTimeout: 10000
+    # 发送消息失败重试次数，默认2
+    retryTimesWhenSendFailed: 2
+    # 异步消息重试此处，默认2
+    retryTimesWhenSendAsyncFailed: 2
+    # 消息最大长度，默认1024 * 1024 * 4(默认4M)
+    maxMessageSize: 4096
+    # 压缩消息阈值，默认4k(1024 * 4)
+    compressMessageBodyThreshold: 4096
+    # 是否在内部发送失败时重试另一个broker，默认false
+    retryNextServer: false
+
+    topic: test
+    #sync tag(同步消息tag)
+    sync-tag: sync-tags
+    #async tag(异步消息tag)
+    async-tag: async-tags
+    #oneway tag(单向消息tag)
+    oneway-tag: oneway-tags
+
+  consumer:
+    group: test
+    #监听主题
+    topic: test
+    # 一次拉取消息最大值，注意是拉取消息的最大值而非消费最大值
+    pull-batch-size: 10
+  hotel:
+    group: hotel_consumer_group
+    topic: hotel_order_topic
+  room:
+    group: room_consumer_group
+    topic: room_order_topic
+  product:
+    group: product_consumer_group
+    topic: product_order_topic
+
+  enhance:
+    # 启动隔离，用于激活配置类EnvironmentIsolationConfig
+    # 启动后会自动在topic上拼接激活的配置文件，达到自动隔离的效果
+    enabledIsolation: true
+    # 隔离环境名称，拼接到topic后，topic_dev，默认空字符串
+    environment: dev
+travelconnect:
+  url:
+    search: http://develop2.webapi.travelconnect.co/api/hotel/2c/search/zh-cn
+  companyId: TC0143
+  signKey: 81708dbaf8b23ca0cd2b8d36345534bf
+aichotels:
+  url:
+    host: https://api-uat.aichotels.net.cn
+    hotelList: /content/public/hotelinfo_list
+    singleHotel: /content/public/single_hotel
+    cityList: /content/public/city_list
+  apiClientKey: BaoShengTest
+  secret: UBiz3ZX58INhgioxv9ToAK2VqbQRe3f3Fp8v

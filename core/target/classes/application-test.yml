@@ -1,0 +1,206 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    host: 8.146.211.133
+    port: 3306
+    name: hotel_base_info
+    username: bystest
+    password: bystest
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries = true&nullCatalogMeansCurrent=true&serverTimezone=GMT%2B8
+  redis:
+    host: 8.146.211.133
+    port: 6379
+    password:
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 32
+        min-idle: 4
+  cloud:
+    nacos:
+      discovery:
+        # Nacos服务注册中心地址
+        server-addr: 10.18.0.8:8848
+        # 生产环境
+        namespace: dev
+        # Nacos 认证用户
+        username: nacos-test
+        # Nacos 认证密码
+        password: cde3vfr4
+        config:
+          # 是否开启配置中心 默认true
+          enabled: true
+          # 指定Nacos配置中心的地址
+          server-addr: 10.18.0.8:8848
+          # 区分环境：开发环境、测试环境、预发布环境、⽣产环境
+          namespace: dev
+          # 区分不同应⽤：同⼀个环境内，不同应⽤的配置，通过group来区分。
+          group: DEFAULT_GROUP
+          #指定yaml格式的配置 默认properties
+          file-extension: yaml
+          # 自动刷新配置文件,默认true
+          refresh-enabled: true
+          # Nacos 认证用户
+          username: nacos-test
+          # Nacos 认证密码
+          password: cde3vfr4
+          # 配置文件prefix
+          prefix: ${spring.application.name}
+
+  schedulerx2:
+    endpoint: acm.aliyun.com
+    namespace: 5da3a313-f372-45f4-af32-e5474a74a218
+    groupId: bingo-hotel-spa
+    appKey: daeI3PeZuBC6sPjh+IhuVg==
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus
+
+#apollo相关配置 开始#
+app:
+  # 与Apollo Portal上面创建的app id保持一致
+  id: hotel-spa
+# 项目启动时需要添加启动参数 -Denv=DEV 来指定 apollo环境
+apollo:
+  # 就是apollo config server的地址
+  meta: http://8.146.211.133:8080
+  bootstrap:
+    # 是否开启 Apollo
+    enabled: true
+    eagerLoad:
+      # 将 Apollo 加载提到初始化日志系统之前，如果设置为false，则配置中心中修改日志信息不会生效
+      enabled: true
+    namespaces: application
+  cacheDir: ./config
+  # 刷新时间,单位：分钟，默认5
+  refreshInterval: 5
+#对应apollo配置中心环境
+env: dev
+#apollo相关配置 结束#
+
+rocketmq:
+  name-server: 8.146.211.133:9876
+  producer:
+    # 发送同一类消息的设置为同一个group，保证唯一
+    group: springboot_producer_group
+    # 发送消息超时时间，默认3000
+    sendMessageTimeout: 10000
+    # 发送消息失败重试次数，默认2
+    retryTimesWhenSendFailed: 2
+    # 异步消息重试此处，默认2
+    retryTimesWhenSendAsyncFailed: 2
+    # 消息最大长度，默认1024 * 1024 * 4(默认4M)
+    maxMessageSize: 4096
+    # 压缩消息阈值，默认4k(1024 * 4)
+    compressMessageBodyThreshold: 4096
+    # 是否在内部发送失败时重试另一个broker，默认false
+    retryNextServer: false
+
+    topic: test
+    #sync tag(同步消息tag)
+    sync-tag: sync-tags
+    #async tag(异步消息tag)
+    async-tag: async-tags
+    #oneway tag(单向消息tag)
+    oneway-tag: oneway-tags
+
+  consumer:
+    group: test
+    #监听主题
+    topic: test
+    # 一次拉取消息最大值，注意是拉取消息的最大值而非消费最大值
+    pull-batch-size: 10
+  hotel:
+    group: hotel_consumer_group
+    topic: hotel_order_topic
+  room:
+    group: room_consumer_group
+    topic: room_order_topic
+  product:
+    group: product_consumer_group
+    topic: product_order_topic
+
+  enhance:
+    # 启动隔离，用于激活配置类EnvironmentIsolationConfig
+    # 启动后会自动在topic上拼接激活的配置文件，达到自动隔离的效果
+    enabledIsolation: true
+    # 隔离环境名称，拼接到topic后，topic_dev，默认空字符串
+    environment: dev
+
+meituan:
+  host:
+    v1: https://fenxiao.meituan.com/opdtor/api
+    v2: https://fenxiao.meituan.com/opdtor/api/v2
+  method:
+    list:
+      path: hotel.poi.list
+      qps: 10
+      maxId: 0
+      pageSize: 10
+      version: 1.0
+    detail:
+      path: hotel.content
+      qps: 20
+      version: 2.0
+    avail:
+      path: hotel.shopping.avail
+      qps: 10
+      version: 2.0
+    multi:
+      path: hotel.shopping.multi
+      qps: 20
+      version: 2.0
+    check:
+      path: hotel.order.check
+      qps: 7
+      version: 1.0
+    booking:
+      path: hotel.order.booking
+      qps: 30
+      version: 1.0
+    room:
+      path: hotel.realroom.content
+      qps: 20
+      version: 2.0
+    order:
+      path: hotel.order.query
+      qps: 30
+      version: 1.0
+    cancel:
+      path: hotel.order.cancel
+      qps: 20
+      version: 1.0
+
+  partner-id: 18437
+
+  change-queue:
+    page-size: 20
+
+  key:
+    public: 3c8862bc4cae512fbc8dc48e231a612b
+    secret: b2e021aba7127c1763ede65019688d4d
+
+  test: test
+  language-chinese: zh_CN
+
+fliggy:
+  cps:
+    url: http://gw.api.taobao.com/router/rest
+    partnerId: 01
+    appKey: 34470354
+    appSecret: 712037dd3e6c86a9513e944eaff9963f
+    activityId: sht_hotel_bgkj
+    positionId: 100000000008
+    fliggyAppKey: 10000008
+    userId: 179884109
+  distrib:
+    url: http://gw.api.taobao.com/router/rest
+    appKey: 34575916
+    appSecret: 5d0246c08dc97ea70e9c7713d88c6ccd
+    sessionKey: 610192381968790b2c79f0d13a258921b2686ff860e37bd2216491776181

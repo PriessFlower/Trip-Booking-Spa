@@ -1,0 +1,28 @@
+package com.bingo.hotel.spa.intl.core.redis;
+
+import org.redisson.api.RRateLimiter;
+import org.redisson.api.RateIntervalUnit;
+import org.redisson.api.RateType;
+import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import java.util.concurrent.TimeUnit;
+
+@Component
+public class DistributedRateLimiter {
+
+    @Autowired
+    private RedissonClient redissonClient;
+
+    public RRateLimiter getRateLimiter(String name, long rate, RateIntervalUnit unit, long rateInterval) {
+        RRateLimiter rateLimiter = redissonClient.getRateLimiter(name);
+        rateLimiter.trySetRate(RateType.OVERALL, rate, rateInterval, unit);
+        return rateLimiter;
+    }
+
+    public boolean tryAcquire(String name, long rate, RateIntervalUnit unit, long rateInterval,int timeOut) {
+        RRateLimiter rateLimiter = getRateLimiter(name, rate, unit, rateInterval);
+        return rateLimiter.tryAcquire(timeOut, TimeUnit.SECONDS);
+    }
+}

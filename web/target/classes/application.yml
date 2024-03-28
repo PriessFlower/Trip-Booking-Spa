@@ -1,0 +1,41 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: bingo-hotel-spa-intl
+  sleuth:
+    hystrix:
+      strategy:
+        enabled: false
+  profiles:
+    active: dev,mapper
+
+logging:
+  config: classpath:log4j2.xml
+  level:
+    root: info
+
+#------------------------------feignClient连接池------------------------------
+feign:
+  client:
+    config:
+      default:
+        # 连接超时时间（毫秒）
+        connectTimeout: 5000
+        # 读取超时时间（毫秒）
+        readTimeout: 5000
+
+        loggerLevel: FULL
+
+#-------------------------------prometheus开启健康检查端点--------------------------------------------------------------
+management:
+  endpoint:
+    health:
+      show-details: always
+    #可以关闭指定的端点
+    shutdown:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: "health,service-registry,prometheus,health-service"

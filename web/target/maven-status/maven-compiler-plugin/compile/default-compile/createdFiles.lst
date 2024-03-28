@@ -1,0 +1,10 @@
+com/bingo/hotel/spa/intl/rest/bean/PageBean.class
+com/bingo/hotel/spa/intl/rest/request/HotelInfoRequest.class
+com/bingo/hotel/spa/intl/rest/Bootstrap.class
+com/bingo/hotel/spa/intl/rest/controller/BackDoorController.class
+com/bingo/hotel/spa/intl/rest/dto/ChangeCallback.class
+com/bingo/hotel/spa/intl/rest/controller/CallbackController.class
+com/bingo/hotel/spa/intl/rest/feign/ContractFeignManager.class
+com/bingo/hotel/spa/intl/rest/common/HttpResponse.class
+com/bingo/hotel/spa/intl/rest/common/ContextConstants.class
+com/bingo/hotel/spa/intl/rest/exception/HotelBaseServiceErrorCode.class
