@@ -17,7 +17,8 @@ public class TravelConnectProductConvertUtil {
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
         searchResponse.getData().getHoteldetail().getRooms().forEach(productVO -> respDTOList.add(
                 ProductRespDTO.builder()
-                        .productId(productVO.getPlansid())
+                        .productId(buildProductId(productVO.getRoomid(), productVO.isIncludebreakfast() ? 1 : 0, productVO.getAdultcount(), productVO.getChildcount()))
+                        .planSession(productVO.getPlansid())
                         .currencyType(productVO.getCurrency())
                         .supplierId(SupplierSourceEnum.TRAVELCONNECT.getCode())
                         .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(productVO.getRoomname()).build())
@@ -29,6 +30,10 @@ public class TravelConnectProductConvertUtil {
                         .build()
         ));
         return respDTOList;
+    }
+
+    private static String buildProductId(String roomId, Integer breakfast, int adultCount, int childCount) {
+        return roomId + "_" + breakfast + "_" + adultCount + "_" + childCount;
     }
 
     public static List<PriceInfo> buildPriceInfos(String checkIn, String checkOut, double price) {

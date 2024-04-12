@@ -145,5 +145,4 @@ public class HotelFeignClientImpl implements SPAFeignClient {
 //        productPushService.pushPriceAndInventory(pushProductsReq.getPushProductsDTO());
         return ResponseDTO.success(null);
     }
-
 }

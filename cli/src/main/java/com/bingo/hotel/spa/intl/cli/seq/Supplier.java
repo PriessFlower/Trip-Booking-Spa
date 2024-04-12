@@ -17,4 +17,7 @@ public class Supplier {
     private String sHotelId;//供应商酒店列表
 
     private String sProductId;//供应商产品Id
+
+    private String sCityCode;
+
 }

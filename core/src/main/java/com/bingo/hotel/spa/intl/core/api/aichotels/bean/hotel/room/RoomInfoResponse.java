@@ -1,6 +1,5 @@
 package com.bingo.hotel.spa.intl.core.api.aichotels.bean.hotel.room;
 
-import com.bingo.hotel.info.intl.cli.request.BedInfoDTO;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.BaseResponse;
 
 import java.util.List;
@@ -98,7 +97,7 @@ public class RoomInfoResponse implements BaseResponse {
         private String room_size;
         private Object bed_info;
         private Integer nonsmoking;
-        private String amenities;
+        private Object amenities;
         private Object max_occupancy;
         private Integer window;
         private List<String> room_pics;
@@ -128,7 +127,7 @@ public class RoomInfoResponse implements BaseResponse {
             this.nonsmoking = nonsmoking;
         }
 
-        public void setAmenities(String amenities) {
+        public void setAmenities(Object amenities) {
             this.amenities = amenities;
         }
 
@@ -176,7 +175,7 @@ public class RoomInfoResponse implements BaseResponse {
             return nonsmoking;
         }
 
-        public String getAmenities() {
+        public Object getAmenities() {
             return amenities;
         }
 

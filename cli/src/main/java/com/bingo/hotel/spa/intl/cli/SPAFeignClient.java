@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
 
-@FeignClient(value = "bingo-hotel-spa",
+@FeignClient(value = "bingo-hotel-spa-intl",
         path = "/client/spa",
         fallbackFactory = SPAFeignClientFallbackFactory.class)
 public interface SPAFeignClient {

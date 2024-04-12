@@ -1,13 +1,13 @@
 <component name="libraryTable">
   <library name="Maven: com.bingo.hotel.info.intl:cli:0.0.1-SNAPSHOT">
     <CLASSES>
-      <root url="jar://$MAVEN_REPOSITORY$/com/bingo/hotel/info/intl/cli/0.0.1-SNAPSHOT/cli-0.0.1-20240322.071605-8.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/com/bingo/hotel/info/intl/cli/0.0.1-SNAPSHOT/cli-0.0.1-20240329.101107-13.jar!/" />
     </CLASSES>
     <JAVADOC>
-      <root url="jar://$MAVEN_REPOSITORY$/com/bingo/hotel/info/intl/cli/0.0.1-SNAPSHOT/cli-0.0.1-20240322.071605-8-javadoc.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/com/bingo/hotel/info/intl/cli/0.0.1-SNAPSHOT/cli-0.0.1-20240329.101107-13-javadoc.jar!/" />
     </JAVADOC>
     <SOURCES>
-      <root url="jar://$MAVEN_REPOSITORY$/com/bingo/hotel/info/intl/cli/0.0.1-SNAPSHOT/cli-0.0.1-20240322.071605-8-sources.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/com/bingo/hotel/info/intl/cli/0.0.1-SNAPSHOT/cli-0.0.1-20240329.101107-13-sources.jar!/" />
     </SOURCES>
   </library>
 </component>

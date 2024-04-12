@@ -23,7 +23,7 @@ public class AichotelsProductConvertUtil {
                                 .currencyType(productVO.getCurrency())
                                 .supplierId(SupplierSourceEnum.TRAVELCONNECT.getCode())
                                 .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomVO.getRoom_name()).build())
-                                .totalPrice((int) Double.parseDouble(productVO.getTotal_amount_after_tax()) * 100)
+                                .totalPrice((int) (Double.parseDouble(productVO.getTotal_amount_after_tax()) * 100))
                                 .hotelId(availabilityResponse.getHotelCode())
                                 .priceInfos(buildPriceInfos(productVO.getRates()))
                                 .meal(productVO.getBreakfast().getInclude() == 1 ? Meal.builder().count(productVO.getBreakfast().getCount()).build() : Meal.builder().count(0).build())
@@ -38,7 +38,7 @@ public class AichotelsProductConvertUtil {
         for (AvailabilityResponse.RoomListBean.RatesAndCancellationPoliciesBean.RatesBean ratesBean : ratesBeans) {
             PriceInfo priceInfo = PriceInfo.builder()
                     .date(ratesBean.getCheck_in())
-                    .price((int) Double.parseDouble(ratesBean.getAmount_after_tax().getNight_rate()) * 100)
+                    .price((int) (Double.parseDouble(ratesBean.getAmount_after_tax().getNight_rate()) * 100))
                     .build();
             priceInfos.add(priceInfo);
         }

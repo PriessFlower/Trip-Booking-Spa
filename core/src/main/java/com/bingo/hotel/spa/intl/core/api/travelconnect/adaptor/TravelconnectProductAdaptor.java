@@ -15,9 +15,16 @@ public class TravelconnectProductAdaptor {
             request.setSupplierId(10001);
             request.setSupplierHotelId(searchResponse.getData().getHoteldetail().getHotelcode());
             request.setSupplierRoomId(roomVo.getRoomid());
-            request.setSupplierProductId(roomVo.getPlansid());
+            request.setSupplierProductName(roomVo.getRoomname());
+            request.setBreakfast(roomVo.isIncludebreakfast() ? 1 : 0);
+            request.setCancelType(0);
+            request.setSupplierProductId(buildProductId(roomVo.getRoomid(),request.getBreakfast(),roomVo.getAdultcount(),roomVo.getChildcount()));
             list.add(request);
         });
         return list;
+    }
+
+    private static String buildProductId(String roomId, Integer breakfast, int adultCount, int childCount) {
+        return roomId + "_" + breakfast + "_" + adultCount + "_" + childCount;
     }
 }

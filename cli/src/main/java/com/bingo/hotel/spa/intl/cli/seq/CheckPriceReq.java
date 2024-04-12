@@ -25,4 +25,8 @@ public class CheckPriceReq {
     private Integer roomNum;//房间数量
     @NonNull
     private Integer totalPrice;//总价
+
+    private String planSession;
+
+    private String sCityCode;
 }

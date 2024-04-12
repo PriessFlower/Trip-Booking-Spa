@@ -5,7 +5,6 @@ import lombok.Builder;
 
 import java.util.List;
 
-@Builder
 public class PrebookResponse implements BaseResponse {
     private DataBean data;
     private int code;

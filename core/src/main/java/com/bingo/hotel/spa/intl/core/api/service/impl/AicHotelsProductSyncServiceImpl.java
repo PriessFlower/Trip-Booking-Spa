@@ -26,7 +26,6 @@ public class AicHotelsProductSyncServiceImpl extends AbstractProductSyncSupportS
 
     @Override
     public AvailabilityResponse querySupplierPrice(PriceReq priceReq, Supplier supplier) {
-
         return aichotelsHotelService.getHotelPrice(priceReq, supplier.getSHotelId());
     }
 

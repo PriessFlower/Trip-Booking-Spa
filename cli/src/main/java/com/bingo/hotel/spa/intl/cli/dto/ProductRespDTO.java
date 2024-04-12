@@ -14,6 +14,7 @@ public class ProductRespDTO {
     public String hotelId;
     public String productId;
     public Integer supplierId;
+    public String planSession;
     /**
      * 总价
      */

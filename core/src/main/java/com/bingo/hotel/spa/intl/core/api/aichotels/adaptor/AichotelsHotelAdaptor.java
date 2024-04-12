@@ -17,7 +17,8 @@ public class AichotelsHotelAdaptor {
         request.setSupplierHotelNameCN(singleHotelResponse.getHotel_data().getName());
         request.setAddress(singleHotelResponse.getHotel_data().getAddress_en());
         request.setAddressCN(singleHotelResponse.getHotel_data().getAddress());
-        request.setCountryCode(singleHotelResponse.getHotel_data().getCountry_name());
+        request.setCountryCode(singleHotelResponse.getHotel_data().getCountry_short());
+        request.setCountryName(singleHotelResponse.getHotel_data().getCountry_name());
         request.setCityId(singleHotelResponse.getHotel_data().getCity_id());
         request.setCityName(singleHotelResponse.getHotel_data().getCity_en());
         request.setCityNameCN(singleHotelResponse.getHotel_data().getCity());

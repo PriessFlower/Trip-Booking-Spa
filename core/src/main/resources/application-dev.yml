@@ -1,6 +1,12 @@
 server:
   port: 8081
-
+feign:
+  httpclient.enabled: true
+  client:
+    config:
+      default:
+        connect-timeout: 300000
+        readTimeout: 300000
 spring:
   datasource:
     host: 8.146.211.133
@@ -11,7 +17,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries = true&nullCatalogMeansCurrent=true&serverTimezone=GMT%2B8
   redis:
-    host: 8.146.211.133
+    host: localhost
     port: 6379
     password:
     lettuce:
@@ -117,15 +123,18 @@ rocketmq:
 travelconnect:
   url:
     search: http://develop2.webapi.travelconnect.co/api/hotel/2c/search/zh-cn
+    hotel: http://develop2.webapi.travelconnect.co/api/hotel/2c/hotel/detail
+    prebook: http://develop2.webapi.travelconnect.co/api/hotel/2c/order/prebook/zh-cn
   companyId: TC0143
   signKey: 81708dbaf8b23ca0cd2b8d36345534bf
 aichotels:
   url:
-    host: https://api-uat.aichotels.net.cn
+    host: https://api.aichotels.net.cn
     hotelList: /content/public/hotelinfo_list
     singleHotel: /content/public/single_hotel
     cityList: /content/public/city_list
     rooms: /content/public/hotel_rooms
     availability: /rate/public/cache/room_availability
-  apiClientKey: BaoShengTest
-  secret: UBiz3ZX58INhgioxv9ToAK2VqbQRe3f3Fp8v
+    prebook: /rate/public/booking/prebook
+  apiClientKey: BeijingBaosheng
+  secret: SRLxRgRXjjaPCWUbcWcwriusUNtpYe3VxRg9

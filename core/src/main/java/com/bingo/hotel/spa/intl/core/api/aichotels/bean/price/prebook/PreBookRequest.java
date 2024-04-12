@@ -1,7 +1,10 @@
 package com.bingo.hotel.spa.intl.core.api.aichotels.bean.price.prebook;
 
+import lombok.Builder;
+
 import java.util.List;
 
+@Builder
 public class PreBookRequest {
 
     /**

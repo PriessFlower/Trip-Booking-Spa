@@ -3,6 +3,8 @@ package com.bingo.hotel.spa.intl.cli.dto;
 
 import lombok.*;
 
+import java.util.List;
+
 @Getter
 @Setter
 @Builder
@@ -30,4 +32,14 @@ public class CheckPriceRespDTO {
      * 验价信息
      */
     private String message;
+
+    private Integer totalPriceAfter;
+
+    private Integer totalPriceBefore;
+
+    private String prebookToken;
+
+    private List<String> bedTypeCode;
+
+    private String plansId;
 }

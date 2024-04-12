@@ -18,7 +18,16 @@ public class SearchResponse implements BaseResponse {
     private String message;
     private String checkInDate;
     private String checkOutDate;
+    private String plansId;
     private PrebookResponse prebookResponse;
+
+    public String getPlansId() {
+        return plansId;
+    }
+
+    public void setPlansId(String plansId) {
+        this.plansId = plansId;
+    }
 
     public void setPrebookResponse(PrebookResponse prebookResponse) {
         this.prebookResponse = prebookResponse;
@@ -940,7 +949,7 @@ public class SearchResponse implements BaseResponse {
                  * awards : [{"awardtype":"sample string 1","displayname":"sample string 2","year":"sample string 3","tinyimgurl":"sample string 4","smallimgurl":"sample string 5","largeimgurl":"sample string 6"},{"awardtype":"sample string 1","displayname":"sample string 2","year":"sample string 3","tinyimgurl":"sample string 4","smallimgurl":"sample string 5","largeimgurl":"sample string 6"}]
                  */
 
-                private double rating;
+                private String rating;
                 private String ratingimgurl;
                 private int reviewcount;
                 private String reviewurl;
@@ -949,11 +958,11 @@ public class SearchResponse implements BaseResponse {
                 private RankingBean ranking;
                 private List<AwardsBean> awards;
 
-                public double getRating() {
+                public String getRating() {
                     return rating;
                 }
 
-                public void setRating(double rating) {
+                public void setRating(String rating) {
                     this.rating = rating;
                 }
 

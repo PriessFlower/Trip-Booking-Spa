@@ -23,9 +23,6 @@ public class TravelConnectProductSyncServiceImpl extends AbstractProductSyncSupp
 
     @Override
     public SearchResponse querySupplierPrice(PriceReq priceReq, Supplier supplier) {
-        if (StringUtils.isNotEmpty(supplier.getSProductId())) {
-            return travelconnectHotelService.checkPrice(priceReq, supplier.getSHotelId(), supplier.getSProductId());
-        }
         return travelconnectHotelService.getHotelPrice(priceReq, supplier.getSHotelId());
     }
 
