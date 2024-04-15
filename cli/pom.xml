@@ -5,14 +5,14 @@
     <parent>
         <groupId>com.bingo.hotel.spa.intl</groupId>
         <artifactId>supplier-product-adapter-intl</artifactId>
-        <version>0.0.1-SNAPSHOT</version>
+        <version>0.0.1</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
 
     <groupId>com.bingo.hotel.spa.intel</groupId>
     <artifactId>cli</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.1</version>
     <name>cli</name>
     <packaging>jar</packaging>
     <description>cli</description>

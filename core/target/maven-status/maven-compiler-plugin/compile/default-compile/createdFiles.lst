@@ -61,6 +61,7 @@ com/bingo/hotel/spa/intl/core/util/RedisKeyUtils.class
 com/bingo/hotel/spa/intl/core/api/travelconnect/bean/hotel/HotelDetailRequest.class
 com/bingo/hotel/spa/intl/core/util/DateFormatUtils$1.class
 com/bingo/hotel/spa/intl/core/api/common/constant/Constants.class
+com/bingo/hotel/spa/intl/core/api/aichotels/bean/price/prebook/PreBookRequest$PreBookRequestBuilder.class
 com/bingo/hotel/spa/intl/core/api/aichotels/access/PreBookAccess.class
 com/bingo/hotel/spa/intl/core/api/common/asynchttp/SupplierApiConstants.class
 com/bingo/hotel/spa/intl/core/api/aichotels/Encryption.class
@@ -119,6 +120,7 @@ com/bingo/hotel/spa/intl/core/api/travelconnect/bean/search/response/SearchRespo
 com/bingo/hotel/spa/intl/core/util/wx/vo/News.class
 com/bingo/hotel/spa/intl/core/api/service/impl/TravelConnectProductSyncServiceImpl.class
 com/bingo/hotel/spa/intl/core/mq/RocketProducer.class
+com/bingo/hotel/spa/intl/core/api/service/impl/AicHotelsCheckPriceServiceImpl.class
 com/bingo/hotel/spa/intl/core/api/service/BookingSyncService.class
 com/bingo/hotel/spa/intl/core/api/aichotels/bean/hotel/list/HotelListResponse.class
 com/bingo/hotel/spa/intl/core/api/travelconnect/bean/search/response/SearchResponse$DataBean$SpecialhotellistBean$TriptypesBeanXXX.class

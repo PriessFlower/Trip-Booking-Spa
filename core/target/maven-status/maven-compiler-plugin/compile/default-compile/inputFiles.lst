@@ -54,6 +54,7 @@
 /Users/baoys/bys/work/intl/hotel-spa-intl/core/src/main/java/com/bingo/hotel/spa/intl/core/api/common/exception/ParseException.java
 /Users/baoys/bys/work/intl/hotel-spa-intl/core/src/main/java/com/bingo/hotel/spa/intl/core/monitor/MonitorService.java
 /Users/baoys/bys/work/intl/hotel-spa-intl/core/src/main/java/com/bingo/hotel/spa/intl/core/api/common/enums/WindowTypeEnum.java
+/Users/baoys/bys/work/intl/hotel-spa-intl/core/src/main/java/com/bingo/hotel/spa/intl/core/api/service/impl/AicHotelsCheckPriceServiceImpl.java
 /Users/baoys/bys/work/intl/hotel-spa-intl/core/src/main/java/com/bingo/hotel/spa/intl/core/util/wx/SendMessageUtil.java
 /Users/baoys/bys/work/intl/hotel-spa-intl/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/adaptor/AichotelsProductAdaptor.java
 /Users/baoys/bys/work/intl/hotel-spa-intl/core/src/main/java/com/bingo/hotel/spa/intl/core/enums/ChannelEnum.java

@@ -6,12 +6,12 @@
     <parent>
         <groupId>com.bingo.hotel.spa.intl</groupId>
         <artifactId>supplier-product-adapter-intl</artifactId>
-        <version>0.0.1-SNAPSHOT</version>
+        <version>0.0.1</version>
     </parent>
     <!--api-->
     <groupId>com.bingo.hotel.spa.intl</groupId>
     <artifactId>web</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.1</version>
     <name>rest</name>
     <description>web</description>
 
@@ -114,7 +114,7 @@
         <dependency>
             <groupId>com.bingo.hotel.spa.intl</groupId>
             <artifactId>core</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
+            <version>0.0.1</version>
             <scope>compile</scope>
         </dependency>
 

@@ -5,13 +5,27 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="04717d26-bf34-45dc-a492-74b5520e8770" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/libraries/Maven__com_bingo_hotel_base_intl_cli_0_0_1_SNAPSHOT.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/libraries/Maven__com_bingo_hotel_base_intl_cli_0_0_1_SNAPSHOT.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/libraries/Maven__com_bingo_hotel_info_intl_cli_0_0_1_SNAPSHOT.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/libraries/Maven__com_bingo_hotel_info_intl_cli_0_0_1_SNAPSHOT.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config/hotel-spa/config-cache/hotel-spa+default+application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/config/hotel-spa/config-cache/hotel-spa+default+application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/Encryption.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/Encryption.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/adaptor/AichotelsProductAdaptor.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/adaptor/AichotelsProductAdaptor.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/adaptor/AichotelsRoomAdaptor.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/adaptor/AichotelsRoomAdaptor.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/service/impl/AichotelsHotelServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/service/impl/AichotelsHotelServiceImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/benchmark/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/benchmark/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/benchmark/target/benchmark-0.0.1-SNAPSHOT.jar" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/benchmark/target/maven-archiver/pom.properties" beforeDir="false" afterPath="$PROJECT_DIR$/benchmark/target/maven-archiver/pom.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cli/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/cli/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cli/target/maven-archiver/pom.properties" beforeDir="false" afterPath="$PROJECT_DIR$/cli/target/maven-archiver/pom.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/core.iml" beforeDir="false" afterPath="$PROJECT_DIR$/core/core.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/core/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/travelconnect/adaptor/TravelconnectRoomAdaptor.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/travelconnect/adaptor/TravelconnectRoomAdaptor.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/src/main/resources/application-prod.yml" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/resources/application-prod.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/target/classes/application-prod.yml" beforeDir="false" afterPath="$PROJECT_DIR$/core/target/classes/application-prod.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/target/maven-archiver/pom.properties" beforeDir="false" afterPath="$PROJECT_DIR$/core/target/maven-archiver/pom.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/core/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/core/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/web/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/target/classes/META-INF/build-info.properties" beforeDir="false" afterPath="$PROJECT_DIR$/web/target/classes/META-INF/build-info.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/target/maven-archiver/pom.properties" beforeDir="false" afterPath="$PROJECT_DIR$/web/target/maven-archiver/pom.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/target/web-0.0.1-SNAPSHOT.jar.original" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -255,7 +269,7 @@
       <workItem from="1713147854856" duration="1015000" />
       <workItem from="1713151272514" duration="1552000" />
       <workItem from="1713161382533" duration="8000" />
-      <workItem from="1713162562754" duration="11667000" />
+      <workItem from="1713162562754" duration="12868000" />
     </task>
     <servers />
   </component>

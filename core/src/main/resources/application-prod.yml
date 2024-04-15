@@ -3,15 +3,15 @@ server:
 
 spring:
   datasource:
-    host: pc-2ze1l4f34v5ql1rsu.rwlb.rds.aliyuncs.com
+    host: pc-2ze0t0vwxj392d111.mysql.polardb.rds.aliyuncs.com
     port: 3306
-    name: hotel_admin
-    username: admin_db_user
+    name: intl_bg_admin
+    username: dbadmin
     password: VvTUbbEp$D6uGiLDb
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries = true&nullCatalogMeansCurrent=true&serverTimezone=GMT%2B8
   redis:
-    host: r-2ze3m1fsvz6z4hpk2l.redis.rds.aliyuncs.com
+    host: r-2ze1teeyudubm0dw8u.redis.rds.aliyuncs.com
     port: 6379
     password:
     lettuce:
@@ -25,7 +25,7 @@ spring:
         # Nacos服务注册中心地址
         server-addr: 10.18.0.8:8848
         # 分组，不同分组之间不能调用，用于微服务之间的隔离
-        group: DEFAULT_GROUP
+        group: INTL
         # 生产环境
         namespace: prod
 
@@ -41,7 +41,7 @@ spring:
           # 区分环境：开发环境、测试环境、预发布环境、⽣产环境
           namespace: prod
           # 区分不同应⽤：同⼀个环境内，不同应⽤的配置，通过group来区分。
-          group: DEFAULT_GROUP
+          group: INTL
           #指定yaml格式的配置 默认properties
           file-extension: yaml
           # 自动刷新配置文件,默认true
@@ -56,8 +56,8 @@ spring:
   schedulerx2:
     endpoint: addr-bj-internal.edas.aliyun.com
     namespace: bcf3aaf8-8eca-459d-971e-ab8a3884eba0
-    groupId: bingo-hotel-spa
-    appKey: sgimis2A4mZTwbPTX+CmNQ==
+    groupId: bingo-hotel-spa-intl
+    appKey: YkeT7pKCVanNmiay6AGmrxg
 
 management:
   endpoints:
@@ -68,7 +68,7 @@ management:
 #apollo相关配置 开始#
 app:
   # 与Apollo Portal上面创建的app id保持一致
-  id: hotel-spa
+  id: hotel-spa-intl
 # 项目启动时需要添加启动参数 -Denv=DEV 来指定 apollo环境
 apollo:
   # 就是apollo config server的地址
@@ -86,142 +86,21 @@ apollo:
 #对应apollo配置中心环境
 env: prod
 #apollo相关配置 结束#
-
-rocketmq:
-  name-server: ep-2zeic261a507056922d5.epsrv-2ze9nhgmudbj2saxncjc.cn-beijing.privatelink.aliyuncs.com:8080
-  producer:
-    # 发送同一类消息的设置为同一个group，保证唯一
-    group: springboot_producer_group
-    access-key: VCfD8A4hmNR1a76u
-    secret-key: Ywuy4wocfP8f0O73
-    # 发送消息超时时间，默认3000
-    sendMessageTimeout: 10000
-    # 发送消息失败重试次数，默认2
-    retryTimesWhenSendFailed: 2
-    # 异步消息重试此处，默认2
-    retryTimesWhenSendAsyncFailed: 2
-    # 消息最大长度，默认1024 * 1024 * 4(默认4M)
-    maxMessageSize: 4096
-    # 压缩消息阈值，默认4k(1024 * 4)
-    compressMessageBodyThreshold: 4096
-    # 是否在内部发送失败时重试另一个broker，默认false
-    retryNextServer: false
-
-
-    topic: test
-    #sync tag(同步消息tag)
-    sync-tag: sync-tags
-    #async tag(异步消息tag)
-    async-tag: async-tags
-    #oneway tag(单向消息tag)
-    oneway-tag: oneway-tags
-
-  consumer:
-    group: GID_SPA_HOTEL
-    #监听主题
-    topic: HOTEL_BASE
-    # 一次拉取消息最大值，注意是拉取消息的最大值而非消费最大值
-    pull-batch-size: 20
-    access-key: VCfD8A4hmNR1a76u
-    secret-key: Ywuy4wocfP8f0O73
-  hotel:
-    group: GID_SPA_HOTEL
-    topic: HOTEL_BASE
-  room:
-    group: GID_SPA_HOTEL
-    topic: ROOM_BASE
-  product:
-    group: GID_SPA_HOTEL
-    topic: PRODUCT_INFO
-
-  enhance:
-    # 启动隔离，用于激活配置类EnvironmentIsolationConfig
-    # 启动后会自动在topic上拼接激活的配置文件，达到自动隔离的效果
-    enabledIsolation: true
-    # 隔离环境名称，拼接到topic后，topic_dev，默认空字符串
-    environment: PROD
-
-meituan:
-  host:
-    v1: https://fenxiao.meituan.com/opdtor/api
-    v2: https://fenxiao.meituan.com/opdtor/api/v2
-  method:
-    list:
-      path: hotel.poi.list
-      qps: 10
-      maxId: 0
-      pageSize: 10
-      version: 1.0
-    detail:
-      path: hotel.content
-      qps: 20
-      version: 2.0
-    avail:
-      path: hotel.shopping.avail
-      qps: 10
-      version: 2.0
-    multi:
-      path: hotel.shopping.multi
-      qps: 20
-      version: 2.0
-    check:
-      path: hotel.order.check
-      qps: 7
-      version: 1.0
-    booking:
-      path: hotel.order.booking
-      qps: 30
-      version: 1.0
-    room:
-      path: hotel.realroom.content
-      qps: 20
-      version: 2.0
-    order:
-      path: hotel.order.query
-      qps: 30
-      version: 1.0
-    cancel:
-      path: hotel.order.cancel
-      qps: 20
-      version: 1.0
-
-  partner-id: 18437
-
-  change-queue:
-    page-size: 20
-
-  key:
-    public: 1baedf399bfe62825c1afbbbf3da73b0
-    secret: 506537e9133c3374e34a81763693ae6b
-
-  test:
-  language-chinese: zh_CN
-  distrib:
-    hotelUrl: https://connectivity-adapter.meituan.com/link/notice/open/hotel
-    roomUrl: https://connectivity-adapter.meituan.com/link/notice/open/room
-    ratePlanUrl: https://connectivity-adapter.meituan.com/link/notice/open/rateplan
-    productUrl: https://connectivity-adapter.meituan.com/link/notice/open/product
-    availabilityUrl: https://connectivity-adapter.meituan.com/link/notice/open/availability
-    rateUrl: https://connectivity-adapter.meituan.com/link/notice/open/rate
-    inventoryUrl: https://connectivity-adapter.meituan.com/link/notice/open/inventory
-    secret: 1601ba07a8fd59581c7a427f406a6f04
-    partnerId: 4722859
-    clientId: lvyou_3171
-fliggy:
-  cps:
-    url: http://gw.api.taobao.com/router/rest
-    partnerId: 01
-    appKey: 34470354
-    appSecret: 712037dd3e6c86a9513e944eaff9963f
-    activityId: sht_hotel_bgkj
-    positionId: 100000000008
-    fliggyAppKey: 10000008
-    #    userId: 12200030e
-    userId: 179884109
-    orderUrl: http://build-order.bingotravel.com.cn/fliggy/buildorder
-    cancelUrl: http://build-order.bingotravel.com.cn/fliggy/cancelorder
-  distrib:
-    url: http://gw.api.taobao.com/router/rest
-    appKey: 34575916
-    appSecret: 5d0246c08dc97ea70e9c7713d88c6ccd
-    sessionKey: 610192381968790b2c79f0d13a258921b2686ff860e37bd2216491776181
+travelconnect:
+  url:
+    search: http://develop2.webapi.travelconnect.co/api/hotel/2c/search/zh-cn
+    hotel: http://develop2.webapi.travelconnect.co/api/hotel/2c/hotel/detail
+    prebook: http://develop2.webapi.travelconnect.co/api/hotel/2c/order/prebook/zh-cn
+  companyId: TC0143
+  signKey: 81708dbaf8b23ca0cd2b8d36345534bf
+aichotels:
+  url:
+    host: https://api.aichotels.net.cn
+    hotelList: /content/public/hotelinfo_list
+    singleHotel: /content/public/single_hotel
+    cityList: /content/public/city_list
+    rooms: /content/public/hotel_rooms
+    availability: /rate/public/cache/room_availability
+    prebook: /rate/public/booking/prebook
+  apiClientKey: BeijingBaosheng
+  secret: SRLxRgRXjjaPCWUbcWcwriusUNtpYe3VxRg9
