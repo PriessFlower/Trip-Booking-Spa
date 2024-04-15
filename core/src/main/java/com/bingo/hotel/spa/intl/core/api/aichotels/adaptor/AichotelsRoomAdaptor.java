@@ -25,6 +25,21 @@ public class AichotelsRoomAdaptor {
             request.setArea(roomVo.getRoom_size());
             request.setBedInfoList(convertBed((List<Map<String, Integer>>) roomVo.getBed_info()));
             request.setHasWindows(roomVo.getWindow() == -1 ? 2 : roomVo.getWindow());
+            if (roomVo.getNonsmoking() != null) {
+                switch (roomVo.getNonsmoking()) {
+                    case 0:
+                        request.setIsSmoking(1);
+                        break;
+                    case 1:
+                        request.setIsSmoking(0);
+                        break;
+                    case 2:
+                        request.setIsSmoking(2);
+                        break;
+                }
+            } else {
+                request.setIsSmoking(0);
+            }
             list.add(request);
         });
         return list;

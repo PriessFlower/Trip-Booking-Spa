@@ -19,7 +19,11 @@ public class AichotelsProductAdaptor {
                 request.setSupplierRoomId(roomListBean.getRoom_type());
                 request.setSupplierProductId(policiesBean.getRoom_key());
                 request.setSupplierProductName(roomListBean.getRoom_name());
-                request.setBreakfast(policiesBean.getBreakfast().getInclude());
+                if (policiesBean.getBreakfast().getInclude() == 0) {
+                    request.setBreakfast(0);
+                } else {
+                    request.setBreakfast(policiesBean.getBreakfast().getInclude());
+                }
                 request.setCancelType(0);
                 list.add(request);
             });

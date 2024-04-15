@@ -15,7 +15,7 @@ public class Encryption {
     public static void main(String[] args) {
         // 打印结果
         System.out.println(getDate());
-        System.out.println(generateSignature("GET", "/content/public/single_hotel/56479", getDate(), "UBiz3ZX58INhgioxv9ToAK2VqbQRe3f3Fp8v"));
+        System.out.println(generateSignature("POST", "/rate/public/search/room_availability", getDate(), "SRLxRgRXjjaPCWUbcWcwriusUNtpYe3VxRg9"));
     }
 
     public static String getDate() {

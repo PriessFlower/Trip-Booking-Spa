@@ -71,7 +71,6 @@ public class AichotelsHotelServiceImpl implements AichotelsHotelService {
 
     @Override
     public void getHotelCodeListByCity(String city) {
-        String date = Encryption.getDate();
 //        String cityApiClientToken = Encryption.generateSignature("GET", cityList + "/" + city, date, secret);
 //        ResponseResult<CityListResponse> cityResponse = new CityListAccess(host + cityList + "/" + city, apiClientKey, date, cityApiClientToken).access(null);
 ////        for (CityListResponse.CityListBean cityListBean : cityResponse.getData().getCity_list()) {
@@ -84,32 +83,30 @@ public class AichotelsHotelServiceImpl implements AichotelsHotelService {
 //        for (HotelListResponse.HotelinfoListBean hotelinfoListBean : response.getData().getHotelinfo_list()) {
         for (int i = 0; i < hotelIds.size(); i++) {
             String hotelId = hotelIds.get(i);
-            log.info("酒店数量：" + hotelIds.size());
-            String singleHotelApiClientToken = Encryption.generateSignature("GET", singleHotel + "/" + hotelId, date, secret);
-            ResponseResult<SingleHotelResponse> singleHotelResponse = new SingleHotelAccess(host + singleHotel + "/" + hotelId + "?" + "locale=zh_CN", apiClientKey, date, singleHotelApiClientToken).access(null);
-            request.addAll(AichotelsHotelAdaptor.transform(singleHotelResponse.getData()));
-            String roomClientToken = Encryption.generateSignature("GET", roomsUrl + "/" + hotelId, date, secret);
-            ResponseResult<RoomInfoResponse> roomInfoResponse = new RoomInfoAccess(host + roomsUrl + "/" + hotelId, apiClientKey, date, roomClientToken).access(null);
-            supplierRoomBaseRequest.addAll(AichotelsRoomAdaptor.transform(roomInfoResponse.getData(), hotelId + ""));
-            String productClientToken = Encryption.generateSignature("POST", availability, date, secret);
-            AvailabilityRequest availabilityRequest = AvailabilityRequest.builder()
-                    .check_in("2024-09-08")
-                    .check_out("2024-09-09")
-                    .hotel_id(Integer.parseInt(hotelId))
-                    .room_number(1)
-                    .adult_number(1)
-                    .kids_number(0).build();
-            ResponseResult<AvailabilityResponse> productResponse = new AvailabilityAccess(host + availability, apiClientKey, date, productClientToken).access(availabilityRequest);
-            supplierProductBaseRequests.addAll(AichotelsProductAdaptor.transform(productResponse.getData(), hotelId + ""));
-            log.info("剩余酒店数量：" + i);
+            try {
+                log.info("酒店数量：" + hotelIds.size());
+                String date = Encryption.getDate();
+                String singleHotelApiClientToken = Encryption.generateSignature("GET", singleHotel + "/" + hotelId, date, secret);
+                ResponseResult<SingleHotelResponse> singleHotelResponse = new SingleHotelAccess(host + singleHotel + "/" + hotelId + "?" + "locale=zh_CN", apiClientKey, date, singleHotelApiClientToken).access(null);
+                String roomClientToken = Encryption.generateSignature("GET", roomsUrl + "/" + hotelId, date, secret);
+                ResponseResult<RoomInfoResponse> roomInfoResponse = new RoomInfoAccess(host + roomsUrl + "/" + hotelId, apiClientKey, date, roomClientToken).access(null);
+                String productClientToken = Encryption.generateSignature("POST", availability, date, secret);
+                AvailabilityRequest availabilityRequest = AvailabilityRequest.builder()
+                        .check_in("2024-07-08")
+                        .check_out("2024-07-09")
+                        .hotel_id(Integer.parseInt(hotelId))
+                        .room_number(1)
+                        .adult_number(1)
+                        .kids_number(0).build();
+                ResponseResult<AvailabilityResponse> productResponse = new AvailabilityAccess(host + availability, apiClientKey, date, productClientToken).access(availabilityRequest);
+                InfoResult infoResult = hotelInfoIntlClient.saveHotelInfo(AichotelsHotelAdaptor.transform(singleHotelResponse.getData()));
+                InfoResult roomResult = hotelInfoIntlClient.saveRoomInfo(AichotelsRoomAdaptor.transform(roomInfoResponse.getData(), hotelId + ""));
+                InfoResult productResult = hotelInfoIntlClient.saveProductInfo(AichotelsProductAdaptor.transform(productResponse.getData(), hotelId + ""));
+                log.info("剩余酒店数量：" + i);
+            } catch (Exception e) {
+                log.error("拉取酒店数据失败：hotelID:{}", hotelId, e);
+            }
         }
-        log.info("推送酒店开始：");
-        InfoResult infoResult = hotelInfoIntlClient.saveHotelInfo(request);
-        log.info("推送房型开始：");
-        InfoResult roomResult = hotelInfoIntlClient.saveRoomInfo(supplierRoomBaseRequest);
-        log.info("推送产品开始：");
-        InfoResult productResult = hotelInfoIntlClient.saveProductInfo(supplierProductBaseRequests);
-//        }
     }
 
     @Override
