@@ -1,6 +1,5 @@
 package com.bingo.hotel.spa.intl.core.feign.impl;
 
-import com.bingo.hotel.rocketmq.util.JsonUtils;
 import com.bingo.hotel.spa.intl.cli.SPAFeignClient;
 import com.bingo.hotel.spa.intl.cli.dto.BookingRespDTO;
 import com.bingo.hotel.spa.intl.cli.dto.CancelRespDTO;
@@ -22,6 +21,7 @@ import com.bingo.hotel.spa.intl.core.api.service.CheckPriceSyncService;
 import com.bingo.hotel.spa.intl.core.api.service.OrderQuerySyncService;
 import com.bingo.hotel.spa.intl.core.api.service.ProductSyncService;
 import com.bingo.hotel.spa.intl.core.monitor.Monitor;
+import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.bingo.hotel.spa.intl.core.util.SpringAppContextUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
