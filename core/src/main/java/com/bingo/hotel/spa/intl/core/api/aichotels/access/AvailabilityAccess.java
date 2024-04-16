@@ -12,10 +12,12 @@ import com.bingo.hotel.spa.intl.core.api.common.exception.ParseException;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.google.common.collect.Maps;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 public class AvailabilityAccess extends BaseHttpAccess<AvailabilityRequest, AvailabilityResponse> {
     private String host;
 
@@ -42,6 +44,7 @@ public class AvailabilityAccess extends BaseHttpAccess<AvailabilityRequest, Avai
         headers.put("APIClientToken", apiClientToken);
         headers.put("Content-Type", "application/json");
         ResponseResult<AvailabilityResponse> result = HttpUtils.access(url, headers, JsonUtils.writeObject2Json(request), parser);
+        log.info("AicHotels de Availability response: " + JsonUtils.writeObject2Json(result));
         AvailabilityResponse response = result.getData();
         response.setHotelCode(request.getHotel_id() + "");
         result.setData(response);

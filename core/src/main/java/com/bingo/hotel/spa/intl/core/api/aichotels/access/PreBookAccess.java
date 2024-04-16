@@ -14,10 +14,12 @@ import com.bingo.hotel.spa.intl.core.api.common.exception.ParseException;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.google.common.collect.Maps;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 public class PreBookAccess extends BaseHttpAccess<PreBookRequest, PreBookResponse> {
     private String host;
 
@@ -44,6 +46,7 @@ public class PreBookAccess extends BaseHttpAccess<PreBookRequest, PreBookRespons
         headers.put("APIClientToken", apiClientToken);
         headers.put("Content-Type", "application/json");
         ResponseResult<PreBookResponse> result = HttpUtils.access(url, headers, JsonUtils.writeObject2Json(request), parser);
+        log.info("AicHotels de PreBook response: " + JsonUtils.writeObject2Json(result));
         return result;
     }
 

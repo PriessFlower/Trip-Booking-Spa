@@ -139,11 +139,4 @@ public class AichotelsHotelServiceImpl implements AichotelsHotelService {
         ResponseResult<PreBookResponse> preBookResponse = new PreBookAccess(host + prebook, apiClientKey, date, apiClientToken).access(preBookRequest);
         return preBookResponse.getData();
     }
-
-    public static void main(String[] args) {
-        String date = Encryption.getDate();
-        String apiClientToken = Encryption.generateSignature("GET", "/content/public/hotel_rooms/114312", date, "UBiz3ZX58INhgioxv9ToAK2VqbQRe3f3Fp8v");
-        ResponseResult<RoomInfoResponse> response = new RoomInfoAccess("https://api-uat.aichotels.net.cn/content/public/hotel_rooms/114312?locale=zh_CN", "BaoShengTest", date, apiClientToken).access(null);
-        System.out.println(JsonUtils.writeObject2Json(response));
-    }
 }
