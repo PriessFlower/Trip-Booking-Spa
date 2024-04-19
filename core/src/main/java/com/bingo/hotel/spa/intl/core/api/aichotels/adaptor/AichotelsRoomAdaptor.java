@@ -60,11 +60,13 @@ public class AichotelsRoomAdaptor {
                         bedInfoDTO.setBedType("8");
                         break;
                     case "Q":
-                    case "D":
                         bedInfoDTO.setBedType("1");
                         break;
+                    case "D":
+                        bedInfoDTO.setBedType("25");
+                        break;
                     case "T":
-                        bedInfoDTO.setBedType("2");
+                        bedInfoDTO.setBedType("3");
                         break;
                     default:
                         bedInfoDTO.setBedType("0");

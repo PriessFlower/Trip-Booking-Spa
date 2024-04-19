@@ -6,7 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="04717d26-bf34-45dc-a492-74b5520e8770" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/src/main/resources/application-prod.yml" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/resources/application-prod.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/adaptor/AichotelsRoomAdaptor.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/adaptor/AichotelsRoomAdaptor.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/travelconnect/adaptor/TravelconnectRoomAdaptor.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/travelconnect/adaptor/TravelconnectRoomAdaptor.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -253,7 +254,7 @@
       <workItem from="1713151272514" duration="1552000" />
       <workItem from="1713161382533" duration="8000" />
       <workItem from="1713162562754" duration="27515000" />
-      <workItem from="1713351742132" duration="5849000" />
+      <workItem from="1713351742132" duration="7713000" />
     </task>
     <servers />
   </component>

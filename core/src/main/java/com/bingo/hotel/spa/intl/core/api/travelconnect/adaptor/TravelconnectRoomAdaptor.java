@@ -45,16 +45,16 @@ public class TravelconnectRoomAdaptor {
     private static String getBedType(String bedType) {
         switch (bedType) {
             case "FullBed":
+            case "QueenBed":
+            case "DoubleBed":
                 return BedTypeAllEnum.LARGE_BED.getValue() + "";
             case "TwinBed":
             case "TwinXLBed":
                 return BedTypeAllEnum.TWIN_BED.getValue() + "";
             case "BunkBed":
                 return BedTypeAllEnum.BUNK_BED.getValue() + "";
-            case "QueenBed":
-                return BedTypeAllEnum.EXTRA_LARGE_BED.getValue() + "";
             case "KingBed":
-                return BedTypeAllEnum.SUPER_LARGE_BED.getValue() + "";
+                return BedTypeAllEnum.EXTRA_LARGE_BED.getValue() + "";
             case "SofaBed":
                 return BedTypeAllEnum.SOFA_BED.getValue() + "";
             default:
