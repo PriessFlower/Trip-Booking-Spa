@@ -60,7 +60,7 @@ public class TravelconnectHotelServiceImpl implements TravelconnectHotelService 
         int pageNum = 1;
         while (true) {
             SearchRequest hotelInfoReq = new SearchRequest();
-            hotelInfoReq.setCitycode("184245");
+            hotelInfoReq.setCitycode(city);
             hotelInfoReq.setCheckindate("2024-07-14 00:00:00");
             hotelInfoReq.setCheckoutdate("2024-07-15 00:00:00");
             hotelInfoReq.setRoomorders(List.of(Roomorders.builder().adultcount(2).build()));
@@ -78,7 +78,7 @@ public class TravelconnectHotelServiceImpl implements TravelconnectHotelService 
             List<SupplierHotelBaseRequest> supplierHotelBaseRequests = TravelconnectHotelAdaptor.transform(hotelDetailResponse.getData());
             InfoResult infoResult = hotelInfoIntlClient.saveHotelInfo(supplierHotelBaseRequests);
             for (SearchResponse.DataBean.PagehotellistBean.DataListBean dataListBean : response.getData().getData().getPagehotellist().getData_list()) {
-                hotelInfoReq.setCitycode("184245");
+                hotelInfoReq.setCitycode(city);
                 hotelInfoReq.setHotelcodes(List.of(dataListBean.getHotelcode()));
                 hotelInfoReq.setCheckindate("2024-07-14 00:00:00");
                 hotelInfoReq.setCheckoutdate("2024-07-15 00:00:00");
