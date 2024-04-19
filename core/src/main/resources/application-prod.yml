@@ -100,7 +100,7 @@ aichotels:
     singleHotel: /content/public/single_hotel
     cityList: /content/public/city_list
     rooms: /content/public/hotel_rooms
-    availability: /rate/public/cache/room_availability
+    availability: /rate/public/search/room_availability
     prebook: /rate/public/booking/prebook
   apiClientKey: BeijingBaosheng
   secret: SRLxRgRXjjaPCWUbcWcwriusUNtpYe3VxRg9
