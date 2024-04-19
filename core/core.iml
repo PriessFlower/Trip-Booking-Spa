@@ -181,7 +181,7 @@
     <orderEntry type="library" name="Maven: org.jodd:jodd-bean:5.1.6" level="project" />
     <orderEntry type="library" name="Maven: org.jodd:jodd-core:5.1.6" level="project" />
     <orderEntry type="library" name="Maven: org.redisson:redisson-spring-data-27:3.18.0" level="project" />
-    <orderEntry type="library" name="Maven: com.bingo.hotel.spa.intel:cli:0.0.1" level="project" />
+    <orderEntry type="module" module-name="cli" />
     <orderEntry type="library" name="Maven: com.aliyun:alibaba-dingtalk-service-sdk:2.0.0" level="project" />
     <orderEntry type="library" name="Maven: log4j:log4j:1.2.15" level="project" />
     <orderEntry type="library" name="Maven: javax.mail:mail:1.4" level="project" />

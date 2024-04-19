@@ -9,10 +9,13 @@ import com.bingo.hotel.spa.intl.core.api.common.enums.MonitorNameEnum;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierDataTypeEnum;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.common.exception.ParseException;
+import com.bingo.hotel.spa.intl.core.exception.RedisLimitException;
+import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RateIntervalUnit;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -27,13 +30,19 @@ public class AvailabilityAccess extends BaseHttpAccess<AvailabilityRequest, Avai
 
     private String apiClientToken;
 
-    public AvailabilityAccess(String host, String apiClientKey, String Date, String apiClientToken) {
+    private DistributedRateLimiter redisRateLimiter;
+
+    private static int QPS = 30;
+
+    public AvailabilityAccess(String host, String apiClientKey, String Date, String apiClientToken,
+                              DistributedRateLimiter redisRateLimiter) {
         super(SupplierSourceEnum.TRAVELCONNECT, SupplierDataTypeEnum.STATIC_DATA,
                 MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_INFO, 0);
         this.host = host;
         this.apiClientKey = apiClientKey;
         this.date = Date;
         this.apiClientToken = apiClientToken;
+        this.redisRateLimiter = redisRateLimiter;
     }
 
     @Override
@@ -53,7 +62,10 @@ public class AvailabilityAccess extends BaseHttpAccess<AvailabilityRequest, Avai
 
     @Override
     protected void beforeAccess(AvailabilityRequest request) {
-
+        if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
+            throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
+                    + "request = " + JsonUtils.writeObject2Json(request));
+        }
     }
 
     @Override

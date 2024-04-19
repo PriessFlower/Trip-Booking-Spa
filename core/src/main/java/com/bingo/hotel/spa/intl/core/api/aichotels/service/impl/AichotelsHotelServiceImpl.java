@@ -29,6 +29,7 @@ import com.bingo.hotel.spa.intl.core.api.aichotels.service.AichotelsHotelService
 import com.bingo.hotel.spa.intl.core.api.aichotels.utils.AichotelsProductConvertUtil;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.bean.search.response.SearchResponse;
+import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.compress.utils.Lists;
@@ -68,6 +69,8 @@ public class AichotelsHotelServiceImpl implements AichotelsHotelService {
     String secret;
     @Autowired
     private HotelInfoIntlClient hotelInfoIntlClient;
+    @Autowired
+    private DistributedRateLimiter rateLimiter;
 
     @Override
     public void getHotelCodeListByCity(String city) {
@@ -98,7 +101,7 @@ public class AichotelsHotelServiceImpl implements AichotelsHotelService {
                         .room_number(1)
                         .adult_number(1)
                         .kids_number(0).build();
-                ResponseResult<AvailabilityResponse> productResponse = new AvailabilityAccess(host + availability, apiClientKey, date, productClientToken).access(availabilityRequest);
+                ResponseResult<AvailabilityResponse> productResponse = new AvailabilityAccess(host + availability, apiClientKey, date, productClientToken,rateLimiter).access(availabilityRequest);
                 InfoResult infoResult = hotelInfoIntlClient.saveHotelInfo(AichotelsHotelAdaptor.transform(singleHotelResponse.getData()));
                 InfoResult roomResult = hotelInfoIntlClient.saveRoomInfo(AichotelsRoomAdaptor.transform(roomInfoResponse.getData(), hotelId + ""));
                 InfoResult productResult = hotelInfoIntlClient.saveProductInfo(AichotelsProductAdaptor.transform(productResponse.getData(), hotelId + ""));
@@ -120,7 +123,7 @@ public class AichotelsHotelServiceImpl implements AichotelsHotelService {
                 .room_number(priceReq.getRoomNum())
                 .adult_number(priceReq.getAdultNum())
                 .kids_number(priceReq.getChildNum()).build();
-        ResponseResult<AvailabilityResponse> roomInfoResponse = new AvailabilityAccess(host + availability, apiClientKey, date, apiClientToken).access(availabilityRequest);
+        ResponseResult<AvailabilityResponse> roomInfoResponse = new AvailabilityAccess(host + availability, apiClientKey, date, apiClientToken,rateLimiter).access(availabilityRequest);
         return roomInfoResponse.getData();
     }
 
