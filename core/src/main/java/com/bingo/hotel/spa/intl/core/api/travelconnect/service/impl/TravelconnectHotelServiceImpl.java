@@ -144,18 +144,4 @@ public class TravelconnectHotelServiceImpl implements TravelconnectHotelService 
         searchResponse.setPrebookResponse(prebookResponse.getData());
         return searchResponse;
     }
-
-    public static void main(String[] args) {
-        SearchRequest hotelInfoReq = new SearchRequest();
-        hotelInfoReq.setCitycode("184245");
-        hotelInfoReq.setHotelcodes(List.of("750771"));
-        hotelInfoReq.setCheckindate("2024-07-14");
-        hotelInfoReq.setCheckoutdate("2024-07-15");
-        hotelInfoReq.setRoomorders(List.of(Roomorders.builder().adultcount(2).build()));
-        hotelInfoReq.setPageindex(1);
-        hotelInfoReq.setPagesize(10);
-        hotelInfoReq.setClientcurrency("HKD");
-        ResponseResult<SearchResponse> response = new SearchAccess("http://develop2.webapi.travelconnect.co/api/hotel/2c/search/zh-hk", "TC0143", "81708dbaf8b23ca0cd2b8d36345534bf").access(hotelInfoReq);
-        System.out.println(JsonUtils.writeObject2Json(response));
-    }
 }
