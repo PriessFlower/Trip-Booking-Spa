@@ -131,7 +131,7 @@ public class TravelconnectHotelServiceImpl implements TravelconnectHotelService 
         List<ProductRespDTO> respDTOList = TravelConnectProductConvertUtil.convertRatePlanVO(singleHotelResponse.getData());
         ProductRespDTO productRespDTO = respDTOList.stream().filter(productResp -> productResp.getProductId().equals(priceReq.getSProductId())).findFirst().orElse(null);
         PrebookRequest prebookRequest = new PrebookRequest();
-        prebookRequest.setCitycode("184245");
+        prebookRequest.setCitycode(priceReq.getSCityCode());
         prebookRequest.setHotelcode(priceReq.getSHotelId());
         prebookRequest.setCheckindate(priceReq.getCheckIn());
         prebookRequest.setCheckoutdate(priceReq.getCheckOut());

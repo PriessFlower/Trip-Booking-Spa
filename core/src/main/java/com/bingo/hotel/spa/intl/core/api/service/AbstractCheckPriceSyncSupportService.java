@@ -31,7 +31,7 @@ public abstract class AbstractCheckPriceSyncSupportService<T> implements CheckPr
             }
             return respDTO;
         } catch (Exception e) {
-            log.error("CheckPriceSyncService is error e:{}", e);
+            log.error("CheckPriceSyncService is error e:", e);
             return null;
         }
     }

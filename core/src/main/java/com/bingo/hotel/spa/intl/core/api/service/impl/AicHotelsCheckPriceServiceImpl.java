@@ -29,6 +29,12 @@ public class AicHotelsCheckPriceServiceImpl extends AbstractCheckPriceSyncSuppor
 
     @Override
     public CheckPriceRespDTO checkPriceRespConvert(PreBookResponse searchResponse) {
+        if (searchResponse.getResult().getReturn_status().getSuccess().equals("false")) {
+            return CheckPriceRespDTO.builder()
+                    .checkStatus(false)
+                    .message(searchResponse.getResult().getReturn_status().getException())
+                    .build();
+        }
         return CheckPriceRespDTO.builder()
                 .checkStatus(true)
                 .prebookToken(searchResponse.getRoom_list().get(0).getRates_and_cancellation_policies().get(0).getRoom_key())
