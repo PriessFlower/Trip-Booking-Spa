@@ -21,7 +21,7 @@ public class AichotelsProductConvertUtil {
                         ProductRespDTO.builder()
                                 .productId(productVO.getRoom_key())
                                 .currencyType(productVO.getCurrency())
-                                .supplierId(SupplierSourceEnum.TRAVELCONNECT.getCode())
+                                .supplierId(SupplierSourceEnum.AICHOTELS.getCode())
                                 .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomVO.getRoom_name()).build())
                                 .totalPrice((int) (Double.parseDouble(productVO.getTotal_amount_after_tax()) * 100))
                                 .hotelId(availabilityResponse.getHotelCode())
