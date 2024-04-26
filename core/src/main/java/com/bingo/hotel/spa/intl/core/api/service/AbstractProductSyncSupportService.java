@@ -15,6 +15,7 @@ public abstract class AbstractProductSyncSupportService<T> implements ProductSyn
     @Override
     public List<ProductRespDTO> queryPrice(PriceReq priceReq, Supplier supplier) {
         try {
+            long start = System.currentTimeMillis();
             T t = querySupplierPrice(priceReq, supplier);
 
             if (t == null) {
@@ -22,9 +23,9 @@ public abstract class AbstractProductSyncSupportService<T> implements ProductSyn
                         JsonUtils.writeObject2Json(priceReq), JsonUtils.writeObject2Json(supplier));
                 return null;
             }
-            log.info("ProductSyncService priceReq : {},supplier : {}",
+            log.info("ProductSyncService priceReq : {},supplier : {},useTime:{}",
                     JsonUtils.writeObject2Json(priceReq),
-                    JsonUtils.writeObject2Json(supplier));
+                    JsonUtils.writeObject2Json(supplier), System.currentTimeMillis() - start);
             List<ProductRespDTO> list = productRespConvert(t);
             if (CollectionUtils.isEmpty(list)) {
                 log.error("ProductSyncService productRespConvert is null,priceReq : {},supplier : {} T : {}", JsonUtils.writeObject2Json(priceReq),
