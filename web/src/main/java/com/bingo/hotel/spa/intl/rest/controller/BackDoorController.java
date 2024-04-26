@@ -24,9 +24,12 @@ public class BackDoorController {
 
     @GetMapping("/push")
     @ApiOperation("HotelList查询")
-    public HttpResponse meituanHotelList(@RequestParam("cityId") String cityId) {
+    public HttpResponse meituanHotelList(@RequestParam("cityId") String cityId,
+                                         @RequestParam("checkIn") String checkIn,
+                                         @RequestParam("checkOut") String checkOut
+    ) {
         System.out.println("push");
-        travelconnectHotelService.getHotelCodeListByCity(cityId);
+        travelconnectHotelService.getHotelCodeListByCity(cityId, checkIn, checkOut);
         return HttpResponse.getSuccessInstance();
     }
 
