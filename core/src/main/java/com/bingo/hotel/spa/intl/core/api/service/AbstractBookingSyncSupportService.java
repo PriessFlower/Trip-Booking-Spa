@@ -29,7 +29,7 @@ public abstract class AbstractBookingSyncSupportService<T> implements BookingSyn
 
             return bookingRespDTO;
         } catch (Exception e) {
-            log.error("BookingSyncService is error e:{}", e.toString());
+            log.error("BookingSyncService is error e:", e);
             return null;
         }
 

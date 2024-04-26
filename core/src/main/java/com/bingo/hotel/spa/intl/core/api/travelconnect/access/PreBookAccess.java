@@ -24,7 +24,7 @@ public class PreBookAccess extends BaseHttpAccess<PrebookRequest, PrebookRespons
 
     public PreBookAccess(String host, String companyId, String signKey) {
         super(SupplierSourceEnum.TRAVELCONNECT, SupplierDataTypeEnum.CHECK_PRICE,
-                MonitorNameEnum.SPA_SUPPLIER_API_PRODUCT_PRICE, 0);
+                MonitorNameEnum.SPA_SUPPLIER_API_ORDER_PRICE, 0);
         this.host = host;
         this.companyId = companyId;
         this.signKey = signKey;

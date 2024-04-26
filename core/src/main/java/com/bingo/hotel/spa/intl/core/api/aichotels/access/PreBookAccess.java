@@ -30,8 +30,8 @@ public class PreBookAccess extends BaseHttpAccess<PreBookRequest, PreBookRespons
     private String apiClientToken;
 
     public PreBookAccess(String host, String apiClientKey, String Date, String apiClientToken) {
-        super(SupplierSourceEnum.TRAVELCONNECT, SupplierDataTypeEnum.STATIC_DATA,
-                MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_INFO, 0);
+        super(SupplierSourceEnum.AICHOTELS, SupplierDataTypeEnum.CHECK_PRICE,
+                MonitorNameEnum.SPA_SUPPLIER_API_ORDER_PRICE, 0);
         this.host = host;
         this.apiClientKey = apiClientKey;
         this.date = Date;

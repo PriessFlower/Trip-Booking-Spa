@@ -30,7 +30,7 @@ public abstract class AbstractCancelSyncSupportService<T> implements CancelSyncS
             return cancelRespDTO;
 
         } catch (Exception e) {
-            log.error("CancelSyncService is error e:{}", e.toString());
+            log.error("CancelSyncService is error e:", e);
             return null;
         }
     }

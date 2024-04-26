@@ -88,11 +88,11 @@ env: prod
 #apollo相关配置 结束#
 travelconnect:
   url:
-    search: http://develop2.webapi.travelconnect.co/api/hotel/2c/search/zh-cn
-    hotel: http://develop2.webapi.travelconnect.co/api/hotel/2c/hotel/detail
-    prebook: http://develop2.webapi.travelconnect.co/api/hotel/2c/order/prebook/zh-cn
+    search: https://b2c-nanhwa.travelconnect.co//api/hotel/2c/search/zh-cn
+    hotel: https://b2c-nanhwa.travelconnect.co//api/hotel/2c/hotel/detail
+    prebook: https://b2c-nanhwa.travelconnect.co//api/hotel/2c/order/prebook/zh-cn
   companyId: TC0143
-  signKey: 81708dbaf8b23ca0cd2b8d36345534bf
+  signKey: 02706c54a917a6940cdf3f283a860e58
 aichotels:
   url:
     host: https://api.aichotels.net.cn
@@ -100,7 +100,7 @@ aichotels:
     singleHotel: /content/public/single_hotel
     cityList: /content/public/city_list
     rooms: /content/public/hotel_rooms
-    availability: /rate/public/cache/room_availability
+    availability: /rate/public/search/room_availability
     prebook: /rate/public/booking/prebook
   apiClientKey: BeijingBaosheng
   secret: SRLxRgRXjjaPCWUbcWcwriusUNtpYe3VxRg9

@@ -27,7 +27,7 @@ public class SingleHotelAccess extends BaseHttpAccess<SearchRequest, SingleHotel
     private String apiClientToken;
 
     public SingleHotelAccess(String host, String apiClientKey, String Date, String apiClientToken) {
-        super(SupplierSourceEnum.TRAVELCONNECT, SupplierDataTypeEnum.STATIC_DATA,
+        super(SupplierSourceEnum.AICHOTELS, SupplierDataTypeEnum.STATIC_DATA,
                 MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_INFO, 0);
         this.host = host;
         this.apiClientKey = apiClientKey;

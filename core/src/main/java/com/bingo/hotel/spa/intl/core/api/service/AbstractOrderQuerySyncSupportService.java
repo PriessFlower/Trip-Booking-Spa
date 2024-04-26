@@ -29,7 +29,7 @@ public abstract class AbstractOrderQuerySyncSupportService<T> implements OrderQu
 
             return orderQueryRespDTO;
         } catch (Exception e) {
-            log.error("OrderQuerySyncService is error e:{}", e.toString());
+            log.error("OrderQuerySyncService is error e:", e);
             return null;
         }
     }

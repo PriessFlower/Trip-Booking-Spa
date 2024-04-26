@@ -27,8 +27,8 @@ public class HotelListAccess extends BaseHttpAccess<SearchRequest, HotelListResp
     private String apiClientToken;
 
     public HotelListAccess(String host, String apiClientKey, String date, String apiClientToken) {
-        super(SupplierSourceEnum.TRAVELCONNECT, SupplierDataTypeEnum.STATIC_DATA,
-                MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_INFO, 0);
+        super(SupplierSourceEnum.AICHOTELS, SupplierDataTypeEnum.STATIC_DATA,
+                MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_LIST, 0);
         this.host = host;
         this.apiClientKey = apiClientKey;
         this.date = date;

@@ -23,8 +23,8 @@ public class SearchAccess extends BaseHttpAccess<SearchRequest, SearchResponse> 
     private String signKey;
 
     public SearchAccess(String host, String companyId, String signKey) {
-        super(SupplierSourceEnum.TRAVELCONNECT, SupplierDataTypeEnum.STATIC_DATA,
-                MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_INFO, 0);
+        super(SupplierSourceEnum.TRAVELCONNECT, SupplierDataTypeEnum.PRODUCT_PRICE,
+                MonitorNameEnum.SPA_SUPPLIER_API_PRODUCT_PRICE, 0);
         this.host = host;
         this.companyId = companyId;
         this.signKey = signKey;

@@ -27,8 +27,8 @@ public class CityListAccess extends BaseHttpAccess<SearchRequest, CityListRespon
     private String apiClientToken;
 
     public CityListAccess(String host, String apiClientKey, String Date, String apiClientToken) {
-        super(SupplierSourceEnum.TRAVELCONNECT, SupplierDataTypeEnum.STATIC_DATA,
-                MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_INFO, 0);
+        super(SupplierSourceEnum.AICHOTELS, SupplierDataTypeEnum.STATIC_DATA,
+                MonitorNameEnum.SPA_SUPPLIER_API_CITY, 0);
         this.host = host;
         this.apiClientKey = apiClientKey;
         this.date = Date;
