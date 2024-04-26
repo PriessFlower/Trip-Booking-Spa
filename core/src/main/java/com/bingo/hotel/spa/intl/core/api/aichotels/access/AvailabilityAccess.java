@@ -53,7 +53,6 @@ public class AvailabilityAccess extends BaseHttpAccess<AvailabilityRequest, Avai
         headers.put("APIClientToken", apiClientToken);
         headers.put("Content-Type", "application/json");
         ResponseResult<AvailabilityResponse> result = HttpUtils.access(url, headers, JsonUtils.writeObject2Json(request), parser);
-        log.info("AicHotels de Availability response: " + JsonUtils.writeObject2Json(result));
         AvailabilityResponse response = result.getData();
         response.setHotelCode(request.getHotel_id() + "");
         result.setData(response);
