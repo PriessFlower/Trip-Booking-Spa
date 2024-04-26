@@ -52,7 +52,9 @@ public class AvailabilityAccess extends BaseHttpAccess<AvailabilityRequest, Avai
         headers.put("Date", date);
         headers.put("APIClientToken", apiClientToken);
         headers.put("Content-Type", "application/json");
+        long start = System.currentTimeMillis();
         ResponseResult<AvailabilityResponse> result = HttpUtils.access(url, headers, JsonUtils.writeObject2Json(request), parser);
+        log.info("美联查询接口耗时：{}", System.currentTimeMillis() - start);
         AvailabilityResponse response = result.getData();
         response.setHotelCode(request.getHotel_id() + "");
         result.setData(response);

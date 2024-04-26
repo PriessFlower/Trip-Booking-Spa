@@ -45,8 +45,9 @@ public class PreBookAccess extends BaseHttpAccess<PreBookRequest, PreBookRespons
         headers.put("Date", date);
         headers.put("APIClientToken", apiClientToken);
         headers.put("Content-Type", "application/json");
+        long start = System.currentTimeMillis();
         ResponseResult<PreBookResponse> result = HttpUtils.access(url, headers, JsonUtils.writeObject2Json(request), parser);
-        log.info("AicHotels de PreBook response: " + JsonUtils.writeObject2Json(result));
+        log.info("AicHotels de PreBook response: {},UseTime:{}", JsonUtils.writeObject2Json(result), System.currentTimeMillis() - start);
         return result;
     }
 

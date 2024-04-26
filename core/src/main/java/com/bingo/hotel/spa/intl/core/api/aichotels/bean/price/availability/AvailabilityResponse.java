@@ -1,5 +1,6 @@
 package com.bingo.hotel.spa.intl.core.api.aichotels.bean.price.availability;
 
+import com.bingo.hotel.spa.intl.core.api.aichotels.bean.price.prebook.PreBookResponse;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.BaseResponse;
 
 import java.util.List;
@@ -14,6 +15,15 @@ public class AvailabilityResponse  implements BaseResponse {
     private ResultBean result;
     private List<RoomListBean> room_list;
     private String hotelCode;
+    private PreBookResponse preBookResponse;
+
+    public void setPreBookResponse(PreBookResponse preBookResponse) {
+        this.preBookResponse = preBookResponse;
+    }
+
+    public PreBookResponse getPreBookResponse() {
+        return preBookResponse;
+    }
 
     public String getHotelCode() {
         return hotelCode;
