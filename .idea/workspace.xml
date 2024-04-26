@@ -6,10 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="04717d26-bf34-45dc-a492-74b5520e8770" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/access/AvailabilityAccess.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/access/AvailabilityAccess.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/access/PreBookAccess.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/access/PreBookAccess.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/bean/price/availability/AvailabilityResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/bean/price/availability/AvailabilityResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/utils/AichotelsProductConvertUtil.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/utils/AichotelsProductConvertUtil.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/hotel-spa/config-cache/hotel-spa+default+application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/config/hotel-spa/config-cache/hotel-spa+default+application.properties" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/service/impl/AicHotelsProductSyncServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/service/impl/AicHotelsProductSyncServiceImpl.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -87,7 +84,7 @@
       <recent name="com.bingo.hotel.spa.intl.core.api.aichotels.access" />
     </key>
   </component>
-  <component name="RunManager" selected="Application.Encryption">
+  <component name="RunManager" selected="Spring Boot.Bootstrap (1)">
     <configuration name="AichotelsHotelServiceImpl" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
       <option name="MAIN_CLASS_NAME" value="com.bingo.hotel.spa.intl.core.api.aichotels.service.impl.AichotelsHotelServiceImpl" />
       <module name="core" />
@@ -291,6 +288,39 @@
           <url>file://$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/travelconnect/access/PreBookAccess.java</url>
           <line>38</line>
           <option name="timeStamp" value="76" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/service/impl/AicHotelsProductSyncServiceImpl.java</url>
+          <line>33</line>
+          <option name="timeStamp" value="81" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/service/impl/AichotelsHotelServiceImpl.java</url>
+          <line>133</line>
+          <option name="timeStamp" value="82" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/utils/AichotelsProductConvertUtil.java</url>
+          <line>38</line>
+          <option name="timeStamp" value="83" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/utils/AichotelsProductConvertUtil.java</url>
+          <line>39</line>
+          <properties>
+            <option name="lambda-ordinal" value="1" />
+          </properties>
+          <option name="timeStamp" value="84" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/utils/AichotelsProductConvertUtil.java</url>
+          <line>41</line>
+          <option name="timeStamp" value="85" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/utils/AichotelsProductConvertUtil.java</url>
+          <line>19</line>
+          <option name="timeStamp" value="86" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>

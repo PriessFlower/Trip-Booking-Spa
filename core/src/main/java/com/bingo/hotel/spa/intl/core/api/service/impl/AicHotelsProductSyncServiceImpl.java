@@ -37,6 +37,8 @@ public class AicHotelsProductSyncServiceImpl extends AbstractProductSyncSupportS
                     .sProductId(supplier.getSProductId())
                     .sHotelId(supplier.getSHotelId())
                     .roomNum(priceReq.getRoomNum())
+                    .supplierId(supplier.getSupplierId())
+                    .totalPrice(0)
                     .build());
             AvailabilityResponse availabilityResponse = new AvailabilityResponse();
             availabilityResponse.setPreBookResponse(preBookResponse);
@@ -49,7 +51,7 @@ public class AicHotelsProductSyncServiceImpl extends AbstractProductSyncSupportS
     @Override
     public List<ProductRespDTO> productRespConvert(AvailabilityResponse searchResponse) {
         if (searchResponse.getPreBookResponse() != null) {
-            AichotelsProductConvertUtil.convertRatePlanCheckVO(searchResponse.getPreBookResponse(), searchResponse.getHotelCode());
+            return AichotelsProductConvertUtil.convertRatePlanCheckVO(searchResponse.getPreBookResponse(), searchResponse.getHotelCode());
         }
         return AichotelsProductConvertUtil.convertRatePlanVO(searchResponse);
     }
