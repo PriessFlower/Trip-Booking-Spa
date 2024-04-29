@@ -56,7 +56,7 @@ public class TravelconnectHotelServiceImpl implements TravelconnectHotelService 
     private HotelInfoIntlClient hotelInfoIntlClient;
 
     @Override
-    public void getHotelCodeListByCity(String city,String checkIn,String checkOut) {
+    public void getHotelCodeListByCity(String city, String checkIn, String checkOut) {
         int pageNum = 1;
         while (true) {
             SearchRequest hotelInfoReq = new SearchRequest();
@@ -67,9 +67,13 @@ public class TravelconnectHotelServiceImpl implements TravelconnectHotelService 
             hotelInfoReq.setPageindex(pageNum);
             hotelInfoReq.setPagesize(50);
             hotelInfoReq.setClientcurrency("HKD");
+            String req = JsonUtils.writeObject2Json(hotelInfoReq);
             ResponseResult<SearchResponse> response = new SearchAccess(host, companyId, signKey).access(hotelInfoReq);
             int totalCount = response.getData().getData().getPagehotellist().getTotal_count();
             log.info("HotelList:" + response.getData().getData().getPagehotellist().getData_list().size());
+            if (totalCount == 0) {
+                break;
+            }
             HotelDetailRequest hotelDetailRequest = new HotelDetailRequest();
             hotelDetailRequest.setLang("zh-cn");
             hotelDetailRequest.setHotelcodes(response.getData().getData().getPagehotellist().getData_list().stream().map(SearchResponse.DataBean.PagehotellistBean.DataListBean::getHotelcode).collect(Collectors.toList()));
@@ -142,6 +146,7 @@ public class TravelconnectHotelServiceImpl implements TravelconnectHotelService 
         ResponseResult<PrebookResponse> prebookResponse = new PreBookAccess(prebook, companyId, signKey).access(prebookRequest);
         SearchResponse searchResponse = new SearchResponse();
         searchResponse.setPrebookResponse(prebookResponse.getData());
+        searchResponse.setPlansId(productRespDTO.getPlanSession());
         return searchResponse;
     }
 }

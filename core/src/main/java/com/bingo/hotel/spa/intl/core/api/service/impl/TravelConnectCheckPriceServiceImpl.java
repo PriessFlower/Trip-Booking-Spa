@@ -38,7 +38,7 @@ public class TravelConnectCheckPriceServiceImpl extends AbstractCheckPriceSyncSu
                 .prebookToken(searchResponse.getPrebookResponse().getData().getPrebookingtoken())
                 .salePrice((int) searchResponse.getPrebookResponse().getData().getTotal() * 100)
                 .plansId(searchResponse.getPlansId())
-                .bedTypeCode(searchResponse.getPrebookResponse().getData().getBedtypes().stream().map(PrebookResponse.DataBean.BedtypesBean::getBedtype).collect(Collectors.toList()))
+                .bedTypeCode(searchResponse.getPrebookResponse().getData().getBedtypes().stream().map(PrebookResponse.DataBean.BedtypesBean::getBedtypeid).collect(Collectors.toList()))
                 .build();
     }
 }
