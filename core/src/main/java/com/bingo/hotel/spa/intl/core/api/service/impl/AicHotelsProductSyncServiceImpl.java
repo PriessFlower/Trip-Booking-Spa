@@ -38,6 +38,7 @@ public class AicHotelsProductSyncServiceImpl extends AbstractProductSyncSupportS
                     .sHotelId(supplier.getSHotelId())
                     .roomNum(priceReq.getRoomNum())
                     .supplierId(supplier.getSupplierId())
+                    .adultCount(priceReq.getAdultNum())
                     .totalPrice(0)
                     .build());
             AvailabilityResponse availabilityResponse = new AvailabilityResponse();

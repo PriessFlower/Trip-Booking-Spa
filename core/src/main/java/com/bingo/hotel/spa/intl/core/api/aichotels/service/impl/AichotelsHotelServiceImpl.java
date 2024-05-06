@@ -137,7 +137,7 @@ public class AichotelsHotelServiceImpl implements AichotelsHotelService {
                 .hotel_id(Integer.parseInt(priceReq.getSHotelId()))
                 .room_key(priceReq.getSProductId())
                 .room_number(priceReq.getRoomNum())
-                .adult_number(2)
+                .adult_number(priceReq.getAdultCount())
                 .kids_number(0).build();
         ResponseResult<PreBookResponse> preBookResponse = new PreBookAccess(host + prebook, apiClientKey, date, apiClientToken).access(preBookRequest);
         return preBookResponse.getData();

@@ -29,4 +29,6 @@ public class CheckPriceReq {
     private String planSession;
 
     private String sCityCode;
+
+    private Integer adultCount;
 }

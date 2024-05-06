@@ -111,7 +111,7 @@ public class TravelconnectHotelServiceImpl implements TravelconnectHotelService 
         hotelInfoReq.setHotelcodes(List.of(sHotelId));
         hotelInfoReq.setCheckindate(priceReq.getCheckIn());
         hotelInfoReq.setCheckoutdate(priceReq.getCheckout());
-        hotelInfoReq.setRoomorders(List.of(Roomorders.builder().adultcount(2).build()));
+        hotelInfoReq.setRoomorders(List.of(Roomorders.builder().adultcount(priceReq.getAdultNum()).build()));
         hotelInfoReq.setPageindex(1);
         hotelInfoReq.setPagesize(50);
         hotelInfoReq.setClientcurrency("HKD");
@@ -127,7 +127,7 @@ public class TravelconnectHotelServiceImpl implements TravelconnectHotelService 
         hotelInfoReq.setHotelcodes(List.of(priceReq.getSHotelId()));
         hotelInfoReq.setCheckindate(priceReq.getCheckIn());
         hotelInfoReq.setCheckoutdate(priceReq.getCheckOut());
-        hotelInfoReq.setRoomorders(List.of(Roomorders.builder().adultcount(2).build()));
+        hotelInfoReq.setRoomorders(List.of(Roomorders.builder().adultcount(priceReq.getAdultCount()).build()));
         hotelInfoReq.setPageindex(1);
         hotelInfoReq.setPagesize(50);
         hotelInfoReq.setClientcurrency("HKD");
@@ -140,7 +140,7 @@ public class TravelconnectHotelServiceImpl implements TravelconnectHotelService 
         prebookRequest.setCheckindate(priceReq.getCheckIn());
         prebookRequest.setCheckoutdate(priceReq.getCheckOut());
         PrebookRequest.RoomsBean roomsBean = new PrebookRequest.RoomsBean();
-        roomsBean.setAdultcount(2);
+        roomsBean.setAdultcount(priceReq.getAdultCount());
         roomsBean.setPlansid(productRespDTO.getPlanSession());
         prebookRequest.setRooms(List.of(roomsBean));
         ResponseResult<PrebookResponse> prebookResponse = new PreBookAccess(prebook, companyId, signKey).access(prebookRequest);
