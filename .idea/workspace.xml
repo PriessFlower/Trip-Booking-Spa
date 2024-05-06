@@ -6,13 +6,9 @@
   <component name="ChangeListManager">
     <list default="true" id="04717d26-bf34-45dc-a492-74b5520e8770" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config/hotel-spa/config-cache/hotel-spa+default+application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/config/hotel-spa/config-cache/hotel-spa+default+application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/service/impl/TravelConnectCheckPriceServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/service/impl/TravelConnectCheckPriceServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/travelconnect/service/impl/TravelconnectHotelServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/travelconnect/service/impl/TravelconnectHotelServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/src/main/resources/application-dev.yml" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/resources/application-dev.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/src/main/resources/application-prod.yml" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/resources/application-prod.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/target/classes/application-dev.yml" beforeDir="false" afterPath="$PROJECT_DIR$/core/target/classes/application-dev.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/target/classes/application-prod.yml" beforeDir="false" afterPath="$PROJECT_DIR$/core/target/classes/application-prod.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/Encryption.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/Encryption.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/access/PreBookAccess.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/access/PreBookAccess.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/travelconnect/access/PreBookAccess.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/travelconnect/access/PreBookAccess.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -155,15 +151,13 @@
         <option name="Make" enabled="true" />
       </method>
     </configuration>
-    <configuration default="true" type="ArquillianTestNG" factoryName="" nameIsGenerated="true">
+    <configuration default="true" type="ArquillianJUnit" factoryName="" nameIsGenerated="true">
       <option name="arquillianRunConfiguration">
         <value>
           <option name="containerStateName" value="" />
         </value>
       </option>
-      <option name="TEST_OBJECT" value="CLASS" />
-      <properties />
-      <listeners />
+      <option name="TEST_OBJECT" value="class" />
       <method v="2">
         <option name="Make" enabled="true" />
       </method>
@@ -260,7 +254,8 @@
       <workItem from="1713161382533" duration="8000" />
       <workItem from="1713162562754" duration="27515000" />
       <workItem from="1713351742132" duration="13525000" />
-      <workItem from="1714275246500" duration="13929000" />
+      <workItem from="1714275246500" duration="18977000" />
+      <workItem from="1714961457719" duration="3392000" />
     </task>
     <servers />
   </component>
@@ -291,11 +286,6 @@
           <url>file://$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/core/api/fliggy/push/mq/FliggyChangeHotelMessageListener.java</url>
           <line>64</line>
           <option name="timeStamp" value="54" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="java-line">
-          <url>file://$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/travelconnect/access/PreBookAccess.java</url>
-          <line>38</line>
-          <option name="timeStamp" value="76" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
           <url>file://$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/service/impl/AicHotelsProductSyncServiceImpl.java</url>

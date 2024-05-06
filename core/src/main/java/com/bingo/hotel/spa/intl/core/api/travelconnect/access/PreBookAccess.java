@@ -12,9 +12,11 @@ import com.bingo.hotel.spa.intl.core.api.travelconnect.bean.prebook.response.Pre
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.google.common.collect.Maps;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
 
+@Slf4j
 public class PreBookAccess extends BaseHttpAccess<PrebookRequest, PrebookResponse> {
     private String host;
 
@@ -35,11 +37,14 @@ public class PreBookAccess extends BaseHttpAccess<PrebookRequest, PrebookRespons
         Map<String, String> headers = Maps.newHashMap();
         headers.put("X-CompanyId", companyId);
         headers.put("X-SignKey", signKey);
+        long start = System.currentTimeMillis();
         ResponseResult<PrebookResponse> result = HttpUtils.access(url, headers, JsonUtils.writeObject2Json(request), parser);
         PrebookResponse response = result.getData();
         response.setCheckInDate(request.getCheckindate());
         response.setCheckOutDate(request.getCheckoutdate());
         result.setData(response);
+        log.info("travelConnect de PreBook request:{} response: {},UseTime:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result), System.currentTimeMillis() - start);
+
         return result;
     }
 
