@@ -13,6 +13,24 @@ public class PreBookResponse  implements BaseResponse {
 
     private ResultBean result;
     private List<RoomListBean> room_list;
+    private String checkIn;
+    private String checkOut;
+
+    public String getCheckIn() {
+        return checkIn;
+    }
+
+    public String getCheckOut() {
+        return checkOut;
+    }
+
+    public void setCheckIn(String checkIn) {
+        this.checkIn = checkIn;
+    }
+
+    public void setCheckOut(String checkOut) {
+        this.checkOut = checkOut;
+    }
 
     public ResultBean getResult() {
         return result;

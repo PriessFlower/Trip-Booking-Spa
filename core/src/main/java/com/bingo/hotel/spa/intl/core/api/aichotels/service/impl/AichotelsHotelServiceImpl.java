@@ -101,7 +101,7 @@ public class AichotelsHotelServiceImpl implements AichotelsHotelService {
                         .room_number(1)
                         .adult_number(1)
                         .kids_number(0).build();
-                ResponseResult<AvailabilityResponse> productResponse = new AvailabilityAccess(host + availability, apiClientKey, date, productClientToken,rateLimiter).access(availabilityRequest);
+                ResponseResult<AvailabilityResponse> productResponse = new AvailabilityAccess(host + availability, apiClientKey, date, productClientToken, rateLimiter).access(availabilityRequest);
                 InfoResult infoResult = hotelInfoIntlClient.saveHotelInfo(AichotelsHotelAdaptor.transform(singleHotelResponse.getData()));
                 InfoResult roomResult = hotelInfoIntlClient.saveRoomInfo(AichotelsRoomAdaptor.transform(roomInfoResponse.getData(), hotelId + ""));
                 InfoResult productResult = hotelInfoIntlClient.saveProductInfo(AichotelsProductAdaptor.transform(productResponse.getData(), hotelId + ""));
@@ -123,7 +123,7 @@ public class AichotelsHotelServiceImpl implements AichotelsHotelService {
                 .room_number(priceReq.getRoomNum())
                 .adult_number(priceReq.getAdultNum())
                 .kids_number(priceReq.getChildNum()).build();
-        ResponseResult<AvailabilityResponse> roomInfoResponse = new AvailabilityAccess(host + availability, apiClientKey, date, apiClientToken,rateLimiter).access(availabilityRequest);
+        ResponseResult<AvailabilityResponse> roomInfoResponse = new AvailabilityAccess(host + availability, apiClientKey, date, apiClientToken, rateLimiter).access(availabilityRequest);
         return roomInfoResponse.getData();
     }
 

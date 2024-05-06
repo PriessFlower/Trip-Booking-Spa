@@ -5,7 +5,7 @@ import com.bingo.hotel.spa.intl.core.api.common.asynchttp.BaseResponse;
 
 import java.util.List;
 
-public class AvailabilityResponse  implements BaseResponse {
+public class AvailabilityResponse implements BaseResponse {
 
     /**
      * result : {"return_status":{"success":"true","exception":""}}

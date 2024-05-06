@@ -41,6 +41,8 @@ public class AicHotelsProductSyncServiceImpl extends AbstractProductSyncSupportS
                     .adultCount(priceReq.getAdultNum())
                     .totalPrice(0)
                     .build());
+            preBookResponse.setCheckIn(priceReq.getCheckIn());
+            preBookResponse.setCheckOut(priceReq.getCheckout());
             AvailabilityResponse availabilityResponse = new AvailabilityResponse();
             availabilityResponse.setPreBookResponse(preBookResponse);
             availabilityResponse.setHotelCode(supplier.getSHotelId());
