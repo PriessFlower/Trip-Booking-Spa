@@ -6,7 +6,8 @@ import java.util.Map;
 
 public enum SupplierSourceEnum {
     TRAVELCONNECT(10001, "travelConnect"),
-    AICHOTELS(10002, "aicHotels");
+    AICHOTELS(10002, "aicHotels"),
+    DIDATRAVEL(10003, "didatravel");
 
     SupplierSourceEnum(int code, String desc) {
         this.code = code;
