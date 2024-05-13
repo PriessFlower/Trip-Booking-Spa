@@ -98,7 +98,7 @@ public class RoomInfoResponse implements BaseResponse {
         private Object bed_info;
         private Integer nonsmoking;
         private Object amenities;
-        private Object max_occupancy;
+        private MaxOccupancy max_occupancy;
         private Integer window;
         private List<String> room_pics;
 
@@ -131,7 +131,7 @@ public class RoomInfoResponse implements BaseResponse {
             this.amenities = amenities;
         }
 
-        public void setMax_occupancy(Object max_occupancy) {
+        public void setMax_occupancy(MaxOccupancy max_occupancy) {
             this.max_occupancy = max_occupancy;
         }
 
@@ -179,7 +179,7 @@ public class RoomInfoResponse implements BaseResponse {
             return amenities;
         }
 
-        public Object getMax_occupancy() {
+        public MaxOccupancy getMax_occupancy() {
             return max_occupancy;
         }
 
@@ -189,6 +189,38 @@ public class RoomInfoResponse implements BaseResponse {
 
         public List<String> getRoom_pics() {
             return room_pics;
+        }
+    }
+
+    public static class MaxOccupancy {
+        private Integer max_all;
+
+        private Integer max_adults;
+
+        private Integer max_children;
+
+        public Integer getMax_all() {
+            return max_all;
+        }
+
+        public Integer getMax_adults() {
+            return max_adults;
+        }
+
+        public Integer getMax_children() {
+            return max_children;
+        }
+
+        public void setMax_all(Integer max_all) {
+            this.max_all = max_all;
+        }
+
+        public void setMax_adults(Integer max_adults) {
+            this.max_adults = max_adults;
+        }
+
+        public void setMax_children(Integer max_children) {
+            this.max_children = max_children;
         }
     }
 }

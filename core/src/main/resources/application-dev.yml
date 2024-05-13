@@ -127,6 +127,7 @@ travelconnect:
     prebook: https://b2c-nanhwa.travelconnect.co//api/hotel/2c/order/prebook/zh-cn
   companyId: TC0143
   signKey: 02706c54a917a6940cdf3f283a860e58
+
 aichotels:
   url:
     host: https://api.aichotels.net.cn
