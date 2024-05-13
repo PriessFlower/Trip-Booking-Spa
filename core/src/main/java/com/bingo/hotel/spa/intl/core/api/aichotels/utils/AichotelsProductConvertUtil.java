@@ -65,34 +65,12 @@ public class AichotelsProductConvertUtil {
         return priceInfos;
     }
 
-    public static List<PriceInfo> buildPriceInfos(String checkIn, String checkOut, double price) {
-        int daysNumber = DateFormatUtils.getBetweenDays(checkIn, checkOut);
-        List<PriceInfo> priceInfos = Lists.newArrayList();
-        for (int i = 0; i < daysNumber; i++) {
-            String date = DateFormatUtils.format4y2M2d(
-                    DateFormatUtils.dateAddDays(
-                            DateFormatUtils.parse4y2M2d(checkIn), i));
-
-            PriceInfo priceInfo = PriceInfo.builder()
-                    .date(date)
-                    .price((int) price / daysNumber)
-                    .build();
-            priceInfos.add(priceInfo);
-        }
-        return priceInfos;
-    }
-
     public static List<PriceInfo> buildPriceInfosCheck(List<PreBookResponse.RoomListBean.RatesAndCancellationPoliciesBean.RatesBean> ratesBeans, String checkIn, String checkOut) {
-        int daysNumber = DateFormatUtils.getBetweenDays(checkIn, checkOut);
         List<PriceInfo> priceInfos = Lists.newArrayList();
-        for (int i = 0; i < daysNumber; i++) {
-            String date = DateFormatUtils.format4y2M2d(
-                    DateFormatUtils.dateAddDays(
-                            DateFormatUtils.parse4y2M2d(checkIn), i));
-
+        for (PreBookResponse.RoomListBean.RatesAndCancellationPoliciesBean.RatesBean ratesBean : ratesBeans) {
             PriceInfo priceInfo = PriceInfo.builder()
-                    .date(date)
-                    .price((int) (Double.parseDouble(ratesBeans.get(0).getAmount_after_tax().getNight_rate()) * 100))
+                    .date(ratesBean.getCheck_in())
+                    .price((int) (Double.parseDouble(ratesBean.getAmount_after_tax().getNight_rate()) * 100))
                     .build();
             priceInfos.add(priceInfo);
         }
