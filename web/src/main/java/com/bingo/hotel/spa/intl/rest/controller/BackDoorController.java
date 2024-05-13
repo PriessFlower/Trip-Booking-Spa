@@ -2,6 +2,7 @@ package com.bingo.hotel.spa.intl.rest.controller;
 
 
 import com.bingo.hotel.spa.intl.core.api.aichotels.service.AichotelsHotelService;
+import com.bingo.hotel.spa.intl.core.api.didatravel.service.DidatravelHotelService;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.service.TravelconnectHotelService;
 import com.bingo.hotel.spa.intl.rest.common.HttpResponse;
 import io.swagger.annotations.ApiOperation;
@@ -12,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.annotation.Resource;
+
 
 @Slf4j
 @RestController
@@ -21,6 +24,8 @@ public class BackDoorController {
     private TravelconnectHotelService travelconnectHotelService;
     @Autowired
     private AichotelsHotelService aichotelsHotelService;
+    @Resource
+    private DidatravelHotelService didatravelHotelService;
 
     @GetMapping("/push")
     @ApiOperation("HotelList查询")
@@ -38,6 +43,13 @@ public class BackDoorController {
     public HttpResponse aicHotelList(@RequestParam("cityId") String cityId) {
         System.out.println("push");
         aichotelsHotelService.getHotelCodeListByCity(cityId);
+        return HttpResponse.getSuccessInstance();
+    }
+
+    @GetMapping("/push/DL")
+    @ApiOperation("酒店静态数据查询-道旅")
+    public HttpResponse hotelListDL(@RequestParam("staticType") String staticType) {
+        didatravelHotelService.queryAndSaveStaticInfo(staticType);
         return HttpResponse.getSuccessInstance();
     }
 

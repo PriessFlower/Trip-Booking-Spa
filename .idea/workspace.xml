@@ -6,9 +6,14 @@
   <component name="ChangeListManager">
     <list default="true" id="04717d26-bf34-45dc-a492-74b5520e8770" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/access/AvailabilityAccess.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/access/AvailabilityAccess.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/service/impl/AichotelsHotelServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/service/impl/AichotelsHotelServiceImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/hotel-spa/config-cache/hotel-spa+default+application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/config/hotel-spa/config-cache/hotel-spa+default+application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/Encryption.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/Encryption.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/adaptor/AichotelsRoomAdaptor.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/adaptor/AichotelsRoomAdaptor.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/bean/hotel/room/RoomInfoResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/bean/hotel/room/RoomInfoResponse.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/utils/AichotelsProductConvertUtil.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/aichotels/utils/AichotelsProductConvertUtil.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/travelconnect/access/SearchAccess.java" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/java/com/bingo/hotel/spa/intl/core/api/travelconnect/access/SearchAccess.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/src/main/resources/application-dev.yml" beforeDir="false" afterPath="$PROJECT_DIR$/core/src/main/resources/application-dev.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/target/classes/application-dev.yml" beforeDir="false" afterPath="$PROJECT_DIR$/core/target/classes/application-dev.yml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -261,7 +266,7 @@
       <workItem from="1715046406824" duration="12299000" />
       <workItem from="1715317580923" duration="1429000" />
       <workItem from="1715394546792" duration="4375000" />
-      <workItem from="1715581432077" duration="2698000" />
+      <workItem from="1715581432077" duration="671000" />
     </task>
     <servers />
   </component>
