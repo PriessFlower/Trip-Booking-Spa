@@ -23,7 +23,12 @@ public class AichotelsRoomAdaptor {
             request.setSupplierRoomName(roomVo.getRoom_name());
             request.setSupplierRoomNameCN(roomVo.getRoom_name_zh());
             request.setArea(roomVo.getRoom_size());
-            request.setCapacity(roomVo.getMax_occupancy() != null ? roomVo.getMax_occupancy().getMax_adults() : 1);
+            request.setCapacity(roomVo.getMax_occupancy() != null ?
+                    (roomVo.getMax_occupancy().getMax_adults() == null ?
+                            (roomVo.getMax_occupancy().getMax_all() == null ?
+                                    1 : roomVo.getMax_occupancy().getMax_all())
+                            : roomVo.getMax_occupancy().getMax_adults())
+                    : 1);
             request.setBedInfoList(convertBed((List<Map<String, Integer>>) roomVo.getBed_info()));
             request.setHasWindows(roomVo.getWindow() == -1 ? 2 : roomVo.getWindow());
             if (roomVo.getNonsmoking() != null) {
