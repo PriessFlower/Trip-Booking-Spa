@@ -124,6 +124,9 @@ public class AichotelsHotelServiceImpl implements AichotelsHotelService {
                 .adult_number(priceReq.getAdultNum())
                 .kids_number(priceReq.getChildNum()).build();
         ResponseResult<AvailabilityResponse> roomInfoResponse = new AvailabilityAccess(host + availability, apiClientKey, date, apiClientToken, rateLimiter).access(availabilityRequest);
+        if (roomInfoResponse == null) {
+            return null;
+        }
         return roomInfoResponse.getData();
     }
 
