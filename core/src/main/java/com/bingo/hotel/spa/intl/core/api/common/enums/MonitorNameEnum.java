@@ -28,6 +28,7 @@ public enum MonitorNameEnum {
     SPA_SUPPLIER_PUSH_RATES("推送价格库存给分销商接口"),
     SPA_SUPPLIER_PUSH_HOTEL("推送酒店给分销商接口"),
     SPA_SUPPLIER_PUSH_ROOM("推送房型给分销商接口"),
+    SPA_SUPPLIER_BED_TYPE("查询供应商床型类型"),
     ;
 
     MonitorNameEnum(String desc) {
