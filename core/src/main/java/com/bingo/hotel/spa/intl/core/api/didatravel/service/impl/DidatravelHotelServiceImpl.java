@@ -80,7 +80,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                     mapReq.put("Header", headerMap);
                     ResponseResult<QueryBedTypeResponse> result = new BedTypeAccess(QUERY_BED_URL).access(mapReq);
                     if (null == result.getData() || null == result.getData().getSuccess()) {
-                        log.error("请求道旅查询床型接口错误：", JsonUtils.writeObject2Json(result));
+                        log.info("请求道旅查询床型接口错误：request:{},response:{}", JsonUtils.writeObject2Json(mapReq), JsonUtils.writeObject2Json(result));
                         return null;
                     }
 
@@ -88,12 +88,19 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                     GetBedTypeListRSSuccess bedTypeResponse = result.getData().getSuccess();
                     List<BedTypeList> bedTypes = bedTypeResponse.getBedTypes();
                     for (BedTypeList bedType : bedTypes) {
-                        String[] bedCondition = bedType.getName_CN().split("或");
+                        if (null == bedType || StringUtils.isBlank(bedType.getName_CN())) {
+                            continue;
+                        }
+                        String[] bedCondition = bedType.getName_CN().replaceAll("(4 TATAMI)", "")
+                                .replaceAll("(10 TATAMI)", "")
+                                .replaceAll("4大床 2单人床", "4 大床 2 单人床")
+                                .replaceAll("1大床1 双人床", "1 大床 1 双人床")
+                                .split("或");
                         List<List<BedInfoDTO>> bedInfoDTOSList = new ArrayList<>();
                         for (String s : bedCondition) {
                             List<BedInfoDTO> bedInfoDTOS = new ArrayList<>();
                             String[] bedInfo = s.trim().split(" ");
-                            for (int i = 0; i < bedInfo.length; i += 2) {
+                            for (int i = 0; i < bedInfo.length - 1; i += 2) {
                                 BedInfoDTO bedInfoDTO = new BedInfoDTO()
                                         .setBedType(String.valueOf(BedTypeAllEnum.getValueByDesc(bedInfo[i + 1])))
                                         .setBedNumber(Integer.parseInt(bedInfo[i]))
@@ -132,12 +139,13 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
             //2.请求道旅获取文件地址
             ResponseResult<UrlDTO> result = new StaticInfoAccess(STATIC_INFO_URL).access(mapReq);
             if (null == result.getData() || StringUtils.isBlank(result.getData().getUrl())) {
+                log.info("请求道旅获取静态数据接口错误：request:{},response:{}", JsonUtils.writeObject2Json(mapReq), JsonUtils.writeObject2Json(result));
                 return;
             }
             //3.解析地址下载文件
             String csvUrl = result.getData().getUrl();
             String localFilePath = LOCAL_FILE_PATH + csvUrl.substring(csvUrl.lastIndexOf("/"), csvUrl.indexOf("?"));
-            downloadFile(csvUrl, localFilePath);
+//            downloadFile(csvUrl, localFilePath);
             //4.解析文件数据并推送base服务
 //            readCSVFromURL(localFilePath, staticType);
             readCSVFromFile(localFilePath, staticType);
@@ -351,24 +359,25 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                         //2.请求道旅获取报价信息
                         ResponseResult<CheckPriceResponse> result = new SearchAccess(CHECK_PRICE_URL).access(mapReq);
                         if (null == result.getData() || null == result.getData().getSuccess()) {
-                            log.info("请求道旅报价接口错误：", JsonUtils.writeObject2Json(result));
+                            log.info("请求道旅报价接口错误：request:{},response:{}", JsonUtils.writeObject2Json(mapReq),
+                                    JsonUtils.writeObject2Json(result.getData().getSuccess()));
                             continue;
                         }
                         List<HotelType> hotelList = result.getData().getSuccess().getPriceDetails().getHotelList();
                         for (HotelType hotelType : hotelList) {
                             List<SupplierProductBaseRequest> supplierProductBaseRequests = new ArrayList<>();
-                            List<SupplierRoomBaseRequest> supplierRoomBaseSubRequest = supplierRoomListMap.get(hotelType.getHotelID());
+                            List<SupplierRoomBaseRequest> supplierRoomBaseSubRequest = supplierRoomListMap.get(String.valueOf(hotelType.getHotelID()));
                             if (CollectionUtils.isEmpty(supplierRoomBaseSubRequest)) {
                                 continue;
                             }
                             for (HotelTypeRatePlan hotelTypeRatePlan : hotelType.getRatePlanList()) {
-                                if(null == hotelTypeRatePlan.getRoomTypeID()){
+                                if (null == hotelTypeRatePlan.getRoomTypeID()) {
                                     continue;
                                 }
                                 for (SupplierRoomBaseRequest roomBaseRequest : supplierRoomBaseSubRequest) {
                                     if (CollectionUtils.isEmpty(roomBaseRequest.getBedInfoList()) && Integer.valueOf(roomBaseRequest.getSupplierRoomId()).equals(hotelTypeRatePlan.getRoomTypeID())) {
                                         List<List<BedInfoDTO>> bedList = getBedInfoMap().get(hotelTypeRatePlan.getBedType());
-                                        if (CollectionUtils.isEmpty(bedList)) {
+                                        if (CollectionUtils.isNotEmpty(bedList)) {
                                             roomBaseRequest.setBedInfoList(bedList);
                                         }
                                     }
@@ -383,9 +392,9 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                                         .setCancelType(0);
                                 supplierProductBaseRequests.add(supplierProductBaseRequest);
                             }
-                            log.info("插入房型数量：" + supplierRoomBaseSubRequest);
+                            log.info("插入房型数量：{}", supplierRoomBaseSubRequest.size());
                             hotelInfoIntlClient.saveRoomInfo(supplierRoomBaseSubRequest);
-                            log.info("插入产品数量：" + supplierProductBaseRequests);
+                            log.info("插入产品数量：{}", supplierProductBaseRequests.size());
                             hotelInfoIntlClient.saveProductInfo(supplierProductBaseRequests);
                         }
 
