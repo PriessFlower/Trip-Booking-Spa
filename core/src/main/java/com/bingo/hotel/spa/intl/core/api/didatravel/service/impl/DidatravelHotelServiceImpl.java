@@ -60,7 +60,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
 
     private final static String CHECK_PRICE_URL = "https://api.didatravel.com/api/rate/pricesearch?$format=json";
 
-    @Value("${didatravel.licenseKey}")
+    @Value("${didatravel.localFilePath}")
     private String LOCAL_FILE_PATH;
 
     private static final String COUNTRIES = "TH,SG,MY,JP,KR,HK,MO,AE,ID";
