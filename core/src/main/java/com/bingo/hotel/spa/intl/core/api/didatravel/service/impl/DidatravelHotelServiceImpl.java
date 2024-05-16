@@ -236,7 +236,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                 if ("HotelSummary".equals(type)) {
                     saveHotelInfoSupplier(csvData);
                 } else if ("RoomTypeAttribute".equals(type)) {
-                    saveRoomInfoSupplier(csvData);
+//                    saveRoomInfoSupplier(csvData,);
                 }
                 csvData.clear();
             }
@@ -244,7 +244,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         if ("HotelSummary".equals(type)) {
             saveHotelInfoSupplier(csvData);
         } else if ("RoomTypeAttribute".equals(type)) {
-            saveRoomInfoSupplier(csvData);
+//            saveRoomInfoSupplier(csvData);
         }
         reader.close();
     }
