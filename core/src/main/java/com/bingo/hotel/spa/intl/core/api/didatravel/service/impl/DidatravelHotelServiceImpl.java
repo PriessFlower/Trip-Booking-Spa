@@ -30,6 +30,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.LineIterator;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -59,17 +60,20 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
 
     private final static String CHECK_PRICE_URL = "https://api.didatravel.com/api/rate/pricesearch?$format=json";
 
-    private final static String LOCAL_FILE_PATH = "D:\\working\\file\\导出文件\\hotel_info";
+    @Value("${didatravel.licenseKey}")
+    private String LOCAL_FILE_PATH;
 
     private static final String COUNTRIES = "TH,SG,MY,JP,KR,HK,MO,AE,ID";
 
-    private static final String LicenseKey = "BSYX_textkey";
+    @Value("${didatravel.licenseKey}")
+    private String LicenseKey;
 
-    private static final String ClientID = "BSYX_text";
+    @Value("${didatravel.clientId}")
+    private String ClientID;
 
     private static Map<Integer, List<List<BedInfoDTO>>> bedInfoMap;
 
-    public static Map<Integer, List<List<BedInfoDTO>>> getBedInfoMap() {
+    public static Map<Integer, List<List<BedInfoDTO>>> getBedInfoMap(String LicenseKey,String ClientID) {
         if (bedInfoMap == null) {
             synchronized (LazyInit.class) {
                 if (bedInfoMap == null) {
@@ -127,10 +131,6 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         Map<String, Object> mapReq = new HashMap<>();
         mapReq.put("IsGetUrlOnly", true);
         Map<String, Object> headerMap = new HashMap<>();
-        //正式
-//        headerMap.put("LicenseKey", "BSYX_key0509");
-//        headerMap.put("ClientID", "BSYX");
-        //测试
         headerMap.put("LicenseKey", LicenseKey);
         headerMap.put("ClientID", ClientID);
         mapReq.put("Header", headerMap);
@@ -145,7 +145,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
             //3.解析地址下载文件
             String csvUrl = result.getData().getUrl();
             String localFilePath = LOCAL_FILE_PATH + csvUrl.substring(csvUrl.lastIndexOf("/"), csvUrl.indexOf("?"));
-//            downloadFile(csvUrl, localFilePath);
+            downloadFile(csvUrl, localFilePath);
             //4.解析文件数据并推送base服务
 //            readCSVFromURL(localFilePath, staticType);
             readCSVFromFile(localFilePath, staticType);
@@ -376,7 +376,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                                 }
                                 for (SupplierRoomBaseRequest roomBaseRequest : supplierRoomBaseSubRequest) {
                                     if (CollectionUtils.isEmpty(roomBaseRequest.getBedInfoList()) && Integer.valueOf(roomBaseRequest.getSupplierRoomId()).equals(hotelTypeRatePlan.getRoomTypeID())) {
-                                        List<List<BedInfoDTO>> bedList = getBedInfoMap().get(hotelTypeRatePlan.getBedType());
+                                        List<List<BedInfoDTO>> bedList = getBedInfoMap(LicenseKey,ClientID).get(hotelTypeRatePlan.getBedType());
                                         if (CollectionUtils.isNotEmpty(bedList)) {
                                             roomBaseRequest.setBedInfoList(bedList);
                                         }
@@ -410,7 +410,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
 
     public static void main(String[] args) {
 
-        System.out.println(JsonUtils.writeObject2Json(getBedInfoMap()));
+//        System.out.println(JsonUtils.writeObject2Json(getBedInfoMap("LicenseKey","ClientID")));
 //        DidatravelHotelServiceImpl didatravelHotelService = new DidatravelHotelServiceImpl();
 //        didatravelHotelService.queryAndSaveStaticInfo("HotelSummary");
 //        List<String> str = new ArrayList<>();
