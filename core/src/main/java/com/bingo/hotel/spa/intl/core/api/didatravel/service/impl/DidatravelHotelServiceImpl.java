@@ -73,7 +73,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
 
     private static Map<Integer, List<List<BedInfoDTO>>> bedInfoMap;
 
-    public static Map<Integer, List<List<BedInfoDTO>>> getBedInfoMap(String LicenseKey,String ClientID) {
+    public static Map<Integer, List<List<BedInfoDTO>>> getBedInfoMap(String LicenseKey, String ClientID) {
         if (bedInfoMap == null) {
             synchronized (LazyInit.class) {
                 if (bedInfoMap == null) {
@@ -126,7 +126,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
     private HotelInfoIntlClient hotelInfoIntlClient;
 
     @Override
-    public void queryAndSaveStaticInfo(String staticType) {
+    public void queryAndSaveStaticInfo(String staticType, String startDate, String endDate) {
         //1.组装参数
         Map<String, Object> mapReq = new HashMap<>();
         mapReq.put("IsGetUrlOnly", true);
@@ -148,7 +148,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
             downloadFile(csvUrl, localFilePath);
             //4.解析文件数据并推送base服务
 //            readCSVFromURL(localFilePath, staticType);
-            readCSVFromFile(localFilePath, staticType);
+            readCSVFromFile(localFilePath, staticType, startDate, endDate);
 
             log.info("道旅静态数据处理完毕！");
         } catch (Exception e) {
@@ -187,7 +187,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         }
     }
 
-    public void readCSVFromFile(String filePath, String type) throws IOException {
+    public void readCSVFromFile(String filePath, String type, String startDate, String endDate) throws IOException {
         List<String[]> csvData = new ArrayList<>();
         LineIterator lineIterator = null;
         try {
@@ -205,7 +205,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                     if ("HotelSummary".equals(type)) {
                         saveHotelInfoSupplier(csvData);
                     } else if ("RoomTypeAttribute".equals(type)) {
-                        saveRoomInfoSupplier(csvData);
+                        saveRoomInfoSupplier(csvData, startDate, endDate);
                     }
                     csvData.clear();
                 }
@@ -213,7 +213,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
             if ("HotelSummary".equals(type)) {
                 saveHotelInfoSupplier(csvData);
             } else if ("RoomTypeAttribute".equals(type)) {
-                saveRoomInfoSupplier(csvData);
+                saveRoomInfoSupplier(csvData, startDate, endDate);
             }
         } finally {
             LineIterator.closeQuietly(lineIterator);
@@ -299,7 +299,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         log.info("酒店静态信息落库完毕");
     }
 
-    public void saveRoomInfoSupplier(List<String[]> csvData) {
+    public void saveRoomInfoSupplier(List<String[]> csvData, String startDate, String endDate) {
         List<SupplierRoomBaseRequest> supplierRoomBaseRequests = new ArrayList<>();
         for (String[] row : csvData) {
             try {
@@ -344,8 +344,8 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                         //1.组装参数
                         Map<String, Object> mapReq = new HashMap<>();
                         mapReq.put("HotelIDList", requestHotelIds);
-                        mapReq.put("CheckInDate", "2024-08-01");
-                        mapReq.put("CheckOutDate", "2024-08-02");
+                        mapReq.put("CheckInDate", startDate);
+                        mapReq.put("CheckOutDate", endDate);
                         mapReq.put("Currency", "CNY");
                         mapReq.put("Nationality", "CN");
                         Map<String, Object> headerMap = new HashMap<>();
@@ -360,7 +360,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                         ResponseResult<CheckPriceResponse> result = new SearchAccess(CHECK_PRICE_URL).access(mapReq);
                         if (null == result.getData() || null == result.getData().getSuccess()) {
                             log.info("请求道旅报价接口错误：request:{},response:{}", JsonUtils.writeObject2Json(mapReq),
-                                    JsonUtils.writeObject2Json(result.getData().getSuccess()));
+                                    JsonUtils.writeObject2Json(result));
                             continue;
                         }
                         List<HotelType> hotelList = result.getData().getSuccess().getPriceDetails().getHotelList();
@@ -376,7 +376,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                                 }
                                 for (SupplierRoomBaseRequest roomBaseRequest : supplierRoomBaseSubRequest) {
                                     if (CollectionUtils.isEmpty(roomBaseRequest.getBedInfoList()) && Integer.valueOf(roomBaseRequest.getSupplierRoomId()).equals(hotelTypeRatePlan.getRoomTypeID())) {
-                                        List<List<BedInfoDTO>> bedList = getBedInfoMap(LicenseKey,ClientID).get(hotelTypeRatePlan.getBedType());
+                                        List<List<BedInfoDTO>> bedList = getBedInfoMap(LicenseKey, ClientID).get(hotelTypeRatePlan.getBedType());
                                         if (CollectionUtils.isNotEmpty(bedList)) {
                                             roomBaseRequest.setBedInfoList(bedList);
                                         }
