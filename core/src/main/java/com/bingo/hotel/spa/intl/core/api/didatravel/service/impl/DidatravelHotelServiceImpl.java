@@ -430,7 +430,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                             continue;
                         }
                         if (null == result.getData().getSuccess().getPriceDetails() || CollectionUtils.isEmpty(result.getData().getSuccess().getPriceDetails().getHotelList())) {
-                            log.info("该酒店无报价信息：{}", hotelId);
+                            log.info("该酒店无报价信息：{}", requestAllHotelIds.get(i));
                             continue;
                         }
                         HotelType hotelType = result.getData().getSuccess().getPriceDetails().getHotelList().get(0);
@@ -492,8 +492,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
             //请求道旅查价
             //1.组装参数
             Map<String, Object> mapReq = new HashMap<>();
-            ArrayList<Integer> hotelId = new ArrayList<>(requestAllHotelIds.get(i));
-            mapReq.put("HotelIDList", hotelId);
+            mapReq.put("HotelIDList", Arrays.asList(requestAllHotelIds.get(i)));
             mapReq.put("CheckInDate", startDate);
             mapReq.put("CheckOutDate", endDate);
             mapReq.put("Currency", "CNY");
@@ -514,7 +513,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                 continue;
             }
             if (null == result.getData().getSuccess().getPriceDetails() || CollectionUtils.isEmpty(result.getData().getSuccess().getPriceDetails().getHotelList())) {
-                log.info("该酒店无报价信息：{}", hotelId);
+                log.info("该酒店无报价信息：{}", requestAllHotelIds.get(i));
                 continue;
             }
             HotelType hotelType = result.getData().getSuccess().getPriceDetails().getHotelList().get(0);
