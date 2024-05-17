@@ -334,7 +334,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
             Map<String, List<SupplierRoomBaseRequest>> supplierRoomListMap =
                     supplierRoomBaseRequests.stream().filter(r -> supplierHotelIds.contains(r.getSupplierHotelId())).collect(Collectors.groupingBy(SupplierRoomBaseRequest::getSupplierHotelId));
             List<Integer> requestAllHotelIds = supplierRoomListMap.keySet().stream().map(s -> Integer.parseInt(s)).collect(Collectors.toList());
-            int batchSize = 50;
+            int batchSize = 30;
             int currentBatch = 0;
             //批量方式
             for (int i = 0; i < requestAllHotelIds.size(); i += batchSize) {
