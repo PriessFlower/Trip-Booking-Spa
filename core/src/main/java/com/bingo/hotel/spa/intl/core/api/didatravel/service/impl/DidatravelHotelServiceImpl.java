@@ -44,6 +44,7 @@ import java.net.URL;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -130,7 +131,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
     private DistributedRateLimiter rateLimiter;
 
     @Override
-    public void queryAndSaveStaticInfo(String staticType, String startDate, String endDate) {
+    public void queryAndSaveStaticInfo(String staticType, String startDate, String endDate, int startNum) {
         //1.组装参数
         Map<String, Object> mapReq = new HashMap<>();
         mapReq.put("IsGetUrlOnly", true);
@@ -152,7 +153,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
             downloadFile(csvUrl, localFilePath);
             //4.解析文件数据并推送base服务
 //            readCSVFromURL(localFilePath, staticType);
-            readCSVFromFile(localFilePath, staticType, startDate, endDate);
+            readCSVFromFile(localFilePath, staticType, startDate, endDate, startNum);
 
             log.info("道旅静态数据处理完毕！");
         } catch (Exception e) {
@@ -191,18 +192,18 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         }
     }
 
-    public void readCSVFromFile(String filePath, String type, String startDate, String endDate) throws IOException {
+    public void readCSVFromFile(String filePath, String type, String startDate, String endDate, int startNum) throws IOException {
         List<String[]> csvData = new ArrayList<>();
         LineIterator lineIterator = null;
         try {
             lineIterator = FileUtils.lineIterator(new File(filePath), "UTF-8");
             int page = 0;
-            //跳过首行导航栏
-            lineIterator.nextLine();
             while (lineIterator.hasNext()) {
                 String line = lineIterator.nextLine();
                 String[] row = line.split("\\|", -1);
-                page++;
+                if (page++ < startNum) {
+                    continue;
+                }
                 csvData.add(row);
                 if (csvData.size() >= 5000) {
                     log.info("已经读取csv行数：" + page);
@@ -335,8 +336,8 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                     Map<String, List<SupplierRoomBaseRequest>> supplierRoomListMap =
                             supplierRoomBaseRequests.stream().filter(r -> supplierHotelIds.contains(r.getSupplierHotelId())).collect(Collectors.groupingBy(SupplierRoomBaseRequest::getSupplierHotelId));
                     List<Integer> requestAllHotelIds = supplierRoomListMap.keySet().stream().map(s -> Integer.parseInt(s)).collect(Collectors.toList());
-                    int batchSize = 50;
-                    int currentBatch = 0;
+//                    int batchSize = 50;
+//                    int currentBatch = 0;
                     //批量方式
 //                    for (int i = 0; i < requestAllHotelIds.size(); i += batchSize) {
 //                        // 截取当前批次的数据
@@ -404,12 +405,11 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
 //
 //                    }
                     //单酒店方式
-                    for (int i = 0; i < requestAllHotelIds.size(); i ++) {
+                    for (int i = 0; i < requestAllHotelIds.size(); i++) {
                         //请求道旅查价
                         //1.组装参数
                         Map<String, Object> mapReq = new HashMap<>();
-                        ArrayList<Integer> hotelId = new ArrayList<>(requestAllHotelIds.get(i));
-                        mapReq.put("HotelIDList", hotelId);
+                        mapReq.put("HotelIDList", Arrays.asList(requestAllHotelIds.get(i)));
                         mapReq.put("CheckInDate", startDate);
                         mapReq.put("CheckOutDate", endDate);
                         mapReq.put("Currency", "CNY");
@@ -488,7 +488,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         Map<String, List<SupplierRoomBaseRequest>> supplierRoomListMap =
                 supplierRoomBaseRequests.stream().filter(r -> supplierHotelIds.contains(r.getSupplierHotelId())).collect(Collectors.groupingBy(SupplierRoomBaseRequest::getSupplierHotelId));
         List<Integer> requestAllHotelIds = supplierRoomListMap.keySet().stream().map(s -> Integer.parseInt(s)).collect(Collectors.toList());
-        for (int i = 0; i < requestAllHotelIds.size(); i ++) {
+        for (int i = 0; i < requestAllHotelIds.size(); i++) {
             //请求道旅查价
             //1.组装参数
             Map<String, Object> mapReq = new HashMap<>();
