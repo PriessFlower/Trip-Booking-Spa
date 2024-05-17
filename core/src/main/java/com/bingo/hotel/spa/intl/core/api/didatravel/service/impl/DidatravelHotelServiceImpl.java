@@ -44,7 +44,6 @@ import java.net.URL;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -307,48 +306,107 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
     public void saveRoomInfoSupplier(List<String[]> csvData, String startDate, String endDate) {
         List<SupplierRoomBaseRequest> supplierRoomBaseRequests = new ArrayList<>();
         for (String[] row : csvData) {
-            try {
-                SupplierRoomBaseRequest supplierRoomBaseRequest = new SupplierRoomBaseRequest()
-                        .setSupplierId(10003)
-                        .setSupplierHotelId(row[0])
-                        .setSupplierRoomId(row[1])
-                        .setSupplierRoomName(row[2])
-                        .setSupplierRoomNameCN(row[3])
-                        .setArea(row[7])
-                        .setBroadNet("True".equals(row[4]) ? BroadnetEnum.FREE_WIFI.getValue() : BroadnetEnum.NOT.getValue())
-                        .setCapacity(StringUtils.isBlank(row[6]) ? 1 : Integer.parseInt(row[6]))
-                        .setHasWindows("True".equals(row[5]) ? 1 : 0);
-                supplierRoomBaseRequests.add(supplierRoomBaseRequest);
-                if (supplierRoomBaseRequests.size() >= 5000) {
-                    List<String> hotelIds =
-                            supplierRoomBaseRequests.stream().map(SupplierRoomBaseRequest::getSupplierHotelId).distinct().collect(Collectors.toList());
-                    QueryHotelRequest queryHotelRequest = new QueryHotelRequest()
-                            .setSupplierId(10003)
-                            .setSupplierHotelIds(hotelIds);
-                    InfoResult<List<SupplierHotelBaseResponse>> listHotelBaseResult = hotelInfoIntlClient.queryHotelList(queryHotelRequest);
-                    List<SupplierHotelBaseResponse> supplierHotelBaseResponseList = listHotelBaseResult.getData();
-                    if (CollectionUtils.isEmpty(supplierHotelBaseResponseList)) {
-                        supplierRoomBaseRequests.clear();
+            SupplierRoomBaseRequest supplierRoomBaseRequest = new SupplierRoomBaseRequest()
+                    .setSupplierId(10003)
+                    .setSupplierHotelId(row[0])
+                    .setSupplierRoomId(row[1])
+                    .setSupplierRoomName(row[2])
+                    .setSupplierRoomNameCN(row[3])
+                    .setArea(row[7])
+                    .setBroadNet("True".equals(row[4]) ? BroadnetEnum.FREE_WIFI.getValue() : BroadnetEnum.NOT.getValue())
+                    .setCapacity(StringUtils.isBlank(row[6]) ? 1 : Integer.parseInt(row[6]))
+                    .setHasWindows("True".equals(row[5]) ? 1 : 0);
+            supplierRoomBaseRequests.add(supplierRoomBaseRequest);
+        }
+        try {
+            List<String> hotelIds =
+                    supplierRoomBaseRequests.stream().map(SupplierRoomBaseRequest::getSupplierHotelId).distinct().collect(Collectors.toList());
+            QueryHotelRequest queryHotelRequest = new QueryHotelRequest()
+                    .setSupplierId(10003)
+                    .setSupplierHotelIds(hotelIds);
+            InfoResult<List<SupplierHotelBaseResponse>> listHotelBaseResult = hotelInfoIntlClient.queryHotelList(queryHotelRequest);
+            List<SupplierHotelBaseResponse> supplierHotelBaseResponseList = listHotelBaseResult.getData();
+            if (CollectionUtils.isEmpty(supplierHotelBaseResponseList)) {
+                return;
+            }
+            List<String> supplierHotelIds =
+                    supplierHotelBaseResponseList.stream().map(SupplierHotelBaseResponse::getSupplierHotelId).distinct().collect(Collectors.toList());
+            Map<String, List<SupplierRoomBaseRequest>> supplierRoomListMap =
+                    supplierRoomBaseRequests.stream().filter(r -> supplierHotelIds.contains(r.getSupplierHotelId())).collect(Collectors.groupingBy(SupplierRoomBaseRequest::getSupplierHotelId));
+            List<Integer> requestAllHotelIds = supplierRoomListMap.keySet().stream().map(s -> Integer.parseInt(s)).collect(Collectors.toList());
+            int batchSize = 50;
+            int currentBatch = 0;
+            //批量方式
+            for (int i = 0; i < requestAllHotelIds.size(); i += batchSize) {
+                // 截取当前批次的数据
+                List<Integer> requestHotelIds = requestAllHotelIds.subList(currentBatch * batchSize, Math.min(requestAllHotelIds.size(),
+                        (currentBatch + 1) * batchSize));
+                // 每处理完一组，增加当前批次计数器
+                currentBatch++;
+                //请求道旅查价
+                //1.组装参数
+                Map<String, Object> mapReq = new HashMap<>();
+                mapReq.put("HotelIDList", requestHotelIds);
+                mapReq.put("CheckInDate", startDate);
+                mapReq.put("CheckOutDate", endDate);
+                mapReq.put("Currency", "CNY");
+                mapReq.put("Nationality", "CN");
+                Map<String, Object> headerMap = new HashMap<>();
+                headerMap.put("LicenseKey", LicenseKey);
+                headerMap.put("ClientID", ClientID);
+                mapReq.put("Header", headerMap);
+                Map<String, Object> isRealTimeMap = new HashMap<>();
+                isRealTimeMap.put("Value", false);
+                isRealTimeMap.put("RoomCount", 1);
+                mapReq.put("IsRealTime", isRealTimeMap);
+                //2.请求道旅获取报价信息
+                ResponseResult<CheckPriceResponse> result = new SearchAccess(CHECK_PRICE_URL, rateLimiter).access(mapReq);
+                if (null == result.getData() || null == result.getData().getSuccess()) {
+                    log.info("请求道旅报价接口错误：request:{},response:{}", JsonUtils.writeObject2Json(mapReq),
+                            JsonUtils.writeObject2Json(result));
+                    continue;
+                }
+                List<HotelType> hotelList = result.getData().getSuccess().getPriceDetails().getHotelList();
+                for (HotelType hotelType : hotelList) {
+                    List<SupplierProductBaseRequest> supplierProductBaseRequests = new ArrayList<>();
+                    List<SupplierRoomBaseRequest> supplierRoomBaseSubRequest = supplierRoomListMap.get(String.valueOf(hotelType.getHotelID()));
+                    if (CollectionUtils.isEmpty(supplierRoomBaseSubRequest)) {
                         continue;
                     }
-                    List<String> supplierHotelIds =
-                            supplierHotelBaseResponseList.stream().map(SupplierHotelBaseResponse::getSupplierHotelId).distinct().collect(Collectors.toList());
-                    Map<String, List<SupplierRoomBaseRequest>> supplierRoomListMap =
-                            supplierRoomBaseRequests.stream().filter(r -> supplierHotelIds.contains(r.getSupplierHotelId())).collect(Collectors.groupingBy(SupplierRoomBaseRequest::getSupplierHotelId));
-                    List<Integer> requestAllHotelIds = supplierRoomListMap.keySet().stream().map(s -> Integer.parseInt(s)).collect(Collectors.toList());
-//                    int batchSize = 50;
-//                    int currentBatch = 0;
-                    //批量方式
-//                    for (int i = 0; i < requestAllHotelIds.size(); i += batchSize) {
-//                        // 截取当前批次的数据
-//                        List<Integer> requestHotelIds = requestAllHotelIds.subList(currentBatch * batchSize, Math.min(requestAllHotelIds.size(),
-//                                (currentBatch + 1) * batchSize));
-//                        // 每处理完一组，增加当前批次计数器
-//                        currentBatch++;
+                    for (HotelTypeRatePlan hotelTypeRatePlan : hotelType.getRatePlanList()) {
+                        if (null == hotelTypeRatePlan.getRoomTypeID()) {
+                            continue;
+                        }
+                        for (SupplierRoomBaseRequest roomBaseRequest : supplierRoomBaseSubRequest) {
+                            if (CollectionUtils.isEmpty(roomBaseRequest.getBedInfoList()) && Integer.valueOf(roomBaseRequest.getSupplierRoomId()).equals(hotelTypeRatePlan.getRoomTypeID())) {
+                                List<List<BedInfoDTO>> bedList = getBedInfoMap(LicenseKey, ClientID).get(hotelTypeRatePlan.getBedType());
+                                if (CollectionUtils.isNotEmpty(bedList)) {
+                                    roomBaseRequest.setBedInfoList(bedList);
+                                }
+                            }
+                        }
+                        SupplierProductBaseRequest supplierProductBaseRequest = new SupplierProductBaseRequest().setSupplierId(10003)
+                                .setSupplierHotelId(String.valueOf(hotelType.getHotelID()))
+                                .setSupplierRoomId(String.valueOf(hotelTypeRatePlan.getRoomTypeID()))
+                                .setSupplierProductId(String.valueOf(hotelTypeRatePlan.getRatePlanID()))
+                                .setSupplierProductName(hotelTypeRatePlan.getRatePlanName())
+                                .setSupplierProductNameCN(hotelTypeRatePlan.getRoomName_CN())
+                                .setBreakfast(hotelTypeRatePlan.getPriceList().get(0).getMealAmount())
+                                .setCancelType(0);
+                        supplierProductBaseRequests.add(supplierProductBaseRequest);
+                    }
+                    log.info("插入房型数量：{}", supplierRoomBaseSubRequest.size());
+                    hotelInfoIntlClient.saveRoomInfo(supplierRoomBaseSubRequest);
+                    log.info("插入产品数量：{}", supplierProductBaseRequests.size());
+                    hotelInfoIntlClient.saveProductInfo(supplierProductBaseRequests);
+                }
+
+                //单酒店方式
+//                    for (int i = 0; i < requestAllHotelIds.size(); i++) {
 //                        //请求道旅查价
 //                        //1.组装参数
 //                        Map<String, Object> mapReq = new HashMap<>();
-//                        mapReq.put("HotelIDList", requestHotelIds);
+//                        mapReq.put("HotelIDList", Arrays.asList(requestAllHotelIds.get(i)));
 //                        mapReq.put("CheckInDate", startDate);
 //                        mapReq.put("CheckOutDate", endDate);
 //                        mapReq.put("Currency", "CNY");
@@ -368,188 +426,48 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
 //                                    JsonUtils.writeObject2Json(result));
 //                            continue;
 //                        }
-//                        List<HotelType> hotelList = result.getData().getSuccess().getPriceDetails().getHotelList();
-//                        for (HotelType hotelType : hotelList) {
-//                            List<SupplierProductBaseRequest> supplierProductBaseRequests = new ArrayList<>();
-//                            List<SupplierRoomBaseRequest> supplierRoomBaseSubRequest = supplierRoomListMap.get(String.valueOf(hotelType.getHotelID()));
-//                            if (CollectionUtils.isEmpty(supplierRoomBaseSubRequest)) {
+//                        if (null == result.getData().getSuccess().getPriceDetails() || CollectionUtils.isEmpty(result.getData().getSuccess().getPriceDetails().getHotelList())) {
+//                            log.info("该酒店无报价信息：{}", requestAllHotelIds.get(i));
+//                            continue;
+//                        }
+//                        HotelType hotelType = result.getData().getSuccess().getPriceDetails().getHotelList().get(0);
+//                        List<SupplierProductBaseRequest> supplierProductBaseRequests = new ArrayList<>();
+//                        List<SupplierRoomBaseRequest> supplierRoomBaseSubRequest = supplierRoomListMap.get(String.valueOf(hotelType.getHotelID()));
+//                        if (CollectionUtils.isEmpty(supplierRoomBaseSubRequest)) {
+//                            continue;
+//                        }
+//                        for (HotelTypeRatePlan hotelTypeRatePlan : hotelType.getRatePlanList()) {
+//                            if (null == hotelTypeRatePlan.getRoomTypeID()) {
 //                                continue;
 //                            }
-//                            for (HotelTypeRatePlan hotelTypeRatePlan : hotelType.getRatePlanList()) {
-//                                if (null == hotelTypeRatePlan.getRoomTypeID()) {
-//                                    continue;
-//                                }
-//                                for (SupplierRoomBaseRequest roomBaseRequest : supplierRoomBaseSubRequest) {
-//                                    if (CollectionUtils.isEmpty(roomBaseRequest.getBedInfoList()) && Integer.valueOf(roomBaseRequest.getSupplierRoomId()).equals(hotelTypeRatePlan.getRoomTypeID())) {
-//                                        List<List<BedInfoDTO>> bedList = getBedInfoMap(LicenseKey, ClientID).get(hotelTypeRatePlan.getBedType());
-//                                        if (CollectionUtils.isNotEmpty(bedList)) {
-//                                            roomBaseRequest.setBedInfoList(bedList);
-//                                        }
+//                            for (SupplierRoomBaseRequest roomBaseRequest : supplierRoomBaseSubRequest) {
+//                                if (CollectionUtils.isEmpty(roomBaseRequest.getBedInfoList()) && Integer.valueOf(roomBaseRequest.getSupplierRoomId()).equals(hotelTypeRatePlan.getRoomTypeID())) {
+//                                    List<List<BedInfoDTO>> bedList = getBedInfoMap(LicenseKey, ClientID).get(hotelTypeRatePlan.getBedType());
+//                                    if (CollectionUtils.isNotEmpty(bedList)) {
+//                                        roomBaseRequest.setBedInfoList(bedList);
 //                                    }
 //                                }
-//                                SupplierProductBaseRequest supplierProductBaseRequest = new SupplierProductBaseRequest().setSupplierId(10003)
-//                                        .setSupplierHotelId(String.valueOf(hotelType.getHotelID()))
-//                                        .setSupplierRoomId(String.valueOf(hotelTypeRatePlan.getRoomTypeID()))
-//                                        .setSupplierProductId(String.valueOf(hotelTypeRatePlan.getRatePlanID()))
-//                                        .setSupplierProductName(hotelTypeRatePlan.getRatePlanName())
-//                                        .setSupplierProductNameCN(hotelTypeRatePlan.getRoomName_CN())
-//                                        .setBreakfast(hotelTypeRatePlan.getPriceList().get(0).getMealAmount())
-//                                        .setCancelType(0);
-//                                supplierProductBaseRequests.add(supplierProductBaseRequest);
 //                            }
-//                            log.info("插入房型数量：{}", supplierRoomBaseSubRequest.size());
-//                            hotelInfoIntlClient.saveRoomInfo(supplierRoomBaseSubRequest);
-//                            log.info("插入产品数量：{}", supplierProductBaseRequests.size());
-//                            hotelInfoIntlClient.saveProductInfo(supplierProductBaseRequests);
+//                            SupplierProductBaseRequest supplierProductBaseRequest = new SupplierProductBaseRequest().setSupplierId(10003)
+//                                    .setSupplierHotelId(String.valueOf(hotelType.getHotelID()))
+//                                    .setSupplierRoomId(String.valueOf(hotelTypeRatePlan.getRoomTypeID()))
+//                                    .setSupplierProductId(String.valueOf(hotelTypeRatePlan.getRatePlanID()))
+//                                    .setSupplierProductName(hotelTypeRatePlan.getRatePlanName())
+//                                    .setSupplierProductNameCN(hotelTypeRatePlan.getRoomName_CN())
+//                                    .setBreakfast(hotelTypeRatePlan.getPriceList().get(0).getMealAmount())
+//                                    .setCancelType(0);
+//                            supplierProductBaseRequests.add(supplierProductBaseRequest);
 //                        }
-//
+//                        log.info("插入房型数量：{}", supplierRoomBaseSubRequest.size());
+//                        hotelInfoIntlClient.saveRoomInfo(supplierRoomBaseSubRequest);
+//                        log.info("插入产品数量：{}", supplierProductBaseRequests.size());
+//                        hotelInfoIntlClient.saveProductInfo(supplierProductBaseRequests);
 //                    }
-                    //单酒店方式
-                    for (int i = 0; i < requestAllHotelIds.size(); i++) {
-                        //请求道旅查价
-                        //1.组装参数
-                        Map<String, Object> mapReq = new HashMap<>();
-                        mapReq.put("HotelIDList", Arrays.asList(requestAllHotelIds.get(i)));
-                        mapReq.put("CheckInDate", startDate);
-                        mapReq.put("CheckOutDate", endDate);
-                        mapReq.put("Currency", "CNY");
-                        mapReq.put("Nationality", "CN");
-                        Map<String, Object> headerMap = new HashMap<>();
-                        headerMap.put("LicenseKey", LicenseKey);
-                        headerMap.put("ClientID", ClientID);
-                        mapReq.put("Header", headerMap);
-                        Map<String, Object> isRealTimeMap = new HashMap<>();
-                        isRealTimeMap.put("Value", false);
-                        isRealTimeMap.put("RoomCount", 1);
-                        mapReq.put("IsRealTime", isRealTimeMap);
-                        //2.请求道旅获取报价信息
-                        ResponseResult<CheckPriceResponse> result = new SearchAccess(CHECK_PRICE_URL, rateLimiter).access(mapReq);
-                        if (null == result.getData() || null == result.getData().getSuccess()) {
-                            log.info("请求道旅报价接口错误：request:{},response:{}", JsonUtils.writeObject2Json(mapReq),
-                                    JsonUtils.writeObject2Json(result));
-                            continue;
-                        }
-                        if (null == result.getData().getSuccess().getPriceDetails() || CollectionUtils.isEmpty(result.getData().getSuccess().getPriceDetails().getHotelList())) {
-                            log.info("该酒店无报价信息：{}", requestAllHotelIds.get(i));
-                            continue;
-                        }
-                        HotelType hotelType = result.getData().getSuccess().getPriceDetails().getHotelList().get(0);
-                        List<SupplierProductBaseRequest> supplierProductBaseRequests = new ArrayList<>();
-                        List<SupplierRoomBaseRequest> supplierRoomBaseSubRequest = supplierRoomListMap.get(String.valueOf(hotelType.getHotelID()));
-                        if (CollectionUtils.isEmpty(supplierRoomBaseSubRequest)) {
-                            continue;
-                        }
-                        for (HotelTypeRatePlan hotelTypeRatePlan : hotelType.getRatePlanList()) {
-                            if (null == hotelTypeRatePlan.getRoomTypeID()) {
-                                continue;
-                            }
-                            for (SupplierRoomBaseRequest roomBaseRequest : supplierRoomBaseSubRequest) {
-                                if (CollectionUtils.isEmpty(roomBaseRequest.getBedInfoList()) && Integer.valueOf(roomBaseRequest.getSupplierRoomId()).equals(hotelTypeRatePlan.getRoomTypeID())) {
-                                    List<List<BedInfoDTO>> bedList = getBedInfoMap(LicenseKey, ClientID).get(hotelTypeRatePlan.getBedType());
-                                    if (CollectionUtils.isNotEmpty(bedList)) {
-                                        roomBaseRequest.setBedInfoList(bedList);
-                                    }
-                                }
-                            }
-                            SupplierProductBaseRequest supplierProductBaseRequest = new SupplierProductBaseRequest().setSupplierId(10003)
-                                    .setSupplierHotelId(String.valueOf(hotelType.getHotelID()))
-                                    .setSupplierRoomId(String.valueOf(hotelTypeRatePlan.getRoomTypeID()))
-                                    .setSupplierProductId(String.valueOf(hotelTypeRatePlan.getRatePlanID()))
-                                    .setSupplierProductName(hotelTypeRatePlan.getRatePlanName())
-                                    .setSupplierProductNameCN(hotelTypeRatePlan.getRoomName_CN())
-                                    .setBreakfast(hotelTypeRatePlan.getPriceList().get(0).getMealAmount())
-                                    .setCancelType(0);
-                            supplierProductBaseRequests.add(supplierProductBaseRequest);
-                        }
-                        log.info("插入房型数量：{}", supplierRoomBaseSubRequest.size());
-                        hotelInfoIntlClient.saveRoomInfo(supplierRoomBaseSubRequest);
-                        log.info("插入产品数量：{}", supplierProductBaseRequests.size());
-                        hotelInfoIntlClient.saveProductInfo(supplierProductBaseRequests);
-                    }
-                    supplierRoomBaseRequests.clear();
-                }
-            } catch (Exception e) {
-                log.error("落库房型数据异常", e);
-                throw e;
             }
+        } catch (Exception e) {
+            log.error("落库房型数据异常", e);
+            throw e;
         }
-        List<String> hotelIds =
-                supplierRoomBaseRequests.stream().map(SupplierRoomBaseRequest::getSupplierHotelId).distinct().collect(Collectors.toList());
-        QueryHotelRequest queryHotelRequest = new QueryHotelRequest()
-                .setSupplierId(10003)
-                .setSupplierHotelIds(hotelIds);
-        InfoResult<List<SupplierHotelBaseResponse>> listHotelBaseResult = hotelInfoIntlClient.queryHotelList(queryHotelRequest);
-        List<SupplierHotelBaseResponse> supplierHotelBaseResponseList = listHotelBaseResult.getData();
-        if (CollectionUtils.isEmpty(supplierHotelBaseResponseList)) {
-            return;
-        }
-        List<String> supplierHotelIds =
-                supplierHotelBaseResponseList.stream().map(SupplierHotelBaseResponse::getSupplierHotelId).distinct().collect(Collectors.toList());
-        Map<String, List<SupplierRoomBaseRequest>> supplierRoomListMap =
-                supplierRoomBaseRequests.stream().filter(r -> supplierHotelIds.contains(r.getSupplierHotelId())).collect(Collectors.groupingBy(SupplierRoomBaseRequest::getSupplierHotelId));
-        List<Integer> requestAllHotelIds = supplierRoomListMap.keySet().stream().map(s -> Integer.parseInt(s)).collect(Collectors.toList());
-        for (int i = 0; i < requestAllHotelIds.size(); i++) {
-            //请求道旅查价
-            //1.组装参数
-            Map<String, Object> mapReq = new HashMap<>();
-            mapReq.put("HotelIDList", Arrays.asList(requestAllHotelIds.get(i)));
-            mapReq.put("CheckInDate", startDate);
-            mapReq.put("CheckOutDate", endDate);
-            mapReq.put("Currency", "CNY");
-            mapReq.put("Nationality", "CN");
-            Map<String, Object> headerMap = new HashMap<>();
-            headerMap.put("LicenseKey", LicenseKey);
-            headerMap.put("ClientID", ClientID);
-            mapReq.put("Header", headerMap);
-            Map<String, Object> isRealTimeMap = new HashMap<>();
-            isRealTimeMap.put("Value", false);
-            isRealTimeMap.put("RoomCount", 1);
-            mapReq.put("IsRealTime", isRealTimeMap);
-            //2.请求道旅获取报价信息
-            ResponseResult<CheckPriceResponse> result = new SearchAccess(CHECK_PRICE_URL, rateLimiter).access(mapReq);
-            if (null == result.getData() || null == result.getData().getSuccess()) {
-                log.info("请求道旅报价接口错误：request:{},response:{}", JsonUtils.writeObject2Json(mapReq),
-                        JsonUtils.writeObject2Json(result));
-                continue;
-            }
-            if (null == result.getData().getSuccess().getPriceDetails() || CollectionUtils.isEmpty(result.getData().getSuccess().getPriceDetails().getHotelList())) {
-                log.info("该酒店无报价信息：{}", requestAllHotelIds.get(i));
-                continue;
-            }
-            HotelType hotelType = result.getData().getSuccess().getPriceDetails().getHotelList().get(0);
-            List<SupplierProductBaseRequest> supplierProductBaseRequests = new ArrayList<>();
-            List<SupplierRoomBaseRequest> supplierRoomBaseSubRequest = supplierRoomListMap.get(String.valueOf(hotelType.getHotelID()));
-            if (CollectionUtils.isEmpty(supplierRoomBaseSubRequest)) {
-                continue;
-            }
-            for (HotelTypeRatePlan hotelTypeRatePlan : hotelType.getRatePlanList()) {
-                if (null == hotelTypeRatePlan.getRoomTypeID()) {
-                    continue;
-                }
-                for (SupplierRoomBaseRequest roomBaseRequest : supplierRoomBaseSubRequest) {
-                    if (CollectionUtils.isEmpty(roomBaseRequest.getBedInfoList()) && Integer.valueOf(roomBaseRequest.getSupplierRoomId()).equals(hotelTypeRatePlan.getRoomTypeID())) {
-                        List<List<BedInfoDTO>> bedList = getBedInfoMap(LicenseKey, ClientID).get(hotelTypeRatePlan.getBedType());
-                        if (CollectionUtils.isNotEmpty(bedList)) {
-                            roomBaseRequest.setBedInfoList(bedList);
-                        }
-                    }
-                }
-                SupplierProductBaseRequest supplierProductBaseRequest = new SupplierProductBaseRequest().setSupplierId(10003)
-                        .setSupplierHotelId(String.valueOf(hotelType.getHotelID()))
-                        .setSupplierRoomId(String.valueOf(hotelTypeRatePlan.getRoomTypeID()))
-                        .setSupplierProductId(String.valueOf(hotelTypeRatePlan.getRatePlanID()))
-                        .setSupplierProductName(hotelTypeRatePlan.getRatePlanName())
-                        .setSupplierProductNameCN(hotelTypeRatePlan.getRoomName_CN())
-                        .setBreakfast(hotelTypeRatePlan.getPriceList().get(0).getMealAmount())
-                        .setCancelType(0);
-                supplierProductBaseRequests.add(supplierProductBaseRequest);
-            }
-            log.info("插入房型数量：{}", supplierRoomBaseSubRequest.size());
-            hotelInfoIntlClient.saveRoomInfo(supplierRoomBaseSubRequest);
-            log.info("插入产品数量：{}", supplierProductBaseRequests.size());
-            hotelInfoIntlClient.saveProductInfo(supplierProductBaseRequests);
-        }
-        supplierRoomBaseRequests.clear();
     }
 
     public static void main(String[] args) {

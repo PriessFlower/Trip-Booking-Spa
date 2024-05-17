@@ -18,6 +18,8 @@ import org.redisson.api.RateIntervalUnit;
 
 import java.util.Map;
 
+import static jodd.util.ThreadUtil.sleep;
+
 /**
  * 查询道旅报价相关信息.
  *
@@ -31,7 +33,7 @@ public class SearchAccess extends BaseHttpAccess<Map<String, Object>, CheckPrice
 
     private String host;
 
-    private static int QPS = 100;
+    private static int QPS = 3;
 
     private DistributedRateLimiter redisRateLimiter;
 
@@ -55,8 +57,7 @@ public class SearchAccess extends BaseHttpAccess<Map<String, Object>, CheckPrice
     @Override
     protected void beforeAccess(Map<String, Object> request) {
         if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
-            throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
-                    + "request = " + JsonUtils.writeObject2Json(request));
+            sleep(1000);
         }
     }
 
