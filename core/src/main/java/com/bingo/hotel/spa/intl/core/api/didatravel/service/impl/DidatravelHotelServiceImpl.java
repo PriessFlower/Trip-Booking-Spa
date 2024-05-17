@@ -130,7 +130,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
     private DistributedRateLimiter rateLimiter;
 
     @Override
-    public void queryAndSaveStaticInfo(String staticType, String startDate, String endDate, int startNum, boolean downloadFlag) {
+    public void queryAndSaveStaticInfo(String staticType, String startDate, String endDate, int startNum, int endNum, boolean downloadFlag) {
         //1.组装参数
         Map<String, Object> mapReq = new HashMap<>();
         mapReq.put("IsGetUrlOnly", true);
@@ -154,7 +154,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
             }
             //4.解析文件数据并推送base服务
 //            readCSVFromURL(localFilePath, staticType);
-            readCSVFromFile(localFilePath, staticType, startDate, endDate, startNum);
+            readCSVFromFile(localFilePath, staticType, startDate, endDate, startNum, endNum);
 
             log.info("道旅静态数据处理完毕！");
         } catch (Exception e) {
@@ -193,7 +193,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         }
     }
 
-    public void readCSVFromFile(String filePath, String type, String startDate, String endDate, int startNum) throws IOException {
+    public void readCSVFromFile(String filePath, String type, String startDate, String endDate, int startNum, int endNum) throws IOException {
         List<String[]> csvData = new ArrayList<>();
         LineIterator lineIterator = null;
         try {
@@ -202,7 +202,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
             while (lineIterator.hasNext()) {
                 String line = lineIterator.nextLine();
                 String[] row = line.split("\\|", -1);
-                if (page++ < startNum) {
+                if (page++ < startNum || page > endNum) {
                     continue;
                 }
                 csvData.add(row);
@@ -362,6 +362,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                 isRealTimeMap.put("RoomCount", 1);
                 mapReq.put("IsRealTime", isRealTimeMap);
                 //2.请求道旅获取报价信息
+                log.info("请求酒店入参：{}", JsonUtils.writeObject2Json(mapReq));
                 ResponseResult<CheckPriceResponse> result = new SearchAccess(CHECK_PRICE_URL, rateLimiter).access(mapReq);
                 if (null == result.getData() || null == result.getData().getSuccess()) {
                     log.info("请求道旅报价接口错误：request:{},response:{}", JsonUtils.writeObject2Json(mapReq),
@@ -369,6 +370,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                     continue;
                 }
                 List<HotelType> hotelList = result.getData().getSuccess().getPriceDetails().getHotelList();
+                log.info("存在报价酒店数量为：{}", JsonUtils.writeObject2Json(hotelList));
                 for (HotelType hotelType : hotelList) {
                     List<SupplierProductBaseRequest> supplierProductBaseRequests = new ArrayList<>();
                     List<SupplierRoomBaseRequest> supplierRoomBaseSubRequest = supplierRoomListMap.get(String.valueOf(hotelType.getHotelID()));
