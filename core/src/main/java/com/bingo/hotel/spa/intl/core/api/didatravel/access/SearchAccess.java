@@ -9,9 +9,12 @@ import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierDataTypeEnum;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.common.exception.ParseException;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.CheckPriceResponse;
+import com.bingo.hotel.spa.intl.core.exception.RedisLimitException;
+import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RateIntervalUnit;
 
 import java.util.Map;
 
@@ -28,11 +31,15 @@ public class SearchAccess extends BaseHttpAccess<Map<String, Object>, CheckPrice
 
     private String host;
 
+    private static int QPS = 100;
 
-    public SearchAccess(String host) {
+    private DistributedRateLimiter redisRateLimiter;
+
+    public SearchAccess(String host, DistributedRateLimiter redisRateLimiter) {
         super(SupplierSourceEnum.DIDATRAVEL, SupplierDataTypeEnum.PRODUCT_PRICE,
                 MonitorNameEnum.SPA_SUPPLIER_API_PRODUCT_PRICES, 0);
         this.host = host;
+        this.redisRateLimiter = redisRateLimiter;
     }
 
     @Override
@@ -47,7 +54,10 @@ public class SearchAccess extends BaseHttpAccess<Map<String, Object>, CheckPrice
 
     @Override
     protected void beforeAccess(Map<String, Object> request) {
-
+        if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
+            throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
+                    + "request = " + JsonUtils.writeObject2Json(request));
+        }
     }
 
     @Override
