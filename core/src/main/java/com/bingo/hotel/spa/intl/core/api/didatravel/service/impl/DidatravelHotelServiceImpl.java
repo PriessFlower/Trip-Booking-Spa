@@ -370,7 +370,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                     continue;
                 }
                 List<HotelType> hotelList = result.getData().getSuccess().getPriceDetails().getHotelList();
-                log.info("存在报价酒店数量为：{}", JsonUtils.writeObject2Json(hotelList));
+                log.info("存在报价酒店数量为：{}", hotelList.size());
                 for (HotelType hotelType : hotelList) {
                     List<SupplierProductBaseRequest> supplierProductBaseRequests = new ArrayList<>();
                     List<SupplierRoomBaseRequest> supplierRoomBaseSubRequest = supplierRoomListMap.get(String.valueOf(hotelType.getHotelID()));

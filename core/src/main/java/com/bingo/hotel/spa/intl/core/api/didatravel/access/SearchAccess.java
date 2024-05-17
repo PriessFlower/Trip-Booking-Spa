@@ -39,7 +39,7 @@ public class SearchAccess extends BaseHttpAccess<Map<String, Object>, CheckPrice
 
     public SearchAccess(String host, DistributedRateLimiter redisRateLimiter) {
         super(SupplierSourceEnum.DIDATRAVEL, SupplierDataTypeEnum.PRODUCT_PRICE,
-                MonitorNameEnum.SPA_SUPPLIER_API_PRODUCT_PRICES, 0);
+                MonitorNameEnum.SPA_SUPPLIER_API_PRODUCT_PRICES, 1);
         this.host = host;
         this.redisRateLimiter = redisRateLimiter;
     }
@@ -57,6 +57,7 @@ public class SearchAccess extends BaseHttpAccess<Map<String, Object>, CheckPrice
     @Override
     protected void beforeAccess(Map<String, Object> request) {
         if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
+            log.info("每秒请求超过{}次", QPS);
             sleep(1000);
         }
     }
