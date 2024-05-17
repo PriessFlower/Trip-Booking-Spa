@@ -130,7 +130,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
     private DistributedRateLimiter rateLimiter;
 
     @Override
-    public void queryAndSaveStaticInfo(String staticType, String startDate, String endDate, int startNum) {
+    public void queryAndSaveStaticInfo(String staticType, String startDate, String endDate, int startNum, boolean downloadFlag) {
         //1.组装参数
         Map<String, Object> mapReq = new HashMap<>();
         mapReq.put("IsGetUrlOnly", true);
@@ -149,7 +149,9 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
             //3.解析地址下载文件
             String csvUrl = result.getData().getUrl();
             String localFilePath = LOCAL_FILE_PATH + csvUrl.substring(csvUrl.lastIndexOf("/"), csvUrl.indexOf("?"));
-            downloadFile(csvUrl, localFilePath);
+            if (downloadFlag) {
+                downloadFile(csvUrl, localFilePath);
+            }
             //4.解析文件数据并推送base服务
 //            readCSVFromURL(localFilePath, staticType);
             readCSVFromFile(localFilePath, staticType, startDate, endDate, startNum);

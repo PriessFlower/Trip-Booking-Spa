@@ -51,8 +51,9 @@ public class BackDoorController {
     public HttpResponse hotelListDL(@RequestParam("staticType") String staticType,
                                     @RequestParam("startDate") String startDate,
                                     @RequestParam("endDate") String endDate,
-                                    @RequestParam("startNum") int startNum) {
-        didatravelHotelService.queryAndSaveStaticInfo(staticType, startDate, endDate, startNum);
+                                    @RequestParam("startNum") int startNum,
+                                    @RequestParam("downloadFlag") boolean downloadFlag) {
+        didatravelHotelService.queryAndSaveStaticInfo(staticType, startDate, endDate, startNum, downloadFlag);
         return HttpResponse.getSuccessInstance();
     }
 
