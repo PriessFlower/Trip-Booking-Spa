@@ -1,5 +1,6 @@
 package com.bingo.hotel.spa.intl.core.redis;
 
+import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RRateLimiter;
 import org.redisson.api.RateIntervalUnit;
 import org.redisson.api.RateType;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
 import java.util.concurrent.TimeUnit;
 
 @Component
+@Slf4j
 public class DistributedRateLimiter {
 
     @Autowired
@@ -23,6 +25,8 @@ public class DistributedRateLimiter {
 
     public boolean tryAcquire(String name, long rate, RateIntervalUnit unit, long rateInterval,int timeOut) {
         RRateLimiter rateLimiter = getRateLimiter(name, rate, unit, rateInterval);
+        long l = rateLimiter.availablePermits();
+        log.info("可用令牌：{}", l);
         return rateLimiter.tryAcquire(1);
     }
 }
