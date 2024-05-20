@@ -471,7 +471,11 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
             }
         } catch (Exception e) {
             log.error("落库房型数据异常", e);
-            throw e;
+            try {
+                throw e;
+            } catch (InterruptedException ex) {
+                throw new RuntimeException(ex);
+            }
         }
     }
 
