@@ -364,6 +364,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                 //2.请求道旅获取报价信息
                 log.info("请求酒店入参：{}", JsonUtils.writeObject2Json(mapReq));
                 ResponseResult<CheckPriceResponse> result = new SearchAccess(CHECK_PRICE_URL, rateLimiter).access(mapReq);
+                Thread.sleep(500);
                 if (null == result.getData() || null == result.getData().getSuccess()) {
                     log.info("请求道旅报价接口错误：request:{},response:{}", JsonUtils.writeObject2Json(mapReq),
                             JsonUtils.writeObject2Json(result));

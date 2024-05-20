@@ -23,6 +23,6 @@ public class DistributedRateLimiter {
 
     public boolean tryAcquire(String name, long rate, RateIntervalUnit unit, long rateInterval,int timeOut) {
         RRateLimiter rateLimiter = getRateLimiter(name, rate, unit, rateInterval);
-        return rateLimiter.tryAcquire(timeOut, TimeUnit.SECONDS);
+        return rateLimiter.tryAcquire(1);
     }
 }

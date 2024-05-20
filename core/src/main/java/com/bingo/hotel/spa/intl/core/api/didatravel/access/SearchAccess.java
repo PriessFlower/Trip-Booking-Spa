@@ -9,7 +9,6 @@ import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierDataTypeEnum;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.common.exception.ParseException;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.CheckPriceResponse;
-import com.bingo.hotel.spa.intl.core.exception.RedisLimitException;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
@@ -18,7 +17,6 @@ import org.redisson.api.RateIntervalUnit;
 
 import java.util.Map;
 
-import static jodd.util.ThreadUtil.sleep;
 
 /**
  * 查询道旅报价相关信息.
@@ -58,7 +56,10 @@ public class SearchAccess extends BaseHttpAccess<Map<String, Object>, CheckPrice
     protected void beforeAccess(Map<String, Object> request) {
         if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
             log.info("每秒请求超过{}次", QPS);
-            sleep(1000);
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+            }
         }
     }
 

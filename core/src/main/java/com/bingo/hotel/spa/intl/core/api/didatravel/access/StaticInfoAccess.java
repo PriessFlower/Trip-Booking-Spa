@@ -38,7 +38,7 @@ public class StaticInfoAccess extends BaseHttpAccess<Map<String, Object>, UrlDTO
     protected ResponseResult<UrlDTO> request(String url, Map<String, Object> request, IParser<UrlDTO> parser) throws Exception {
         long start = System.currentTimeMillis();
         ResponseResult<UrlDTO> result = HttpUtils.access(url, null, JsonUtils.writeObject2Json(request), parser);
-        log.info("道旅查询接口耗时：{}", System.currentTimeMillis() - start);
+        log.info("道旅查询静态数据接口耗时：{}", System.currentTimeMillis() - start);
         return result;
     }
 
