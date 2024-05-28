@@ -1,6 +1,6 @@
 package com.bingo.hotel.spa.intl.core.api.didatravel.access;
 
-import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson.JSON;
 import com.bingo.hotel.spa.intl.core.api.common.access.BaseHttpAccess;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.IParser;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
@@ -8,7 +8,7 @@ import com.bingo.hotel.spa.intl.core.api.common.enums.MonitorNameEnum;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierDataTypeEnum;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.common.exception.ParseException;
-import com.bingo.hotel.spa.intl.core.api.didatravel.bean.UrlDTO;
+import com.bingo.hotel.spa.intl.core.api.didatravel.bean.QueryBedTypeResponse;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -16,29 +16,28 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.Map;
 
 /**
- * 请求道旅获取静态数据.
+ * 床型枚举查询.
  *
  * @author : hanJH
- * @version : 1.0 2024/05/10
+ * @version : 1.0 2024/05/15
  * @since : 1.0
  **/
 @Slf4j
-public class StaticInfoAccess extends BaseHttpAccess<Map<String, Object>, UrlDTO> {
+public class BedTypeAccess extends BaseHttpAccess<Map<String, Object>, QueryBedTypeResponse> {
 
     private String host;
 
-
-    public StaticInfoAccess(String host) {
+    public BedTypeAccess(String host) {
         super(SupplierSourceEnum.DIDATRAVEL, SupplierDataTypeEnum.STATIC_DATA,
-                MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_LIST, 0);
+                MonitorNameEnum.SPA_SUPPLIER_BED_TYPE, 0);
         this.host = host;
     }
 
     @Override
-    protected ResponseResult<UrlDTO> request(String url, Map<String, Object> request, IParser<UrlDTO> parser) throws Exception {
+    protected ResponseResult<QueryBedTypeResponse> request(String url, Map<String, Object> request, IParser<QueryBedTypeResponse> parser) throws Exception {
         long start = System.currentTimeMillis();
-        ResponseResult<UrlDTO> result = HttpUtils.access(url, null, JsonUtils.writeObject2Json(request), parser);
-        log.info("道旅查询静态数据接口耗时：{}", System.currentTimeMillis() - start);
+        ResponseResult<QueryBedTypeResponse> result = HttpUtils.access(url, null, JsonUtils.writeObject2Json(request), parser);
+        log.info("道旅查询床型接口耗时：{}", System.currentTimeMillis() - start);
         return result;
     }
 
@@ -53,9 +52,9 @@ public class StaticInfoAccess extends BaseHttpAccess<Map<String, Object>, UrlDTO
     }
 
     @Override
-    protected UrlDTO parseResponse(String data) {
+    protected QueryBedTypeResponse parseResponse(String data) {
         try {
-            return new UrlDTO().setUrl(JSONObject.parseObject(data).get("Url").toString());
+            return JSON.parseObject(data, QueryBedTypeResponse.class);
         } catch (Exception e) {
             throw new ParseException(e);
         }

@@ -48,8 +48,13 @@ public class BackDoorController {
 
     @GetMapping("/push/DL")
     @ApiOperation("酒店静态数据查询-道旅")
-    public HttpResponse hotelListDL(@RequestParam("staticType") String staticType) {
-        didatravelHotelService.queryAndSaveStaticInfo(staticType);
+    public HttpResponse hotelListDL(@RequestParam("staticType") String staticType,
+                                    @RequestParam("startDate") String startDate,
+                                    @RequestParam("endDate") String endDate,
+                                    @RequestParam("startNum") int startNum,
+                                    @RequestParam("endNum") int endNum,
+                                    @RequestParam("downloadFlag") boolean downloadFlag) {
+        didatravelHotelService.queryAndSaveStaticInfo(staticType, startDate, endDate, startNum, endNum, downloadFlag);
         return HttpResponse.getSuccessInstance();
     }
 

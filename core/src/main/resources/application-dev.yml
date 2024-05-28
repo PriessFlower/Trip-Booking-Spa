@@ -17,7 +17,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries = true&nullCatalogMeansCurrent=true&serverTimezone=GMT%2B8
   redis:
-    host: localhost
+    host: 8.146.211.133
     port: 6379
     password:
     lettuce:
@@ -138,3 +138,7 @@ aichotels:
     prebook: /rate/public/booking/prebook
   apiClientKey: BeijingBaosheng
   secret: SRLxRgRXjjaPCWUbcWcwriusUNtpYe3VxRg9
+didatravel:
+  licenseKey: BSYX_textkey
+  clientId: BSYX_text
+  localFilePath: D:\working\file\导出文件\hotel_info

@@ -1,24 +1,42 @@
 package com.bingo.hotel.spa.intl.core.api.didatravel.service.impl;
 
-import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
-import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
+import com.alibaba.fastjson.JSON;
+import com.bingo.hotel.base.intl.cli.enums.BedTypeAllEnum;
+import com.bingo.hotel.info.intl.cli.client.HotelInfoIntlClient;
+import com.bingo.hotel.info.intl.cli.dto.BedInfoDTO;
+import com.bingo.hotel.info.intl.cli.enums.BroadnetEnum;
+import com.bingo.hotel.info.intl.cli.request.QueryHotelRequest;
+import com.bingo.hotel.info.intl.cli.request.SupplierHotelBaseRequest;
+import com.bingo.hotel.info.intl.cli.request.SupplierProductBaseRequest;
+import com.bingo.hotel.info.intl.cli.request.SupplierRoomBaseRequest;
+import com.bingo.hotel.info.intl.cli.response.SupplierHotelBaseResponse;
+import com.bingo.hotel.info.intl.cli.result.InfoResult;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
-import com.bingo.hotel.spa.intl.core.api.didatravel.access.DidaTravelAccess;
-import com.bingo.hotel.spa.intl.core.api.didatravel.access.PriceConfirmAccess;
+import com.bingo.hotel.spa.intl.core.api.didatravel.access.BedTypeAccess;
+import com.bingo.hotel.spa.intl.core.api.didatravel.access.SearchAccess;
 import com.bingo.hotel.spa.intl.core.api.didatravel.access.StaticInfoAccess;
+import com.bingo.hotel.spa.intl.core.api.didatravel.bean.BedTypeList;
+import com.bingo.hotel.spa.intl.core.api.didatravel.bean.CheckPriceResponse;
+import com.bingo.hotel.spa.intl.core.api.didatravel.bean.GetBedTypeListRSSuccess;
+import com.bingo.hotel.spa.intl.core.api.didatravel.bean.HotelType;
+import com.bingo.hotel.spa.intl.core.api.didatravel.bean.HotelTypeRatePlan;
+import com.bingo.hotel.spa.intl.core.api.didatravel.bean.QueryBedTypeResponse;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.UrlDTO;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.DidaTravelRequest;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.DidaTravelResponse;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.priceConfirm.PriceConfirmRequest;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.priceConfirm.PriceConfirmResponse;
 import com.bingo.hotel.spa.intl.core.api.didatravel.service.DidatravelHotelService;
+import com.bingo.hotel.spa.intl.core.api.travelconnect.bean.search.response.SearchResponse;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
+import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * @author EDY
@@ -27,7 +45,10 @@ import java.util.Map;
 @Service
 public class DidatravelHotelServiceImpl implements DidatravelHotelService {
 
-    private static final String STATIC_INFO_URL = "https://api.didatravel.com/api/staticdata/GetStaticInformation?$format=json";
+    private final static String QUERY_BED_URL = "https://api.didatravel.com/api/staticdata/GetBedTypeList?$format=json";
+    private final static String STATIC_INFO_URL = "https://api.didatravel.com/api/staticdata/GetStaticInformation?$format=json";
+
+    private final static String CHECK_PRICE_URL = "https://api.didatravel.com/api/rate/pricesearch?$format=json";
     private static final String PRICE_URL = "https://api.didatravel.com/api/rate/pricesearch?$format=json";
     private static final String PRICECONFRIM_URL = "https://api.didatravel.com/api/rate/PriceConfirm?$format=json";
 

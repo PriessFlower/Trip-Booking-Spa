@@ -12,9 +12,11 @@ import com.bingo.hotel.spa.intl.core.api.travelconnect.bean.search.response.Sear
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.google.common.collect.Maps;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
 
+@Slf4j
 public class SearchAccess extends BaseHttpAccess<SearchRequest, SearchResponse> {
     private String host;
 

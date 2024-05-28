@@ -104,3 +104,7 @@ aichotels:
     prebook: /rate/public/booking/prebook
   apiClientKey: BeijingBaosheng
   secret: SRLxRgRXjjaPCWUbcWcwriusUNtpYe3VxRg9
+didatravel:
+  licenseKey: BSYX_key0509
+  clientId: BSYX
+  localFilePath: /home/webrun/logs/file

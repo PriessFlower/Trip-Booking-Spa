@@ -9,7 +9,7 @@ import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.priceConfirm.Pric
  * @author EDY
  */
 public interface DidatravelHotelService {
-     void queryAndSaveStaticInfo (String staticType);
+    void queryAndSaveStaticInfo(String staticType, String startTime, String endTime, int startNum, int endNum, boolean downloadFlag);
 
      DidaTravelResponse getHotelService(PriceReq priceReq, String sHotelId);
 

@@ -1,6 +1,7 @@
 /web/target/
 /core/target/
 /cli/target/
+/benchmark/target/
 !.mvn/wrapper/maven-wrapper.jar
 
 ### STS ###

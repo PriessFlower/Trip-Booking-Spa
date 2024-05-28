@@ -55,6 +55,9 @@ public class AvailabilityAccess extends BaseHttpAccess<AvailabilityRequest, Avai
         long start = System.currentTimeMillis();
         ResponseResult<AvailabilityResponse> result = HttpUtils.access(url, headers, JsonUtils.writeObject2Json(request), parser);
         log.info("美联查询接口耗时：{}", System.currentTimeMillis() - start);
+        if (result.getHttpStatus() == 429 || result.getData().getResult().getReturn_status().getException().equals("Exceeded the allowed QPS")) {
+            return null;
+        }
         AvailabilityResponse response = result.getData();
         response.setHotelCode(request.getHotel_id() + "");
         result.setData(response);
