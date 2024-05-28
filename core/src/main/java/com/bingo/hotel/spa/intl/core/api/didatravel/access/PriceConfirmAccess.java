@@ -1,0 +1,51 @@
+package com.bingo.hotel.spa.intl.core.api.didatravel.access;
+
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import com.bingo.hotel.spa.intl.core.api.common.access.BaseHttpAccess;
+import com.bingo.hotel.spa.intl.core.api.common.asynchttp.IParser;
+import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
+import com.bingo.hotel.spa.intl.core.api.common.enums.MonitorNameEnum;
+import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierDataTypeEnum;
+import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
+import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.priceConfirm.PriceConfirmRequest;
+import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.priceConfirm.PriceConfirmResponse;
+import com.bingo.hotel.spa.intl.core.util.HttpUtils;
+
+public class PriceConfirmAccess extends BaseHttpAccess<PriceConfirmRequest, PriceConfirmResponse> {
+
+    private String host;
+    public PriceConfirmAccess(String host) {
+        super(SupplierSourceEnum.DIDATRAVEL, SupplierDataTypeEnum.STATIC_DATA,
+                MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_LIST, 0);
+        this.host = host;
+    }
+
+    @Override
+    protected ResponseResult<PriceConfirmResponse> request(String url, PriceConfirmRequest request, IParser<PriceConfirmResponse> parser) throws Exception {
+        ResponseResult<PriceConfirmResponse> result = HttpUtils.access(url, null, JSON.toJSONString(request), parser);
+        return result;
+    }
+
+    @Override
+    protected void beforeAccess(PriceConfirmRequest request) {
+
+    }
+
+    @Override
+    protected String buildRequestUrl() {
+        return host;
+    }
+
+    @Override
+    protected PriceConfirmResponse parseResponse(String data) {
+        JSONObject jsonObject = JSONObject.parseObject(data);
+        if(jsonObject.containsKey("Error")){
+            JSONObject error = jsonObject.getJSONObject("Error");
+            String message = error.getString("Message");
+            throw new RuntimeException(message);
+        }
+        PriceConfirmResponse response = JSONObject.parseObject(data, PriceConfirmResponse.class);
+        return response;
+    }
+}

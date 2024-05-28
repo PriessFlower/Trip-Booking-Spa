@@ -16,19 +16,15 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="false">
-          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.22/lombok-1.18.22.jar" />
-          <entry name="$MAVEN_REPOSITORY$/org/mapstruct/mapstruct-processor/1.5.1.Final/mapstruct-processor-1.5.1.Final.jar" />
-          <entry name="$MAVEN_REPOSITORY$/org/mapstruct/mapstruct/1.5.1.Final/mapstruct-1.5.1.Final.jar" />
+          <entry name="$PROJECT_DIR$/../../../anzhuang/apache-maven-3.8.1/mvn_resp/org/projectlombok/lombok/1.18.22/lombok-1.18.22.jar" />
+          <entry name="$PROJECT_DIR$/../../../anzhuang/apache-maven-3.8.1/mvn_resp/org/mapstruct/mapstruct-processor/1.5.1.Final/mapstruct-processor-1.5.1.Final.jar" />
+          <entry name="$PROJECT_DIR$/../../../anzhuang/apache-maven-3.8.1/mvn_resp/org/mapstruct/mapstruct/1.5.1.Final/mapstruct-1.5.1.Final.jar" />
         </processorPath>
         <module name="web" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
-      <module name="benchmark" target="11" />
-      <module name="cli" target="11" />
-      <module name="core" target="11" />
       <module name="SPA" target="11" />
-      <module name="web" target="11" />
     </bytecodeTargetLevel>
   </component>
   <component name="JavacSettings">
@@ -37,6 +33,7 @@
       <module name="benchmark" options="-parameters" />
       <module name="cli" options="-parameters" />
       <module name="core" options="-parameters" />
+      <module name="supplier-product-adapter-intl" options="-parameters" />
       <module name="web" options="-parameters" />
     </option>
   </component>
