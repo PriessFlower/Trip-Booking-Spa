@@ -14,8 +14,8 @@ import java.util.Date;
 public class RedisRecordLogServiceImpl implements RecordLogService {
 
     public static final String DAOLV_QPS_KEY_PREFIX = "record:daolv:qps:";
-    public static final String AICHOTELS_QPS_KEY_PREFIX = "record:daolv:qps:";
-    public static final String TRAVELCONNECT_QPS_KEY_PREFIX = "record:daolv:qps:";
+    public static final String AICHOTELS_QPS_KEY_PREFIX = "record:aichotels:qps:";
+    public static final String TRAVELCONNECT_QPS_KEY_PREFIX = "record:travelconnect:qps:";
 
     @Autowired
     RedisUtils redisUtils;
