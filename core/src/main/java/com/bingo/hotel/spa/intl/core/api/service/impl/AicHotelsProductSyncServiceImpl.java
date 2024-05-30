@@ -9,6 +9,7 @@ import com.bingo.hotel.spa.intl.core.api.aichotels.bean.price.prebook.PreBookRes
 import com.bingo.hotel.spa.intl.core.api.aichotels.service.AichotelsHotelService;
 import com.bingo.hotel.spa.intl.core.api.aichotels.utils.AichotelsProductConvertUtil;
 import com.bingo.hotel.spa.intl.core.api.service.AbstractProductSyncSupportService;
+import com.bingo.hotel.spa.intl.core.api.service.RecordLogService;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.bean.search.response.SearchResponse;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.service.TravelconnectHotelService;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.utils.TravelConnectProductConvertUtil;
@@ -17,6 +18,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.Resource;
 import java.util.List;
 
 @Service("aicHotelsProductSyncService")
@@ -26,8 +28,12 @@ public class AicHotelsProductSyncServiceImpl extends AbstractProductSyncSupportS
     @Autowired
     private AichotelsHotelService aichotelsHotelService;
 
+    @Resource(name = "redisRecordLogServiceImpl")
+    private RecordLogService redisRecordLogServiceImpl;
+
     @Override
     public AvailabilityResponse querySupplierPrice(PriceReq priceReq, Supplier supplier) {
+        redisRecordLogServiceImpl.recordAichotelsQps();
         if (StringUtils.isEmpty(supplier.getSProductId())) {
             return aichotelsHotelService.getHotelPrice(priceReq, supplier.getSHotelId());
         } else {

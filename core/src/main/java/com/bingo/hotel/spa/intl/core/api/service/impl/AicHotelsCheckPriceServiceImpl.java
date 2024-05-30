@@ -5,6 +5,7 @@ import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.core.api.aichotels.bean.price.prebook.PreBookResponse;
 import com.bingo.hotel.spa.intl.core.api.aichotels.service.AichotelsHotelService;
 import com.bingo.hotel.spa.intl.core.api.service.AbstractCheckPriceSyncSupportService;
+import com.bingo.hotel.spa.intl.core.api.service.RecordLogService;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.bean.prebook.response.PrebookResponse;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.bean.search.response.SearchResponse;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.service.TravelconnectHotelService;
@@ -12,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.Resource;
 import java.math.BigDecimal;
 import java.util.stream.Collectors;
 
@@ -21,9 +23,12 @@ public class AicHotelsCheckPriceServiceImpl extends AbstractCheckPriceSyncSuppor
 
     @Autowired
     private AichotelsHotelService aichotelsHotelService;
+    @Resource(name="redisRecordLogServiceImpl")
+    private RecordLogService redisRecordLogServiceImpl;
 
     @Override
     public PreBookResponse doCheckPrice(CheckPriceReq checkPriceReq) {
+        redisRecordLogServiceImpl.recordAichotelsQps();
         return aichotelsHotelService.checkPrice(checkPriceReq);
     }
 

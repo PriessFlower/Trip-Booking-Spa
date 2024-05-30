@@ -359,6 +359,19 @@ public class RedisUtils {
     }
 
     /**
+     * 计数器
+     *
+     * @param key Redis键名
+     * @return 是否存在
+     */
+    public Long incr(final String key) {
+        Long result = null;
+        ValueOperations<String, String> operations = redisTemplate.opsForValue();
+        result = operations.increment(key);
+        return result;
+    }
+
+    /**
      * 模糊查询Redis键名
      *
      * @param pattern 键名包含字符串&#xff08;如&#xff1a;myKey*&#xff09;
