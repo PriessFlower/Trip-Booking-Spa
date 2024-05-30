@@ -515,8 +515,8 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         Map<String, Object> mapReq = new HashMap<>();
         mapReq.put("IsGetUrlOnly", true);
         DidaTravelRequest.HeaderType headerType = new DidaTravelRequest.HeaderType();
-        headerType.setLicenseKey("BSYX_textkey");
-        headerType.setClientID("BSYX_text");
+        headerType.setLicenseKey(LicenseKey);
+        headerType.setClientID(ClientID);
 
         ArrayList<Integer> list = new ArrayList<>();
         list.add(Integer.parseInt(sHotelId));
@@ -553,8 +553,8 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         Map<String, Object> mapReq = new HashMap<>();
         mapReq.put("IsGetUrlOnly", true);
         PriceConfirmRequest.HeaderType headerType = new PriceConfirmRequest.HeaderType();
-        headerType.setLicenseKey("BSYX_textkey");
-        headerType.setClientID("BSYX_text");
+        headerType.setLicenseKey(LicenseKey);
+        headerType.setClientID(ClientID);
 
         PriceConfirmRequest.RoomOccupancyType roomOccupancyType = new PriceConfirmRequest.RoomOccupancyType();
         roomOccupancyType.setAdultCount(checkPriceReq.getAdultCount());
