@@ -3,6 +3,7 @@ package com.bingo.hotel.spa.intl.core.api.service.impl;
 import com.bingo.hotel.spa.intl.core.api.service.RecordLogService;
 import com.bingo.hotel.spa.intl.core.redis.RedisUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.text.SimpleDateFormat;
@@ -15,6 +16,9 @@ public class RedisRecordLogServiceImpl implements RecordLogService {
     public static final String DAOLV_QPS_KEY_PREFIX = "record:daolv:qps:";
     public static final String AICHOTELS_QPS_KEY_PREFIX = "record:daolv:qps:";
     public static final String TRAVELCONNECT_QPS_KEY_PREFIX = "record:daolv:qps:";
+
+    @Autowired
+    RedisUtils redisUtils;
 
     @Override
     public void recordDaolvQps() {
@@ -39,7 +43,6 @@ public class RedisRecordLogServiceImpl implements RecordLogService {
             String[] dateFormatSplit = dateFormat.split("&");
             String date = dateFormatSplit[0];
             String time = dateFormatSplit[1];
-            RedisUtils redisUtils = new RedisUtils();
             redisUtils.incr(key + date + ":" + time);
         } catch (Exception e) {
             log.error("记录qps异常", e);
