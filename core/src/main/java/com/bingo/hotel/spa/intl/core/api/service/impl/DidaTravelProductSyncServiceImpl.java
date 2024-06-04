@@ -1,9 +1,13 @@
 package com.bingo.hotel.spa.intl.core.api.service.impl;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
+import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.DidaTravelResponse;
+import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.priceConfirm.PriceConfirmResponse;
 import com.bingo.hotel.spa.intl.core.api.didatravel.service.DidatravelHotelService;
 import com.bingo.hotel.spa.intl.core.api.didatravel.utils.DidaTravelProductConvertUtil;
 import com.bingo.hotel.spa.intl.core.api.service.AbstractProductSyncSupportService;
@@ -28,18 +32,35 @@ public class DidaTravelProductSyncServiceImpl extends AbstractProductSyncSupport
     @Override
     public DidaTravelResponse querySupplierPrice(PriceReq priceReq, Supplier supplier) {
         redisRecordLogServiceImpl.recordDaolvQps();
-        DidaTravelResponse response = didatravelHotelService.getHotelService(priceReq, supplier.getSHotelId());
-
+        DidaTravelResponse response = null;
         if(StringUtils.isNotBlank(supplier.getSProductId())){
-            Iterator<DidaTravelResponse.HotelTypeRatePlan> iterator = response.getSuccess().getPriceDetails().getHotelList().get(0).getRatePlanList().iterator();
-            while (iterator.hasNext()) {
-                DidaTravelResponse.HotelTypeRatePlan next = iterator.next();
-                if(!next.getRatePlanID().equals(supplier.getSProductId())){
-                    iterator.remove();
-                }
-            }
+            PriceConfirmResponse checkPrice = didatravelHotelService.checkPrice(buildCheckPriceReq(priceReq, supplier), false);
+            response = buildResponse(checkPrice);
+        } else {
+            response = didatravelHotelService.getHotelService(priceReq, supplier.getSHotelId());
         }
         return response;
+    }
+
+    private DidaTravelResponse buildResponse(PriceConfirmResponse checkResponse) {
+        String jsonString = JSON.toJSONString(checkResponse);
+        DidaTravelResponse response = JSONObject.parseObject(jsonString, DidaTravelResponse.class);
+        return response;
+    }
+
+    public CheckPriceReq buildCheckPriceReq(PriceReq priceReq, Supplier supplier) {
+        return CheckPriceReq.builder()
+                .checkIn(priceReq.getCheckIn())
+                .checkOut(priceReq.getCheckout())
+                .sProductId(supplier.getSProductId())
+                .sHotelId(supplier.getSHotelId())
+                .supplierId(supplier.getSupplierId())
+                .roomNum(priceReq.getRoomNum())
+                .totalPrice(0)
+                .sCityCode(supplier.getSCityCode())
+                .adultCount(priceReq.getAdultNum())
+//                .planSession()
+                .build();
     }
 
     @Override

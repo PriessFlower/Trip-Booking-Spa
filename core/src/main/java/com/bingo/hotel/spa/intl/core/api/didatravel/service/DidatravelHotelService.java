@@ -13,6 +13,8 @@ public interface DidatravelHotelService {
 
      DidaTravelResponse getHotelService(PriceReq priceReq, String sHotelId);
 
-     PriceConfirmResponse checkPrice(CheckPriceReq checkPriceReq);
+
+    PriceConfirmResponse checkPrice(CheckPriceReq checkPriceReq);
+    PriceConfirmResponse checkPrice(CheckPriceReq checkPriceReq, boolean preBook);
 
 }
