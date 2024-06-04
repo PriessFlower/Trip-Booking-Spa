@@ -298,7 +298,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                         .setIntroduceInfo("");
                 supplierHotelBaseRequests.add(supplierHotelBaseRequest);
             } catch (Exception e) {
-                System.out.println(JSON.toJSONString(row));
+                log.info(JSON.toJSONString(row));
                 throw e;
             }
             if (supplierHotelBaseRequests.size() >= 50) {
@@ -400,7 +400,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                         SupplierProductBaseRequest supplierProductBaseRequest = new SupplierProductBaseRequest().setSupplierId(10003)
                                 .setSupplierHotelId(String.valueOf(hotelType.getHotelID()))
                                 .setSupplierRoomId(String.valueOf(hotelTypeRatePlan.getRoomTypeID()))
-                                .setSupplierProductId(String.valueOf(hotelTypeRatePlan.getRatePlanID()))
+                                .setSupplierProductId(hotelTypeRatePlan.getRatePlanID())
                                 .setSupplierProductName(hotelTypeRatePlan.getRatePlanName())
                                 .setSupplierProductNameCN(hotelTypeRatePlan.getRoomName_CN())
                                 .setBreakfast(hotelTypeRatePlan.getPriceList().get(0).getMealAmount())
