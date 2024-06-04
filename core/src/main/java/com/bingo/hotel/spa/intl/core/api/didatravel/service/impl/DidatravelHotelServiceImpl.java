@@ -542,7 +542,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                 .Nationality("CN")
                 .IsNeedOnRequest(false)
                 .build();
-        ResponseResult<DidaTravelResponse> access = new DidaTravelAccess(PRICE_URL).access(didaTravelRequest);
+        ResponseResult<DidaTravelResponse> access = new DidaTravelAccess(PRICE_URL, rateLimiter).access(didaTravelRequest);
 
 //        return JsonUtils.readValue(access.getOrigData(), DidaTravelResponse.class);
         return access.getData();
@@ -568,6 +568,41 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         PriceConfirmRequest priceConfirmRequest = PriceConfirmRequest.builder()
                 .Header(headerType)
                 .PreBook(true)
+                .CheckInDate(checkPriceReq.getCheckIn())
+                .CheckOutDate(checkPriceReq.getCheckOut())
+                .NumOfRooms(checkPriceReq.getRoomNum())
+                .HotelID(Integer.valueOf(checkPriceReq.getSHotelId()))
+                .OccupancyDetails(roomOccupancyTypeList)
+                .Currency("CNY")
+                .Nationality("CN")
+                .RatePlanID(checkPriceReq.getSProductId())
+                .IsNeedOnRequest(false)
+                .build();
+
+        ResponseResult<PriceConfirmResponse> access = new PriceConfirmAccess(PRICECONFRIM_URL).access(priceConfirmRequest);
+        return access.getData();
+    }
+
+    @Override
+    public PriceConfirmResponse checkPrice(CheckPriceReq checkPriceReq, boolean preBook) {
+        Map<String, Object> mapReq = new HashMap<>();
+        mapReq.put("IsGetUrlOnly", true);
+        PriceConfirmRequest.HeaderType headerType = new PriceConfirmRequest.HeaderType();
+        headerType.setLicenseKey(LicenseKey);
+        headerType.setClientID(ClientID);
+
+        PriceConfirmRequest.RoomOccupancyType roomOccupancyType = new PriceConfirmRequest.RoomOccupancyType();
+        roomOccupancyType.setAdultCount(checkPriceReq.getAdultCount());
+        roomOccupancyType.setChildCount(0);
+        roomOccupancyType.setRoomNum(1);
+        roomOccupancyType.setChildAgeDetails(new ArrayList<>());
+
+        ArrayList<PriceConfirmRequest.RoomOccupancyType> roomOccupancyTypeList = new ArrayList<>();
+        roomOccupancyTypeList.add(roomOccupancyType);
+
+        PriceConfirmRequest priceConfirmRequest = PriceConfirmRequest.builder()
+                .Header(headerType)
+                .PreBook(preBook)
                 .CheckInDate(checkPriceReq.getCheckIn())
                 .CheckOutDate(checkPriceReq.getCheckOut())
                 .NumOfRooms(checkPriceReq.getRoomNum())

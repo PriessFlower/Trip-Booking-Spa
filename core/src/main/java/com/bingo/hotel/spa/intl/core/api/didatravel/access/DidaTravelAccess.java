@@ -10,18 +10,27 @@ import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierDataTypeEnum;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.DidaTravelRequest;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.DidaTravelResponse;
+import com.bingo.hotel.spa.intl.core.exception.RedisLimitException;
+import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
+import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RateIntervalUnit;
 
 @Slf4j
 public class DidaTravelAccess extends BaseHttpAccess<DidaTravelRequest, DidaTravelResponse> {
 
     private String host;
 
-    public DidaTravelAccess(String host) {
+    private static int QPS = 100;
+
+    private DistributedRateLimiter redisRateLimiter;
+
+    public DidaTravelAccess(String host, DistributedRateLimiter redisRateLimiter) {
         super(SupplierSourceEnum.DIDATRAVEL, SupplierDataTypeEnum.STATIC_DATA,
                 MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_LIST, 0);
         this.host = host;
+        this.redisRateLimiter = redisRateLimiter;
     }
 
     @Override
@@ -31,11 +40,11 @@ public class DidaTravelAccess extends BaseHttpAccess<DidaTravelRequest, DidaTrav
         try {
             result = HttpUtils.access(url, null, JSON.toJSONString(request), parser);
             if(result == null || result.getData() == null || result.getData().getSuccess()==null || !result.isSucc()){
-                log.error("道旅报价接口异常，用时：{}，请求参数：{}", System.currentTimeMillis() - start, JSON.toJSONString(request));
+                log.error("道旅报价接口异常，用时：{}，请求参数：{}，返回结果：{}", System.currentTimeMillis() - start,JSON.toJSONString(request), JSON.toJSONString(result) == null ? "null" : JSON.toJSONString(result));
                 return result;
             }
         } catch (Exception e){
-            log.error("道旅报价接口异常，用时：{}，请求参数：{}", System.currentTimeMillis() - start, JSON.toJSONString(request),e);
+            log.error("道旅报价接口异常，用时：{}，请求参数：{},返回结果：{},异常信息：{}", System.currentTimeMillis() - start, JSON.toJSONString(request), JSON.toJSONString(result) == null ? "null" : JSON.toJSONString(result),e);
             return result;
         }
         log.info("DidaTravel接口耗时：{}", System.currentTimeMillis() - start);
@@ -44,7 +53,11 @@ public class DidaTravelAccess extends BaseHttpAccess<DidaTravelRequest, DidaTrav
 
     @Override
     protected void beforeAccess(DidaTravelRequest request) {
-
+        if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
+            log.info("DidaTravel接口请求超过限制，每秒请求超过{}次", QPS);
+            throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
+                    + "request = " + JsonUtils.writeObject2Json(request));
+        }
     }
 
     @Override
