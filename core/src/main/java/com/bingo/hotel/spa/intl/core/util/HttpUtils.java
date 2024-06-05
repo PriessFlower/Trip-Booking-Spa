@@ -92,7 +92,7 @@ public class HttpUtils {
         if (HTTP_CLIENT == null) {
             synchronized (SYNC_LOCK) {
                 if (HTTP_CLIENT == null) {
-                    HTTP_CLIENT = createHttpClient(100, 20, 50, hostname, port);
+                    HTTP_CLIENT = createHttpClient(200, 40, 100, hostname, port);
                 }
             }
         }
