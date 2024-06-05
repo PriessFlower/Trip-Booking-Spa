@@ -29,6 +29,7 @@ import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.priceConfirm.Pric
 import com.bingo.hotel.spa.intl.core.api.didatravel.service.DidatravelHotelService;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
+import com.ctrip.framework.apollo.spring.annotation.ApolloJsonValue;
 import com.google.errorprone.annotations.concurrent.LazyInit;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -78,6 +79,9 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
 
     @Value("${didatravel.clientId}")
     private String ClientID;
+
+//    @ApolloJsonValue("${didatravel.query.cache}")
+//    private Boolean queryCache;
 
     private static Map<Integer, List<List<BedInfoDTO>>> bedInfoMap;
 
@@ -522,7 +526,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         list.add(Integer.parseInt(sHotelId));
 
         DidaTravelRequest.PriceSearchRequestIsRealTime priceSearchRequestIsRealTime = new DidaTravelRequest.PriceSearchRequestIsRealTime();
-        priceSearchRequestIsRealTime.setValue(true);
+        priceSearchRequestIsRealTime.setValue(false);
         priceSearchRequestIsRealTime.setRoomCount(priceReq.getRoomNum());
 
         DidaTravelRequest.PriceSearchRequestRealTimeOccupancy priceSearchRequestRealTimeOccupancy = new DidaTravelRequest.PriceSearchRequestRealTimeOccupancy();
@@ -537,11 +541,26 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                 .CheckInDate(priceReq.getCheckIn())
                 .CheckOutDate(priceReq.getCheckout())
                 .IsRealTime(priceSearchRequestIsRealTime)
-                .RealTimeOccupancy(priceSearchRequestRealTimeOccupancy)
+//                .RealTimeOccupancy(priceSearchRequestRealTimeOccupancy)
                 .Currency("CNY")
                 .Nationality("CN")
                 .IsNeedOnRequest(false)
                 .build();
+
+//        DidaTravelRequest.DidaTravelRequestBuilder didaTravelRequest = DidaTravelRequest.builder();
+//        didaTravelRequest.Header(headerType)
+//                .HotelIDList(list)
+//                .CheckInDate(priceReq.getCheckIn())
+//                .CheckOutDate(priceReq.getCheckout())
+//                .IsRealTime(priceSearchRequestIsRealTime)
+////               .RealTimeOccupancy(priceSearchRequestRealTimeOccupancy)
+//                .Currency("CNY")
+//                .Nationality("CN")
+//                .IsNeedOnRequest(false);
+//
+//        if (queryCache) {
+//            didaTravelRequest.RealTimeOccupancy(priceSearchRequestRealTimeOccupancy);
+//        }
         ResponseResult<DidaTravelResponse> access = new DidaTravelAccess(PRICE_URL, rateLimiter).access(didaTravelRequest);
 
 //        return JsonUtils.readValue(access.getOrigData(), DidaTravelResponse.class);
