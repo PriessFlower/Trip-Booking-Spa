@@ -4,6 +4,7 @@ import com.bingo.hotel.spa.intl.core.api.common.asynchttp.BaseResponse;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.IParser;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
 import com.google.common.collect.Lists;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpEntity;
@@ -50,6 +51,7 @@ import java.net.UnknownHostException;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 public class HttpUtils {
 
     private static final int TIME_OUT = 100 * 1000;
@@ -116,12 +118,15 @@ public class HttpUtils {
 
             httpPost.setEntity(entity);
         }
-
+        long start = System.currentTimeMillis();
         HttpResponse response = httpClient.execute(httpPost);
+        log.info("http调用耗时:{}", System.currentTimeMillis() - start);
         HttpEntity entity = response.getEntity();
 
         String entityStr;
         T data;
+        long start1 = System.currentTimeMillis();
+
         if (entity == null && response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
             entityStr = Strings.EMPTY;
             data = parser.parseError(entityStr);
@@ -129,7 +134,7 @@ public class HttpUtils {
             entityStr = EntityUtils.toString(entity, "UTF-8");
             data = parser.parse(entityStr);
         }
-
+        log.info("http结果转义调用耗时:{}", System.currentTimeMillis() - start1);
         ResponseResult<T> result = new ResponseResult(response.getStatusLine().getStatusCode(), entityStr, data);
 
         EntityUtils.consume(entity);
@@ -167,6 +172,7 @@ public class HttpUtils {
         EntityUtils.consume(entity);
         return result;
     }
+
     /**
      * get
      *
