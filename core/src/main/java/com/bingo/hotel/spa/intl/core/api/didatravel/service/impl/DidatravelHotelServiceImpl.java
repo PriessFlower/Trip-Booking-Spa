@@ -522,7 +522,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         list.add(Integer.parseInt(sHotelId));
 
         DidaTravelRequest.PriceSearchRequestIsRealTime priceSearchRequestIsRealTime = new DidaTravelRequest.PriceSearchRequestIsRealTime();
-        priceSearchRequestIsRealTime.setValue(false);
+        priceSearchRequestIsRealTime.setValue(true);
         priceSearchRequestIsRealTime.setRoomCount(priceReq.getRoomNum());
 
         DidaTravelRequest.PriceSearchRequestRealTimeOccupancy priceSearchRequestRealTimeOccupancy = new DidaTravelRequest.PriceSearchRequestRealTimeOccupancy();
@@ -537,7 +537,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
                 .CheckInDate(priceReq.getCheckIn())
                 .CheckOutDate(priceReq.getCheckout())
                 .IsRealTime(priceSearchRequestIsRealTime)
-//                .RealTimeOccupancy(priceSearchRequestRealTimeOccupancy)
+                .RealTimeOccupancy(priceSearchRequestRealTimeOccupancy)
                 .Currency("CNY")
                 .Nationality("CN")
                 .IsNeedOnRequest(false)
