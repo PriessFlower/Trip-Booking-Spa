@@ -68,7 +68,7 @@ management:
 #apollo相关配置 开始#
 app:
   # 与Apollo Portal上面创建的app id保持一致
-  id: hotel-spa-intl
+  id: bingo-hotel-spa-intl
 # 项目启动时需要添加启动参数 -Denv=DEV 来指定 apollo环境
 apollo:
   # 就是apollo config server的地址
@@ -83,6 +83,7 @@ apollo:
   cacheDir: ./config
   # 刷新时间,单位：分钟，默认5
   refreshInterval: 5
+  config-service: http://10.18.1.51:8080
 #对应apollo配置中心环境
 env: prod
 #apollo相关配置 结束#
