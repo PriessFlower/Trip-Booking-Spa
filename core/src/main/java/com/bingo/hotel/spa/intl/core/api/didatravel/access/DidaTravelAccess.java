@@ -22,7 +22,7 @@ public class DidaTravelAccess extends BaseHttpAccess<DidaTravelRequest, DidaTrav
 
     private String host;
 
-    private static int QPS = 100;
+    private static int QPS = 50;
 
     private DistributedRateLimiter redisRateLimiter;
 
