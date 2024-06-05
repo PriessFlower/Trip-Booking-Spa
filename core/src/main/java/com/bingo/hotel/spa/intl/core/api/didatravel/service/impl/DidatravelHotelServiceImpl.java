@@ -80,8 +80,8 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
     @Value("${didatravel.clientId}")
     private String ClientID;
 
-//    @ApolloJsonValue("${didatravel.query.cache}")
-//    private Boolean queryCache;
+    @ApolloJsonValue("${didatravel.query.cache}")
+    private Boolean queryCache;
 
     private static Map<Integer, List<List<BedInfoDTO>>> bedInfoMap;
 
@@ -516,8 +516,6 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
 
     @Override
     public DidaTravelResponse getHotelService(PriceReq priceReq, String sHotelId) {
-        Map<String, Object> mapReq = new HashMap<>();
-        mapReq.put("IsGetUrlOnly", true);
         DidaTravelRequest.HeaderType headerType = new DidaTravelRequest.HeaderType();
         headerType.setLicenseKey(LicenseKey);
         headerType.setClientID(ClientID);
@@ -526,7 +524,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         list.add(Integer.parseInt(sHotelId));
 
         DidaTravelRequest.PriceSearchRequestIsRealTime priceSearchRequestIsRealTime = new DidaTravelRequest.PriceSearchRequestIsRealTime();
-        priceSearchRequestIsRealTime.setValue(false);
+        priceSearchRequestIsRealTime.setValue(queryCache);
         priceSearchRequestIsRealTime.setRoomCount(priceReq.getRoomNum());
 
         DidaTravelRequest.PriceSearchRequestRealTimeOccupancy priceSearchRequestRealTimeOccupancy = new DidaTravelRequest.PriceSearchRequestRealTimeOccupancy();
@@ -534,34 +532,21 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         priceSearchRequestRealTimeOccupancy.setChildCount(priceReq.getChildNum());
         priceSearchRequestRealTimeOccupancy.setChildAgeDetails(priceReq.getChildNum() == 0 ? new ArrayList<>() : priceReq.getChildAges());
 
-
-        DidaTravelRequest didaTravelRequest = DidaTravelRequest.builder()
-                .Header(headerType)
+        DidaTravelRequest.DidaTravelRequestBuilder didaTravelRequest = DidaTravelRequest.builder();
+        didaTravelRequest.Header(headerType)
                 .HotelIDList(list)
                 .CheckInDate(priceReq.getCheckIn())
                 .CheckOutDate(priceReq.getCheckout())
                 .IsRealTime(priceSearchRequestIsRealTime)
-//                .RealTimeOccupancy(priceSearchRequestRealTimeOccupancy)
+//               .RealTimeOccupancy(priceSearchRequestRealTimeOccupancy)
                 .Currency("CNY")
                 .Nationality("CN")
-                .IsNeedOnRequest(false)
-                .build();
+                .IsNeedOnRequest(false);
 
-//        DidaTravelRequest.DidaTravelRequestBuilder didaTravelRequest = DidaTravelRequest.builder();
-//        didaTravelRequest.Header(headerType)
-//                .HotelIDList(list)
-//                .CheckInDate(priceReq.getCheckIn())
-//                .CheckOutDate(priceReq.getCheckout())
-//                .IsRealTime(priceSearchRequestIsRealTime)
-////               .RealTimeOccupancy(priceSearchRequestRealTimeOccupancy)
-//                .Currency("CNY")
-//                .Nationality("CN")
-//                .IsNeedOnRequest(false);
-//
-//        if (queryCache) {
-//            didaTravelRequest.RealTimeOccupancy(priceSearchRequestRealTimeOccupancy);
-//        }
-        ResponseResult<DidaTravelResponse> access = new DidaTravelAccess(PRICE_URL, rateLimiter).access(didaTravelRequest);
+        if (queryCache) {
+            didaTravelRequest.RealTimeOccupancy(priceSearchRequestRealTimeOccupancy);
+        }
+        ResponseResult<DidaTravelResponse> access = new DidaTravelAccess(PRICE_URL, rateLimiter).access(didaTravelRequest.build());
 
 //        return JsonUtils.readValue(access.getOrigData(), DidaTravelResponse.class);
         return access.getData();
@@ -569,8 +554,6 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
 
     @Override
     public PriceConfirmResponse checkPrice(CheckPriceReq checkPriceReq) {
-        Map<String, Object> mapReq = new HashMap<>();
-        mapReq.put("IsGetUrlOnly", true);
         PriceConfirmRequest.HeaderType headerType = new PriceConfirmRequest.HeaderType();
         headerType.setLicenseKey(LicenseKey);
         headerType.setClientID(ClientID);
