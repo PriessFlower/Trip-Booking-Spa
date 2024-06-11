@@ -23,10 +23,10 @@ public class DistributedRateLimiter {
         return rateLimiter;
     }
 
-    public boolean tryAcquire(String name, long rate, RateIntervalUnit unit, long rateInterval,int timeOut) {
+    public boolean tryAcquire(String name, long rate, RateIntervalUnit unit, long rateInterval, int timeOut) {
         RRateLimiter rateLimiter = getRateLimiter(name, rate, unit, rateInterval);
         long l = rateLimiter.availablePermits();
         log.info("可用令牌：{}", l);
-        return rateLimiter.tryAcquire(1);
+        return rateLimiter.tryAcquire(timeOut, TimeUnit.SECONDS);
     }
 }
