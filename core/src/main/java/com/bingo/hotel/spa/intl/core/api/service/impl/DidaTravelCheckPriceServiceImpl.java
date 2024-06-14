@@ -42,6 +42,7 @@ public class DidaTravelCheckPriceServiceImpl extends AbstractCheckPriceSyncSuppo
                 .salePrice(plan.getTotalPrice().multiply(BigDecimal.valueOf(100)).intValue())
                 .totalPriceAfter(plan.getTotalPrice().multiply(BigDecimal.valueOf(100)).intValue())
                 .totalPriceBefore(plan.getTotalPrice().multiply(BigDecimal.valueOf(100)).intValue())
+                .message(plan.getCurrency())
                 .bedTypeCode(list)
                 .build();
     }
