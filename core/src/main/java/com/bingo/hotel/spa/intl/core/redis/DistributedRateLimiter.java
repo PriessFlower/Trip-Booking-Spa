@@ -27,6 +27,6 @@ public class DistributedRateLimiter {
         RRateLimiter rateLimiter = getRateLimiter(name, rate, unit, rateInterval);
         long l = rateLimiter.availablePermits();
         log.info("可用令牌：{}", l);
-        return rateLimiter.tryAcquire(timeOut, TimeUnit.SECONDS);
+        return rateLimiter.tryAcquire(1);
     }
 }
