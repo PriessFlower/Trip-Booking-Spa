@@ -558,14 +558,17 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         headerType.setLicenseKey(LicenseKey);
         headerType.setClientID(ClientID);
 
-        PriceConfirmRequest.RoomOccupancyType roomOccupancyType = new PriceConfirmRequest.RoomOccupancyType();
-        roomOccupancyType.setAdultCount(checkPriceReq.getAdultCount());
-        roomOccupancyType.setChildCount(0);
-        roomOccupancyType.setRoomNum(1);
-        roomOccupancyType.setChildAgeDetails(new ArrayList<>());
-
         ArrayList<PriceConfirmRequest.RoomOccupancyType> roomOccupancyTypeList = new ArrayList<>();
-        roomOccupancyTypeList.add(roomOccupancyType);
+
+        for (int i = 1; i <= checkPriceReq.getRoomNum(); i++) {
+            PriceConfirmRequest.RoomOccupancyType roomOccupancyType = new PriceConfirmRequest.RoomOccupancyType();
+            roomOccupancyType.setAdultCount(checkPriceReq.getAdultCount());
+            roomOccupancyType.setChildCount(0);
+            roomOccupancyType.setRoomNum(i);
+            roomOccupancyType.setChildAgeDetails(new ArrayList<>());
+            roomOccupancyTypeList.add(roomOccupancyType);
+        }
+
 
         PriceConfirmRequest priceConfirmRequest = PriceConfirmRequest.builder()
                 .Header(headerType)
@@ -593,14 +596,16 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         headerType.setLicenseKey(LicenseKey);
         headerType.setClientID(ClientID);
 
-        PriceConfirmRequest.RoomOccupancyType roomOccupancyType = new PriceConfirmRequest.RoomOccupancyType();
-        roomOccupancyType.setAdultCount(checkPriceReq.getAdultCount());
-        roomOccupancyType.setChildCount(0);
-        roomOccupancyType.setRoomNum(1);
-        roomOccupancyType.setChildAgeDetails(new ArrayList<>());
 
         ArrayList<PriceConfirmRequest.RoomOccupancyType> roomOccupancyTypeList = new ArrayList<>();
-        roomOccupancyTypeList.add(roomOccupancyType);
+        for (int i = 1; i <= checkPriceReq.getRoomNum(); i++) {
+            PriceConfirmRequest.RoomOccupancyType roomOccupancyType = new PriceConfirmRequest.RoomOccupancyType();
+            roomOccupancyType.setAdultCount(checkPriceReq.getAdultCount());
+            roomOccupancyType.setChildCount(0);
+            roomOccupancyType.setRoomNum(i);
+            roomOccupancyType.setChildAgeDetails(new ArrayList<>());
+            roomOccupancyTypeList.add(roomOccupancyType);
+        }
 
         PriceConfirmRequest priceConfirmRequest = PriceConfirmRequest.builder()
                 .Header(headerType)
