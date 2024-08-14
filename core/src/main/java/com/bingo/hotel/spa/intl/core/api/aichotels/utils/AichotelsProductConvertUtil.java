@@ -29,6 +29,7 @@ public class AichotelsProductConvertUtil {
                                 .priceInfos(buildPriceInfos(productVO.getRates()))
                                 .meal(productVO.getBreakfast().getInclude() == 1 ? Meal.builder().count(productVO.getBreakfast().getCount()).build() : Meal.builder().count(0).build())
                                 .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+                                .maxOccupancy(0)
                                 .build()
                 )));
         return respDTOList;
@@ -48,6 +49,7 @@ public class AichotelsProductConvertUtil {
                                 .priceInfos(buildPriceInfosCheck(productVO.getRates(), preBookResponse.getCheckIn(), preBookResponse.getCheckOut()))
                                 .meal(productVO.getBreakfast().getInclude() == 1 ? Meal.builder().count(productVO.getBreakfast().getCount()).build() : Meal.builder().count(0).build())
                                 .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+                                .maxOccupancy(0)
                                 .build()
                 )));
         return respDTOList;
