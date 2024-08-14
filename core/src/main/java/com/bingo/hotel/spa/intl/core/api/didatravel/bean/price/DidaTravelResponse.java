@@ -72,6 +72,8 @@ public class DidaTravelResponse implements BaseResponse {
 
         private BigDecimal TotalPrice;
 
+        private Integer maxOccupancy;
+
         private List<HotelTypeRatePlanPriceInfo> PriceList;
 
         private List<CancellationPolicyListTypeCancellationPolicy> RatePlanCancellationPolicyList;

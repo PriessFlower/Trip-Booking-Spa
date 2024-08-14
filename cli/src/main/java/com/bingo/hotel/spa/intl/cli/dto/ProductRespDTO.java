@@ -51,5 +51,9 @@ public class ProductRespDTO {
      * 价格
      */
     public List<PriceInfo> priceInfos;
+    /**
+     * 最大入住人数
+     */
+    private Integer maxOccupancy;
 
 }

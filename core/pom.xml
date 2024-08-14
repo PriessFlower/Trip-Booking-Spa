@@ -166,7 +166,7 @@
         <dependency>
             <groupId>com.bingo.hotel.spa.intel</groupId>
             <artifactId>cli</artifactId>
-            <version>0.0.2</version>
+            <version>0.0.3</version>
         </dependency>
 
         <dependency>

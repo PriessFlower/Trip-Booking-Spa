@@ -36,6 +36,7 @@ public class DidaTravelProductConvertUtil {
                         .currency(ratePlan.getCurrency())
                         .meal(ratePlan.getPriceList().get(0).getMealType() == 1 ? Meal.builder().count(0).build() : Meal.builder().count(ratePlan.getPriceList().get(0).getMealAmount()).build())
                         .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+                        .maxOccupancy(ratePlan.getMaxOccupancy())
                         .build();
                 respDTOList.add(build);
             });
