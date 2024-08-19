@@ -8,7 +8,7 @@ import java.util.List;
 public class Price {
     private int hid;
     private int rid;
-    private int rpid;
+    private String rpid;
     private String name;
     private String en_name;
     private String checkin;

@@ -10,5 +10,7 @@ public interface HuiTravelService {
 
     AvailabilityResponse getPrice(PriceReq priceReq, String sHotelId);
 
+    AvailabilityResponse getPriceByProductId(CheckPriceReq priceReq);
+
     CheckResponse checkPrice(CheckPriceReq priceReq);
 }

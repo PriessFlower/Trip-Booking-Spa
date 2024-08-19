@@ -5,27 +5,22 @@ import com.bingo.hotel.info.intl.cli.client.HotelInfoIntlClient;
 import com.bingo.hotel.info.intl.cli.result.InfoResult;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
-import com.bingo.hotel.spa.intl.core.api.aichotels.access.AvailabilityAccess;
-import com.bingo.hotel.spa.intl.core.api.aichotels.adaptor.AichotelsHotelAdaptor;
-import com.bingo.hotel.spa.intl.core.api.aichotels.adaptor.AichotelsProductAdaptor;
-import com.bingo.hotel.spa.intl.core.api.aichotels.adaptor.AichotelsRoomAdaptor;
+import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
+import com.bingo.hotel.spa.intl.core.api.huitravel.access.CheckPriceAccess;
 import com.bingo.hotel.spa.intl.core.api.huitravel.access.GetPriceAccess;
 import com.bingo.hotel.spa.intl.core.api.huitravel.access.HotelDetailAccess;
+import com.bingo.hotel.spa.intl.core.api.huitravel.access.HotelIdListAccess;
 import com.bingo.hotel.spa.intl.core.api.huitravel.adaptor.HuiTravelHotelAdaptor;
 import com.bingo.hotel.spa.intl.core.api.huitravel.adaptor.HuiTravelProductAdaptor;
 import com.bingo.hotel.spa.intl.core.api.huitravel.adaptor.HuiTravelRoomAdaptor;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.hotel.detail.HotelDetailRequest;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.hotel.detail.HotelDetailResponse;
-import com.bingo.hotel.spa.intl.core.api.huitravel.bean.hotel.detail.HotelDetailResult;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.hotel.list.HotelListRequest;
-import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
-import com.bingo.hotel.spa.intl.core.api.huitravel.access.HotelIdListAccess;
-
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.hotel.list.HotelListResponse;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.hotel.list.Hotels;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.AvailabilityRequest;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.AvailabilityResponse;
-import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.AvailabilityResult;
+import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.NightlyRate;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.check.CheckRequest;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.check.CheckResponse;
 import com.bingo.hotel.spa.intl.core.api.huitravel.service.HuiTravelService;
@@ -33,6 +28,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
 
 @Slf4j
 @Service
@@ -61,8 +58,8 @@ public class HuiTravelServiceImpl implements HuiTravelService {
             System.out.println(hotelDetailResponse.getData().getResult().getHoteldetail().get(0).getEn_name());
             AvailabilityRequest availabilityRequest = AvailabilityRequest.builder().
                     hid(hotelId.getHid())
-                    .checkin("2024-08-15")
-                    .checkout("2024-8-16")
+                    .checkin("2024-08-20")
+                    .checkout("2024-08-21")
                     .roomnum(1)
                     .adultnum(2)
                     .nationality("CN")
@@ -84,8 +81,41 @@ public class HuiTravelServiceImpl implements HuiTravelService {
                 .adultnum(priceReq.getAdultNum())
                 .nationality("CN")
                 .build();
-        ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess("http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/static/hoteldetails", "boqiaotest", "d1e205262c06132733faa748dc3e29ab").access(availabilityRequest);
+        ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess("http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/getrateplanprice", "boqiaotest", "d1e205262c06132733faa748dc3e29ab").access(availabilityRequest);
         return availabilityResponse.getData();
+    }
+
+    @Override
+    public AvailabilityResponse getPriceByProductId(CheckPriceReq priceReq) {
+        AvailabilityRequest availabilityRequest = AvailabilityRequest.builder().
+                hid(Integer.parseInt(priceReq.getSHotelId()))
+                .checkin(priceReq.getCheckIn())
+                .checkout(priceReq.getCheckOut())
+                .roomnum(priceReq.getRoomNum())
+                .adultnum(priceReq.getAdultCount())
+                .nationality("CN")
+                .build();
+        ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess("http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/getrateplanprice", "boqiaotest", "d1e205262c06132733faa748dc3e29ab").access(availabilityRequest);
+        BigDecimal total = BigDecimal.ZERO;
+        String costs="";
+        for(NightlyRate item:availabilityResponse.getData().getResult().getPrices().get(0).getNightlyrate()){
+            total=total.add(item.getCost());
+            costs=costs+",";
+        }
+        CheckRequest checkRequest = CheckRequest.builder().
+                checkin(priceReq.getCheckIn())
+                .checkout(priceReq.getCheckOut())
+                .adultnum(priceReq.getAdultCount())
+                .hid(Integer.parseInt(priceReq.getSHotelId()))
+                .rid(availabilityResponse.getData().getResult().getPrices().get(0).getRid())
+                .rpid(availabilityResponse.getData().getResult().getPrices().get(0).getRpid())
+                .costs(costs.substring(0,costs.length()-1))
+                .totalprice(total)
+                .build();
+        ResponseResult<CheckResponse> checkResponse = new CheckPriceAccess("http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/checkavailability", "boqiaotest", "d1e205262c06132733faa748dc3e29ab").access(checkRequest);
+        AvailabilityResponse returnResponse=availabilityResponse.getData();
+        returnResponse.setCheckResponse(checkResponse.getData());
+        return returnResponse;
     }
 
     @Override
@@ -99,8 +129,12 @@ public class HuiTravelServiceImpl implements HuiTravelService {
                 .nationality("CN")
                 .build();
         ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess("http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/static/hoteldetails", "boqiaotest", "d1e205262c06132733faa748dc3e29ab").access(availabilityRequest);
-
-        availabilityResponse.getData().getResult().getPrices().get(0).getNightlyrate();
+        BigDecimal total = BigDecimal.ZERO;
+        String costs="";
+        for(NightlyRate item:availabilityResponse.getData().getResult().getPrices().get(0).getNightlyrate()){
+            total=total.add(item.getCost());
+            costs=costs+",";
+        }
         CheckRequest checkRequest = CheckRequest.builder().
                 checkin(priceReq.getCheckIn())
                 .checkout(priceReq.getCheckOut())
@@ -108,7 +142,10 @@ public class HuiTravelServiceImpl implements HuiTravelService {
                 .hid(Integer.parseInt(priceReq.getSHotelId()))
                 .rid(availabilityResponse.getData().getResult().getPrices().get(0).getRid())
                 .rpid(availabilityResponse.getData().getResult().getPrices().get(0).getRpid())
+                .costs(costs.substring(0,costs.length()-1))
+                .totalprice(total)
                 .build();
-        return null;
+        ResponseResult<CheckResponse> checkResponse = new CheckPriceAccess("http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/checkavailability", "boqiaotest", "d1e205262c06132733faa748dc3e29ab").access(checkRequest);
+        return checkResponse.getData();
     }
 }
