@@ -139,6 +139,9 @@ aichotels:
   apiClientKey: BeijingBaosheng
   secret: SRLxRgRXjjaPCWUbcWcwriusUNtpYe3VxRg9
 didatravel:
-  licenseKey: BSYX_textkey
-  clientId: BSYX_text
+  licenseKey: BSYX_key0509
+  clientId: BSYX
   localFilePath: D:\working\file\导出文件\hotel_info
+expedia:
+  apiKey: 6urn54ijk30uttcqm64c3it6gf
+  sharedSecret: 708a6tdaqvm7
