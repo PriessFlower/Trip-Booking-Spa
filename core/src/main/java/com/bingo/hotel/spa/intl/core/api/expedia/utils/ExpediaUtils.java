@@ -22,9 +22,10 @@ public class ExpediaUtils {
     @Value("${expedia.sharedSecret}")
     private String expediaSharedSecret = "708a6tdaqvm7";
 
-    public void SignatureGeneration() {
+    public String signGeneration() {
         Date date = new java.util.Date();
         Long timestamp = (date.getTime() / 1000);
+//        Long timestamp = 1724382883L;
         String signature = null;
         try {
             String toBeHashed = expediaApiKey + expediaSharedSecret + timestamp;
@@ -40,10 +41,11 @@ public class ExpediaUtils {
         } catch (UnsupportedEncodingException e) {
             e.printStackTrace();
         }
-        String authHeaderValue = "EAN APIKey=" + expediaApiKey + ",Signature=" + signature + ",timestamp=" + timestamp;
+        return "EAN APIKey=" + expediaApiKey + ",Signature=" + signature + ",timestamp=" + timestamp;
     }
 
     public static void main(String[] args) {
-
+        ExpediaUtils expediaUtils = new ExpediaUtils();
+        System.out.println(expediaUtils.signGeneration());
     }
 }
