@@ -27,6 +27,7 @@ public class HuiTravelProductConvertUtil {
                         .priceInfos(buildPriceInfos(productVO.getNightlyrate()))
                         .meal(Meal.builder().count(productVO.getBreakfast_count()).build())
                         .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+                        .maxOccupancy(productVO.getMax_occupancy())
                         .build())
         );
         return respDTOList;
@@ -46,6 +47,7 @@ public class HuiTravelProductConvertUtil {
                         .priceInfos(buildPriceInfos(availabilityResponse.getCheckResponse().getResult().getNightlyrate()))
                         .meal(Meal.builder().count(productVO.getBreakfast_count()).build())
                         .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+                        .maxOccupancy(productVO.getMax_occupancy())
                         .build())
         );
         return respDTOList;

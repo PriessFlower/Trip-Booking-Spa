@@ -6,5 +6,5 @@ import lombok.Setter;
 @Getter
 @Setter
 public class Hotels {
-    private int hid;
+    private Integer hid;
 }

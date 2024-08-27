@@ -6,15 +6,15 @@ import lombok.Setter;
 @Getter
 @Setter
 public class Room {
-    private int rid;
+    private Integer rid;
     private String name;
     private String en_name;
     private String internet;
-    private int max_occupancy;
+    private Integer max_occupancy;
     private String area;
     private String floor;
     private String bed_type;
     private String bed_size;
-    private int window_type;
-    private int cutoff_hour;
+    private Integer window_type;
+    private Integer cutoff_hour;
 }

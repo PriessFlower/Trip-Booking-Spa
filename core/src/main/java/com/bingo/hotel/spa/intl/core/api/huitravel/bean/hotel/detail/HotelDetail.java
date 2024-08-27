@@ -7,15 +7,15 @@ import java.util.List;
 @Getter
 @Setter
 public class HotelDetail {
-    private int hid;
+    private Integer hid;
     private String name;
     private String en_name;
     private String tel;
     private String address;
     private String domestic;
-    private int country_code;
-    private int province_code;
-    private int city_code;
+    private Integer country_code;
+    private Integer province_code;
+    private Integer city_code;
     private String country;
     private String en_country;
     private String province;
@@ -30,6 +30,6 @@ public class HotelDetail {
     private String main_imgs;
     private String description;
     private String order_index;
-    private int reunion_room_min_count;
+    private Integer reunion_room_min_count;
     private List<Room> rooms;
 }

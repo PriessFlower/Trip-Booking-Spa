@@ -9,9 +9,9 @@ import java.util.List;
 @Getter
 @Setter
 public class CheckResult {
-    private int check_code;
-    private int hid;
-    private int rid;
+    private Integer check_code;
+    private Integer hid;
+    private Integer rid;
     private String rpid;
     private String room_name;
     private String room_en_name;
