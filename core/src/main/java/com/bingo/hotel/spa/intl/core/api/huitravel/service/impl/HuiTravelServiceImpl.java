@@ -154,6 +154,7 @@ public class HuiTravelServiceImpl implements HuiTravelService {
                 .rid(availabilityResponse.getData().getResult().getPrices().get(0).getRid())
                 .rpid(availabilityResponse.getData().getResult().getPrices().get(0).getRpid())
                 .costs(costs.substring(1))
+                .roomnum(priceReq.getRoomNum())
                 .totalprice(total)
                 .build();
         ResponseResult<CheckResponse> checkResponse = new CheckPriceAccess(checkavailability, appKey, secretKey).access(checkRequest);
