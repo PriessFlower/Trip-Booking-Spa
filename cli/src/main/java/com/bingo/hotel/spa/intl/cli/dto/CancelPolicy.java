@@ -1,5 +1,6 @@
 package com.bingo.hotel.spa.intl.cli.dto;
 
+import com.bingo.hotel.spa.intl.cli.enums.RefundType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -32,4 +33,15 @@ public class CancelPolicy {
     //如果罚款是百分比，则存在，例如 10 表示收取整单的10%
     private Object percent;
 
+    // 取消规则的时区
+    private String timeZone;
+
+    // 规则有效期 表示用户距离入住日当天24:00前多少小时可以取消订单，数值表示小时数且必须大于24；
+    private int before;
+
+    // 退款类型
+    private RefundType type;
+
+    // 当退款类型为扣除固定金额、扣除房费的百分比时，必填。
+    private Double value;
 }

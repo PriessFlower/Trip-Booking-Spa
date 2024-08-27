@@ -5,6 +5,7 @@ import lombok.Data;
 import org.joda.time.DateTime;
 
 import java.math.BigDecimal;
+import java.util.Date;
 import java.util.List;
 
 @Data
@@ -28,8 +29,8 @@ public class DidaTravelResponse implements BaseResponse {
 
     @Data
     public static class PriceDetails {
-        private String CheckInDate;
-        private String CheckOutDate;
+        private Date CheckInDate;
+        private Date CheckOutDate;
 
         private List<HotelType> HotelList;
     }
@@ -111,7 +112,7 @@ public class DidaTravelResponse implements BaseResponse {
 
     @Data
     public static class CancellationPolicyListTypeCancellationPolicy {
-        private String FromDate;
+        private Date FromDate;
 
         private BigDecimal Amount;
     }

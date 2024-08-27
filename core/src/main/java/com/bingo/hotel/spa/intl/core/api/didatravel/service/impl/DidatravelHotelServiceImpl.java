@@ -549,7 +549,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         ResponseResult<DidaTravelResponse> access = new DidaTravelAccess(PRICE_URL, rateLimiter).access(didaTravelRequest.build());
 
 //        return JsonUtils.readValue(access.getOrigData(), DidaTravelResponse.class);
-        return access.getData();
+            return access.getData();
     }
 
     @Override

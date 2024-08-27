@@ -8,7 +8,7 @@ spring:
       strategy:
         enabled: false
   profiles:
-    active: prod,mapper
+    active: dev,mapper
 
 logging:
   config: classpath:log4j2.xml

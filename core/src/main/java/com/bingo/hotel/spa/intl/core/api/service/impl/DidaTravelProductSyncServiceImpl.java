@@ -29,6 +29,9 @@ public class DidaTravelProductSyncServiceImpl extends AbstractProductSyncSupport
     @Resource(name = "redisRecordLogServiceImpl")
     private RecordLogService redisRecordLogServiceImpl;
 
+    @Autowired
+    private DidaTravelProductConvertUtil didaTravelProductConvertUtil;
+
     @Override
     public DidaTravelResponse querySupplierPrice(PriceReq priceReq, Supplier supplier) {
         redisRecordLogServiceImpl.recordDaolvQps();
@@ -65,6 +68,6 @@ public class DidaTravelProductSyncServiceImpl extends AbstractProductSyncSupport
 
     @Override
     public List<ProductRespDTO> productRespConvert(DidaTravelResponse didaTravelResponse) {
-        return DidaTravelProductConvertUtil.convertRatePlanVO(didaTravelResponse);
+        return didaTravelProductConvertUtil.convertRatePlanVO(didaTravelResponse);
     }
 }
