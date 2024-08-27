@@ -12,7 +12,7 @@ public class CheckResult {
     private int check_code;
     private int hid;
     private int rid;
-    private int rpid;
+    private String rpid;
     private String room_name;
     private String room_en_name;
     private String checkin;

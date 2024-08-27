@@ -18,33 +18,35 @@ public class HuiTravelProductConvertUtil {
     public static List<ProductRespDTO> convertRatePlanVO(AvailabilityResponse availabilityResponse) {
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
         availabilityResponse.getResult().getPrices().forEach(productVO -> respDTOList.add(ProductRespDTO.builder()
-                        .productId(productVO.getRpid()+"")
+                        .productId(productVO.getRpid() + "")
 //                        .currencyType(productVO.getCurrency())
                         .supplierId(SupplierSourceEnum.HUITRAVEL.getCode())
                         .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(productVO.getName()).build())
 //                        .totalPrice((int) (Double.parseDouble(productVO.getTotal_amount_after_tax()) * 100))
-                        .hotelId(productVO.getHid()+"")
+                        .hotelId(productVO.getHid() + "")
                         .priceInfos(buildPriceInfos(productVO.getNightlyrate()))
                         .meal(Meal.builder().count(productVO.getBreakfast_count()).build())
                         .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                         .build())
-                );
+        );
         return respDTOList;
     }
 
     public static List<ProductRespDTO> convertRatePlanCheckVO(AvailabilityResponse availabilityResponse) {
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
+        BigDecimal totalPrice = availabilityResponse.getCheckResponse().getResult().getNightlyrate().stream()
+                .map(NightlyRate::getCost).reduce(BigDecimal.ZERO, BigDecimal::add);
         availabilityResponse.getResult().getPrices().forEach(productVO -> respDTOList.add(ProductRespDTO.builder()
-                                .productId(productVO.getRpid()+"")
+                        .productId(productVO.getRpid() + "")
 //                        .currencyType(productVO.getCurrency())
-                                .supplierId(SupplierSourceEnum.HUITRAVEL.getCode())
-                                .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(productVO.getName()).build())
-//                        .totalPrice((int) (Double.parseDouble(productVO.getTotal_amount_after_tax()) * 100))
-                                .hotelId(productVO.getHid()+"")
-                                .priceInfos(buildPriceInfos(availabilityResponse.getCheckResponse().getResult().getNightlyrate()))
-                                .meal(Meal.builder().count(productVO.getBreakfast_count()).build())
-                                .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
-                                .build())
+                        .supplierId(SupplierSourceEnum.HUITRAVEL.getCode())
+                        .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(productVO.getName()).build())
+                        .totalPrice(totalPrice.multiply(new BigDecimal(100)).intValue())
+                        .hotelId(productVO.getHid() + "")
+                        .priceInfos(buildPriceInfos(availabilityResponse.getCheckResponse().getResult().getNightlyrate()))
+                        .meal(Meal.builder().count(productVO.getBreakfast_count()).build())
+                        .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+                        .build())
         );
         return respDTOList;
     }

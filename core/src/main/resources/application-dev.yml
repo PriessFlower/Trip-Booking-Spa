@@ -145,5 +145,8 @@ didatravel:
 huitravel:
   url:
     hotellist: http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/static/hotellist
+    hoteldetails: http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/static/hoteldetails
+    getPrice: http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/getrateplanprice
+    checkavailability: http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/checkavailability
   appkey: boqiaotest
   secretKey: d1e205262c06132733faa748dc3e29ab

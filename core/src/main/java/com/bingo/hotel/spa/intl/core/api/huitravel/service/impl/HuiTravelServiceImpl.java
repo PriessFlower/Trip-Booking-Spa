@@ -30,12 +30,22 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Slf4j
 @Service
 public class HuiTravelServiceImpl implements HuiTravelService {
     @Value("${huitravel.url.hotellist}")
-    String host;
+    String hotellist;
+
+    @Value("${huitravel.url.hoteldetails}")
+    String hoteldetails;
+
+    @Value("${huitravel.url.getPrice}")
+    String getPrice;
+
+    @Value("${huitravel.url.checkavailability}")
+    String checkavailability;
 
     @Value("${huitravel.appkey}")
     String appKey;
@@ -51,23 +61,23 @@ public class HuiTravelServiceImpl implements HuiTravelService {
                 .countrycode(countryCode)
                 .citycode(cityCode)
                 .build();
-        ResponseResult<HotelListResponse> hotelListResponse = new HotelIdListAccess("http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/static/hotellist", "boqiaotest", "d1e205262c06132733faa748dc3e29ab").access(data);
+        ResponseResult<HotelListResponse> hotelListResponse = new HotelIdListAccess(hotellist, appKey, secretKey).access(data);
         for (Hotels hotelId : hotelListResponse.getData().getResult().getHotels()) {
             HotelDetailRequest request = HotelDetailRequest.builder().hids(hotelId.getHid() + "").build();
-            ResponseResult<HotelDetailResponse> hotelDetailResponse = new HotelDetailAccess("http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/static/hoteldetails", "boqiaotest", "d1e205262c06132733faa748dc3e29ab").access(request);
+            ResponseResult<HotelDetailResponse> hotelDetailResponse = new HotelDetailAccess(hoteldetails, appKey, secretKey).access(request);
             System.out.println(hotelDetailResponse.getData().getResult().getHoteldetail().get(0).getEn_name());
             AvailabilityRequest availabilityRequest = AvailabilityRequest.builder().
                     hid(hotelId.getHid())
-                    .checkin("2024-08-20")
-                    .checkout("2024-08-21")
+                    .checkin("2024-10-20")
+                    .checkout("2024-10-21")
                     .roomnum(1)
                     .adultnum(2)
                     .nationality("CN")
                     .build();
-            ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess("http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/static/hoteldetails", "boqiaotest", "d1e205262c06132733faa748dc3e29ab").access(availabilityRequest);
+            ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess(getPrice, appKey, secretKey).access(availabilityRequest);
             InfoResult infoResult = hotelInfoIntlClient.saveHotelInfo(HuiTravelHotelAdaptor.transform(hotelDetailResponse.getData().getResult().getHoteldetail().get(0)));
-            InfoResult roomResult = hotelInfoIntlClient.saveRoomInfo(HuiTravelRoomAdaptor.transform(hotelDetailResponse.getData().getResult().getHoteldetail().get(0).getRooms(), hotelId + ""));
-            InfoResult productResult = hotelInfoIntlClient.saveProductInfo(HuiTravelProductAdaptor.transform(availabilityResponse.getData(), hotelId + ""));
+            InfoResult roomResult = hotelInfoIntlClient.saveRoomInfo(HuiTravelRoomAdaptor.transform(hotelDetailResponse.getData().getResult().getHoteldetail().get(0).getRooms(), hotelId.getHid() + ""));
+            InfoResult productResult = hotelInfoIntlClient.saveProductInfo(HuiTravelProductAdaptor.transform(availabilityResponse.getData(), hotelId.getHid() + ""));
         }
     }
 
@@ -81,7 +91,7 @@ public class HuiTravelServiceImpl implements HuiTravelService {
                 .adultnum(priceReq.getAdultNum())
                 .nationality("CN")
                 .build();
-        ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess("http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/getrateplanprice", "boqiaotest", "d1e205262c06132733faa748dc3e29ab").access(availabilityRequest);
+        ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess(getPrice, appKey, secretKey).access(availabilityRequest);
         return availabilityResponse.getData();
     }
 
@@ -95,12 +105,12 @@ public class HuiTravelServiceImpl implements HuiTravelService {
                 .adultnum(priceReq.getAdultCount())
                 .nationality("CN")
                 .build();
-        ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess("http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/getrateplanprice", "boqiaotest", "d1e205262c06132733faa748dc3e29ab").access(availabilityRequest);
+        ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess(getPrice, appKey, secretKey).access(availabilityRequest);
         BigDecimal total = BigDecimal.ZERO;
-        String costs="";
-        for(NightlyRate item:availabilityResponse.getData().getResult().getPrices().get(0).getNightlyrate()){
-            total=total.add(item.getCost());
-            costs=costs+",";
+        StringBuilder costs = new StringBuilder();
+        for (NightlyRate item : availabilityResponse.getData().getResult().getPrices().get(0).getNightlyrate()) {
+            total = total.add(item.getCost());
+            costs.append(",").append(item.getCost());
         }
         CheckRequest checkRequest = CheckRequest.builder().
                 checkin(priceReq.getCheckIn())
@@ -109,11 +119,12 @@ public class HuiTravelServiceImpl implements HuiTravelService {
                 .hid(Integer.parseInt(priceReq.getSHotelId()))
                 .rid(availabilityResponse.getData().getResult().getPrices().get(0).getRid())
                 .rpid(availabilityResponse.getData().getResult().getPrices().get(0).getRpid())
-                .costs(costs.substring(0,costs.length()-1))
+                .costs(costs.substring(1))
+                .roomnum(priceReq.getRoomNum())
                 .totalprice(total)
                 .build();
-        ResponseResult<CheckResponse> checkResponse = new CheckPriceAccess("http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/checkavailability", "boqiaotest", "d1e205262c06132733faa748dc3e29ab").access(checkRequest);
-        AvailabilityResponse returnResponse=availabilityResponse.getData();
+        ResponseResult<CheckResponse> checkResponse = new CheckPriceAccess(checkavailability, appKey, secretKey).access(checkRequest);
+        AvailabilityResponse returnResponse = availabilityResponse.getData();
         returnResponse.setCheckResponse(checkResponse.getData());
         return returnResponse;
     }
@@ -128,12 +139,12 @@ public class HuiTravelServiceImpl implements HuiTravelService {
                 .adultnum(priceReq.getAdultCount())
                 .nationality("CN")
                 .build();
-        ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess("http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/static/hoteldetails", "boqiaotest", "d1e205262c06132733faa748dc3e29ab").access(availabilityRequest);
+        ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess(getPrice, appKey, secretKey).access(availabilityRequest);
         BigDecimal total = BigDecimal.ZERO;
-        String costs="";
-        for(NightlyRate item:availabilityResponse.getData().getResult().getPrices().get(0).getNightlyrate()){
-            total=total.add(item.getCost());
-            costs=costs+",";
+        StringBuilder costs = new StringBuilder();
+        for (NightlyRate item : availabilityResponse.getData().getResult().getPrices().get(0).getNightlyrate()) {
+            total = total.add(item.getCost());
+            costs.append(",").append(item.getCost());
         }
         CheckRequest checkRequest = CheckRequest.builder().
                 checkin(priceReq.getCheckIn())
@@ -142,10 +153,10 @@ public class HuiTravelServiceImpl implements HuiTravelService {
                 .hid(Integer.parseInt(priceReq.getSHotelId()))
                 .rid(availabilityResponse.getData().getResult().getPrices().get(0).getRid())
                 .rpid(availabilityResponse.getData().getResult().getPrices().get(0).getRpid())
-                .costs(costs.substring(0,costs.length()-1))
+                .costs(costs.substring(1))
                 .totalprice(total)
                 .build();
-        ResponseResult<CheckResponse> checkResponse = new CheckPriceAccess("http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/checkavailability", "boqiaotest", "d1e205262c06132733faa748dc3e29ab").access(checkRequest);
+        ResponseResult<CheckResponse> checkResponse = new CheckPriceAccess(checkavailability, appKey, secretKey).access(checkRequest);
         return checkResponse.getData();
     }
 }

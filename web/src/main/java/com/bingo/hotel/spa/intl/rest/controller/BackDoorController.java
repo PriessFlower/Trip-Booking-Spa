@@ -3,6 +3,7 @@ package com.bingo.hotel.spa.intl.rest.controller;
 
 import com.bingo.hotel.spa.intl.core.api.aichotels.service.AichotelsHotelService;
 import com.bingo.hotel.spa.intl.core.api.didatravel.service.DidatravelHotelService;
+import com.bingo.hotel.spa.intl.core.api.huitravel.service.HuiTravelService;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.service.TravelconnectHotelService;
 import com.bingo.hotel.spa.intl.rest.common.HttpResponse;
 import io.swagger.annotations.ApiOperation;
@@ -26,6 +27,8 @@ public class BackDoorController {
     private AichotelsHotelService aichotelsHotelService;
     @Resource
     private DidatravelHotelService didatravelHotelService;
+    @Autowired
+    private HuiTravelService huiTravelService;
 
     @GetMapping("/push")
     @ApiOperation("HotelList查询")
@@ -55,6 +58,14 @@ public class BackDoorController {
                                     @RequestParam("endNum") int endNum,
                                     @RequestParam("downloadFlag") boolean downloadFlag) {
         didatravelHotelService.queryAndSaveStaticInfo(staticType, startDate, endDate, startNum, endNum, downloadFlag);
+        return HttpResponse.getSuccessInstance();
+    }
+
+    @GetMapping("/push/hui")
+    @ApiOperation("HotelList查询")
+    public HttpResponse huiTravelHotelList(@RequestParam("countryCode") String countryCode, @RequestParam("cityId") String cityId) {
+        System.out.println("push");
+        huiTravelService.getHotelCodeListByCity(countryCode, cityId);
         return HttpResponse.getSuccessInstance();
     }
 
