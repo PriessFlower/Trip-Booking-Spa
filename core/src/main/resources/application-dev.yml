@@ -11,7 +11,7 @@ spring:
   datasource:
     host: 8.146.211.133
     port: 3306
-    name: bg_admin
+    name: intl_bg_admin
     username: bystest
     password: bystest
     driver-class-name: com.mysql.cj.jdbc.Driver

@@ -1,4 +1,4 @@
-package com.bingo.hotel.spa.intl.core.test;
+package com.bingo.hotel.spa.intl.core.util;
 
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -27,9 +27,9 @@ import java.security.cert.X509Certificate;
  * 
  * @author ruoyi
  */
-public class HttpUtils
+public class ZoneHttpUtils
 {
-    private static final Logger log = LoggerFactory.getLogger(HttpUtils.class);
+    private static final Logger log = LoggerFactory.getLogger(ZoneHttpUtils.class);
 
     /**
      * 向指定 URL 发送GET方法的请求

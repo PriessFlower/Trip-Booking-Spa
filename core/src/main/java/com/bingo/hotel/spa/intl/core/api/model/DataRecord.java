@@ -1,4 +1,4 @@
-package com.bingo.hotel.spa.intl.core.test;
+package com.bingo.hotel.spa.intl.core.api.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

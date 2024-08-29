@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bingo.hotel.spa.intl.core.api.common.mapper.InitTimeZoneMapper">
+
+    <select id="getCityZoneListByCityNames" resultType="com.bingo.hotel.spa.intl.core.api.common.bean.CityZone">
+        select * from city_zone where city_name in
+        <foreach collection="list" item="item" open="(" separator="," close=")">
+            #{item.cityName}
+        </foreach>
+    </select>
+
+    <insert id="insertBatch">
+        insert into city_zone (city_name, timezone, country_name) values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.cityName}, #{item.timezone}, #{item.countryName})
+        </foreach>
+    </insert>
+
+    <select id="getCityZoneByCityName" resultType="java.lang.String">
+        select timezone from city_zone where city_name = #{cityName} and country_name = #{countryName}
+    </select>
+</mapper>
