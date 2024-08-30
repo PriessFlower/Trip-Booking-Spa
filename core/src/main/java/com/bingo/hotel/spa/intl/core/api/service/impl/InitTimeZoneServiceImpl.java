@@ -47,9 +47,22 @@ public class InitTimeZoneServiceImpl implements InitTimeZoneService {
 
     @Override
     public void initTimeZone() {
+//        new Thread(() -> {
+//            while (true){
+//                try {
+//                    Thread.sleep(10000);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//                initTimeZoneMapper.test();
+//            }
+//        }).start();
         BaseResult<List<GetCityInfoBySupplierHotelIdResponse>> allCityInfoBySupplierId = hotelBaseIntlClient.getAllCityInfoBySupplierId(supplierQueryTimezone);
         List<GetCityInfoBySupplierHotelIdResponse> data = allCityInfoBySupplierId.getData();
         List<CityZone> cityZoneList = new ArrayList<>();
+//        for (int i = 0; i < 10; i++) {
+//            GetCityInfoBySupplierHotelIdResponse cityInfo = data.get(i);
+//        }
         for (GetCityInfoBySupplierHotelIdResponse cityInfo : data) {
             DataRecord record = didaTravelProductConvertUtil.getCityInfo(cityInfo.getCityName(), cityInfo.getCountryName());
             String timeZone = "";
@@ -78,7 +91,10 @@ public class InitTimeZoneServiceImpl implements InitTimeZoneService {
             // 比对
             // 添加
             cityZoneList.removeAll(dataBaseList);
-            initTimeZoneMapper.insertBatch(cityZoneList);
+            if(!CollectionUtils.isEmpty(cityZoneList)){
+                initTimeZoneMapper.delBatch(cityZoneList);
+                initTimeZoneMapper.insertBatch(cityZoneList);
+            }
         }
 
     }

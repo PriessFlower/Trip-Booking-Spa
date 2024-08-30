@@ -97,8 +97,8 @@ public class DidaTravelProductConvertUtil {
                         .room(room)
                         .currency(ratePlan.getCurrency())
                         .meal(ratePlan.getPriceList().get(0).getMealType() == 1 ? Meal.builder().count(0).build() : Meal.builder().count(ratePlan.getPriceList().get(0).getMealAmount()).build())
-                        .cancelPolicy(cancelPolicies)
-//                        .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+//                        .cancelPolicy(cancelPolicies)
+                        .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                         .maxOccupancy(null == ratePlan.getMaxOccupancy() ? 0 : ratePlan.getMaxOccupancy())
                         .build();
                 respDTOList.add(build);
@@ -241,6 +241,7 @@ public class DidaTravelProductConvertUtil {
     * 根据城市名称获取城市信息
     * */
     public DataRecord getCityInfo(String cityName, String countryName) {
+        countryName = sloveCountryName(countryName);
         String input = ZoneHttpUtils.sendGet("https://www.timeanddate.com/scripts/completion.php?query=" + cityName + "&xd=3&mode=ci");
         List<DataRecord> records = parseData(input);
         for (DataRecord record : records) {
@@ -250,6 +251,15 @@ public class DidaTravelProductConvertUtil {
         }
         log.error("未找到城市信息: cityName:{},countryName:{}" , cityName, countryName);
         return null;
+    }
+
+    private String sloveCountryName(String countryName) {
+        if(countryName.equals("United States of America")){
+            return "USA";
+        } else if (countryName.equals("The United Kingdom of Great Britain and Northern Ireland")) {
+            return "United Kingdom";
+        }
+        return countryName;
     }
 
     public List<DataRecord> parseData(String input) {

@@ -20,4 +20,16 @@
     <select id="getCityZoneByCityName" resultType="java.lang.String">
         select timezone from city_zone where city_name = #{cityName} and country_name = #{countryName}
     </select>
+
+    <delete id="delBatch">
+        delete from city_zone where
+        city_name in
+        <foreach collection="list" item="item" separator="," open="(" close=")">
+            #{item.cityName}
+        </foreach>
+        and country_name in
+        <foreach collection="list" item="item" separator="," open="(" close=")">
+            #{item.countryName}
+        </foreach>
+    </delete>
 </mapper>
