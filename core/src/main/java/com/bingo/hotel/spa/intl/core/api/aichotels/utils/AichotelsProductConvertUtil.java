@@ -109,7 +109,7 @@ public class AichotelsProductConvertUtil {
                 BigDecimal amount = new BigDecimal(policyOne.getAmount_penalty());
                 return List.of(CancelPolicy.builder()
                     .cancelType(1)
-                    .timeZone(getTimeZone(ratePlanCancellationPolicy.getTimezone()))
+                    .timeZone(getTimeZone("GMT" + ratePlanCancellationPolicy.getTimezone()))
                     .before(25)
                     .type(totalPrice.subtract(amount).equals(0) ? RefundType.NO_DEDUCTION : RefundType.DEDUCT_BY_AMOUNT)
                     .value(amount.doubleValue()).build());
@@ -126,7 +126,7 @@ public class AichotelsProductConvertUtil {
                     BigDecimal amount = new BigDecimal(policy.getAmount_penalty());
                     CancelPolicy cancelPolicy = CancelPolicy.builder()
                             .cancelType(1)
-                            .timeZone(getTimeZone(ratePlanCancellationPolicy.getTimezone()))
+                            .timeZone("GMT" + getTimeZone(ratePlanCancellationPolicy.getTimezone()))
                             .before(DateUtil.diffHour(formatDate(policy.getDatetime()), solveCheckIn(checkIn)))
                             .type(cancelType(totalPrice,amount,policy.getFee_type()))
                             .value(amount.doubleValue()).build();
@@ -162,7 +162,7 @@ public class AichotelsProductConvertUtil {
                 BigDecimal amount = new BigDecimal(policyOne.getAmount_penalty());
                 return List.of(CancelPolicy.builder()
                         .cancelType(1)
-                        .timeZone(getTimeZone(ratePlanCancellationPolicy.getTimezone()))
+                        .timeZone("GMT" + getTimeZone(ratePlanCancellationPolicy.getTimezone()))
                         .before(25)
                         .type(totalPrice.subtract(amount).equals(0) ? RefundType.NO_DEDUCTION : RefundType.DEDUCT_BY_AMOUNT)
                         .value(amount.doubleValue()).build());
@@ -179,7 +179,7 @@ public class AichotelsProductConvertUtil {
                     BigDecimal amount = new BigDecimal(policy.getAmount_penalty());
                     CancelPolicy cancelPolicy = CancelPolicy.builder()
                             .cancelType(1)
-                            .timeZone(getTimeZone(ratePlanCancellationPolicy.getTimezone()))
+                            .timeZone("GMT" + getTimeZone(ratePlanCancellationPolicy.getTimezone()))
                             .before(DateUtil.diffHour(formatDate(policy.getDatetime()), solveCheckIn(checkIn)))
 //                            .type(totalPrice.subtract(amount).equals(0) ? RefundType.NO_DEDUCTION : RefundType.DEDUCT_BY_AMOUNT)
                             .type(cancelType(totalPrice,amount,policy.getFee_type()))
