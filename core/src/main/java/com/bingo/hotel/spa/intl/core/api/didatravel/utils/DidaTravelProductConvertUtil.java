@@ -77,11 +77,7 @@ public class DidaTravelProductConvertUtil {
                         .roomName(ratePlan.getRoomName())
                         .build();
 
-                ratePlan.getRatePlanCancellationPolicyList().sort((map1, map2) -> {
-                    Date date1 = map1.getFromDate();
-                    Date date2 = map2.getFromDate();
-                    return date1.compareTo(date2);
-                });
+
                 List<CancelPolicy> cancelPolicies
                         = convertCancelPolicy(ratePlan.getRatePlanCancellationPolicyList(),
                         didaTravelResponse.getSuccess().getPriceDetails().getCheckInDate(), ratePlan.getTotalPrice(), timeZone);
