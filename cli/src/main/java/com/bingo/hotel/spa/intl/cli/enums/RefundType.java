@@ -8,7 +8,9 @@ public enum RefundType {
     NO_DEDUCTION("NO_DEDUCTION", "不扣房费"),
     DEDUCT_BY_PERCENT("DEDUCT_BY_PERCENT","扣除房费的百分比"),
     DEDUCT_BY_AMOUNT("DEDUCT_BY_AMOUNT", "扣除固定金额"),
-    DEDUCT_FIRST_NIGHT("DEDUCT_FIRST_NIGHT", "扣除首晚房费");
+    DEDUCT_FIRST_NIGHT("DEDUCT_FIRST_NIGHT", "扣除首晚房费"),
+    DEDUCT_DAY_NIGHT("DEDUCT_DAY_NIGHT", "扣除几晚房费"),
+    NO_CANCEL("NO_CANCEL", "不可取消");
 
     private String code;
     private String description;
