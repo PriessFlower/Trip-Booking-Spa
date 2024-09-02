@@ -1,5 +1,5 @@
 server:
-  port: 8081
+  port: 8089
 feign:
   httpclient.enabled: true
   client:
@@ -11,11 +11,11 @@ spring:
   datasource:
     host: 8.146.211.133
     port: 3306
-    name: bg_admin
+    name: intl_bg_admin
     username: bystest
     password: bystest
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries = true&nullCatalogMeansCurrent=true&serverTimezone=GMT%2B8
+    url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries = true&nullCatalogMeansCurrent=true&serverTimezone=CST&autoReconnect=true
   redis:
     host: 8.146.211.133
     port: 6379
@@ -139,9 +139,17 @@ aichotels:
   apiClientKey: BeijingBaosheng
   secret: SRLxRgRXjjaPCWUbcWcwriusUNtpYe3VxRg9
 didatravel:
-  licenseKey: BSYX_key0509
-  clientId: BSYX
+  licenseKey: BSYX_textkey
+  clientId: BSYX_text
   localFilePath: D:\working\file\导出文件\hotel_info
+huitravel:
+  url:
+    hotellist: http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/static/hotellist
+    hoteldetails: http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/static/hoteldetails
+    getPrice: http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/getrateplanprice
+    checkavailability: http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/checkavailability
+  appkey: boqiaotest
+  secretKey: d1e205262c06132733faa748dc3e29ab
 expedia:
   apiKey: 6urn54ijk30uttcqm64c3it6gf
   sharedSecret: 708a6tdaqvm7
