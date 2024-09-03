@@ -10,9 +10,6 @@ import com.bingo.hotel.spa.intl.core.api.aichotels.service.AichotelsHotelService
 import com.bingo.hotel.spa.intl.core.api.aichotels.utils.AichotelsProductConvertUtil;
 import com.bingo.hotel.spa.intl.core.api.service.AbstractProductSyncSupportService;
 import com.bingo.hotel.spa.intl.core.api.service.RecordLogService;
-import com.bingo.hotel.spa.intl.core.api.travelconnect.bean.search.response.SearchResponse;
-import com.bingo.hotel.spa.intl.core.api.travelconnect.service.TravelconnectHotelService;
-import com.bingo.hotel.spa.intl.core.api.travelconnect.utils.TravelConnectProductConvertUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +27,9 @@ public class AicHotelsProductSyncServiceImpl extends AbstractProductSyncSupportS
 
     @Resource(name = "redisRecordLogServiceImpl")
     private RecordLogService redisRecordLogServiceImpl;
+
+    @Autowired
+    private AichotelsProductConvertUtil aichotelsProductConvertUtil;
 
     @Override
     public AvailabilityResponse querySupplierPrice(PriceReq priceReq, Supplier supplier) {
@@ -60,8 +60,8 @@ public class AicHotelsProductSyncServiceImpl extends AbstractProductSyncSupportS
     @Override
     public List<ProductRespDTO> productRespConvert(AvailabilityResponse searchResponse) {
         if (searchResponse.getPreBookResponse() != null) {
-            return AichotelsProductConvertUtil.convertRatePlanCheckVO(searchResponse.getPreBookResponse(), searchResponse.getHotelCode());
+            return aichotelsProductConvertUtil.convertRatePlanCheckVO(searchResponse.getPreBookResponse(), searchResponse.getHotelCode());
         }
-        return AichotelsProductConvertUtil.convertRatePlanVO(searchResponse);
+        return aichotelsProductConvertUtil.convertRatePlanVO(searchResponse);
     }
 }

@@ -77,11 +77,7 @@ public class DidaTravelProductConvertUtil {
                         .roomName(ratePlan.getRoomName())
                         .build();
 
-                ratePlan.getRatePlanCancellationPolicyList().sort((map1, map2) -> {
-                    Date date1 = map1.getFromDate();
-                    Date date2 = map2.getFromDate();
-                    return date1.compareTo(date2);
-                });
+
                 List<CancelPolicy> cancelPolicies
                         = convertCancelPolicy(ratePlan.getRatePlanCancellationPolicyList(),
                         didaTravelResponse.getSuccess().getPriceDetails().getCheckInDate(), ratePlan.getTotalPrice(), timeZone);
@@ -126,47 +122,98 @@ public class DidaTravelProductConvertUtil {
         return timeZone;
     }
     public List<CancelPolicy> convertCancelPolicy(List<DidaTravelResponse.CancellationPolicyListTypeCancellationPolicy>
-                                                                 ratePlanCancellationPolicyList, Date checkIn, BigDecimal totalPrice, String timeZone)  {
+                                                                 policyList, Date checkIn, BigDecimal totalPrice, String timeZone)  {
 
         // 如果道旅给的取消规则是null，则表示不可取消
-        if(CollectionUtils.isEmpty(ratePlanCancellationPolicyList) || StringUtils.isBlank(timeZone)){
+        if(CollectionUtils.isEmpty(policyList) || StringUtils.isBlank(timeZone)){
             return List.of(CancelPolicy.builder().cancelType(0).build());
         }
         // 根据取消时间从小到大排序
-        Collections.sort(ratePlanCancellationPolicyList, (map1, map2) -> map1.getFromDate().compareTo(map2.getFromDate()));
+        Collections.sort(policyList, (map1, map2) -> map1.getFromDate().compareTo(map2.getFromDate()));
 
         // 取出第一条数据，如果第一条数据checkIn - formDate <= 24小时,则直接改为25
-        DidaTravelResponse.CancellationPolicyListTypeCancellationPolicy policyOne = ratePlanCancellationPolicyList.get(0);
+        DidaTravelResponse.CancellationPolicyListTypeCancellationPolicy policyOne = policyList.get(0);
         String firstDate = convertToOffsetTime(policyOne.getFromDate(), timeZone);
         String fisrtCheckIn = convertToOffsetTime(solveCheckIn(checkIn), timeZone);
         int hour = DateUtil.diffHour(DateFormatUtils.parse4y2M2d2h2m2s(firstDate), DateFormatUtils.parse4y2M2d2h2m2s(fisrtCheckIn));
         if(hour <= 24){
             BigDecimal amount = policyOne.getAmount();
-
+            RefundType type = getRefundType(totalPrice, amount);
+            if(type.equals(RefundType.NO_CANCEL)){
+                return List.of(CancelPolicy.builder().cancelType(0).build());
+            }
             return List.of(CancelPolicy.builder()
                     .cancelType(1)
                     .timeZone("GMT" + timeZone)
                     .before(25)
-                    .type(totalPrice.subtract(amount).equals(0) ? RefundType.NO_DEDUCTION : RefundType.DEDUCT_BY_AMOUNT)
+                    .type(type)
                     .value(amount.doubleValue()).build());
         } else {
             List<CancelPolicy> cancelPolicyList = Lists.newArrayList();
-            for (DidaTravelResponse.CancellationPolicyListTypeCancellationPolicy policy : ratePlanCancellationPolicyList) {
-                BigDecimal amount = policy.getAmount();
-                String fromDate = convertToOffsetTime(policy.getFromDate(), timeZone);
-                Date cancelDate = DateFormatUtils.parse4y2M2d2h2m2s(fromDate);
-                String sChecnIn = convertToOffsetTime(solveCheckIn(checkIn), timeZone);
-                Date checkInDate = DateFormatUtils.parse4y2M2d2h2m2s(sChecnIn);
-                CancelPolicy cancelPolicy = CancelPolicy.builder()
-                        .cancelType(1)
-                        .timeZone("GMT" + timeZone)
-                        .before(DateUtil.diffHour(cancelDate, checkInDate))
-                        .type(totalPrice.subtract(amount).equals(0) ? RefundType.NO_DEDUCTION : RefundType.DEDUCT_BY_AMOUNT)
-                        .value(amount.doubleValue()).build();
-                cancelPolicyList.add(cancelPolicy);
+            DidaTravelResponse.CancellationPolicyListTypeCancellationPolicy firstPolicy = policyList.get(0);
+            RefundType firstType = getRefundType(totalPrice, firstPolicy.getAmount());
+            if(firstType.equals(RefundType.NO_CANCEL)){
+                return List.of(CancelPolicy.builder().cancelType(0).build());
+            }
+            CancelPolicy cancelPolicyFirst = CancelPolicy.builder()
+                    .cancelType(1)
+                    .timeZone("GMT" + timeZone)
+                    .before(DateUtil.diffHour(firstPolicy.getFromDate(), solveCheckIn(checkIn)))
+                    .type(RefundType.NO_DEDUCTION)
+                    .value(0.0).build();
+            cancelPolicyList.add(cancelPolicyFirst);
+            if(policyList.size() == 1){
+                RefundType type1 = getRefundType(totalPrice, firstPolicy.getAmount());
+                if(!type1.equals(RefundType.NO_CANCEL)) {
+                    CancelPolicy cancelPolicyLast = CancelPolicy.builder()
+                            .cancelType(1)
+                            .timeZone("GMT" + timeZone)
+                            .before(25)
+                            .type(type1)
+                            .value(firstPolicy.getAmount().doubleValue()).build();
+                    cancelPolicyList.add(cancelPolicyLast);
+                }
+            } else {
+                for (int i = 1; i < policyList.size(); i++) {
+                    RefundType type1 = getRefundType(totalPrice, policyList.get(i-1).getAmount());
+                    if(type1.equals(RefundType.NO_CANCEL)){
+                        return cancelPolicyList;
+                    }
+                    int before = DateUtil.diffHour(policyList.get(i).getFromDate(), solveCheckIn(checkIn));
+                    CancelPolicy cancelPolicy = CancelPolicy.builder()
+                            .cancelType(1)
+                            .timeZone("GMT" + timeZone)
+                            .before(before <= 24 ? 25 : before)
+                            .type(type1)
+                            .value(policyList.get(i-1).getAmount().doubleValue()).build();
+                    cancelPolicyList.add(cancelPolicy);
+                    if(before <= 24){
+                        return cancelPolicyList;
+                    }
+                }
+                RefundType lastType = getRefundType(totalPrice,policyList.get(policyList.size()-1).getAmount());
+                if(!lastType.equals(RefundType.NO_CANCEL)){
+                    int lastBefore = DateUtil.diffHour(policyList.get(policyList.size() -1).getFromDate(), solveCheckIn(checkIn));
+                    if(!(lastBefore <= 25)){
+                        CancelPolicy lastCancelPolicy = CancelPolicy.builder()
+                                .cancelType(1)
+                                .timeZone("GMT" + timeZone)
+                                .before(25)
+                                .type(lastType)
+                                .value(policyList.get(policyList.size()-1).getAmount().doubleValue()).build();
+                        cancelPolicyList.add(lastCancelPolicy);
+                    }
+                }
             }
             return cancelPolicyList;
         }
+    }
+
+    public RefundType getRefundType(BigDecimal totalPrice, BigDecimal amount) {
+        if(totalPrice.subtract(amount).compareTo(BigDecimal.ZERO) == 0){
+            return RefundType.NO_DEDUCTION;
+        }
+        return RefundType.DEDUCT_BY_AMOUNT;
     }
     public Date solveCheckIn(Date checkIn){
         Date date = DateUtil.addDay(checkIn, 1);
