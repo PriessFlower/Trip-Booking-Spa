@@ -139,9 +139,7 @@ public class AichotelsProductConvertUtil {
                         = ratePlanCancellationPolicy.getDetails();
                 PreBookResponse.RoomListBean.RatesAndCancellationPoliciesBean.CancellationInformationBean.DetailsBean first = policyList.get(0);
                 RefundType type = cancelType(totalPrice, new BigDecimal(first.getAmount_penalty()), first.getFee_type(),first.getFee_type_value(),checkIn,checkOut);
-                if(type.equals(RefundType.NO_CANCEL)){
-                    return List.of(CancelPolicy.builder().cancelType(0).build());
-                }
+
                 CancelPolicy cancelPolicyFirst = CancelPolicy.builder()
                         .cancelType(1)
                         .timeZone("GMT" + getTimeZone(ratePlanCancellationPolicy.getTimezone(), hotelId))
@@ -149,6 +147,9 @@ public class AichotelsProductConvertUtil {
                         .type(RefundType.NO_DEDUCTION)
                         .value(0.0).build();
                 cancelPolicyList.add(cancelPolicyFirst);
+                if(type.equals(RefundType.NO_CANCEL)){
+                    return cancelPolicyList;
+                }
                 if(policyList.size() == 1){
                     RefundType type1 = cancelType(totalPrice,new BigDecimal(first.getAmount_penalty()),first.getFee_type(),first.getFee_type_value(),checkIn,checkOut);
                     if(!type1.equals(RefundType.NO_CANCEL)) {
