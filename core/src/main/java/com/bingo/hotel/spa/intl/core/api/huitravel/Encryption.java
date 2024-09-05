@@ -15,8 +15,8 @@ public class Encryption {
 
     public static void main(String[] args) {
         long timestamp = System.currentTimeMillis();
-        String appKey = "boqiaotest";
-        String secretKey = "d1e205262c06132733faa748dc3e29ab";
+        String appKey = "bsgl";
+        String secretKey = "C340EB9BF816799573229D66B6F11555";
         System.out.println(timestamp);
         System.out.println(Md5Utils.md5Hex(Md5Utils.md5Hex(appKey + secretKey) + timestamp));
     }
