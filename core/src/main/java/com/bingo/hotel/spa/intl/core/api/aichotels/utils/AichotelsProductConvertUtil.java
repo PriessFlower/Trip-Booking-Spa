@@ -54,10 +54,10 @@ public class AichotelsProductConvertUtil {
                 roomVO.getRates_and_cancellation_policies().forEach(productVO -> {
                     AvailabilityResponse.RoomListBean.RatesAndCancellationPoliciesBean.CancellationInformationBean cancellationInformation
                             = productVO.getCancellation_information();
-                    List<CancelPolicy> cancelPolicies
-                            = convertCancelPolicy(cancellationInformation, DateFormatUtils.parse(productVO.getRates().get(0).getCheck_in(), "yyyy-MM-dd"),
-                            DateFormatUtils.parse(productVO.getRates().get(productVO.getRates().size() - 1).getCheck_out(), "yyyy-MM-dd"),
-                            new BigDecimal(productVO.getTotal_amount_after_tax()),availabilityResponse.getHotelCode());
+//                    List<CancelPolicy> cancelPolicies
+//                            = convertCancelPolicy(cancellationInformation, DateFormatUtils.parse(productVO.getRates().get(0).getCheck_in(), "yyyy-MM-dd"),
+//                            DateFormatUtils.parse(productVO.getRates().get(productVO.getRates().size() - 1).getCheck_out(), "yyyy-MM-dd"),
+//                            new BigDecimal(productVO.getTotal_amount_after_tax()),availabilityResponse.getHotelCode());
                     respDTOList.add(
                             ProductRespDTO.builder()
                                     .productId(productVO.getRoom_key())
@@ -68,7 +68,8 @@ public class AichotelsProductConvertUtil {
                                     .hotelId(availabilityResponse.getHotelCode())
                                     .priceInfos(buildPriceInfos(productVO.getRates()))
                                     .meal(productVO.getBreakfast().getInclude() == 1 ? Meal.builder().count(productVO.getBreakfast().getCount()).build() : Meal.builder().count(0).build())
-                                    .cancelPolicy(cancelPolicies)
+                                    .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+//                                    .cancelPolicy(cancelPolicies)
                                     .maxOccupancy(0)
                                     .build()
                     );
