@@ -111,9 +111,9 @@ didatravel:
   localFilePath: /home/webrun/logs/file
 huitravel:
   url:
-    hotellist: http://hapi.huizhi-intl.com/hotelsell/cithotelsell/static/hotellist
-    hoteldetails: http://hapi.huizhi-intl.com/hotelsell/cithotelsell/static/hoteldetails
-    getPrice: http://hapi.huizhi-intl.com/hotelsell/cithotelsell/getrateplanprice
-    checkavailability: http://hapi.huizhi-intl.com/hotelsell/cithotelsell/checkavailability
+    hotellist: http://hapi.huizhi-intl.com/hotelsell/cithotelsell/yoppay/static/hotellist
+    hoteldetails: http://hapi.huizhi-intl.com/hotelsell/cithotelsell/yoppay/static/hoteldetails
+    getPrice: http://hapi.huizhi-intl.com/hotelsell/cithotelsell/yoppay/getrateplanprice
+    checkavailability: http://hapi.huizhi-intl.com/hotelsell/cithotelsell/yoppay/checkavailability
   appkey: bsgl
   secretKey: C340EB9BF816799573229D66B6F11555
