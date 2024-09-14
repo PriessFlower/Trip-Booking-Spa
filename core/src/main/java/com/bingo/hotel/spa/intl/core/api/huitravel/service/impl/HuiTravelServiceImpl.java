@@ -64,7 +64,7 @@ public class HuiTravelServiceImpl implements HuiTravelService {
                 HotelDetailRequest request = HotelDetailRequest.builder().hids(hotelId).build();
                 ResponseResult<HotelDetailResponse> hotelDetailResponse = new HotelDetailAccess(hoteldetails, appKey, secretKey).access(request);
                 AvailabilityRequest availabilityRequest = AvailabilityRequest.builder().
-                        hid(Integer.parseInt(hotelId))
+                        hid(hotelId)
                         .checkin("2024-09-20")
                         .checkout("2024-09-21")
                         .roomnum(1)
