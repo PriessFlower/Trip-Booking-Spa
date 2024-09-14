@@ -85,7 +85,7 @@ public class HuiTravelServiceImpl implements HuiTravelService {
     @Override
     public AvailabilityResponse getPrice(PriceReq priceReq, String sHotelId) {
         AvailabilityRequest availabilityRequest = AvailabilityRequest.builder().
-                hid(Integer.parseInt(sHotelId))
+                hid(sHotelId)
                 .checkin(priceReq.getCheckIn())
                 .checkout(priceReq.getCheckout())
                 .roomnum(priceReq.getRoomNum())
@@ -99,7 +99,8 @@ public class HuiTravelServiceImpl implements HuiTravelService {
     @Override
     public AvailabilityResponse getPriceByProductId(CheckPriceReq priceReq) {
         AvailabilityRequest availabilityRequest = AvailabilityRequest.builder().
-                hid(Integer.parseInt(priceReq.getSHotelId()))
+                hid(priceReq.getSHotelId())
+                .rpid(priceReq.getSProductId())
                 .checkin(priceReq.getCheckIn())
                 .checkout(priceReq.getCheckOut())
                 .roomnum(priceReq.getRoomNum())
@@ -133,7 +134,8 @@ public class HuiTravelServiceImpl implements HuiTravelService {
     @Override
     public CheckResponse checkPrice(CheckPriceReq priceReq) {
         AvailabilityRequest availabilityRequest = AvailabilityRequest.builder().
-                hid(Integer.parseInt(priceReq.getSHotelId()))
+                hid(priceReq.getSHotelId())
+                .rpid(priceReq.getSProductId())
                 .checkin(priceReq.getCheckIn())
                 .checkout(priceReq.getCheckOut())
                 .roomnum(priceReq.getRoomNum())
