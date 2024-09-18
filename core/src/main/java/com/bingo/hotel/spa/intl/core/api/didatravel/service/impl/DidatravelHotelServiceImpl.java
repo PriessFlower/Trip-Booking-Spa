@@ -28,6 +28,7 @@ import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.priceConfirm.Pric
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.priceConfirm.PriceConfirmResponse;
 import com.bingo.hotel.spa.intl.core.api.didatravel.service.DidatravelHotelService;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
+import com.bingo.hotel.spa.intl.core.util.FileDealUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.ctrip.framework.apollo.spring.annotation.ApolloJsonValue;
 import com.google.errorprone.annotations.concurrent.LazyInit;
@@ -161,7 +162,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
             String csvUrl = result.getData().getUrl();
             String localFilePath = LOCAL_FILE_PATH + csvUrl.substring(csvUrl.lastIndexOf("/"), csvUrl.indexOf("?"));
             if (downloadFlag) {
-                downloadFile(csvUrl, localFilePath);
+                FileDealUtils.downloadFile(csvUrl, localFilePath);
             }
             //4.解析文件数据并推送base服务
 //            readCSVFromURL(localFilePath, staticType);
@@ -171,36 +172,6 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         } catch (Exception e) {
             log.error("道旅静态数据获取异常", e);
             e.printStackTrace();
-        }
-    }
-
-    public static void downloadFile(String remoteFilePath, String localFilePath) {
-        URL website = null;
-        ReadableByteChannel rbc = null;
-        FileOutputStream fos = null;
-        try {
-            website = new URL(remoteFilePath);
-            rbc = Channels.newChannel(website.openStream());
-            fos = new FileOutputStream(localFilePath);//本地要存储的文件地址 例如：test.txt
-            fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            if (fos != null) {
-                try {
-                    fos.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (rbc != null) {
-                try {
-                    rbc.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
-            }
         }
     }
 

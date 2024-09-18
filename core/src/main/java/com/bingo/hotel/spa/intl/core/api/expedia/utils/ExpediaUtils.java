@@ -1,12 +1,13 @@
 package com.bingo.hotel.spa.intl.core.api.expedia.utils;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.Timestamp;
 import java.util.Date;
+
 /**
  * expedia交互工具类.
  *
@@ -14,6 +15,8 @@ import java.util.Date;
  * @version : 1.0 2024/08/15
  * @since : 1.0
  **/
+
+@Component
 public class ExpediaUtils {
 
     @Value("${expedia.apiKey}")

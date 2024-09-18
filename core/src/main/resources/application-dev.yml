@@ -153,3 +153,8 @@ huitravel:
 expedia:
   apiKey: 6urn54ijk30uttcqm64c3it6gf
   sharedSecret: 708a6tdaqvm7
+  session: abcdefg
+  ownIp: 5.5.5.5
+  localFilePath: D:\working\file\导出文件\hotel_info
+  url:
+    host: https://test.ean.com/v3

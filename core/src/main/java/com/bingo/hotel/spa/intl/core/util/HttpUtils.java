@@ -3,6 +3,7 @@ package com.bingo.hotel.spa.intl.core.util;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.BaseResponse;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.IParser;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
+import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.HotelStaticInfo;
 import com.google.common.collect.Lists;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.MapUtils;
@@ -59,12 +60,28 @@ public class HttpUtils {
     private final static Object SYNC_LOCK = new Object();
 
     private static void config(HttpRequestBase httpRequestBase) {
-        // 设置Header等
+//         设置Header等
         httpRequestBase.setHeader("User-Agent", "Mozilla/5.0");
         httpRequestBase.setHeader("Accept", "application/json, text/plain, */*");
         httpRequestBase.setHeader("Accept-Language", "zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3");
         httpRequestBase.setHeader("Accept-Charset", "UTF-8");
-        httpRequestBase.setHeader("Content-Type", "application/json;charset=UTF-8");
+        httpRequestBase.setHeader("Content-Type", "application/json");
+
+        // 配置请求的超时设置
+        RequestConfig requestConfig = RequestConfig.custom()
+                .setConnectionRequestTimeout(TIME_OUT)
+                .setConnectTimeout(TIME_OUT)
+                .setSocketTimeout(TIME_OUT).build();
+
+        httpRequestBase.setConfig(requestConfig);
+    }
+
+    private static void configGet(HttpRequestBase httpRequestBase) {
+//         设置Header等
+        httpRequestBase.setHeader("User-Agent", "Mozilla/5.0");
+        httpRequestBase.setHeader("Accept", "application/json, text/plain, */*");
+        httpRequestBase.setHeader("Accept-Language", "zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3");
+        httpRequestBase.setHeader("Accept-Charset", "UTF-8");
 
         // 配置请求的超时设置
         RequestConfig requestConfig = RequestConfig.custom()
@@ -141,13 +158,17 @@ public class HttpUtils {
         return result;
     }
 
+    public static void main(String[] args) {
+
+    }
+
     public static <T extends BaseResponse> ResponseResult accessGet(String url, Map<String, String> headers,
                                                                     Map<String, String> params, IParser<T> parser)
             throws Exception {
         HttpClient httpClient = getHttpClient(url);
 
         HttpGet httpGet = new HttpGet(buildUrl(url, params));
-        config(httpGet);
+        configGet(httpGet);
         if (MapUtils.isNotEmpty(headers)) {
             for (Map.Entry<String, String> e : headers.entrySet()) {
                 httpGet.addHeader(e.getKey(), e.getValue());
@@ -168,7 +189,6 @@ public class HttpUtils {
         }
 
         ResponseResult<T> result = new ResponseResult(response.getStatusLine().getStatusCode(), entityStr, data);
-
         EntityUtils.consume(entity);
         return result;
     }
@@ -187,7 +207,7 @@ public class HttpUtils {
         HttpClient httpClient = getHttpClient(url);
 
         HttpGet httpGet = new HttpGet(buildUrl(url, params));
-        config(httpGet);
+        configGet(httpGet);
         for (Map.Entry<String, String> e : headers.entrySet()) {
             httpGet.addHeader(e.getKey(), e.getValue());
         }

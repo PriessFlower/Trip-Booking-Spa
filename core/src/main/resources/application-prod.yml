@@ -117,3 +117,11 @@ huitravel:
     checkavailability: http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/checkavailability
   appkey: boqiaotest
   secretKey: d1e205262c06132733faa748dc3e29ab
+expedia:
+  apiKey: 6urn54ijk30uttcqm64c3it6gf
+  sharedSecret: 708a6tdaqvm7
+  session: abcdefg
+  ownIp: 5.5.5.5
+  localFilePath: /home/webrun/logs/file
+  url:
+    host: https://test.ean.com/v3

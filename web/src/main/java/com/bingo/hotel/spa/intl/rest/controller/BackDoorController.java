@@ -3,6 +3,7 @@ package com.bingo.hotel.spa.intl.rest.controller;
 
 import com.bingo.hotel.spa.intl.core.api.aichotels.service.AichotelsHotelService;
 import com.bingo.hotel.spa.intl.core.api.didatravel.service.DidatravelHotelService;
+import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaStaticInfoService;
 import com.bingo.hotel.spa.intl.core.api.huitravel.service.HuiTravelService;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.service.TravelconnectHotelService;
 import com.bingo.hotel.spa.intl.rest.common.HttpResponse;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
+import java.util.List;
 
 
 @Slf4j
@@ -29,6 +31,8 @@ public class BackDoorController {
     private DidatravelHotelService didatravelHotelService;
     @Autowired
     private HuiTravelService huiTravelService;
+    @Autowired
+    private ExpediaStaticInfoService expediaStaticInfoService;
 
     @GetMapping("/push")
     @ApiOperation("HotelList查询")
@@ -69,4 +73,35 @@ public class BackDoorController {
         return HttpResponse.getSuccessInstance();
     }
 
+    @GetMapping("/save/expedia/country")
+    @ApiOperation("国家静态数据查询-expedia")
+    public HttpResponse expediaSaveCountryInfo() {
+        expediaStaticInfoService.saveCountryInfo();
+        return HttpResponse.getSuccessInstance();
+    }
+
+    @GetMapping("/save/expedia/city")
+    @ApiOperation("城市静态数据查询-expedia")
+    public HttpResponse expediaSaveCityInfo() {
+        expediaStaticInfoService.saveCityInfo();
+        return HttpResponse.getSuccessInstance();
+    }
+
+    @GetMapping("/save/expedia/hotel")
+    @ApiOperation("酒店静态数据保存-expedia")
+    public HttpResponse expediaSaveHotelInfo(@RequestParam("downloadFlag") boolean downloadFlag,
+                                             @RequestParam("allPushFlag") boolean allPushFlag,
+                                             @RequestParam("updateDays") Integer updateDays,
+                                             @RequestParam(value = "supplierHotelIds", required = false) List<String> supplierHotelIds) {
+        expediaStaticInfoService.saveOrUpdateHotelInfo(downloadFlag, allPushFlag, updateDays, supplierHotelIds);
+        return HttpResponse.getSuccessInstance();
+    }
+
+
+    @GetMapping("/delete/expedia/hotel")
+    @ApiOperation("下架酒店删除-expedia")
+    public HttpResponse expediaSaveHotelInfo(@RequestParam("deleteDate") String deleteDate) {
+        expediaStaticInfoService.deleteHotelInfo(deleteDate);
+        return HttpResponse.getSuccessInstance();
+    }
 }
