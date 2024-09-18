@@ -10,9 +10,9 @@ import lombok.Setter;
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AvailabilityRequest {
-    private Integer hid;
+    private String hid;
     private Integer rid;
-    private Integer rpid;
+    private String rpid;
     private String checkin;
     private String checkout;
     private Integer roomnum;

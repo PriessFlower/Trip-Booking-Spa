@@ -64,7 +64,7 @@ public class DidaTravelProductConvertUtil {
         for (DidaTravelResponse.HotelType hotelType : didaTravelResponse.getSuccess().getPriceDetails().getHotelList()) {
             SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(hotelType.getHotelID().toString(), SupplierSourceEnum.DIDATRAVEL.getCode());
             BaseResult<GetCityInfoBySupplierHotelIdResponse> result = hotelBaseIntlClient.getCityInfoBySupplierHotelId(supplierHotelRequest);
-            String timeZone = getTimeZone(result.getData().getCityName(), result.getData().getCountryName());
+//            String timeZone = getTimeZone(result.getData().getCityName(), result.getData().getCountryName());
             for (DidaTravelResponse.HotelTypeRatePlan ratePlan : hotelType.getRatePlanList()) {
                 ProductInfo productInfo = ProductInfo.builder()
                         .inventory(ratePlan.getRoomOccupancy().getRoomNum())
@@ -78,9 +78,9 @@ public class DidaTravelProductConvertUtil {
                         .build();
 
 
-                List<CancelPolicy> cancelPolicies
-                        = convertCancelPolicy(ratePlan.getRatePlanCancellationPolicyList(),
-                        didaTravelResponse.getSuccess().getPriceDetails().getCheckInDate(), ratePlan.getTotalPrice(), timeZone);
+//                List<CancelPolicy> cancelPolicies
+//                        = convertCancelPolicy(ratePlan.getRatePlanCancellationPolicyList(),
+//                        didaTravelResponse.getSuccess().getPriceDetails().getCheckInDate(), ratePlan.getTotalPrice(), timeZone);
 
                 ProductRespDTO build = ProductRespDTO.builder()
                         .productId(ratePlan.getRatePlanID())

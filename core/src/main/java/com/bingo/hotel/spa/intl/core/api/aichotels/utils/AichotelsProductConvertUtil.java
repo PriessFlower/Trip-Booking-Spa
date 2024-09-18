@@ -54,10 +54,10 @@ public class AichotelsProductConvertUtil {
                 roomVO.getRates_and_cancellation_policies().forEach(productVO -> {
                     AvailabilityResponse.RoomListBean.RatesAndCancellationPoliciesBean.CancellationInformationBean cancellationInformation
                             = productVO.getCancellation_information();
-                    List<CancelPolicy> cancelPolicies
-                            = convertCancelPolicy(cancellationInformation, DateFormatUtils.parse(productVO.getRates().get(0).getCheck_in(), "yyyy-MM-dd"),
-                            DateFormatUtils.parse(productVO.getRates().get(productVO.getRates().size() - 1).getCheck_out(), "yyyy-MM-dd"),
-                            new BigDecimal(productVO.getTotal_amount_after_tax()),availabilityResponse.getHotelCode());
+//                    List<CancelPolicy> cancelPolicies
+//                            = convertCancelPolicy(cancellationInformation, DateFormatUtils.parse(productVO.getRates().get(0).getCheck_in(), "yyyy-MM-dd"),
+//                            DateFormatUtils.parse(productVO.getRates().get(productVO.getRates().size() - 1).getCheck_out(), "yyyy-MM-dd"),
+//                            new BigDecimal(productVO.getTotal_amount_after_tax()),availabilityResponse.getHotelCode());
                     respDTOList.add(
                             ProductRespDTO.builder()
                                     .productId(productVO.getRoom_key())
@@ -68,7 +68,8 @@ public class AichotelsProductConvertUtil {
                                     .hotelId(availabilityResponse.getHotelCode())
                                     .priceInfos(buildPriceInfos(productVO.getRates()))
                                     .meal(productVO.getBreakfast().getInclude() == 1 ? Meal.builder().count(productVO.getBreakfast().getCount()).build() : Meal.builder().count(0).build())
-                                    .cancelPolicy(cancelPolicies)
+                                    .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+//                                    .cancelPolicy(cancelPolicies)
                                     .maxOccupancy(0)
                                     .build()
                     );
@@ -139,9 +140,7 @@ public class AichotelsProductConvertUtil {
                         = ratePlanCancellationPolicy.getDetails();
                 PreBookResponse.RoomListBean.RatesAndCancellationPoliciesBean.CancellationInformationBean.DetailsBean first = policyList.get(0);
                 RefundType type = cancelType(totalPrice, new BigDecimal(first.getAmount_penalty()), first.getFee_type(),first.getFee_type_value(),checkIn,checkOut);
-                if(type.equals(RefundType.NO_CANCEL)){
-                    return List.of(CancelPolicy.builder().cancelType(0).build());
-                }
+
                 CancelPolicy cancelPolicyFirst = CancelPolicy.builder()
                         .cancelType(1)
                         .timeZone("GMT" + getTimeZone(ratePlanCancellationPolicy.getTimezone(), hotelId))
@@ -149,6 +148,9 @@ public class AichotelsProductConvertUtil {
                         .type(RefundType.NO_DEDUCTION)
                         .value(0.0).build();
                 cancelPolicyList.add(cancelPolicyFirst);
+                if(type.equals(RefundType.NO_CANCEL)){
+                    return cancelPolicyList;
+                }
                 if(policyList.size() == 1){
                     RefundType type1 = cancelType(totalPrice,new BigDecimal(first.getAmount_penalty()),first.getFee_type(),first.getFee_type_value(),checkIn,checkOut);
                     if(!type1.equals(RefundType.NO_CANCEL)) {

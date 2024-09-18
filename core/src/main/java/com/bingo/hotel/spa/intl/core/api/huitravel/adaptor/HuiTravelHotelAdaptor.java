@@ -14,8 +14,8 @@ public class HuiTravelHotelAdaptor {
         SupplierHotelBaseRequest request = new SupplierHotelBaseRequest();
         request.setSupplierId(10004);
         request.setSupplierHotelId(hotelDetail.getHid()+ "");
-        request.setSupplierHotelName(hotelDetail.getName());
-        request.setSupplierHotelNameCN(hotelDetail.getEn_name());
+        request.setSupplierHotelName(hotelDetail.getEn_name());
+        request.setSupplierHotelNameCN(hotelDetail.getName());
         request.setAddress(hotelDetail.getAddress());
         request.setAddressCN(hotelDetail.getAddress());
         request.setCountryCode(hotelDetail.getCountry_code()+"");
