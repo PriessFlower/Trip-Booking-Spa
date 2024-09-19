@@ -97,11 +97,20 @@ public class BackDoorController {
         return HttpResponse.getSuccessInstance();
     }
 
-
     @GetMapping("/delete/expedia/hotel")
     @ApiOperation("下架酒店删除-expedia")
-    public HttpResponse expediaSaveHotelInfo(@RequestParam("deleteDate") String deleteDate) {
+    public HttpResponse expediaDeleteHotelInfo(@RequestParam("deleteDate") String deleteDate) {
         expediaStaticInfoService.deleteHotelInfo(deleteDate);
+        return HttpResponse.getSuccessInstance();
+    }
+
+    @GetMapping("/save/expedia/product")
+    @ApiOperation("产品静态数据保存-expedia")
+    public HttpResponse expediaSaveProductInfo(@RequestParam("downloadFlag") boolean downloadFlag,
+                                             @RequestParam("allPushFlag") boolean allPushFlag,
+                                             @RequestParam("updateDays") Integer updateDays,
+                                             @RequestParam(value = "supplierHotelIds", required = false) List<String> supplierHotelIds) {
+        expediaStaticInfoService.saveOrUpdateProductInfo();
         return HttpResponse.getSuccessInstance();
     }
 }

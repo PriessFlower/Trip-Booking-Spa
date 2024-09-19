@@ -1,29 +1,37 @@
 package com.bingo.hotel.spa.intl.core.api.expedia.service.impl;
 
 import com.bingo.hotel.base.intl.cli.client.HotelBaseIntlClient;
-import com.bingo.hotel.base.intl.cli.dto.BedInfoDTO;
-import com.bingo.hotel.base.intl.cli.dto.GlobalHotelBaseExtendDTO;
-import com.bingo.hotel.base.intl.cli.dto.GlobalHotelPictureDTO;
 import com.bingo.hotel.base.intl.cli.enums.ExpediaContinentEnum;
 import com.bingo.hotel.base.intl.cli.request.CityInfoRequest;
 import com.bingo.hotel.base.intl.cli.request.CountryInfoRequest;
 import com.bingo.hotel.base.intl.cli.request.HotelDetailsRequest;
-import com.bingo.hotel.base.intl.cli.request.RoomBaseRequest;
 import com.bingo.hotel.info.intl.cli.client.HotelInfoIntlClient;
+import com.bingo.hotel.info.intl.cli.request.QueryHotelRequest;
+import com.bingo.hotel.info.intl.cli.request.SupplierHotelBaseRequest;
+import com.bingo.hotel.info.intl.cli.response.PageResp;
+import com.bingo.hotel.info.intl.cli.response.SupplierHotelBaseResponse;
+import com.bingo.hotel.info.intl.cli.result.InfoResult;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.HotelDetailsAccess;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.HotelFileAccess;
+import com.bingo.hotel.spa.intl.core.api.expedia.access.HotelRemoveAccess;
+import com.bingo.hotel.spa.intl.core.api.expedia.access.QueryProductAccess;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.RegionsAccess;
+import com.bingo.hotel.spa.intl.core.api.expedia.adaptor.ExpediaStaticInfoAdaptor;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.request.HotelInfoRequest;
+import com.bingo.hotel.spa.intl.core.api.expedia.bean.request.QueryPriceRequest;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.request.RegionsRequest;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.HotelFileResponse;
+import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.HotelIdsResponse;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.HotelStaticInfo;
+import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.QueryPriceResponse;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.RegionsInfoResponse;
 import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaStaticInfoService;
 import com.bingo.hotel.spa.intl.core.api.expedia.utils.ExpediaUtils;
 import com.bingo.hotel.spa.intl.core.api.expedia.utils.ThreadPoolUtils;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
+import com.bingo.hotel.spa.intl.core.util.DateUtil;
 import com.bingo.hotel.spa.intl.core.util.FileDealUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -43,12 +51,9 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.TimeZone;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 
 @Service
@@ -63,6 +68,12 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
     String ownIp;
     @Value("${expedia.localFilePath}")
     private String LOCAL_FILE_PATH;
+    @Value("${expedia.partner_point_of_sale}")
+    private String partnerPointOfSale;
+    @Value("${expedia.payment_terms}")
+    private String paymentTerms;
+    @Value("${expedia.billing_terms}")
+    private String billingTerms;
     @Resource
     private HotelInfoIntlClient hotelInfoIntlClient;
     @Resource
@@ -285,10 +296,13 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
 
     private void pushHotelByHotelId(List<String> supplierHotelIds) {
         List<HotelDetailsRequest> hotelDetailsRequests = new ArrayList<>();
+        List<SupplierHotelBaseRequest> supplierHotelBaseRequests = new ArrayList<>();
         supplierHotelIds.forEach(supplierHotelId -> {
-            pushHotelList(hotelDetailsRequests, supplierHotelId);
+            pushHotelList(hotelDetailsRequests, supplierHotelBaseRequests, supplierHotelId);
         });
         hotelBaseIntlClient.saveHotelDetails(hotelDetailsRequests);
+        hotelInfoIntlClient.saveHotelInfo(supplierHotelBaseRequests);
+        hotelInfoIntlClient.saveRoomInfo(supplierHotelBaseRequests.stream().flatMap(supplierHotelBaseRequest -> supplierHotelBaseRequest.getRoomList().stream()).collect(Collectors.toList()));
     }
 
     public static void main(String[] args) {
@@ -312,7 +326,10 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
     private void parseFile(String localFilePath, boolean allPushFlag, Integer updateDays) {
         try (BufferedReader reader = new BufferedReader(new FileReader(localFilePath))) {
             String line;
+            //base酒店+房型
             List<HotelDetailsRequest> hotelDetailsRequests = new ArrayList<>();
+            //info酒店+房型
+            List<SupplierHotelBaseRequest> supplierHotelBaseRequests = new ArrayList<>();
             log.info("开始推送酒店信息");
             int sumHotel = 0;
             while ((line = reader.readLine()) != null) {
@@ -337,7 +354,7 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
                     log.info("时间转行校验异常", e);
                 }
                 ThreadPoolUtils.execute(() -> {
-                    pushHotelList(hotelDetailsRequests, hotelStaticInfo.getProperty_id());
+                    pushHotelList(hotelDetailsRequests, supplierHotelBaseRequests, hotelStaticInfo.getProperty_id());
                 });
             }
             //保存酒店详情
@@ -348,7 +365,7 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
         }
     }
 
-    private void pushHotelList(List<HotelDetailsRequest> hotelDetailsRequests, String hotelId) {
+    private void pushHotelList(List<HotelDetailsRequest> hotelDetailsRequests, List<SupplierHotelBaseRequest> supplierHotelBaseRequests, String hotelId) {
         HotelInfoRequest hotelInfoRequest =
                 HotelInfoRequest.builder().supply_source(SupplierSourceEnum.EXPEDIA.getDesc()).property_id(hotelId).build();
         try {
@@ -364,13 +381,18 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
                 log.info("请求expedia获取酒店中文详情接口错误：request:{},response:{}", JsonUtils.writeObject2Json(hotelInfoRequest), JsonUtils.writeObject2Json(resultCN));
                 return;
             }
-            pushHotelDetails(hotelDetailsRequests, convertHotelDetails(resultUS.getData(), resultCN.getData()));
+            //pushBase
+            pushBaseHotelDetails(hotelDetailsRequests, ExpediaStaticInfoAdaptor.transformBaseHotelReq(resultUS.getData(), resultCN.getData()));
+            //pushInfo
+            pushInfoHotelDetails(supplierHotelBaseRequests, resultUS.getData(), resultCN.getData());
+
+
         } catch (Exception e) {
             log.error("酒店查询异常，request:{}", JsonUtils.writeObject2Json(hotelInfoRequest), e);
         }
     }
 
-    private synchronized void pushHotelDetails(List<HotelDetailsRequest> hotelDetailsRequests, HotelDetailsRequest hotelDetailsRequest) {
+    private synchronized void pushBaseHotelDetails(List<HotelDetailsRequest> hotelDetailsRequests, HotelDetailsRequest hotelDetailsRequest) {
         hotelDetailsRequests.add(hotelDetailsRequest);
         if (hotelDetailsRequests.size() >= 5) {
             //保存酒店详情
@@ -379,165 +401,80 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
         }
     }
 
-    private HotelDetailsRequest convertHotelDetails(HotelStaticInfo resultUS, HotelStaticInfo resultCN) {
-        HotelDetailsRequest hotelDetailsRequest = new HotelDetailsRequest()
-                .setHotelId(resultUS.getProperty_id())
-                .setHotelName(resultUS.getName())
-                .setHotelNameCN(resultCN.getName())
-                .setTelephone(resultUS.getPhone())
-                .setPostCode(resultUS.getAddress().getPostal_code())
-                .setAddress(resultUS.getAddress().getLine_1())
-                .setAddressCN(resultCN.getAddress().getLine_1())
-                .setCountryCode(resultUS.getAddress().getCountry_code())
-                .setCityName(resultUS.getAddress().getCity())
-                .setCityNameCN(resultCN.getAddress().getCity())
-                .setStar(null == resultUS.getRatings() || null == resultUS.getRatings().getProperty() || StringUtils.isBlank(resultUS.getRatings().getProperty().getRating()) ? "0" :
-                        resultUS.getRatings().getProperty().getRating())
-                .setScore(null == resultUS.getRatings() || null == resultUS.getRatings().getGuest() || StringUtils.isBlank(resultUS.getRatings().getGuest().getOverall()) ? "0" :
-                        resultUS.getRatings().getGuest().getOverall())
-                .setLongitude(String.valueOf(resultUS.getLocation().getCoordinates().getLongitude()))
-                .setLatitude(String.valueOf(resultUS.getLocation().getCoordinates().getLatitude()))
-                .setGroup(null == resultUS.getChain() ? "" : resultUS.getChain().getName())
-                .setBrand(null == resultUS.getBrand() ? "" : resultUS.getBrand().getName());
-
-        //图片集合
-        List<GlobalHotelPictureDTO> globalHotelPictures = new ArrayList<>();
-        //图片
-        if (CollectionUtils.isNotEmpty(resultUS.getImages())) {
-            resultUS.getImages().forEach(images -> {
-                HotelStaticInfo.UrlInfo urlInfo = null == images.getLinks().get("1000px") ? images.getLinks().get("350px") : images.getLinks().get("1000px");
-                if (null != urlInfo) {
-                    GlobalHotelPictureDTO globalHotelPictureDTO = new GlobalHotelPictureDTO()
-                            .setHotelId(resultUS.getProperty_id())
-                            .setType("hotel")
-                            .setName(images.getCaption())
-                            .setSort(images.getHero_image() ? 0 : 1)
-                            .setUrl(urlInfo.getHref());
-                    globalHotelPictures.add(globalHotelPictureDTO);
-                }
-            });
+    private synchronized void pushInfoHotelDetails(List<SupplierHotelBaseRequest> supplierHotelBaseRequests, HotelStaticInfo hotelStaticInfoUS, HotelStaticInfo hotelStaticInfoCN) {
+        supplierHotelBaseRequests.add(ExpediaStaticInfoAdaptor.transformInfoHotelReq(hotelStaticInfoUS, hotelStaticInfoCN));
+        if (supplierHotelBaseRequests.size() >= 10) {
+            //保存酒店详情
+            hotelInfoIntlClient.saveHotelInfo(supplierHotelBaseRequests);
+            //保存房型信息
+            hotelInfoIntlClient.saveRoomInfo(supplierHotelBaseRequests.stream().flatMap(supplierHotelBaseRequest -> supplierHotelBaseRequest.getRoomList().stream()).collect(Collectors.toList()));
         }
-        hotelDetailsRequest.setGlobalHotelPictureDTOS(globalHotelPictures);
-        //酒店附属信息集合
-        List<GlobalHotelBaseExtendDTO> globalHotelBaseExtends = new ArrayList<>();
-        //附属信息
-        //英文
-        Map<String, String> checkinUS = resultUS.getCheckin();
-        GlobalHotelBaseExtendDTO globalHotelBaseExtendUS = new GlobalHotelBaseExtendDTO()
-                .setHotelId(resultUS.getProperty_id())
-                .setLanguage("en-US")
-                .setCheckIn(StringUtils.isBlank(checkinUS.get("24_hour")) ? checkinUS.get("begin_time") + "-" + checkinUS.get("end_time") : checkinUS.get(
-                        "24_hour"))
-                .setCheckOut(null == resultUS.getCheckout() ? "" : resultUS.getCheckout().getTime())
-                .setInstructions(checkinUS.get("instructions") + checkinUS.get("special_instructions"))
-                .setMinAge(checkinUS.get("min_age"))
-                .setFees(null == resultUS.getFees() ? "" : convertNull(resultUS.getFees().getMandatory()) + convertNull(resultUS.getFees().getOptional()))
-                .setPolicies(null == resultUS.getPolicies() ? "" : resultUS.getPolicies().getKnow_before_you_go());
-        globalHotelBaseExtends.add(globalHotelBaseExtendUS);
-        //中文
-        Map<String, String> checkinCN = resultCN.getCheckin();
-        GlobalHotelBaseExtendDTO globalHotelBaseExtendCN = new GlobalHotelBaseExtendDTO()
-                .setHotelId(resultCN.getProperty_id())
-                .setLanguage("zh-CN")
-                .setCheckIn(StringUtils.isBlank(checkinCN.get("24_hour")) ? checkinCN.get("begin_time") + "-" + checkinCN.get("end_time") : checkinCN.get("24_hour"))
-                .setCheckOut(null == resultUS.getCheckout() ? "" : resultUS.getCheckout().getTime())
-                .setInstructions(checkinCN.get("instructions") + checkinCN.get("special_instructions"))
-                .setMinAge(checkinCN.get("min_age"))
-                .setFees(null == resultUS.getFees() ? "" : convertNull(resultUS.getFees().getMandatory()) + convertNull(resultUS.getFees().getOptional()))
-                .setPolicies(null == resultUS.getPolicies() ? "" : resultUS.getPolicies().getKnow_before_you_go());
-        globalHotelBaseExtends.add(globalHotelBaseExtendCN);
-        hotelDetailsRequest.setGlobalHotelBaseExtendDTOS(globalHotelBaseExtends);
-
-        //房型信息
-        List<RoomBaseRequest> roomBaseList = new ArrayList<>();
-        Map<String, HotelStaticInfo.Room> roomUSMap = resultUS.getRooms();
-        Map<String, HotelStaticInfo.Room> roomCNMap = resultCN.getRooms();
-        if (null != roomUSMap && !roomUSMap.isEmpty()) {
-            roomUSMap.keySet().forEach(roomId -> {
-                HotelStaticInfo.Room roomUS = roomUSMap.get(roomId);
-                HotelStaticInfo.Room roomCN = roomCNMap.get(roomId);
-                RoomBaseRequest bedInfo = convertBedInfo(roomUS.getBed_groups(), roomCN.getBed_groups());
-                RoomBaseRequest roomBaseRequest = new RoomBaseRequest()
-                        .setHotelId(resultUS.getProperty_id())
-                        .setRoomId(roomId)
-                        .setRoomName(roomUS.getName())
-                        .setRoomNameCN(convertNull(roomCN.getName()))
-                        .setArea(null == roomUS.getArea() ? "0" : String.valueOf(roomUS.getArea().getSquare_meters()))
-                        .setBroadnet(0)
-                        .setBedType(bedInfo.getBedType())
-                        .setBedName(bedInfo.getBedName())
-                        .setBedNameCN(bedInfo.getBedNameCN())
-                        .setBedDesc(bedInfo.getBedDesc())
-                        .setCapacity(roomUS.getOccupancy().getMax_allowed().getTotal())
-                        .setHasBathroom(0)
-                        .setHasWindows(0)
-                        .setIsSmoking(0);
-                //房型图片
-                List<GlobalHotelPictureDTO> globalRoomPictures = new ArrayList<>();
-                if (CollectionUtils.isNotEmpty(roomUS.getImages())) {
-                    roomUS.getImages().forEach(images -> {
-                        HotelStaticInfo.UrlInfo urlInfo = null == images.getLinks().get("1000px") ? images.getLinks().get("350px") : images.getLinks().get("1000px");
-                        if (null != urlInfo) {
-                            GlobalHotelPictureDTO globalRoomPictureDTO = new GlobalHotelPictureDTO()
-                                    .setHotelId(resultUS.getProperty_id())
-                                    .setRoomId(roomId)
-                                    .setType("hotel")
-                                    .setName(images.getCaption())
-                                    .setSort(images.getHero_image() ? 0 : 1)
-                                    .setUrl(urlInfo.getHref());
-                            globalRoomPictures.add(globalRoomPictureDTO);
-                        }
-                    });
-                }
-                roomBaseRequest.setGlobalRoomPictureDTOS(globalRoomPictures);
-                roomBaseList.add(roomBaseRequest);
-            });
-        }
-        hotelDetailsRequest.setRoomBaseList(roomBaseList);
-        return hotelDetailsRequest;
-    }
-
-    private RoomBaseRequest convertBedInfo(Map<String, HotelStaticInfo.BedGroup> bed_groups_us, Map<String, HotelStaticInfo.BedGroup> bed_groups_cn) {
-        Set<String> bedTypeSet = new HashSet<>();
-        AtomicReference<String> bedNameUS = new AtomicReference<>("");
-        AtomicReference<String> bedNameCN = new AtomicReference<>("");
-        List<List<BedInfoDTO>> bedInfosList = new ArrayList<>();
-        if (null != bed_groups_us && !bed_groups_us.isEmpty()) {
-            bed_groups_us.keySet().forEach(bedId -> {
-                List<BedInfoDTO> bedInfoDTOS = new ArrayList<>();
-                HotelStaticInfo.BedGroup bedGroupUS = bed_groups_us.get(bedId);
-                HotelStaticInfo.BedGroup bedGroupCN = bed_groups_cn.get(bedId);
-                bedNameUS.set(StringUtils.isBlank(bedNameUS.get()) ? bedGroupUS.getDescription() : bedNameUS + "或" + bedGroupUS.getDescription());
-                bedNameCN.set(StringUtils.isBlank(bedNameCN.get()) ? bedGroupCN.getDescription() : bedNameCN + "或" + bedGroupCN.getDescription());
-                bedGroupUS.getConfiguration().forEach(bedInfo -> {
-                    bedTypeSet.add(bedInfo.getType());
-                    BedInfoDTO bedInfoDTO = new BedInfoDTO()
-                            .setBedNumber(bedInfo.getQuantity())
-                            .setBedDesc(bedInfo.getType())
-                            .setBedType(bedInfo.getSize());
-                    bedInfoDTOS.add(bedInfoDTO);
-                });
-                bedInfosList.add(bedInfoDTOS);
-            });
-        }
-        RoomBaseRequest bedInfo = new RoomBaseRequest()
-                .setBedType(CollectionUtils.isEmpty(bedTypeSet) ? "" : bedTypeSet.toString())
-                .setBedName(bedNameUS.get())
-                .setBedNameCN(bedNameCN.get())
-                .setBedDesc(JsonUtils.writeObject2Json(bedInfosList));
-        return bedInfo;
-    }
-
-    private String convertNull(String str) {
-        if (StringUtils.isBlank(str)) {
-            return "";
-        }
-        return str;
     }
 
     @Override
     public void deleteHotelInfo(String deleteDate) {
 
+        if (StringUtils.isBlank(deleteDate)) {
+            deleteDate = DateUtil.getPastDay(7);
+        }
+        ResponseResult<HotelIdsResponse> result = new HotelRemoveAccess(host, expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(deleteDate);
+        if (null == result.getData() || CollectionUtils.isEmpty(result.getData().getHotelIds())) {
+            log.info("请求expedia获取酒店文件接口错误：request:{},response:{}", deleteDate, JsonUtils.writeObject2Json(result));
+            return;
+        }
+        List<String> hotelIds = result.getData().getHotelIds();
+        int batchSize = 50;
+        int currentBatch = 0;
+        //批量方式
+        for (int i = 0; i < hotelIds.size(); i += batchSize) {
+            // 截取当前批次的数据
+            List<String> requestHotelIds = hotelIds.subList(currentBatch * batchSize, Math.min(hotelIds.size(), (currentBatch + 1) * batchSize));
+            hotelBaseIntlClient.removeHotelDetails(requestHotelIds);
+            // 每处理完一组，增加当前批次计数器
+            currentBatch++;
+        }
+    }
+
+    @Override
+    public void saveOrUpdateProductInfo() {
+        int pageNum = 0;
+        QueryHotelRequest queryHotelRequest = new QueryHotelRequest().setSupplierId(10005);
+        while (true) {
+            queryHotelRequest.setPageNum(pageNum).setPageSize(100);
+            InfoResult<PageResp<SupplierHotelBaseResponse>> hotelInfoPageListResult = hotelInfoIntlClient.queryHotelPageList(queryHotelRequest);
+            if (!hotelInfoPageListResult.isSUCCESS() || null == hotelInfoPageListResult.getData() || CollectionUtils.isEmpty(hotelInfoPageListResult.getData().getList())) {
+                log.info("酒店展示集合查询未果，入参：{}，反参：{}", JsonUtils.writeObject2Json(queryHotelRequest), JsonUtils.writeObject2Json(hotelInfoPageListResult));
+                return;
+            }
+            List<String> supplierHotelIds =
+                    hotelInfoPageListResult.getData().getList().stream().map(SupplierHotelBaseResponse::getSupplierHotelId).collect(Collectors.toList());
+            supplierHotelIds.forEach(supplierHotelId -> {
+                ThreadPoolUtils.execute(() -> {
+                    QueryPriceRequest queryPriceRequest = QueryPriceRequest.builder()
+                            .property_id(supplierHotelId)
+                            .checkin(DateUtil.getFutureDay(5))
+                            .checkout(DateUtil.getFutureDay(10))
+                            .currency("USD")
+                            .occupancies(new ArrayList<>(1))
+                            .sales_environment("hotel_only")
+                            .billing_terms(billingTerms)
+                            .payment_terms(paymentTerms)
+                            .partner_point_of_sale(partnerPointOfSale)
+                            .build();
+                    ResponseResult<QueryPriceResponse> result =
+                            new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                    if (null == result.getData()) {
+                        log.info("请求expedia查询报价异常：request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(result));
+                        return;
+                    }
+                    //推送base
+                    hotelBaseIntlClient.aggregatorProductMapping(ExpediaStaticInfoAdaptor.transformBaseProductReq(result.getData()));
+                    //推送info
+                    hotelInfoIntlClient.saveProductInfo(ExpediaStaticInfoAdaptor.transformInfoProductReq(result.getData()));
+                });
+            });
+            pageNum++;
+        }
     }
 
 }

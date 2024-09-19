@@ -18,4 +18,6 @@ public interface ExpediaStaticInfoService {
     void saveOrUpdateHotelInfo(boolean downloadFlag, boolean allPushFlag, Integer updateDays, List<String> supplierHotelIds);
 
     void deleteHotelInfo(String deleteDate);
+
+    void saveOrUpdateProductInfo();
 }

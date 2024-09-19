@@ -14,6 +14,7 @@ import javax.xml.datatype.XMLGregorianCalendar;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.format.DateTimeFormatter;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
@@ -586,7 +587,38 @@ public class DateUtil {
         }
     }
 
+    /**
+     * 计算当前日期过去几天的日期
+     * @param num
+     * @return
+     */
+    public static String getPastDay(int num) {
+        // 获取当前日期
+        java.time.LocalDate currentDate = java.time.LocalDate.now();
+        // 计算当前日期前几天的日期
+        java.time.LocalDate pastDate = currentDate.minusDays(num);
+        // 格式化日期为 yyyy-MM-dd 格式
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        return pastDate.format(formatter);
+    }
+
+    /**
+     * 计算当前日期未来几天的日期
+     * @param num
+     * @return
+     */
+    public static String getFutureDay(int num) {
+        // 获取当前日期
+        java.time.LocalDate currentDate = java.time.LocalDate.now();
+        // 计算当前日期前一周的日期
+        java.time.LocalDate pastDate = currentDate.plusDays(num);
+        // 格式化日期为 yyyy-MM-dd 格式
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        return pastDate.format(formatter);
+    }
+
+
     public static void main(String[] arg) {
-        System.out.println(DateUtil.getTZDate());
+        System.out.println(DateUtil.getPastDay(-6));
     }
 }
