@@ -15,7 +15,7 @@ public interface ExpediaStaticInfoService {
 
     void saveCityInfo();
 
-    void saveOrUpdateHotelInfo(boolean downloadFlag, boolean allPushFlag, Integer updateDays, List<String> supplierHotelIds);
+    void saveOrUpdateHotelInfo(boolean downloadFlag, boolean allPushFlag, Integer updateDays, List<String> supplierHotelIds, Integer startLine);
 
     void deleteHotelInfo(String deleteDate);
 

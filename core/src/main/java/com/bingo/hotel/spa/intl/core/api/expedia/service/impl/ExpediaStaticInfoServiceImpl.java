@@ -49,6 +49,7 @@ import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -268,7 +269,7 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
     }
 
     @Override
-    public void saveOrUpdateHotelInfo(boolean downloadFlag, boolean allPushFlag, Integer updateDays, List<String> supplierHotelIds) {
+    public void saveOrUpdateHotelInfo(boolean downloadFlag, boolean allPushFlag, Integer updateDays, List<String> supplierHotelIds, Integer startLine) {
         //1.请求供应商获取全量酒店信息文件
         HotelInfoRequest hotelInfoRequest = HotelInfoRequest.builder().supply_source(SupplierSourceEnum.EXPEDIA.getDesc()).build();
         ResponseResult<HotelFileResponse> result = new HotelFileAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(hotelInfoRequest);
@@ -288,7 +289,7 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
         if (CollectionUtils.isNotEmpty(supplierHotelIds)) {
             pushHotelByHotelId(supplierHotelIds);
         } else {
-            parseFile(localFilePath.replace(".gz", ""), allPushFlag, updateDays);
+            parseFile(localFilePath.replace(".gz", ""), allPushFlag, updateDays, startLine);
         }
 
         log.info("expedia酒店基础处理完毕！");
@@ -323,7 +324,7 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
         }
     }
 
-    private void parseFile(String localFilePath, boolean allPushFlag, Integer updateDays) {
+    private void parseFile(String localFilePath, boolean allPushFlag, Integer updateDays, Integer startLine) {
         try (BufferedReader reader = new BufferedReader(new FileReader(localFilePath))) {
             String line;
             //base酒店+房型
@@ -333,6 +334,10 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
             log.info("开始推送酒店信息");
             int sumHotel = 0;
             while ((line = reader.readLine()) != null) {
+                sumHotel += 1;
+                if (startLine > sumHotel) {
+                    continue;
+                }
                 HotelStaticInfo hotelStaticInfo = JsonUtils.readValue(line, HotelStaticInfo.class);
                 // 创建SimpleDateFormat对象，并设置日期时间模式
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
@@ -346,12 +351,11 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
                     if (!allPushFlag && addTime.getTime() < needPushTime.getTime() && updateTime.getTime() < needPushTime.getTime()) {
                         continue;
                     }
-                    sumHotel += 1;
-                    if (sumHotel % 1000 == 0) {
-                        log.info("已经推送酒店总数：{}", sumHotel);
-                    }
                 } catch (Exception e) {
-                    log.info("时间转行校验异常", e);
+                    log.info("时间转换校验异常", e);
+                }
+                if (sumHotel % 1000 == 0) {
+                    log.info("已经推送酒店总数：{}", sumHotel);
                 }
                 ThreadPoolUtils.execute(() -> {
                     pushHotelList(hotelDetailsRequests, supplierHotelBaseRequests, hotelStaticInfo.getProperty_id());
@@ -369,6 +373,7 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
         HotelInfoRequest hotelInfoRequest =
                 HotelInfoRequest.builder().supply_source(SupplierSourceEnum.EXPEDIA.getDesc()).property_id(hotelId).build();
         try {
+            long startTime = System.currentTimeMillis();
             ResponseResult<HotelStaticInfo> resultUS =
                     new HotelDetailsAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(hotelInfoRequest);
             if (null == resultUS || null == resultUS.getData()) {
@@ -381,6 +386,8 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
                 log.info("请求expedia获取酒店中文详情接口错误：request:{},response:{}", JsonUtils.writeObject2Json(hotelInfoRequest), JsonUtils.writeObject2Json(resultCN));
                 return;
             }
+            long endTime = System.currentTimeMillis();
+            log.info("查询expedia酒店详情耗时：{}", endTime - startTime);
             //pushBase
             pushBaseHotelDetails(hotelDetailsRequests, ExpediaStaticInfoAdaptor.transformBaseHotelReq(resultUS.getData(), resultCN.getData()));
             //pushInfo
@@ -392,23 +399,38 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
         }
     }
 
-    private synchronized void pushBaseHotelDetails(List<HotelDetailsRequest> hotelDetailsRequests, HotelDetailsRequest hotelDetailsRequest) {
-        hotelDetailsRequests.add(hotelDetailsRequest);
-        if (hotelDetailsRequests.size() >= 5) {
-            //保存酒店详情
-            hotelBaseIntlClient.saveHotelDetails(hotelDetailsRequests);
-            hotelDetailsRequests.clear();
-        }
+    //    private synchronized void pushBaseHotelDetails(List<HotelDetailsRequest> hotelDetailsRequests, HotelDetailsRequest hotelDetailsRequest) {
+//        hotelDetailsRequests.add(hotelDetailsRequest);
+//        if (hotelDetailsRequests.size() >= 5) {
+//            //保存酒店详情
+//            long startTime = System.currentTimeMillis();
+//            hotelBaseIntlClient.saveHotelDetails(hotelDetailsRequests);
+//            long endTime = System.currentTimeMillis();
+//            log.info("推送base酒店详情耗时：{}", endTime - startTime);
+//            log.info("推送base酒店id：{}", hotelDetailsRequests.stream().map(HotelDetailsRequest::getHotelId).collect(Collectors.toList()).toString());
+//            hotelDetailsRequests.clear();
+//        }
+//    }
+    private void pushBaseHotelDetails(List<HotelDetailsRequest> hotelDetailsRequests, HotelDetailsRequest hotelDetailsRequest) {
+
+        //保存酒店详情
+        long startTime = System.currentTimeMillis();
+        hotelBaseIntlClient.saveHotelDetails(Arrays.asList(hotelDetailsRequest));
+        long endTime = System.currentTimeMillis();
+        log.info("推送base酒店详情耗时：{}", endTime - startTime);
+
     }
 
-    private synchronized void pushInfoHotelDetails(List<SupplierHotelBaseRequest> supplierHotelBaseRequests, HotelStaticInfo hotelStaticInfoUS, HotelStaticInfo hotelStaticInfoCN) {
-        supplierHotelBaseRequests.add(ExpediaStaticInfoAdaptor.transformInfoHotelReq(hotelStaticInfoUS, hotelStaticInfoCN));
-        if (supplierHotelBaseRequests.size() >= 10) {
-            //保存酒店详情
-            hotelInfoIntlClient.saveHotelInfo(supplierHotelBaseRequests);
-            //保存房型信息
-            hotelInfoIntlClient.saveRoomInfo(supplierHotelBaseRequests.stream().flatMap(supplierHotelBaseRequest -> supplierHotelBaseRequest.getRoomList().stream()).collect(Collectors.toList()));
-        }
+    private void pushInfoHotelDetails(List<SupplierHotelBaseRequest> supplierHotelBaseRequests, HotelStaticInfo hotelStaticInfoUS, HotelStaticInfo hotelStaticInfoCN) {
+        SupplierHotelBaseRequest supplierHotelBaseRequest = ExpediaStaticInfoAdaptor.transformInfoHotelReq(hotelStaticInfoUS, hotelStaticInfoCN);
+        //保存酒店详情
+        long startTime = System.currentTimeMillis();
+        hotelInfoIntlClient.saveHotelInfo(Arrays.asList(supplierHotelBaseRequest));
+        //保存房型信息
+        hotelInfoIntlClient.saveRoomInfo(supplierHotelBaseRequest.getRoomList());
+        long endTime = System.currentTimeMillis();
+        log.info("推送Info酒店详情耗时：{}", endTime - startTime);
+
     }
 
     @Override
@@ -455,22 +477,27 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
                             .checkin(DateUtil.getFutureDay(5))
                             .checkout(DateUtil.getFutureDay(10))
                             .currency("USD")
-                            .occupancies(new ArrayList<>(1))
+                            .occupancies(Arrays.asList("1"))
                             .sales_environment("hotel_only")
                             .billing_terms(billingTerms)
                             .payment_terms(paymentTerms)
                             .partner_point_of_sale(partnerPointOfSale)
                             .build();
-                    ResponseResult<QueryPriceResponse> result =
-                            new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
-                    if (null == result.getData()) {
-                        log.info("请求expedia查询报价异常：request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(result));
-                        return;
+                    try {
+                        ResponseResult<QueryPriceResponse> result =
+                                new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                        if (null != result.getData() && CollectionUtils.isNotEmpty(result.getData().getHotelPrices())) {
+                            //推送base
+                            hotelBaseIntlClient.aggregatorProductMapping(ExpediaStaticInfoAdaptor.transformBaseProductReq(result.getData()));
+                            //推送info
+                            hotelInfoIntlClient.saveProductInfo(ExpediaStaticInfoAdaptor.transformInfoProductReq(result.getData()));
+                        } else {
+                            log.info("请求expedia查询报价异常：request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(result));
+
+                        }
+                    } catch (Exception e) {
+                        log.error("推送产品信息异常：request:{} ", JsonUtils.writeObject2Json(queryPriceRequest), e);
                     }
-                    //推送base
-                    hotelBaseIntlClient.aggregatorProductMapping(ExpediaStaticInfoAdaptor.transformBaseProductReq(result.getData()));
-                    //推送info
-                    hotelInfoIntlClient.saveProductInfo(ExpediaStaticInfoAdaptor.transformInfoProductReq(result.getData()));
                 });
             });
             pageNum++;

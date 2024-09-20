@@ -71,9 +71,6 @@ public class HotelDetailsAccess extends BaseHttpAccess<HotelInfoRequest, HotelSt
         body.put("supply_source", request.getSupply_source());
         String resultStr = HttpUtils.doGet(url, headers, body);
         String hotelStaticInfoStr = JsonUtils.writeObject2Json(JsonUtils.readTree(resultStr).get(request.getProperty_id()));
-        if (null == hotelStaticInfoStr) {
-            return new ResponseResult(HttpStatus.SC_OK, "");
-        }
         HotelStaticInfo hotelStaticInfo = JsonUtils.readValue(hotelStaticInfoStr, HotelStaticInfo.class);
         return new ResponseResult<>(hotelStaticInfo);
     }

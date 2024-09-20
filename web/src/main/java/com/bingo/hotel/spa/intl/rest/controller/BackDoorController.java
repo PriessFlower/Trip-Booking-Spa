@@ -92,8 +92,10 @@ public class BackDoorController {
     public HttpResponse expediaSaveHotelInfo(@RequestParam("downloadFlag") boolean downloadFlag,
                                              @RequestParam("allPushFlag") boolean allPushFlag,
                                              @RequestParam("updateDays") Integer updateDays,
-                                             @RequestParam(value = "supplierHotelIds", required = false) List<String> supplierHotelIds) {
-        expediaStaticInfoService.saveOrUpdateHotelInfo(downloadFlag, allPushFlag, updateDays, supplierHotelIds);
+                                             @RequestParam(value = "supplierHotelIds", required = false) List<String> supplierHotelIds,
+                                             @RequestParam(value = "startLine", required = false) Integer startLine
+    ) {
+        expediaStaticInfoService.saveOrUpdateHotelInfo(downloadFlag, allPushFlag, updateDays, supplierHotelIds, startLine);
         return HttpResponse.getSuccessInstance();
     }
 
@@ -106,10 +108,7 @@ public class BackDoorController {
 
     @GetMapping("/save/expedia/product")
     @ApiOperation("产品静态数据保存-expedia")
-    public HttpResponse expediaSaveProductInfo(@RequestParam("downloadFlag") boolean downloadFlag,
-                                             @RequestParam("allPushFlag") boolean allPushFlag,
-                                             @RequestParam("updateDays") Integer updateDays,
-                                             @RequestParam(value = "supplierHotelIds", required = false) List<String> supplierHotelIds) {
+    public HttpResponse expediaSaveProductInfo() {
         expediaStaticInfoService.saveOrUpdateProductInfo();
         return HttpResponse.getSuccessInstance();
     }

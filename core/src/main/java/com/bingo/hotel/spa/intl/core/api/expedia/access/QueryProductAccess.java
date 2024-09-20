@@ -8,15 +8,18 @@ import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierDataTypeEnum;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.common.exception.ParseException;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.request.QueryPriceRequest;
+import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.HotelStaticInfo;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.QueryPriceResponse;
 import com.bingo.hotel.spa.intl.core.exception.RedisLimitException;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RateIntervalUnit;
 
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -55,20 +58,29 @@ public class QueryProductAccess extends BaseHttpAccess<QueryPriceRequest, QueryP
         headers.put("Customer-Session-Id", customerSessionId);
         headers.put("Content-Type", "application/json");
         Map<String, String> body = Maps.newHashMap();
+        body.put("property_id", request.getProperty_id());
         body.put("language", language);
         body.put("checkin", request.getCheckin());
         body.put("checkout", request.getCheckout());
         body.put("country_code", "CN");
         body.put("currency", request.getCurrency());
-        body.put("occupancy", request.getOccupancies().toString());
+        StringBuilder occupancyStr = new StringBuilder();
+        request.getOccupancies().forEach(occupancy -> {
+            occupancyStr.append("occupancy=").append(occupancy);
+        });
+        body.put("", occupancyStr.toString());
         body.put("rate_plan_count", "250");
         body.put("sales_channel", "agent_tool");
         body.put("sales_environment", request.getSales_environment());
         body.put("billing_terms", request.getBilling_terms());
         body.put("payment_terms", request.getPayment_terms());
         body.put("partner_point_of_sale", request.getPartner_point_of_sale());
-        ResponseResult<QueryPriceResponse> result = HttpUtils.accessGet(url, headers, body, parser);
-        return result;
+        String result = HttpUtils.doGet(url, headers, body);
+        List<QueryPriceResponse.HotelPrice> hotelPrices = JsonUtils.decodeJson(result, new TypeReference<List<QueryPriceResponse.HotelPrice>>() {
+        });
+        QueryPriceResponse queryPriceResponse = new QueryPriceResponse();
+        queryPriceResponse.setHotelPrices(hotelPrices);
+        return new ResponseResult<>(queryPriceResponse);
     }
 
     @Override

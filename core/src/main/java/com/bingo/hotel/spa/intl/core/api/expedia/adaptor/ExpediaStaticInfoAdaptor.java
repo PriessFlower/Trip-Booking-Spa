@@ -154,7 +154,7 @@ public class ExpediaStaticInfoAdaptor {
                 List<BedInfoDTO> bedInfoDTOS = new ArrayList<>();
                 HotelStaticInfo.BedGroup bedGroupUS = bed_groups_us.get(bedId);
                 HotelStaticInfo.BedGroup bedGroupCN = bed_groups_cn.get(bedId);
-                bedNameUS.set(StringUtils.isBlank(bedNameUS.get()) ? bedGroupUS.getDescription() : bedNameUS + "或" + bedGroupUS.getDescription());
+                bedNameUS.set(StringUtils.isBlank(bedNameUS.get()) ? bedGroupUS.getDescription() : bedNameUS + " or " + bedGroupUS.getDescription());
                 bedNameCN.set(StringUtils.isBlank(bedNameCN.get()) ? bedGroupCN.getDescription() : bedNameCN + "或" + bedGroupCN.getDescription());
                 bedGroupUS.getConfiguration().forEach(bedInfo -> {
                     bedTypeSet.add(bedInfo.getType());
@@ -177,19 +177,24 @@ public class ExpediaStaticInfoAdaptor {
 
     public static List<GlobalProductSupplierRequest> transformBaseProductReq(QueryPriceResponse queryPriceResponse) {
         List<GlobalProductSupplierRequest> list = Lists.newArrayList();
-        queryPriceResponse.getRooms().forEach(roomListBean -> {
-            roomListBean.getRates().forEach(rate -> {
-                GlobalProductSupplierRequest request = new GlobalProductSupplierRequest()
-                        .setSupplierId(10005)
-                        .setSupplierHotelId(queryPriceResponse.getProperty_id())
-                        .setSupplierRoomId(roomListBean.getId())
-                        .setSupplierProductId(rate.getId())
-                        .setSupplierProductName(roomListBean.getRoom_name())
-                        .setHasWindow(0)
-                        .setBreakfast(0)
-                        .setCancelType(0);
-                list.add(request);
-            });
+        if (CollectionUtils.isEmpty(queryPriceResponse.getHotelPrices())) {
+            return list;
+        }
+        queryPriceResponse.getHotelPrices().forEach(hotelPrice -> {
+            if (CollectionUtils.isNotEmpty(hotelPrice.getRooms())) {
+                hotelPrice.getRooms().forEach(roomListBean -> roomListBean.getRates().forEach(rate -> {
+                    GlobalProductSupplierRequest request = new GlobalProductSupplierRequest()
+                            .setSupplierId(10005)
+                            .setSupplierHotelId(hotelPrice.getProperty_id())
+                            .setSupplierRoomId(roomListBean.getId())
+                            .setSupplierProductId(rate.getId())
+                            .setSupplierProductName(roomListBean.getRoom_name())
+                            .setHasWindow(0)
+                            .setBreakfast(0)
+                            .setCancelType(0);
+                    list.add(request);
+                }));
+            }
         });
         return list;
     }
@@ -219,12 +224,13 @@ public class ExpediaStaticInfoAdaptor {
                 HotelStaticInfo.Room roomUS = roomUSMap.get(roomId);
                 HotelStaticInfo.Room roomCN = roomCNMap.get(roomId);
                 SupplierRoomBaseRequest roomBaseRequest = new SupplierRoomBaseRequest()
+                        .setSupplierId(10005)
                         .setSupplierHotelId(resultUS.getProperty_id())
                         .setSupplierRoomId(roomId)
                         .setSupplierRoomName(roomUS.getName())
                         .setSupplierRoomNameCN(convertNull(roomCN.getName()))
                         .setArea(null == roomUS.getArea() ? "0" : String.valueOf(roomUS.getArea().getSquare_meters()))
-                        .setDescription(roomCN.getDescriptions().getOverview())
+                        .setDescription("")
                         .setBroadNet(0)
                         .setBedInfoList(new ArrayList<>())
                         .setCapacity(roomUS.getOccupancy().getMax_allowed().getTotal())
@@ -240,19 +246,24 @@ public class ExpediaStaticInfoAdaptor {
 
     public static List<SupplierProductBaseRequest> transformInfoProductReq(QueryPriceResponse queryPriceResponse) {
         List<SupplierProductBaseRequest> list = Lists.newArrayList();
-        queryPriceResponse.getRooms().forEach(roomListBean -> {
-            roomListBean.getRates().forEach(rate -> {
-                SupplierProductBaseRequest request = new SupplierProductBaseRequest()
-                        .setSupplierId(10005)
-                        .setSupplierHotelId(queryPriceResponse.getProperty_id())
-                        .setSupplierRoomId(roomListBean.getId())
-                        .setSupplierProductId(rate.getId())
-                        .setSupplierProductName(roomListBean.getRoom_name())
-                        .setHasWindow(0)
-                        .setBreakfast(0)
-                        .setCancelType(0);
-                list.add(request);
-            });
+        if (CollectionUtils.isEmpty(queryPriceResponse.getHotelPrices())) {
+            return list;
+        }
+        queryPriceResponse.getHotelPrices().forEach(hotelPrice -> {
+            if (CollectionUtils.isNotEmpty(hotelPrice.getRooms())) {
+                hotelPrice.getRooms().forEach(roomListBean -> roomListBean.getRates().forEach(rate -> {
+                    SupplierProductBaseRequest request = new SupplierProductBaseRequest()
+                            .setSupplierId(10005)
+                            .setSupplierHotelId(hotelPrice.getProperty_id())
+                            .setSupplierRoomId(roomListBean.getId())
+                            .setSupplierProductId(rate.getId())
+                            .setSupplierProductName(roomListBean.getRoom_name())
+                            .setHasWindow(0)
+                            .setBreakfast(0)
+                            .setCancelType(0);
+                    list.add(request);
+                }));
+            }
         });
         return list;
     }

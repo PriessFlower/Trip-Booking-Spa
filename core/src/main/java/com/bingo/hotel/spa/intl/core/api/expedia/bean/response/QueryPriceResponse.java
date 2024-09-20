@@ -2,7 +2,6 @@ package com.bingo.hotel.spa.intl.core.api.expedia.bean.response;
 
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.BaseResponse;
 
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -15,41 +14,14 @@ import java.util.Map;
  **/
 public class QueryPriceResponse implements BaseResponse {
 
-    private String property_id;
-    private String status;
-    private List<Rooms> rooms;
-    private int score;
+    private List<HotelPrice> hotelPrices;
 
-    public void setProperty_id(String property_id) {
-        this.property_id = property_id;
+    public List<HotelPrice> getHotelPrices() {
+        return hotelPrices;
     }
 
-    public String getProperty_id() {
-        return property_id;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setRooms(List<Rooms> rooms) {
-        this.rooms = rooms;
-    }
-
-    public List<Rooms> getRooms() {
-        return rooms;
-    }
-
-    public void setScore(int score) {
-        this.score = score;
-    }
-
-    public int getScore() {
-        return score;
+    public void setHotelPrices(List<HotelPrice> hotelPrices) {
+        this.hotelPrices = hotelPrices;
     }
 
     @Override
@@ -61,6 +33,45 @@ public class QueryPriceResponse implements BaseResponse {
     public boolean isEmptyResult() {
         return false;
     }
+    public static class HotelPrice {
+        private String property_id;
+        private String status;
+        private List<Rooms> rooms;
+        private int score;
+
+        public void setProperty_id(String property_id) {
+            this.property_id = property_id;
+        }
+
+        public String getProperty_id() {
+            return property_id;
+        }
+
+        public void setStatus(String status) {
+            this.status = status;
+        }
+
+        public String getStatus() {
+            return status;
+        }
+
+        public void setRooms(List<Rooms> rooms) {
+            this.rooms = rooms;
+        }
+
+        public List<Rooms> getRooms() {
+            return rooms;
+        }
+
+        public void setScore(int score) {
+            this.score = score;
+        }
+
+        public int getScore() {
+            return score;
+        }
+    }
+
 
     public static class Rooms {
 
@@ -404,36 +415,41 @@ public class QueryPriceResponse implements BaseResponse {
 
     public static class Cancel_penalties {
 
-        private Date start;
-        private Date end;
-        private Date percent;
+        private String start;
+        private String end;
+        private String percent;
         private String currency;
-        public void setStart(Date start) {
-            this.start = start;
-        }
-        public Date getStart() {
+
+        public String getStart() {
             return start;
         }
 
-        public void setEnd(Date end) {
-            this.end = end;
+        public void setStart(String start) {
+            this.start = start;
         }
-        public Date getEnd() {
+
+        public String getEnd() {
             return end;
         }
 
-        public void setPercent(Date percent) {
+        public void setEnd(String end) {
+            this.end = end;
+        }
+
+        public String getPercent() {
+            return percent;
+        }
+
+        public void setPercent(String percent) {
             this.percent = percent;
         }
-        public Date getPercent() {
-            return percent;
+
+        public String getCurrency() {
+            return currency;
         }
 
         public void setCurrency(String currency) {
             this.currency = currency;
-        }
-        public String getCurrency() {
-            return currency;
         }
     }
 
