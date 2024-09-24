@@ -50,7 +50,6 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.TimeZone;
@@ -152,7 +151,6 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
     @Override
     public void saveCityInfo() {
         for (ExpediaContinentEnum expediaContinent : ExpediaContinentEnum.values()) {
-            List<CityInfoRequest> cityInfoRequestList = Collections.synchronizedList(new ArrayList<>());
             RegionsRequest regionsRequest = RegionsRequest.builder().include("details").build();
             ResponseResult<RegionsInfoResponse> result = new RegionsAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId,
                     expediaContinent.getKey(), rateLimiter).access(regionsRequest);
@@ -172,10 +170,9 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
                             RegionsInfoResponse.Descendants countryDescendants = resultUS.getData().getDescendants();
                             if (CollectionUtils.isNotEmpty(countryDescendants.getProvince_state())) {
                                 String finalNameCN = nameCN;
-                                countryDescendants.getProvince_state().forEach(provinceState -> {
-                                    ThreadPoolUtils.execute(() -> {
-                                        queryCityInfo(provinceState, countryId, resultUS.getData().getName(), finalNameCN, countryId, cityInfoRequestList);
-                                    });
+                                ThreadPoolUtils.execute(() -> {
+                                    queryCityInfo(countryDescendants.getProvince_state(), countryId, resultUS.getData().getName(), finalNameCN, countryId);
+                                    log.info("{}-》》》》》》》》下城市推送完毕", finalNameCN);
                                 });
                             }
                         }
@@ -185,70 +182,96 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
         }
     }
 
-    private void queryCityInfo(String id, String stateId, String stateName, String stateNameCN, String countryId, List<CityInfoRequest> cityInfoList) {
-        log.info("保存cityId:{} 开始：", id);
-        try {
-            CityInfoRequest cityInfo = new CityInfoRequest()
-                    .setCountryId(countryId)
-                    .setCityId(id)
-                    .setStateId(stateId)
-                    .setStateName(stateName)
-                    .setStateNameCN(stateNameCN);
-            RegionsRequest regionsRequest = RegionsRequest.builder().include("details").build();
-
-            //补充中文名称
-            String nameCN = "";
-            ResponseResult<RegionsInfoResponse> resultCN =
-                    new RegionsAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, id, rateLimiter).access(regionsRequest);
-            if (null != resultCN && null != resultCN.getData()) {
-                RegionsInfoResponse regionsInfoResponse = resultCN.getData();
-                cityInfo.setCityNameCN(regionsInfoResponse.getName());
-                nameCN = regionsInfoResponse.getName();
+    /**
+     * 自旋等待机制
+     */
+    private void spinWaitingMechanism() {
+        if (ThreadPoolUtils.getThreadPool().getQueue().size() > 10) {
+            try {
+                log.info("等待上一个国家查询完毕");
+                Thread.sleep(20 * 1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
             }
-            //补充核心字段
-            ResponseResult<RegionsInfoResponse> resultUS =
-                    new RegionsAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, id, rateLimiter).access(regionsRequest);
-            if (null != resultUS && null != resultUS.getData()) {
-                RegionsInfoResponse regionsInfoResponse = resultUS.getData();
-                cityInfo
-                        .setCityName(regionsInfoResponse.getName())
-                        .setLongitude(null == regionsInfoResponse.getCoordinates().getCenter_longitude() ? new BigDecimal("0") :
-                                new BigDecimal(regionsInfoResponse.getCoordinates().getCenter_longitude()).setScale(10, 6))
-                        .setLatitude(null == regionsInfoResponse.getCoordinates().getCenter_latitude() ? new BigDecimal("0") :
-                                new BigDecimal(regionsInfoResponse.getCoordinates().getCenter_latitude()).setScale(10, 6))
-                        .setNote(regionsInfoResponse.getType());
-                if (null != regionsInfoResponse.getDescendants()) {
-                    RegionsInfoResponse.Descendants descendants = regionsInfoResponse.getDescendants();
-                    String finalNameCN = nameCN;
-
-                    if (CollectionUtils.isNotEmpty(descendants.getProvince_state())) {
-                        descendants.getProvince_state().forEach(provinceState -> {
-                            //查询城市信息
-                            queryCityInfo(provinceState, id, regionsInfoResponse.getName(), finalNameCN, countryId, cityInfoList);
-                        });
-                    }
-                    if (CollectionUtils.isNotEmpty(descendants.getCity())) {
-                        descendants.getCity().forEach(cityId -> {
-                            //查询城市信息
-                            queryCityInfo(cityId, id, regionsInfoResponse.getName(), finalNameCN, countryId, cityInfoList);
-                        });
-                    }
-                }
-            }
-            cityInfoList.add(cityInfo);
-            extracted(cityInfoList);
-        } catch (Exception e) {
-            log.error("保存城市信息异常 city为:{} 异常信息：", id, e);
+            spinWaitingMechanism();
         }
-        log.info("保存cityId:{} 完毕：", id);
     }
 
-    private synchronized void extracted(List<CityInfoRequest> cityInfoList) {
-        if (cityInfoList.size() >= 50) {
+
+    private void queryCityInfo(List<String> cityList, String stateId, String stateName, String stateNameCN, String countryId) {
+
+        log.info("保存cityIds:{} 开始：", cityList.toString());
+        List<CityInfoRequest> cityInfoList = new ArrayList<>();
+
+        cityList.forEach(cityId -> {
+            try {
+                CityInfoRequest cityInfo = new CityInfoRequest()
+                        .setCountryId(countryId)
+                        .setCityId(cityId)
+                        .setStateId(stateId)
+                        .setStateName(stateName)
+                        .setStateNameCN(stateNameCN);
+                RegionsRequest regionsRequest = RegionsRequest.builder().include("details").build();
+
+                //补充中文名称
+                String nameCN = "";
+                ResponseResult<RegionsInfoResponse> resultCN =
+                        new RegionsAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, cityId, rateLimiter).access(regionsRequest);
+                if (null != resultCN && null != resultCN.getData()) {
+                    RegionsInfoResponse regionsInfoResponse = resultCN.getData();
+                    cityInfo.setCityNameCN(regionsInfoResponse.getName());
+                    nameCN = regionsInfoResponse.getName();
+                }
+                //补充核心字段
+                ResponseResult<RegionsInfoResponse> resultUS =
+                        new RegionsAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, cityId, rateLimiter).access(regionsRequest);
+                if (null != resultUS && null != resultUS.getData()) {
+                    RegionsInfoResponse regionsInfoResponse = resultUS.getData();
+                    cityInfo
+                            .setCityName(regionsInfoResponse.getName())
+                            .setLongitude(null == regionsInfoResponse.getCoordinates() || null == regionsInfoResponse.getCoordinates().getCenter_longitude()
+                                    ? new BigDecimal("0") : new BigDecimal(regionsInfoResponse.getCoordinates().getCenter_longitude()).setScale(10, 6))
+                            .setLatitude(null == regionsInfoResponse.getCoordinates() || null == regionsInfoResponse.getCoordinates().getCenter_latitude() ?
+                                    new BigDecimal("0") : new BigDecimal(regionsInfoResponse.getCoordinates().getCenter_latitude()).setScale(10, 6))
+                            .setNote(regionsInfoResponse.getType());
+                    if (null != regionsInfoResponse.getDescendants()) {
+                        RegionsInfoResponse.Descendants descendants = regionsInfoResponse.getDescendants();
+                        String finalNameCN = nameCN;
+                        if (CollectionUtils.isNotEmpty(descendants.getProvince_state())) {
+//                            ThreadPoolUtils.execute(() -> {
+                            //查询城市信息
+                            queryCityInfo(descendants.getProvince_state(), cityId, regionsInfoResponse.getName(), finalNameCN, countryId);
+//                            });
+                        }
+                        if (CollectionUtils.isNotEmpty(descendants.getCity())) {
+                            //查询城市信息
+                            queryCityInfo(descendants.getCity(), cityId, regionsInfoResponse.getName(), finalNameCN, countryId);
+                        }
+                    }
+                }
+//                saveCityList(Arrays.asList(cityInfo));
+                cityInfoList.add(cityInfo);
+            } catch (Exception e) {
+                log.error("保存城市信息异常 city为:{} 异常信息：", cityId, e);
+            }
+        });
+        extracted(cityInfoList);
+        log.info("保存cityIds:{} 完毕：", cityList.toString());
+    }
+
+    private void extracted(List<CityInfoRequest> cityInfoList) {
+        int batchSize = 50;
+        int currentBatch = 0;
+        //批量方式
+        for (int i = 0; i < cityInfoList.size(); i += batchSize) {
+            // 截取当前批次的数据
+            List<CityInfoRequest> saveCityInfoList = cityInfoList.subList(currentBatch * batchSize, Math.min(cityInfoList.size(), (currentBatch + 1) * batchSize));
             //分批保存城市信息
-            saveCityList(cityInfoList);
-            cityInfoList.clear();
+            saveCityList(saveCityInfoList);
+            // 每处理完一组，增加当前批次计数器
+            currentBatch++;
         }
+        log.info("国家：{}下地区：{}-》》》》》》》》下城市推送完毕", cityInfoList.get(0).getCountryId(), cityInfoList.get(0).getStateNameCN());
     }
 
     private void saveCountryList(List<CountryInfoRequest> countryInfoList) {
@@ -304,24 +327,6 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
         hotelBaseIntlClient.saveHotelDetails(hotelDetailsRequests);
         hotelInfoIntlClient.saveHotelInfo(supplierHotelBaseRequests);
         hotelInfoIntlClient.saveRoomInfo(supplierHotelBaseRequests.stream().flatMap(supplierHotelBaseRequest -> supplierHotelBaseRequest.getRoomList().stream()).collect(Collectors.toList()));
-    }
-
-    public static void main(String[] args) {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-        sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
-        String add = "2024-09-10T15:00:00.000Z";
-        String update = "2024-09-10T15:41:01.018Z";
-        try {
-            Date addTime = sdf.parse(add);
-            Date updateTime = sdf.parse(update);
-            LocalDate currentDate = LocalDate.now().minusDays(3);
-            Date needPushTime = Date.from(currentDate.atStartOfDay(ZoneOffset.ofHours(8)).toInstant());
-            if (addTime.getTime() < needPushTime.getTime() && updateTime.getTime() < needPushTime.getTime()) {
-                System.out.println("不需要上传");
-            }
-        } catch (Exception e) {
-            log.info("时间转行校验异常", e);
-        }
     }
 
     private void parseFile(String localFilePath, boolean allPushFlag, Integer updateDays, Integer startLine) {
@@ -458,7 +463,14 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
     }
 
     @Override
-    public void saveOrUpdateProductInfo() {
+    public void saveOrUpdateProductInfo(String checkInDate, String checkOutDate, List<String> supplierHotelIds) {
+        if (StringUtils.isBlank(checkInDate) || StringUtils.isBlank(checkOutDate)) {
+            checkInDate = DateUtil.getFutureDay(9);
+            checkOutDate = DateUtil.getFutureDay(10);
+        }
+        if (CollectionUtils.isNotEmpty(supplierHotelIds)) {
+            pushProductInfo(checkInDate, checkOutDate, supplierHotelIds);
+        }
         int pageNum = 0;
         QueryHotelRequest queryHotelRequest = new QueryHotelRequest().setSupplierId(10005);
         while (true) {
@@ -468,40 +480,42 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
                 log.info("酒店展示集合查询未果，入参：{}，反参：{}", JsonUtils.writeObject2Json(queryHotelRequest), JsonUtils.writeObject2Json(hotelInfoPageListResult));
                 return;
             }
-            List<String> supplierHotelIds =
-                    hotelInfoPageListResult.getData().getList().stream().map(SupplierHotelBaseResponse::getSupplierHotelId).collect(Collectors.toList());
-            supplierHotelIds.forEach(supplierHotelId -> {
-                ThreadPoolUtils.execute(() -> {
-                    QueryPriceRequest queryPriceRequest = QueryPriceRequest.builder()
-                            .property_id(supplierHotelId)
-                            .checkin(DateUtil.getFutureDay(5))
-                            .checkout(DateUtil.getFutureDay(10))
-                            .currency("USD")
-                            .occupancies(Arrays.asList("1"))
-                            .sales_environment("hotel_only")
-                            .billing_terms(billingTerms)
-                            .payment_terms(paymentTerms)
-                            .partner_point_of_sale(partnerPointOfSale)
-                            .build();
-                    try {
-                        ResponseResult<QueryPriceResponse> result =
-                                new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
-                        if (null != result.getData() && CollectionUtils.isNotEmpty(result.getData().getHotelPrices())) {
-                            //推送base
-                            hotelBaseIntlClient.aggregatorProductMapping(ExpediaStaticInfoAdaptor.transformBaseProductReq(result.getData()));
-                            //推送info
-                            hotelInfoIntlClient.saveProductInfo(ExpediaStaticInfoAdaptor.transformInfoProductReq(result.getData()));
-                        } else {
-                            log.info("请求expedia查询报价异常：request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(result));
-
-                        }
-                    } catch (Exception e) {
-                        log.error("推送产品信息异常：request:{} ", JsonUtils.writeObject2Json(queryPriceRequest), e);
-                    }
-                });
-            });
+            supplierHotelIds = hotelInfoPageListResult.getData().getList().stream().map(SupplierHotelBaseResponse::getSupplierHotelId).collect(Collectors.toList());
+            pushProductInfo(checkInDate, checkOutDate, supplierHotelIds);
             pageNum++;
         }
+    }
+
+    private void pushProductInfo(String checkInDate, String checkOutDate, List<String> supplierHotelIds) {
+        supplierHotelIds.forEach(supplierHotelId -> {
+            ThreadPoolUtils.execute(() -> {
+                QueryPriceRequest queryPriceRequest = QueryPriceRequest.builder()
+                        .property_id(supplierHotelId)
+                        .checkin(checkInDate)
+                        .checkout(checkOutDate)
+                        .currency("USD")
+                        .occupancies(Arrays.asList("1"))
+                        .sales_environment("hotel_only")
+                        .billing_terms(billingTerms)
+                        .payment_terms(paymentTerms)
+                        .partner_point_of_sale(partnerPointOfSale)
+                        .build();
+                try {
+                    ResponseResult<QueryPriceResponse> result =
+                            new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                    if (null != result.getData() && CollectionUtils.isNotEmpty(result.getData().getHotelPrices())) {
+                        //推送base
+                        hotelBaseIntlClient.aggregatorProductMapping(ExpediaStaticInfoAdaptor.transformBaseProductReq(result.getData()));
+                        //推送info
+                        hotelInfoIntlClient.saveProductInfo(ExpediaStaticInfoAdaptor.transformInfoProductReq(result.getData()));
+                    } else {
+                        log.info("请求expedia查询报价异常：request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(result));
+                    }
+                } catch (Exception e) {
+                    log.error("推送产品信息异常：request:{} ", JsonUtils.writeObject2Json(queryPriceRequest), e);
+                }
+            });
+        });
     }
 
 }

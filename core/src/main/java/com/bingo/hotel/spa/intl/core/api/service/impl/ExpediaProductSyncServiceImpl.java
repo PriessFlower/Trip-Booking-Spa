@@ -4,6 +4,7 @@ import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
+import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaPriceService;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.AvailabilityResponse;
 import com.bingo.hotel.spa.intl.core.api.huitravel.service.HuiTravelService;
 import com.bingo.hotel.spa.intl.core.api.huitravel.utils.HuiTravelProductConvertUtil;
@@ -17,23 +18,22 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.util.List;
 
-@Service("huitravelProductSyncService")
+@Service("expediaProductSyncService")
 @Slf4j
 public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportService<AvailabilityResponse> {
 
     @Autowired
-    private HuiTravelService huiTravelService;
+    private ExpediaPriceService expediaPriceService;
 
     @Resource(name = "redisRecordLogServiceImpl")
     private RecordLogService redisRecordLogServiceImpl;
 
     @Override
     public AvailabilityResponse querySupplierPrice(PriceReq priceReq, Supplier supplier) {
-        redisRecordLogServiceImpl.recordAichotelsQps();
         if (StringUtils.isEmpty(supplier.getSProductId())) {
-            return huiTravelService.getPrice(priceReq, supplier.getSHotelId());
+            return expediaPriceService.queryPrice(priceReq, supplier);
         } else {
-            return huiTravelService.getPriceByProductId(CheckPriceReq.builder()
+            return expediaPriceService.checkPrice(CheckPriceReq.builder()
                     .checkIn(priceReq.getCheckIn())
                     .checkOut(priceReq.getCheckout())
                     .sProductId(supplier.getSProductId())

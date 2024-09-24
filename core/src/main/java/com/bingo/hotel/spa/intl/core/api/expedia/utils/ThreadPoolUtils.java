@@ -54,15 +54,24 @@ public class ThreadPoolUtils {
      */
     public static void execute(Runnable runnable) {
         ThreadPoolExecutor executor = getThreadPool();
+        spinWaitingMechanism(executor);
         executor.execute(runnable);
-        if(executor.getQueue().size()>200){
+        log.info("任务提交至线程池。当前线程池队列大小: {}", executor.getQueue().size());
+    }
+
+    /**
+     * 自旋等待机制
+     */
+    private static void spinWaitingMechanism(ThreadPoolExecutor executor) {
+        if (executor.getQueue().size() > 200) {
             try {
-                Thread.sleep(20000);
+                log.info("等待ing");
+                Thread.sleep(20 * 1000);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
+            spinWaitingMechanism(executor);
         }
-        log.info("任务提交至线程池。当前线程池队列大小: {}", executor.getQueue().size());
     }
 
     /**
@@ -75,7 +84,7 @@ public class ThreadPoolUtils {
         return getThreadPool().submit(callable);
     }
 
-    private static synchronized ThreadPoolExecutor getThreadPool() {
+    public static synchronized ThreadPoolExecutor getThreadPool() {
         if (threadPool == null) {
             // 获取处理器数量
 //            int cpuNum = Runtime.getRuntime().availableProcessors();

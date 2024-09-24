@@ -14,7 +14,7 @@ import javax.annotation.Resource;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 
-@Service("huitravelCheckPriceSyncService")
+@Service("expediaCheckPriceService")
 public class ExpediaCheckPriceServiceImpl extends AbstractCheckPriceSyncSupportService<CheckResponse> {
 
     @Autowired

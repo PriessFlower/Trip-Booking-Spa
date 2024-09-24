@@ -108,8 +108,10 @@ public class BackDoorController {
 
     @GetMapping("/save/expedia/product")
     @ApiOperation("产品静态数据保存-expedia")
-    public HttpResponse expediaSaveProductInfo() {
-        expediaStaticInfoService.saveOrUpdateProductInfo();
+    public HttpResponse expediaSaveProductInfo(@RequestParam("checkInDate") String checkInDate,
+                                               @RequestParam("checkOutDate") String checkOutDate,
+                                               @RequestParam(value = "supplierHotelIds", required = false) List<String> supplierHotelIds) {
+        expediaStaticInfoService.saveOrUpdateProductInfo(checkInDate, checkOutDate, supplierHotelIds);
         return HttpResponse.getSuccessInstance();
     }
 }

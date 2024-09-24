@@ -27,5 +27,7 @@ public class PriceReq {
     @NonNull
     private Integer guestType;//宾客类型
 
+    private String salesType;//售卖类型 expedia专用
+
     private List<Supplier> suppliers;
 }

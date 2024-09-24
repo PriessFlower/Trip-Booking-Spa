@@ -127,7 +127,7 @@ public class ExpediaStaticInfoAdaptor {
                             GlobalHotelPictureDTO globalRoomPictureDTO = new GlobalHotelPictureDTO()
                                     .setHotelId(resultUS.getProperty_id())
                                     .setRoomId(roomId)
-                                    .setType("hotel")
+                                    .setType("room")
                                     .setName(images.getCaption())
                                     .setSort(images.getHero_image() ? 0 : 1)
                                     .setUrl(urlInfo.getHref());
