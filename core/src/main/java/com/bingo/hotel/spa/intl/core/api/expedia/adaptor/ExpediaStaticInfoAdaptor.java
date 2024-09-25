@@ -71,26 +71,28 @@ public class ExpediaStaticInfoAdaptor {
         Map<String, String> checkinUS = resultUS.getCheckin();
         GlobalHotelBaseExtendDTO globalHotelBaseExtendUS = new GlobalHotelBaseExtendDTO()
                 .setHotelId(resultUS.getProperty_id())
-                .setLanguage("en-US")
+                .setLanguage("USD")
                 .setCheckIn(StringUtils.isBlank(checkinUS.get("24_hour")) ? checkinUS.get("begin_time") + "-" + checkinUS.get("end_time") : checkinUS.get(
                         "24_hour"))
                 .setCheckOut(null == resultUS.getCheckout() ? "" : resultUS.getCheckout().getTime())
                 .setInstructions(checkinUS.get("instructions") + checkinUS.get("special_instructions"))
-                .setMinAge(checkinUS.get("min_age"))
+                .setMinAge(checkinUS.containsKey("min_age") ? "Guests must be at least " + checkinUS.get("min_age") + " years old" : "No")
                 .setFees(null == resultUS.getFees() ? "" : convertNull(resultUS.getFees().getMandatory()) + convertNull(resultUS.getFees().getOptional()))
-                .setPolicies(null == resultUS.getPolicies() ? "" : resultUS.getPolicies().getKnow_before_you_go());
+                .setPolicies(null == resultUS.getPolicies() ? "" : resultUS.getPolicies().getKnow_before_you_go())
+                .setDescriptions(null == resultUS.getDescriptions() ? "" : convertDescriptions(resultUS.getDescriptions()));
         globalHotelBaseExtends.add(globalHotelBaseExtendUS);
         //中文
         Map<String, String> checkinCN = resultCN.getCheckin();
         GlobalHotelBaseExtendDTO globalHotelBaseExtendCN = new GlobalHotelBaseExtendDTO()
                 .setHotelId(resultCN.getProperty_id())
-                .setLanguage("zh-CN")
+                .setLanguage("CNY")
                 .setCheckIn(StringUtils.isBlank(checkinCN.get("24_hour")) ? checkinCN.get("begin_time") + "-" + checkinCN.get("end_time") : checkinCN.get("24_hour"))
-                .setCheckOut(null == resultUS.getCheckout() ? "" : resultUS.getCheckout().getTime())
+                .setCheckOut(null == resultCN.getCheckout() ? "" : resultCN.getCheckout().getTime())
                 .setInstructions(checkinCN.get("instructions") + checkinCN.get("special_instructions"))
-                .setMinAge(checkinCN.get("min_age"))
-                .setFees(null == resultUS.getFees() ? "" : convertNull(resultUS.getFees().getMandatory()) + convertNull(resultUS.getFees().getOptional()))
-                .setPolicies(null == resultUS.getPolicies() ? "" : resultUS.getPolicies().getKnow_before_you_go());
+                .setMinAge(checkinCN.containsKey("min_age") ? "入住办理人需年满 " + checkinCN.get("min_age") + " 周岁" : "无")
+                .setFees(null == resultCN.getFees() ? "" : convertNull(resultCN.getFees().getMandatory()) + convertNull(resultCN.getFees().getOptional()))
+                .setPolicies(null == resultCN.getPolicies() ? "" : resultCN.getPolicies().getKnow_before_you_go())
+                .setDescriptions(null == resultCN.getDescriptions() ? "" : convertDescriptions(resultCN.getDescriptions()));
         globalHotelBaseExtends.add(globalHotelBaseExtendCN);
         hotelDetailsRequest.setGlobalHotelBaseExtendDTOS(globalHotelBaseExtends);
 
@@ -141,6 +143,29 @@ public class ExpediaStaticInfoAdaptor {
         }
         hotelDetailsRequest.setRoomBaseList(roomBaseList);
         return hotelDetailsRequest;
+    }
+
+    private static String convertDescriptions(HotelStaticInfo.HotelDescription description) {
+        String descStr = "";
+        if (StringUtils.isNotBlank(description.getAmenities())) {
+            descStr += description.getAmenities();
+        }
+        if (StringUtils.isNotBlank(description.getBusiness_amenities())) {
+            descStr += description.getBusiness_amenities();
+        }
+        if (StringUtils.isNotBlank(description.getRooms())) {
+            descStr += description.getRooms();
+        }
+        if (StringUtils.isNotBlank(description.getAttractions())) {
+            descStr += description.getAttractions();
+        }
+        if (StringUtils.isNotBlank(description.getLocation())) {
+            descStr += description.getLocation();
+        }
+        if (StringUtils.isNotBlank(description.getHeadline())) {
+            descStr += description.getHeadline();
+        }
+        return descStr;
     }
 
 

@@ -1,7 +1,5 @@
 package com.bingo.hotel.spa.intl.core.api.expedia.service.impl;
 
-import com.bingo.hotel.base.intl.cli.client.HotelBaseIntlClient;
-import com.bingo.hotel.info.intl.cli.client.HotelInfoIntlClient;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
@@ -41,18 +39,14 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     @Value("${expedia.billing_terms}")
     private String billingTerms;
     @Resource
-    private HotelInfoIntlClient hotelInfoIntlClient;
-    @Resource
-    private HotelBaseIntlClient hotelBaseIntlClient;
-    @Resource
     private ExpediaUtils expediaUtils;
     @Resource
     private DistributedRateLimiter rateLimiter;
 
 
     @Override
-    public AvailabilityResponse queryPrice(PriceReq request, Supplier supplier) {
-
+    public QueryPriceResponse queryPrice(PriceReq request, Supplier supplier) {
+        ResponseResult<QueryPriceResponse> result;
         QueryPriceRequest queryPriceRequest = QueryPriceRequest.builder()
                 .property_id(supplier.getSHotelId())
                 .checkin(request.getCheckIn())
@@ -76,17 +70,18 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                 }
             }
             occupancies.add(request.getAdultNum() + childrenList);
-
         }
         queryPriceRequest.setOccupancies(occupancies);
-        ResponseResult<QueryPriceResponse> result =
-                new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
-
-        return null;
+        if ("USD".equals(request.getCurrency())) {
+            result = new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+        } else {
+            result = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+        }
+        return result.getData();
     }
 
     @Override
-    public AvailabilityResponse checkPrice(CheckPriceReq request) {
+    public QueryPriceResponse checkPrice(CheckPriceReq request) {
         return null;
     }
 }

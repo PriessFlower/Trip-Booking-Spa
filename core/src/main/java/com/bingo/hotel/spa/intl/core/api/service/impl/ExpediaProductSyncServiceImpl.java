@@ -4,6 +4,7 @@ import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
+import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.QueryPriceResponse;
 import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaPriceService;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.AvailabilityResponse;
 import com.bingo.hotel.spa.intl.core.api.huitravel.service.HuiTravelService;
@@ -20,7 +21,7 @@ import java.util.List;
 
 @Service("expediaProductSyncService")
 @Slf4j
-public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportService<AvailabilityResponse> {
+public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportService<QueryPriceResponse> {
 
     @Autowired
     private ExpediaPriceService expediaPriceService;
@@ -29,11 +30,12 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
     private RecordLogService redisRecordLogServiceImpl;
 
     @Override
-    public AvailabilityResponse querySupplierPrice(PriceReq priceReq, Supplier supplier) {
-        if (StringUtils.isEmpty(supplier.getSProductId())) {
-            return expediaPriceService.queryPrice(priceReq, supplier);
-        } else {
-            return expediaPriceService.checkPrice(CheckPriceReq.builder()
+    public QueryPriceResponse querySupplierPrice(PriceReq priceReq, Supplier supplier) {
+        QueryPriceResponse queryPriceResponse = expediaPriceService.queryPrice(priceReq, supplier);
+        if (StringUtils.isBlank(supplier.getSProductId())) {
+            return queryPriceResponse;
+        }
+        return expediaPriceService.checkPrice(CheckPriceReq.builder()
                     .checkIn(priceReq.getCheckIn())
                     .checkOut(priceReq.getCheckout())
                     .sProductId(supplier.getSProductId())
@@ -43,14 +45,11 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
                     .adultCount(priceReq.getAdultNum())
                     .totalPrice(0)
                     .build());
-        }
+
     }
 
     @Override
-    public List<ProductRespDTO> productRespConvert(AvailabilityResponse searchResponse) {
-        if (searchResponse.getCheckResponse()!= null) {
-            return HuiTravelProductConvertUtil.convertRatePlanCheckVO(searchResponse);
-        }
-        return HuiTravelProductConvertUtil.convertRatePlanVO(searchResponse);
+    public List<ProductRespDTO> productRespConvert(QueryPriceResponse searchResponse) {
+        return null;
     }
 }

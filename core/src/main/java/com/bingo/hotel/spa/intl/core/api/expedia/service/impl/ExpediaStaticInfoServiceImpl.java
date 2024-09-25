@@ -322,20 +322,20 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
         List<HotelDetailsRequest> hotelDetailsRequests = new ArrayList<>();
         List<SupplierHotelBaseRequest> supplierHotelBaseRequests = new ArrayList<>();
         supplierHotelIds.forEach(supplierHotelId -> {
-            pushHotelList(hotelDetailsRequests, supplierHotelBaseRequests, supplierHotelId);
+            pushHotelList(supplierHotelId);
         });
-        hotelBaseIntlClient.saveHotelDetails(hotelDetailsRequests);
-        hotelInfoIntlClient.saveHotelInfo(supplierHotelBaseRequests);
-        hotelInfoIntlClient.saveRoomInfo(supplierHotelBaseRequests.stream().flatMap(supplierHotelBaseRequest -> supplierHotelBaseRequest.getRoomList().stream()).collect(Collectors.toList()));
+//        hotelBaseIntlClient.saveHotelDetails(hotelDetailsRequests);
+//        hotelInfoIntlClient.saveHotelInfo(supplierHotelBaseRequests);
+//        hotelInfoIntlClient.saveRoomInfo(supplierHotelBaseRequests.stream().flatMap(supplierHotelBaseRequest -> supplierHotelBaseRequest.getRoomList().stream()).collect(Collectors.toList()));
     }
 
     private void parseFile(String localFilePath, boolean allPushFlag, Integer updateDays, Integer startLine) {
         try (BufferedReader reader = new BufferedReader(new FileReader(localFilePath))) {
             String line;
-            //base酒店+房型
-            List<HotelDetailsRequest> hotelDetailsRequests = new ArrayList<>();
-            //info酒店+房型
-            List<SupplierHotelBaseRequest> supplierHotelBaseRequests = new ArrayList<>();
+//            //base酒店+房型
+//            List<HotelDetailsRequest> hotelDetailsRequests = new ArrayList<>();
+//            //info酒店+房型
+//            List<SupplierHotelBaseRequest> supplierHotelBaseRequests = new ArrayList<>();
             log.info("开始推送酒店信息");
             int sumHotel = 0;
             while ((line = reader.readLine()) != null) {
@@ -363,18 +363,18 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
                     log.info("已经推送酒店总数：{}", sumHotel);
                 }
                 ThreadPoolUtils.execute(() -> {
-                    pushHotelList(hotelDetailsRequests, supplierHotelBaseRequests, hotelStaticInfo.getProperty_id());
+                    pushHotelList(hotelStaticInfo.getProperty_id());
                 });
             }
-            //保存酒店详情
-            hotelBaseIntlClient.saveHotelDetails(hotelDetailsRequests);
+//            //保存酒店详情
+//            hotelBaseIntlClient.saveHotelDetails(hotelDetailsRequests);
             log.info("酒店静态信息推送完毕,共：{}", sumHotel);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private void pushHotelList(List<HotelDetailsRequest> hotelDetailsRequests, List<SupplierHotelBaseRequest> supplierHotelBaseRequests, String hotelId) {
+    private void pushHotelList(String hotelId) {
         HotelInfoRequest hotelInfoRequest =
                 HotelInfoRequest.builder().supply_source(SupplierSourceEnum.EXPEDIA.getDesc()).property_id(hotelId).build();
         try {
@@ -394,9 +394,9 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
             long endTime = System.currentTimeMillis();
             log.info("查询expedia酒店详情耗时：{}", endTime - startTime);
             //pushBase
-            pushBaseHotelDetails(hotelDetailsRequests, ExpediaStaticInfoAdaptor.transformBaseHotelReq(resultUS.getData(), resultCN.getData()));
+            pushBaseHotelDetails(ExpediaStaticInfoAdaptor.transformBaseHotelReq(resultUS.getData(), resultCN.getData()));
             //pushInfo
-            pushInfoHotelDetails(supplierHotelBaseRequests, resultUS.getData(), resultCN.getData());
+            pushInfoHotelDetails(resultUS.getData(), resultCN.getData());
 
 
         } catch (Exception e) {
@@ -416,7 +416,7 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
 //            hotelDetailsRequests.clear();
 //        }
 //    }
-    private void pushBaseHotelDetails(List<HotelDetailsRequest> hotelDetailsRequests, HotelDetailsRequest hotelDetailsRequest) {
+    private void pushBaseHotelDetails(HotelDetailsRequest hotelDetailsRequest) {
 
         //保存酒店详情
         long startTime = System.currentTimeMillis();
@@ -426,7 +426,7 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
 
     }
 
-    private void pushInfoHotelDetails(List<SupplierHotelBaseRequest> supplierHotelBaseRequests, HotelStaticInfo hotelStaticInfoUS, HotelStaticInfo hotelStaticInfoCN) {
+    private void pushInfoHotelDetails(HotelStaticInfo hotelStaticInfoUS, HotelStaticInfo hotelStaticInfoCN) {
         SupplierHotelBaseRequest supplierHotelBaseRequest = ExpediaStaticInfoAdaptor.transformInfoHotelReq(hotelStaticInfoUS, hotelStaticInfoCN);
         //保存酒店详情
         long startTime = System.currentTimeMillis();
@@ -470,6 +470,7 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
         }
         if (CollectionUtils.isNotEmpty(supplierHotelIds)) {
             pushProductInfo(checkInDate, checkOutDate, supplierHotelIds);
+            return;
         }
         int pageNum = 0;
         QueryHotelRequest queryHotelRequest = new QueryHotelRequest().setSupplierId(10005);

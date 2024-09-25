@@ -3,6 +3,7 @@ package com.bingo.hotel.spa.intl.core.api.expedia.service;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
+import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.QueryPriceResponse;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.AvailabilityResponse;
 
 /**
@@ -14,8 +15,8 @@ import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.Avail
  **/
 public interface ExpediaPriceService {
 
-    AvailabilityResponse queryPrice(PriceReq request, Supplier supplier);
+    QueryPriceResponse queryPrice(PriceReq request, Supplier supplier);
 
-    AvailabilityResponse checkPrice(CheckPriceReq request);
+    QueryPriceResponse checkPrice(CheckPriceReq request);
 
 }
