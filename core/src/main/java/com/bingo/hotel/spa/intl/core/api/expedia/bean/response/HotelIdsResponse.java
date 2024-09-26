@@ -25,7 +25,7 @@ public class HotelIdsResponse implements BaseResponse {
 
     @Override
     public boolean isSucc() {
-        return false;
+        return true;
     }
 
     @Override
