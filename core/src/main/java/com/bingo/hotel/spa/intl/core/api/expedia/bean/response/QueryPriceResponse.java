@@ -1,12 +1,14 @@
 package com.bingo.hotel.spa.intl.core.api.expedia.bean.response;
 
+import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.BaseResponse;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * 地域静态信息反参.
+ * 查询报价信息反参.
  *
  * @author : hanJH
  * @version : 1.0 2024/09/03
@@ -16,12 +18,22 @@ public class QueryPriceResponse implements BaseResponse {
 
     private List<HotelPrice> hotelPrices;
 
+    private List<ProductRespDTO> productRespDTOList;
+
     public List<HotelPrice> getHotelPrices() {
         return hotelPrices;
     }
 
     public void setHotelPrices(List<HotelPrice> hotelPrices) {
         this.hotelPrices = hotelPrices;
+    }
+
+    public List<ProductRespDTO> getProductRespDTOList() {
+        return productRespDTOList;
+    }
+
+    public void setProductRespDTOList(List<ProductRespDTO> productRespDTOList) {
+        this.productRespDTOList = productRespDTOList;
     }
 
     @Override
@@ -33,6 +45,7 @@ public class QueryPriceResponse implements BaseResponse {
     public boolean isEmptyResult() {
         return false;
     }
+
     public static class HotelPrice {
         private String property_id;
         private String status;
@@ -117,7 +130,7 @@ public class QueryPriceResponse implements BaseResponse {
         private Map<String, Amenity> amenities;
         private Bed_groups bed_groups;
         private List<Cancel_penalties> cancel_penalties;
-        private Occupancy_pricing occupancy_pricing;
+        private Map<String, Occupancy_pricing> occupancy_pricing;
         private Promotions promotions;
 
         public void setId(String id) {
@@ -200,12 +213,12 @@ public class QueryPriceResponse implements BaseResponse {
             return cancel_penalties;
         }
 
-        public void setOccupancy_pricing(Occupancy_pricing occupancy_pricing) {
-            this.occupancy_pricing = occupancy_pricing;
+        public Map<String, Occupancy_pricing> getOccupancy_pricing() {
+            return occupancy_pricing;
         }
 
-        public Occupancy_pricing getOccupancy_pricing() {
-            return occupancy_pricing;
+        public void setOccupancy_pricing(Map<String, Occupancy_pricing> occupancy_pricing) {
+            this.occupancy_pricing = occupancy_pricing;
         }
 
         public void setPromotions(Promotions promotions) {
@@ -356,9 +369,11 @@ public class QueryPriceResponse implements BaseResponse {
     public static class Links {
 
         private Price_check price_check;
+
         public void setPrice_check(Price_check price_check) {
             this.price_check = price_check;
         }
+
         public Price_check getPrice_check() {
             return price_check;
         }
@@ -369,9 +384,11 @@ public class QueryPriceResponse implements BaseResponse {
 
         private String method;
         private String href;
+
         public void setMethod(String method) {
             this.method = method;
         }
+
         public String getMethod() {
             return method;
         }
@@ -379,6 +396,7 @@ public class QueryPriceResponse implements BaseResponse {
         public void setHref(String href) {
             this.href = href;
         }
+
         public String getHref() {
             return href;
         }
@@ -390,9 +408,11 @@ public class QueryPriceResponse implements BaseResponse {
         private String type;
         private String size;
         private int quantity;
+
         public void setType(String type) {
             this.type = type;
         }
+
         public String getType() {
             return type;
         }
@@ -400,6 +420,7 @@ public class QueryPriceResponse implements BaseResponse {
         public void setSize(String size) {
             this.size = size;
         }
+
         public String getSize() {
             return size;
         }
@@ -407,6 +428,7 @@ public class QueryPriceResponse implements BaseResponse {
         public void setQuantity(int quantity) {
             this.quantity = quantity;
         }
+
         public int getQuantity() {
             return quantity;
         }
@@ -460,38 +482,37 @@ public class QueryPriceResponse implements BaseResponse {
         private Fees fees;
         private Totals totals;
 
-        public void setNightly(List<List<Nightly>> nightly) {
-            this.nightly = nightly;
-        }
-
         public List<List<Nightly>> getNightly() {
             return nightly;
         }
 
-        public void setStay(List<Stay> stay) {
-            this.stay = stay;
+        public void setNightly(List<List<Nightly>> nightly) {
+            this.nightly = nightly;
         }
 
         public List<Stay> getStay() {
             return stay;
         }
 
-        public void setFees(Fees fees) {
-            this.fees = fees;
+        public void setStay(List<Stay> stay) {
+            this.stay = stay;
         }
 
         public Fees getFees() {
             return fees;
         }
 
-        public void setTotals(Totals totals) {
-            this.totals = totals;
+        public void setFees(Fees fees) {
+            this.fees = fees;
         }
 
         public Totals getTotals() {
             return totals;
         }
 
+        public void setTotals(Totals totals) {
+            this.totals = totals;
+        }
     }
 
     public static class Fees {
@@ -551,9 +572,11 @@ public class QueryPriceResponse implements BaseResponse {
 
         private String value;
         private String currency;
+
         public void setValue(String value) {
             this.value = value;
         }
+
         public String getValue() {
             return value;
         }
@@ -561,6 +584,7 @@ public class QueryPriceResponse implements BaseResponse {
         public void setCurrency(String currency) {
             this.currency = currency;
         }
+
         public String getCurrency() {
             return currency;
         }
@@ -657,9 +681,11 @@ public class QueryPriceResponse implements BaseResponse {
         private String type;
         private String value;
         private String currency;
+
         public void setType(String type) {
             this.type = type;
         }
+
         public String getType() {
             return type;
         }
@@ -667,6 +693,7 @@ public class QueryPriceResponse implements BaseResponse {
         public void setValue(String value) {
             this.value = value;
         }
+
         public String getValue() {
             return value;
         }
@@ -674,6 +701,7 @@ public class QueryPriceResponse implements BaseResponse {
         public void setCurrency(String currency) {
             this.currency = currency;
         }
+
         public String getCurrency() {
             return currency;
         }
@@ -685,9 +713,11 @@ public class QueryPriceResponse implements BaseResponse {
         private String type;
         private String value;
         private String currency;
+
         public void setType(String type) {
             this.type = type;
         }
+
         public String getType() {
             return type;
         }
@@ -695,6 +725,7 @@ public class QueryPriceResponse implements BaseResponse {
         public void setValue(String value) {
             this.value = value;
         }
+
         public String getValue() {
             return value;
         }
@@ -702,6 +733,7 @@ public class QueryPriceResponse implements BaseResponse {
         public void setCurrency(String currency) {
             this.currency = currency;
         }
+
         public String getCurrency() {
             return currency;
         }
@@ -712,9 +744,11 @@ public class QueryPriceResponse implements BaseResponse {
 
         private Deal deal;
         private Value_adds value_adds;
+
         public void setDeal(Deal deal) {
             this.deal = deal;
         }
+
         public Deal getDeal() {
             return deal;
         }
@@ -722,6 +756,7 @@ public class QueryPriceResponse implements BaseResponse {
         public void setValue_adds(Value_adds value_adds) {
             this.value_adds = value_adds;
         }
+
         public Value_adds getValue_adds() {
             return value_adds;
         }
@@ -732,9 +767,11 @@ public class QueryPriceResponse implements BaseResponse {
 
         private String id;
         private String description;
+
         public void setId(String id) {
             this.id = id;
         }
+
         public String getId() {
             return id;
         }
@@ -756,9 +793,11 @@ public class QueryPriceResponse implements BaseResponse {
         private String offer_type;
         private String frequency;
         private int person_count;
+
         public void setId(String id) {
             this.id = id;
         }
+
         public String getId() {
             return id;
         }
@@ -774,6 +813,7 @@ public class QueryPriceResponse implements BaseResponse {
         public void setCategory(String category) {
             this.category = category;
         }
+
         public String getCategory() {
             return category;
         }
@@ -781,6 +821,7 @@ public class QueryPriceResponse implements BaseResponse {
         public void setOffer_type(String offer_type) {
             this.offer_type = offer_type;
         }
+
         public String getOffer_type() {
             return offer_type;
         }
@@ -788,6 +829,7 @@ public class QueryPriceResponse implements BaseResponse {
         public void setFrequency(String frequency) {
             this.frequency = frequency;
         }
+
         public String getFrequency() {
             return frequency;
         }
@@ -795,6 +837,7 @@ public class QueryPriceResponse implements BaseResponse {
         public void setPerson_count(int person_count) {
             this.person_count = person_count;
         }
+
         public int getPerson_count() {
             return person_count;
         }

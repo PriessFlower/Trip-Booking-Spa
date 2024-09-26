@@ -442,7 +442,7 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
     public void deleteHotelInfo(String deleteDate) {
 
         if (StringUtils.isBlank(deleteDate)) {
-            deleteDate = DateUtil.getPastDay(7);
+            deleteDate = DateUtil.getPastDay("", 7);
         }
         ResponseResult<HotelIdsResponse> result = new HotelRemoveAccess(host, expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(deleteDate);
         if (null == result.getData() || CollectionUtils.isEmpty(result.getData().getHotelIds())) {
@@ -465,8 +465,8 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
     @Override
     public void saveOrUpdateProductInfo(String checkInDate, String checkOutDate, List<String> supplierHotelIds) {
         if (StringUtils.isBlank(checkInDate) || StringUtils.isBlank(checkOutDate)) {
-            checkInDate = DateUtil.getFutureDay(9);
-            checkOutDate = DateUtil.getFutureDay(10);
+            checkInDate = DateUtil.getFutureDay(null, 9);
+            checkOutDate = DateUtil.getFutureDay(null, 10);
         }
         if (CollectionUtils.isNotEmpty(supplierHotelIds)) {
             pushProductInfo(checkInDate, checkOutDate, supplierHotelIds);

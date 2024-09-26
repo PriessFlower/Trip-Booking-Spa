@@ -1,17 +1,20 @@
 package com.bingo.hotel.spa.intl.core.api.service.impl;
 
+import com.bingo.hotel.spa.intl.cli.dto.CancelPolicy;
+import com.bingo.hotel.spa.intl.cli.dto.Meal;
+import com.bingo.hotel.spa.intl.cli.dto.ProductInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
+import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.QueryPriceResponse;
 import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaPriceService;
-import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.AvailabilityResponse;
-import com.bingo.hotel.spa.intl.core.api.huitravel.service.HuiTravelService;
-import com.bingo.hotel.spa.intl.core.api.huitravel.utils.HuiTravelProductConvertUtil;
 import com.bingo.hotel.spa.intl.core.api.service.AbstractProductSyncSupportService;
 import com.bingo.hotel.spa.intl.core.api.service.RecordLogService;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -36,20 +39,19 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
             return queryPriceResponse;
         }
         return expediaPriceService.checkPrice(CheckPriceReq.builder()
-                    .checkIn(priceReq.getCheckIn())
-                    .checkOut(priceReq.getCheckout())
-                    .sProductId(supplier.getSProductId())
-                    .sHotelId(supplier.getSHotelId())
-                    .roomNum(priceReq.getRoomNum())
-                    .supplierId(supplier.getSupplierId())
-                    .adultCount(priceReq.getAdultNum())
-                    .totalPrice(0)
-                    .build());
-
+                .checkIn(priceReq.getCheckIn())
+                .checkOut(priceReq.getCheckout())
+                .sProductId(supplier.getSProductId())
+                .sHotelId(supplier.getSHotelId())
+                .roomNum(priceReq.getRoomNum())
+                .supplierId(supplier.getSupplierId())
+                .adultCount(priceReq.getAdultNum())
+                .totalPrice(0)
+                .build());
     }
 
     @Override
-    public List<ProductRespDTO> productRespConvert(QueryPriceResponse searchResponse) {
-        return null;
+    public List<ProductRespDTO> productRespConvert(QueryPriceResponse queryPriceResponse) {
+        return queryPriceResponse.getProductRespDTOList();
     }
 }

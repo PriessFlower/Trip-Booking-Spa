@@ -55,5 +55,9 @@ public class ProductRespDTO {
      * 最大入住人数
      */
     private Integer maxOccupancy;
+    /**
+     * hotel_package-打包价 hotel_only-零售价
+     */
+    private String priceFlag;
 
 }

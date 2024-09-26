@@ -2,6 +2,7 @@ package com.bingo.hotel.spa.intl.core.util;
 
 import com.bingo.hotel.spa.intl.core.api.common.exception.SysRuntimeException;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.time.DateUtils;
 import org.apache.commons.lang3.time.FastDateFormat;
 import org.joda.time.DateTime;
@@ -218,6 +219,7 @@ public class DateUtil {
         cal.set(Calendar.MILLISECOND, 0);
         return cal.getTime();
     }
+
     public static Calendar getCalendarTomorrow0H0M0S() {
         Calendar cal = Calendar.getInstance();
         cal.add(Calendar.DAY_OF_MONTH, 1);
@@ -589,36 +591,42 @@ public class DateUtil {
 
     /**
      * 计算当前日期过去几天的日期
+     *
      * @param num
      * @return
      */
-    public static String getPastDay(int num) {
-        // 获取当前日期
-        java.time.LocalDate currentDate = java.time.LocalDate.now();
-        // 计算当前日期前几天的日期
-        java.time.LocalDate pastDate = currentDate.minusDays(num);
+    public static String getPastDay(String dateStr, int num) {
         // 格式化日期为 yyyy-MM-dd 格式
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        // 获取当前日期
+        java.time.LocalDate currentDate = java.time.LocalDate.now();
+        if (StringUtils.isBlank(dateStr)) {
+            currentDate = java.time.LocalDate.parse(dateStr, formatter); // 将字符串转换为LocalDate对象
+        }
+        // 计算当前日期前几天的日期
+        java.time.LocalDate pastDate = currentDate.minusDays(num);
+        //转换为新字符串日期返回
         return pastDate.format(formatter);
     }
 
     /**
      * 计算当前日期未来几天的日期
+     *
      * @param num
      * @return
      */
-    public static String getFutureDay(int num) {
-        // 获取当前日期
-        java.time.LocalDate currentDate = java.time.LocalDate.now();
-        // 计算当前日期前一周的日期
-        java.time.LocalDate pastDate = currentDate.plusDays(num);
+    public static String getFutureDay(String dateStr, int num) {
         // 格式化日期为 yyyy-MM-dd 格式
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        // 获取当前日期
+        java.time.LocalDate currentDate = java.time.LocalDate.now();
+        if (StringUtils.isBlank(dateStr)) {
+            currentDate = java.time.LocalDate.parse(dateStr, formatter); // 将字符串转换为LocalDate对象
+        }
+        // 计算当前日期未来几天的日期
+        java.time.LocalDate pastDate = currentDate.plusDays(num);
+        //转换为新字符串日期返回
         return pastDate.format(formatter);
     }
 
-
-    public static void main(String[] arg) {
-        System.out.println(DateUtil.getPastDay(-6));
-    }
 }
