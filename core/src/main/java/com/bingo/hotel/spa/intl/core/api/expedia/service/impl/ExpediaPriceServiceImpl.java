@@ -27,8 +27,10 @@ import javax.annotation.Resource;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 
@@ -65,7 +67,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                 .property_id(supplier.getSHotelId())
                 .checkin(request.getCheckIn())
                 .checkout(request.getCheckout())
-                .currency(request.getCurrency())
+                .currency("USD")
                 .sales_environment("hotel_only")
                 .billing_terms(billingTerms)
                 .payment_terms(paymentTerms)
@@ -134,9 +136,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     private QueryPriceResponse convertPriceComparisonsResp(QueryPriceResponse.HotelPrice hotelPriceOnly, QueryPriceResponse.HotelPrice hotelPricePackage, PriceReq request) {
         QueryPriceResponse queryPriceResponse = new QueryPriceResponse();
         List<ProductRespDTO> productRespDTOS = new ArrayList<>();
-        List<QueryPriceResponse.Rooms> rooms = hotelPricePackage.getRooms();
-        List<QueryPriceResponse.Rooms> rooms1 = hotelPriceOnly.getRooms();
-        List<String> roomIdList = new ArrayList<>();
+        Set<String> roomIdList = new HashSet<>();
         Map<String, QueryPriceResponse.Rooms> roomOnlyMap = hotelPriceOnly.getRooms().stream().collect(Collectors.toMap(QueryPriceResponse.Rooms::getId,
                 room -> room));
         Map<String, QueryPriceResponse.Rooms> roomPackageMap = hotelPricePackage.getRooms().stream().collect(Collectors.toMap(QueryPriceResponse.Rooms::getId,
@@ -149,7 +149,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                 QueryPriceResponse.Rooms roomPackage = roomPackageMap.get(roomId);
                 Map<String, QueryPriceResponse.Rates> rateOnlyMap = new HashMap<>();
                 Map<String, QueryPriceResponse.Rates> ratePackageMap = new HashMap<>();
-                ArrayList<String> rateIdList = new ArrayList<>();
+                Set<String> rateIdList = new HashSet<>();
                 if (CollectionUtils.isNotEmpty(roomOnly.getRates()) && CollectionUtils.isNotEmpty(roomPackage.getRates())) {
                     rateOnlyMap = roomOnly.getRates().stream().collect(Collectors.toMap(QueryPriceResponse.Rates::getId, rate -> rate));
                     rateIdList.addAll(rateOnlyMap.keySet());
@@ -157,7 +157,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                     rateIdList.addAll(ratePackageMap.keySet());
                 }
                 for (String rateId : rateIdList) {
-                    if (roomOnlyMap.containsKey(rateId) && roomPackageMap.containsKey(rateId)) {
+                    if (rateOnlyMap.containsKey(rateId) && ratePackageMap.containsKey(rateId)) {
                         Integer onlyPrice = 0;
                         Integer packagePrice = 0;
                         QueryPriceResponse.Rates rateOnly = rateOnlyMap.get(rateId);
@@ -175,9 +175,9 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                         }
                         convertRateResp(hotelPriceOnly.getProperty_id(), roomOnly.getRoom_name(), packagePrice < onlyPrice ? ratePackage : rateOnly,
                                 packagePrice < onlyPrice ? "hotel_package" : "hotel_only", productRespDTOS, request);
-                    } else if (roomOnlyMap.containsKey(rateId)) {
+                    } else if (rateOnlyMap.containsKey(rateId)) {
                         convertRateResp(hotelPriceOnly.getProperty_id(), roomOnly.getRoom_name(), rateOnlyMap.get(rateId), "hotel_only", productRespDTOS, request);
-                    } else if (roomPackageMap.containsKey(rateId)) {
+                    } else if (ratePackageMap.containsKey(rateId)) {
                         convertRateResp(hotelPricePackage.getProperty_id(), roomPackage.getRoom_name(), ratePackageMap.get(rateId), "hotel_package", productRespDTOS, request);
                     }
                 }

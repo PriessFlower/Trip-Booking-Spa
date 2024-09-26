@@ -502,15 +502,29 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
                         .partner_point_of_sale(partnerPointOfSale)
                         .build();
                 try {
-                    ResponseResult<QueryPriceResponse> result =
+                    ResponseResult<QueryPriceResponse> resultOnly =
                             new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
-                    if (null != result.getData() && CollectionUtils.isNotEmpty(result.getData().getHotelPrices())) {
+                    if (null != resultOnly.getData() && CollectionUtils.isNotEmpty(resultOnly.getData().getHotelPrices())) {
                         //推送base
-                        hotelBaseIntlClient.aggregatorProductMapping(ExpediaStaticInfoAdaptor.transformBaseProductReq(result.getData()));
+                        hotelBaseIntlClient.aggregatorProductMapping(ExpediaStaticInfoAdaptor.transformBaseProductReq(resultOnly.getData()));
                         //推送info
-                        hotelInfoIntlClient.saveProductInfo(ExpediaStaticInfoAdaptor.transformInfoProductReq(result.getData()));
+                        hotelInfoIntlClient.saveProductInfo(ExpediaStaticInfoAdaptor.transformInfoProductReq(resultOnly.getData()));
                     } else {
-                        log.info("请求expedia查询报价异常：request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(result));
+                        log.info("请求expedia查询零售价异常：request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest),
+                                JsonUtils.writeObject2Json(resultOnly));
+                    }
+                    //查询打包价
+                    queryPriceRequest.setSales_environment("hotel_package");
+                    ResponseResult<QueryPriceResponse> resultPackage =
+                            new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                    if (null != resultPackage.getData() && CollectionUtils.isNotEmpty(resultPackage.getData().getHotelPrices())) {
+                        //推送base
+                        hotelBaseIntlClient.aggregatorProductMapping(ExpediaStaticInfoAdaptor.transformBaseProductReq(resultPackage.getData()));
+                        //推送info
+                        hotelInfoIntlClient.saveProductInfo(ExpediaStaticInfoAdaptor.transformInfoProductReq(resultPackage.getData()));
+                    } else {
+                        log.info("请求expedia查询打包价异常：request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest),
+                                JsonUtils.writeObject2Json(resultPackage));
                     }
                 } catch (Exception e) {
                     log.error("推送产品信息异常：request:{} ", JsonUtils.writeObject2Json(queryPriceRequest), e);
