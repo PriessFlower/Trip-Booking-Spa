@@ -29,7 +29,9 @@ public class PriceReq {
 
     private String salesType;//售卖类型 expedia专用
 
-    private String currency;//语言
+    private String currency;//币种
+
+    private String language;//语言
 
     private List<Supplier> suppliers;
 }

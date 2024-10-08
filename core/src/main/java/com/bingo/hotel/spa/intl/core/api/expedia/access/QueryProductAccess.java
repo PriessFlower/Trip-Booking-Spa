@@ -17,6 +17,7 @@ import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.redisson.api.RateIntervalUnit;
 
 import java.util.List;
@@ -41,7 +42,7 @@ public class QueryProductAccess extends BaseHttpAccess<QueryPriceRequest, QueryP
     private static int QPS = 500;
 
     public QueryProductAccess(String host, String language, String authorization, String customerIp, String customerSessionId, DistributedRateLimiter redisRateLimiter) {
-        super(SupplierSourceEnum.EXPEDIA, SupplierDataTypeEnum.STATIC_DATA, MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_INFO, 0);
+        super(SupplierSourceEnum.EXPEDIA, SupplierDataTypeEnum.PRODUCT_PRICE, MonitorNameEnum.SPA_SUPPLIER_API_PRODUCT_PRICES, 0);
         this.host = host;
         this.language = language;
         this.authorization = authorization;
@@ -66,6 +67,9 @@ public class QueryProductAccess extends BaseHttpAccess<QueryPriceRequest, QueryP
         body.put("currency", request.getCurrency());
         StringBuilder occupancyStr = new StringBuilder();
         request.getOccupancies().forEach(occupancy -> {
+            if (StringUtils.isNotBlank(occupancyStr)) {
+                occupancyStr.append("&");
+            }
             occupancyStr.append("occupancy=").append(occupancy);
         });
         body.put("", occupancyStr.toString());

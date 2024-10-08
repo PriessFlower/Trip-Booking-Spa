@@ -31,4 +31,6 @@ public class CheckPriceReq {
     private String sCityCode;
 
     private Integer adultCount;
+
+    private String expediaCheckUrl;//expedia验价链接 expedia专用
 }

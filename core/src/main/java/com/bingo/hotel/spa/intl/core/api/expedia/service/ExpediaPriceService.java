@@ -1,10 +1,13 @@
 package com.bingo.hotel.spa.intl.core.api.expedia.service;
 
+import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
+import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.CheckPriceResponse
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.QueryPriceResponse;
-import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.AvailabilityResponse;
+
+import java.util.List;
 
 /**
  * expedia静态信息相关接口.
@@ -15,8 +18,10 @@ import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.Avail
  **/
 public interface ExpediaPriceService {
 
-    QueryPriceResponse queryPrice(PriceReq request, Supplier supplier);
+    List<ProductRespDTO> queryPrices(PriceReq request, Supplier supplier);
 
-    QueryPriceResponse checkPrice(CheckPriceReq request);
+    List<ProductRespDTO> queryProductPrice(CheckPriceReq request);
+
+    CheckPriceResponse checkPrices(CheckPriceReq request);
 
 }

@@ -8,6 +8,8 @@ import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
+import com.bingo.hotel.spa.intl.core.api.expedia.access.CheckPriceAccess;
+import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.CheckPriceResponse;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.QueryProductAccess;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.request.QueryPriceRequest;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.QueryPriceResponse;
@@ -57,7 +59,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
 
 
     @Override
-    public QueryPriceResponse queryPrice(PriceReq request, Supplier supplier) {
+    public List<ProductRespDTO> queryPrices(PriceReq request, Supplier supplier) {
         ResponseResult<QueryPriceResponse> resultOnly;
         ResponseResult<QueryPriceResponse> resultPackage;
         QueryPriceResponse.HotelPrice hotelPriceOnly = null;
@@ -122,19 +124,16 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         }
     }
 
-    private QueryPriceResponse convertPriceResp(QueryPriceResponse.HotelPrice hotelPrice, String salesType, PriceReq request) {
-        QueryPriceResponse queryPriceResponse = new QueryPriceResponse();
+    private List<ProductRespDTO> convertPriceResp(QueryPriceResponse.HotelPrice hotelPrice, String salesType, PriceReq request) {
         List<ProductRespDTO> productRespDTOS = new ArrayList<>();
 
         hotelPrice.getRooms().forEach(room -> {
             convertRoomResp(hotelPrice.getProperty_id(), room, salesType, productRespDTOS, request);
         });
-        queryPriceResponse.setProductRespDTOList(productRespDTOS);
-        return queryPriceResponse;
+        return productRespDTOS;
     }
 
-    private QueryPriceResponse convertPriceComparisonsResp(QueryPriceResponse.HotelPrice hotelPriceOnly, QueryPriceResponse.HotelPrice hotelPricePackage, PriceReq request) {
-        QueryPriceResponse queryPriceResponse = new QueryPriceResponse();
+    private List<ProductRespDTO> convertPriceComparisonsResp(QueryPriceResponse.HotelPrice hotelPriceOnly, QueryPriceResponse.HotelPrice hotelPricePackage, PriceReq request) {
         List<ProductRespDTO> productRespDTOS = new ArrayList<>();
         Set<String> roomIdList = new HashSet<>();
         Map<String, QueryPriceResponse.Rooms> roomOnlyMap = hotelPriceOnly.getRooms().stream().collect(Collectors.toMap(QueryPriceResponse.Rooms::getId,
@@ -187,8 +186,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                 convertRoomResp(hotelPricePackage.getProperty_id(), roomPackageMap.get(roomId), "hotel_package", productRespDTOS, request);
             }
         });
-        queryPriceResponse.setProductRespDTOList(productRespDTOS);
-        return queryPriceResponse;
+        return productRespDTOS;
     }
 
     private void convertRoomResp(String hotelId, QueryPriceResponse.Rooms room, String salesType, List<ProductRespDTO> productRespDTOS, PriceReq request) {
@@ -210,7 +208,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                     .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomName).build())
                     .currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency())
                     .totalPrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
-                    .priceInfos(buildPriceInfos(occupancyPricing.getNightly(), request.getCheckIn()))
+                    .priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn()))
 //                              .meal(Meal.builder().count(productVO.getBreakfast_count()).build())
 //                              .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                     .maxOccupancy(request.getAdultNum())
@@ -219,7 +217,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         }
     }
 
-    public List<PriceInfo> buildPriceInfos(List<List<QueryPriceResponse.Nightly>> nightlyLists, String checkIn) {
+    public List<PriceInfo> buildQueryPriceInfos(List<List<QueryPriceResponse.Nightly>> nightlyLists, String checkIn) {
         List<PriceInfo> priceInfos = Lists.newArrayList();
         for (int i = 0; i < nightlyLists.size(); i++) {
             BigDecimal sumPrice = BigDecimal.ZERO; // 初始化累加器为0
@@ -236,7 +234,50 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     }
 
     @Override
-    public QueryPriceResponse checkPrice(CheckPriceReq request) {
+    public List<ProductRespDTO> queryProductPrice(CheckPriceReq request) {
+        ResponseResult<CheckPriceResponse> result = new CheckPriceAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(request.getExpediaCheckUrl());
+        if (result.isSucc() && null != result.getData()) {
+            packageCheckPrice(request, result);
+        }
+        return new ArrayList<ProductRespDTO>();
+    }
+
+    @Override
+    public CheckPriceResponse checkPrices(CheckPriceReq request) {
         return null;
     }
+
+    private void packageCheckPrice(CheckPriceReq request, ResponseResult<CheckPriceResponse> result) {
+        CheckPriceResponse.Occupancy_pricing occupancyPricing = result.getData().getOccupancy_pricing();
+        ProductRespDTO.builder()
+                .hotelId(request.getSHotelId())
+                .productId(request.getSProductId())
+                .supplierId(SupplierSourceEnum.EXPEDIA.getCode())
+//                .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomName).build())
+                .currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency())
+                .totalPrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
+                .priceInfos(buildCheckPriceInfos(occupancyPricing.getNightly(), request.getCheckIn()))
+//                              .meal(Meal.builder().count(productVO.getBreakfast_count()).build())
+//                              .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+                .maxOccupancy(request.getAdultCount())
+//                .priceFlag(salesType)
+                .build();
+    }
+
+    public List<PriceInfo> buildCheckPriceInfos(List<List<CheckPriceResponse.Nightly>> nightlyLists, String checkIn) {
+        List<PriceInfo> priceInfos = Lists.newArrayList();
+        for (int i = 0; i < nightlyLists.size(); i++) {
+            BigDecimal sumPrice = BigDecimal.ZERO; // 初始化累加器为0
+            for (CheckPriceResponse.Nightly nightly : nightlyLists.get(i)) {
+                sumPrice = sumPrice.add(new BigDecimal(nightly.getValue()));
+            }
+            PriceInfo priceInfo = PriceInfo.builder()
+                    .date(DateUtil.getFutureDay(checkIn, i))
+                    .price(sumPrice.multiply(BigDecimal.valueOf(100)).intValue())
+                    .build();
+            priceInfos.add(priceInfo);
+        }
+        return priceInfos;
+    }
+
 }

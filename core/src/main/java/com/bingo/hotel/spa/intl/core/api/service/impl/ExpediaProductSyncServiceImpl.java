@@ -1,20 +1,13 @@
 package com.bingo.hotel.spa.intl.core.api.service.impl;
 
-import com.bingo.hotel.spa.intl.cli.dto.CancelPolicy;
-import com.bingo.hotel.spa.intl.cli.dto.Meal;
-import com.bingo.hotel.spa.intl.cli.dto.ProductInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
-import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
-import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.QueryPriceResponse;
 import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaPriceService;
 import com.bingo.hotel.spa.intl.core.api.service.AbstractProductSyncSupportService;
 import com.bingo.hotel.spa.intl.core.api.service.RecordLogService;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -24,7 +17,7 @@ import java.util.List;
 
 @Service("expediaProductSyncService")
 @Slf4j
-public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportService<QueryPriceResponse> {
+public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportService<List<ProductRespDTO>> {
 
     @Autowired
     private ExpediaPriceService expediaPriceService;
@@ -33,12 +26,12 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
     private RecordLogService redisRecordLogServiceImpl;
 
     @Override
-    public QueryPriceResponse querySupplierPrice(PriceReq priceReq, Supplier supplier) {
-        QueryPriceResponse queryPriceResponse = expediaPriceService.queryPrice(priceReq, supplier);
+    public List<ProductRespDTO> querySupplierPrice(PriceReq priceReq, Supplier supplier) {
+        List<ProductRespDTO> queryPriceResponse = expediaPriceService.queryPrices(priceReq, supplier);
         if (StringUtils.isBlank(supplier.getSProductId())) {
             return queryPriceResponse;
         }
-        return expediaPriceService.checkPrice(CheckPriceReq.builder()
+        return expediaPriceService.queryProductPrice(CheckPriceReq.builder()
                 .checkIn(priceReq.getCheckIn())
                 .checkOut(priceReq.getCheckout())
                 .sProductId(supplier.getSProductId())
@@ -51,7 +44,7 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
     }
 
     @Override
-    public List<ProductRespDTO> productRespConvert(QueryPriceResponse queryPriceResponse) {
-        return queryPriceResponse.getProductRespDTOList();
+    public List<ProductRespDTO> productRespConvert(List<ProductRespDTO> queryPriceResponse) {
+        return queryPriceResponse;
     }
 }
