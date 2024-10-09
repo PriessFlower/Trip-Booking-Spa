@@ -93,9 +93,39 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         }
         queryPriceRequest.setOccupancies(occupancies);
         if ("en-US".equals(request.getLanguage())) {
-            reqExpediaQueryPrice(request, queryPriceRequest, resultOnly, resultPackage, "en-US");
+            if ("hotel_only".equals(request.getSalesType())) {
+                //先查询零售价
+                queryPriceRequest.setSales_environment("hotel_only");
+                resultOnly = new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+            } else if ("hotel_package".equals(request.getSalesType())) {
+                //查询打包价
+                queryPriceRequest.setSales_environment("hotel_package");
+                resultPackage = new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+            } else {
+                //先查询零售价
+                queryPriceRequest.setSales_environment("hotel_only");
+                resultOnly = new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                //查询打包价
+                queryPriceRequest.setSales_environment("hotel_package");
+                resultPackage = new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+            }
         } else {
-            reqExpediaQueryPrice(request, queryPriceRequest, resultOnly, resultPackage, "zh-CN");
+            if ("hotel_only".equals(request.getSalesType())) {
+                //先查询零售价
+                queryPriceRequest.setSales_environment("hotel_only");
+                resultOnly = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+            } else if ("hotel_package".equals(request.getSalesType())) {
+                //查询打包价
+                queryPriceRequest.setSales_environment("hotel_package");
+                resultPackage = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+            } else {
+                //先查询零售价
+                queryPriceRequest.setSales_environment("hotel_only");
+                resultOnly = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                //查询打包价
+                queryPriceRequest.setSales_environment("hotel_package");
+                resultPackage = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+            }
         }
         if (resultOnly != null && resultOnly.isSucc() && null != resultOnly.getData() && CollectionUtils.isNotEmpty(resultOnly.getData().getHotelPrices())) {
             hotelPriceOnly = resultOnly.getData().getHotelPrices().get(0);
@@ -118,25 +148,25 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         }
     }
 
-    private void reqExpediaQueryPrice(PriceReq request, QueryPriceRequest queryPriceRequest, ResponseResult<QueryPriceResponse> resultOnly,
-                                      ResponseResult<QueryPriceResponse> resultPackage, String language) {
-        if ("hotel_only".equals(request.getSalesType())) {
-            //先查询零售价
-            queryPriceRequest.setSales_environment("hotel_only");
-            resultOnly = new QueryProductAccess(host, language, expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
-        } else if ("hotel_package".equals(request.getSalesType())) {
-            //查询打包价
-            queryPriceRequest.setSales_environment("hotel_package");
-            resultPackage = new QueryProductAccess(host, language, expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
-        } else {
-            //先查询零售价
-            queryPriceRequest.setSales_environment("hotel_only");
-            resultOnly = new QueryProductAccess(host, language, expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
-            //查询打包价
-            queryPriceRequest.setSales_environment("hotel_package");
-            resultPackage = new QueryProductAccess(host, language, expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
-        }
-    }
+//    private void reqExpediaQueryPrice(PriceReq request, QueryPriceRequest queryPriceRequest, ResponseResult<QueryPriceResponse> resultOnly,
+//                                      ResponseResult<QueryPriceResponse> resultPackage, String language) {
+//        if ("hotel_only".equals(request.getSalesType())) {
+//            //先查询零售价
+//            queryPriceRequest.setSales_environment("hotel_only");
+//            resultOnly = new QueryProductAccess(host, language, expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+//        } else if ("hotel_package".equals(request.getSalesType())) {
+//            //查询打包价
+//            queryPriceRequest.setSales_environment("hotel_package");
+//            resultPackage = new QueryProductAccess(host, language, expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+//        } else {
+//            //先查询零售价
+//            queryPriceRequest.setSales_environment("hotel_only");
+//            resultOnly = new QueryProductAccess(host, language, expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+//            //查询打包价
+//            queryPriceRequest.setSales_environment("hotel_package");
+//            resultPackage = new QueryProductAccess(host, language, expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+//        }
+//    }
 
     private List<ProductRespDTO> convertPriceResp(QueryPriceResponse.HotelPrice hotelPrice, String salesType, PriceReq request) {
         List<ProductRespDTO> productRespDTOS = new ArrayList<>();
@@ -258,7 +288,6 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                 .checkin(request.getCheckIn())
                 .checkout(request.getCheckout())
                 .currency("USD")
-                .sales_environment("hotel_only")
                 .billing_terms(billingTerms)
                 .payment_terms(paymentTerms)
                 .partner_point_of_sale(partnerPointOfSale)
@@ -278,7 +307,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             occupancies.add(request.getAdultNum() + childrenList);
         }
         queryPriceRequest.setOccupancies(occupancies);
-        queryPriceRequest.setSales_environment(StringUtils.isBlank(request.getSalesType()) ? "hotel_only" : request.getSalesType());
+        queryPriceRequest.setSales_environment(StringUtils.isBlank(request.getSalesType()) ? "hotel_package" : request.getSalesType());
         ResponseResult<QueryPriceResponse> result = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(),
                 expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
         if (result != null && result.isSucc() && null != result.getData() && CollectionUtils.isNotEmpty(result.getData().getHotelPrices())) {
@@ -309,7 +338,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
 //                              .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                                 .maxOccupancy(request.getAdultNum())
                                 .priceFlag(queryPriceRequest.getSales_environment())
-                                .bedInfoList(bedCheckInfos)
+                                .bedCheckInfos(bedCheckInfos)
                                 .build();
                         productRespDTO.setTaxes(productRespDTO.getTotalPrice() - productRespDTO.getRoomPrice());
                         return Arrays.asList(productRespDTO);
@@ -329,11 +358,12 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
             return null;
         }
+        result.getData().setAdultCount(request.getAdultCount());
         return result.getData();
     }
 
     private void packageCheckPrice(CheckPriceReq request, ResponseResult<CheckPriceResponse> result) {
-        CheckPriceResponse.Occupancy_pricing occupancyPricing = result.getData().getOccupancy_pricing();
+        CheckPriceResponse.Occupancy_pricing occupancyPricing = result.getData().getOccupancy_pricing().get(request.getAdultCount().toString());
         ProductRespDTO.builder()
                 .hotelId(request.getSHotelId())
                 .productId(request.getSProductId())

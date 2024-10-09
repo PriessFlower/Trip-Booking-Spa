@@ -37,7 +37,7 @@ public class QueryProductAccess extends BaseHttpAccess<QueryPriceRequest, QueryP
 
     private DistributedRateLimiter redisRateLimiter;
 
-    private final static String PATH = "/properties/availability";
+    private final static String PATH = "/v3/properties/availability";
 
     private static int QPS = 500;
 

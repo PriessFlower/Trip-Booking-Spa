@@ -43,7 +43,7 @@ public class HotelDetailsAccess extends BaseHttpAccess<HotelInfoRequest, HotelSt
 
     private DistributedRateLimiter redisRateLimiter;
 
-    private final static String PATH = "/properties/content";
+    private final static String PATH = "/v3/properties/content";
 
     private static int QPS = 500;
 

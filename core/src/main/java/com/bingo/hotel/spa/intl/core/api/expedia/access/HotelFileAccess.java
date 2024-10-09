@@ -31,7 +31,7 @@ public class HotelFileAccess extends BaseHttpAccess<HotelInfoRequest, HotelFileR
 
     private DistributedRateLimiter redisRateLimiter;
 
-    private final static String PATH = "/files/properties/catalog";
+    private final static String PATH = "/v3/files/properties/catalog";
 
     private static int QPS = 30;
 

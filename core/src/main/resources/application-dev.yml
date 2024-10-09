@@ -160,4 +160,4 @@ expedia:
   payment_terms: 1
   billing_terms: VCC
   url:
-    host: https://test.ean.com/v3
+    host: https://test.ean.com

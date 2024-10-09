@@ -70,6 +70,6 @@ public class ProductRespDTO {
     /**
      * 床型选择信息
      */
-    private List<BedCheckInfo> bedInfoList;
+    private List<BedCheckInfo> bedCheckInfos;
 
 }

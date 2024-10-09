@@ -33,7 +33,7 @@ public class RegionsAccess extends BaseHttpAccess<RegionsRequest, RegionsInfoRes
 
     private DistributedRateLimiter redisRateLimiter;
 
-    private final static String PATH = "/regions/";
+    private final static String PATH = "/v3/regions/";
 
     private static int QPS = 30;
 

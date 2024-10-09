@@ -124,4 +124,4 @@ expedia:
   ownIp: 5.5.5.5
   localFilePath: /home/webrun/logs/file
   url:
-    host: https://test.ean.com/v3
+    host: https://test.ean.com

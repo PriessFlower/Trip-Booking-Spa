@@ -42,5 +42,9 @@ public class CheckPriceRespDTO {
     private List<String> bedTypeCode;
 
     private String plansId;
+    /**
+     * 线下支付金额
+     */
+    private Integer storePayPrice;//线下支付金额
 
 }

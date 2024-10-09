@@ -14,19 +14,18 @@ import java.util.Map;
  **/
 public class CheckPriceResponse implements BaseResponse {
 
-    @Override
-    public boolean isSucc() {
-        return true;
-    }
-
-    @Override
-    public boolean isEmptyResult() {
-        return false;
-    }
-
+    private Integer adultCount;
     private String status;
-    private Occupancy_pricing occupancy_pricing;
+    private Map<String, Occupancy_pricing> occupancy_pricing;
     private Links links;
+
+    public Integer getAdultCount() {
+        return adultCount;
+    }
+
+    public void setAdultCount(Integer adultCount) {
+        this.adultCount = adultCount;
+    }
 
     public String getStatus() {
         return status;
@@ -36,11 +35,11 @@ public class CheckPriceResponse implements BaseResponse {
         this.status = status;
     }
 
-    public Occupancy_pricing getOccupancy_pricing() {
+    public Map<String, Occupancy_pricing> getOccupancy_pricing() {
         return occupancy_pricing;
     }
 
-    public void setOccupancy_pricing(Occupancy_pricing occupancy_pricing) {
+    public void setOccupancy_pricing(Map<String, Occupancy_pricing> occupancy_pricing) {
         this.occupancy_pricing = occupancy_pricing;
     }
 
@@ -50,6 +49,16 @@ public class CheckPriceResponse implements BaseResponse {
 
     public void setLinks(Links links) {
         this.links = links;
+    }
+
+    @Override
+    public boolean isSucc() {
+        return true;
+    }
+
+    @Override
+    public boolean isEmptyResult() {
+        return false;
     }
 
     public static class Occupancy_pricing {
@@ -340,7 +349,7 @@ public class CheckPriceResponse implements BaseResponse {
         }
     }
 
-    public class LinkInfo {
+    public static class LinkInfo {
 
         private String method;
         private String href;

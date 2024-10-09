@@ -31,7 +31,7 @@ public class HotelRemoveAccess extends BaseHttpAccess<String, HotelIdsResponse> 
 
     private DistributedRateLimiter redisRateLimiter;
 
-    private final static String PATH = "/properties/inactive";
+    private final static String PATH = "/v3/properties/inactive";
 
     private static int QPS = 500;
 
