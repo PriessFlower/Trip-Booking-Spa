@@ -32,5 +32,9 @@ public class CheckPriceReq {
 
     private Integer adultCount;
 
+    private String priceFlag;//hotel_package-打包价 hotel_only-零售价
+
+    private String language;//语言
+
     private String expediaCheckUrl;//expedia验价链接 expedia专用
 }

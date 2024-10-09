@@ -36,7 +36,6 @@ public abstract class AbstractProductSyncSupportService<T> implements ProductSyn
             log.error("ProductSyncService is error e:", e);
             return null;
         }
-
     }
 
     public abstract T querySupplierPrice(PriceReq priceReq, Supplier supplier);

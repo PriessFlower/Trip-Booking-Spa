@@ -24,16 +24,16 @@ public class PriceInfo implements Serializable{
      */
     private String date;
     /**
-     * 价格：房费
+     * 价格：总费用
      */
     private Integer price;
     /**
      * 税费 expedia专用
      */
-    private BigDecimal taxes;
+    private Integer taxes;
     /**
      * 房价 expedia专用
      */
-    private BigDecimal roomPrices;
+    private Integer roomPrices;
 
 }

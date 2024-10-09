@@ -27,20 +27,10 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
 
     @Override
     public List<ProductRespDTO> querySupplierPrice(PriceReq priceReq, Supplier supplier) {
-        List<ProductRespDTO> queryPriceResponse = expediaPriceService.queryPrices(priceReq, supplier);
-        if (StringUtils.isBlank(supplier.getSProductId())) {
-            return queryPriceResponse;
+        if (StringUtils.isNotBlank(supplier.getSProductId())) {
+            return expediaPriceService.queryProductPrice(priceReq, supplier);
         }
-        return expediaPriceService.queryProductPrice(CheckPriceReq.builder()
-                .checkIn(priceReq.getCheckIn())
-                .checkOut(priceReq.getCheckout())
-                .sProductId(supplier.getSProductId())
-                .sHotelId(supplier.getSHotelId())
-                .roomNum(priceReq.getRoomNum())
-                .supplierId(supplier.getSupplierId())
-                .adultCount(priceReq.getAdultNum())
-                .totalPrice(0)
-                .build());
+        return expediaPriceService.queryPrices(priceReq, supplier);
     }
 
     @Override

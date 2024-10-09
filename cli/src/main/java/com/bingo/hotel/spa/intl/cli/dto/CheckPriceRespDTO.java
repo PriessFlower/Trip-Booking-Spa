@@ -42,4 +42,5 @@ public class CheckPriceRespDTO {
     private List<String> bedTypeCode;
 
     private String plansId;
+
 }

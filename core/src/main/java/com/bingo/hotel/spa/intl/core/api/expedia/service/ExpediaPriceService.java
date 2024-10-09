@@ -4,8 +4,7 @@ import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
-import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.CheckPriceResponse
-import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.QueryPriceResponse;
+import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.CheckPriceResponse;
 
 import java.util.List;
 
@@ -20,7 +19,7 @@ public interface ExpediaPriceService {
 
     List<ProductRespDTO> queryPrices(PriceReq request, Supplier supplier);
 
-    List<ProductRespDTO> queryProductPrice(CheckPriceReq request);
+    List<ProductRespDTO> queryProductPrice(PriceReq request, Supplier supplier);
 
     CheckPriceResponse checkPrices(CheckPriceReq request);
 

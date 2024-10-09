@@ -20,6 +20,14 @@ public class ProductRespDTO {
      */
     private Integer totalPrice;
     /**
+     * 税费 expedia专用
+     */
+    private Integer taxes;
+    /**
+     * 房价 expedia专用
+     */
+    private Integer roomPrice;
+    /**
      * 外币币种
      */
     private String currencyType;
@@ -59,5 +67,9 @@ public class ProductRespDTO {
      * hotel_package-打包价 hotel_only-零售价
      */
     private String priceFlag;
+    /**
+     * 床型选择信息
+     */
+    private List<BedCheckInfo> bedInfoList;
 
 }

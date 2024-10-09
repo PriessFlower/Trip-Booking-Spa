@@ -128,7 +128,7 @@ public class QueryPriceResponse implements BaseResponse {
         private Sale_scenario sale_scenario;
         private String merchant_of_record;
         private Map<String, Amenity> amenities;
-        private Bed_groups bed_groups;
+        private Map<String, Bed_groups> bed_groups;
         private List<Cancel_penalties> cancel_penalties;
         private Map<String, Occupancy_pricing> occupancy_pricing;
         private Promotions promotions;
@@ -197,12 +197,12 @@ public class QueryPriceResponse implements BaseResponse {
             this.amenities = amenities;
         }
 
-        public void setBed_groups(Bed_groups bed_groups) {
-            this.bed_groups = bed_groups;
+        public Map<String, Bed_groups> getBed_groups() {
+            return bed_groups;
         }
 
-        public Bed_groups getBed_groups() {
-            return bed_groups;
+        public void setBed_groups(Map<String, Bed_groups> bed_groups) {
+            this.bed_groups = bed_groups;
         }
 
         public void setCancel_penalties(List<Cancel_penalties> cancel_penalties) {

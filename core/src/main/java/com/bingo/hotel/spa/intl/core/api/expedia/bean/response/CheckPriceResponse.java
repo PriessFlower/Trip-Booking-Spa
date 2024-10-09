@@ -321,12 +321,22 @@ public class CheckPriceResponse implements BaseResponse {
 
         private LinkInfo commit;
 
+        private LinkInfo book;
+
         public LinkInfo getCommit() {
             return commit;
         }
 
         public void setCommit(LinkInfo commit) {
             this.commit = commit;
+        }
+
+        public LinkInfo getBook() {
+            return book;
+        }
+
+        public void setBook(LinkInfo book) {
+            this.book = book;
         }
     }
 
