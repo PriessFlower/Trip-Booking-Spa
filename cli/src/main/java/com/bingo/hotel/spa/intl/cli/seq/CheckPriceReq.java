@@ -6,6 +6,7 @@ import lombok.NonNull;
 import lombok.Setter;
 
 import java.util.Date;
+import java.util.List;
 
 @Getter
 @Setter
@@ -32,9 +33,17 @@ public class CheckPriceReq {
 
     private Integer adultCount;
 
+    @NonNull
+    private Integer childNum; //儿童数
+
+    @NonNull
+    private List<Integer> childAges; //儿童年龄
+
     private String priceFlag;//hotel_package-打包价 hotel_only-零售价
 
     private String language;//语言
+
+    private String bedId;
 
     private String expediaCheckUrl;//expedia验价链接 expedia专用
 }

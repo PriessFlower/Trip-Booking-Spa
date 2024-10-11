@@ -34,4 +34,6 @@ public class PriceReq {
     private String language;//语言
 
     private List<Supplier> suppliers;
+
+    private String bedId;//床型id
 }

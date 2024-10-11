@@ -129,7 +129,8 @@ public class QueryPriceResponse implements BaseResponse {
         private String merchant_of_record;
         private Map<String, Amenity> amenities;
         private Map<String, Bed_groups> bed_groups;
-        private List<Cancel_penalties> cancel_penalties;
+        private List<CancelPolicy> cancel_penalties;
+        private List<CancelPolicy> nonrefundable_date_ranges;
         private Map<String, Occupancy_pricing> occupancy_pricing;
         private Promotions promotions;
 
@@ -205,12 +206,20 @@ public class QueryPriceResponse implements BaseResponse {
             this.bed_groups = bed_groups;
         }
 
-        public void setCancel_penalties(List<Cancel_penalties> cancel_penalties) {
+        public List<CancelPolicy> getCancel_penalties() {
+            return cancel_penalties;
+        }
+
+        public void setCancel_penalties(List<CancelPolicy> cancel_penalties) {
             this.cancel_penalties = cancel_penalties;
         }
 
-        public List<Cancel_penalties> getCancel_penalties() {
-            return cancel_penalties;
+        public List<CancelPolicy> getNonrefundable_date_ranges() {
+            return nonrefundable_date_ranges;
+        }
+
+        public void setNonrefundable_date_ranges(List<CancelPolicy> nonrefundable_date_ranges) {
+            this.nonrefundable_date_ranges = nonrefundable_date_ranges;
         }
 
         public Map<String, Occupancy_pricing> getOccupancy_pricing() {
@@ -435,10 +444,12 @@ public class QueryPriceResponse implements BaseResponse {
 
     }
 
-    public static class Cancel_penalties {
+    public static class CancelPolicy {
 
         private String start;
         private String end;
+        private String nights;
+        private String amount;
         private String percent;
         private String currency;
 
@@ -456,6 +467,22 @@ public class QueryPriceResponse implements BaseResponse {
 
         public void setEnd(String end) {
             this.end = end;
+        }
+
+        public String getNights() {
+            return nights;
+        }
+
+        public void setNights(String nights) {
+            this.nights = nights;
+        }
+
+        public String getAmount() {
+            return amount;
+        }
+
+        public void setAmount(String amount) {
+            this.amount = amount;
         }
 
         public String getPercent() {

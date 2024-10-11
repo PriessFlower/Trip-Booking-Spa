@@ -1,6 +1,8 @@
 package com.bingo.hotel.spa.intl.core.api.expedia.service.impl;
 
 import com.bingo.hotel.spa.intl.cli.dto.BedCheckInfo;
+import com.bingo.hotel.spa.intl.cli.dto.CancelPolicy;
+import com.bingo.hotel.spa.intl.cli.dto.Meal;
 import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
@@ -58,6 +60,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     private ExpediaUtils expediaUtils;
     @Resource
     private DistributedRateLimiter rateLimiter;
+    private final static String mealList = "1073742857,21022103,2104,2105,2205,1073742786,1073744734,1073744735,2106,2107,2193,2194,2203,2206,2207,1073744459";
 
 
     @Override
@@ -245,6 +248,8 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                                  PriceReq request) {
         if (rate.getOccupancy_pricing().containsKey(request.getAdultNum().toString())) {
             QueryPriceResponse.Occupancy_pricing occupancyPricing = rate.getOccupancy_pricing().get(request.getAdultNum().toString());
+            List<QueryPriceResponse.CancelPolicy> cancelPolicies = rate.getCancel_penalties();
+
             ProductRespDTO productRespDTO = ProductRespDTO.builder()
                     .hotelId(hotelId)
                     .productId(rate.getId())
@@ -252,14 +257,14 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                     .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomName).build())
                     .currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency())
                     .totalPrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
-                    .roomPrice(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
+                    .roomTotalPrice(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
                     .priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn()))
-//                              .meal(Meal.builder().count(productVO.getBreakfast_count()).build())
-//                              .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+                    .meal(convertMeal(request.getAdultNum(), rate.getAmenities()))
+                    .cancelPolicy(convertCancelPolicy(cancelPolicies))
                     .maxOccupancy(request.getAdultNum())
                     .priceFlag(salesType)
                     .build();
-            productRespDTO.setTaxes(productRespDTO.getTotalPrice() - productRespDTO.getRoomPrice());
+            productRespDTO.setTotalTaxes(productRespDTO.getTotalPrice() - productRespDTO.getRoomTotalPrice());
             productRespDTOS.add(productRespDTO);
         }
     }
@@ -267,9 +272,16 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     public List<PriceInfo> buildQueryPriceInfos(List<List<QueryPriceResponse.Nightly>> nightlyLists, String checkIn) {
         List<PriceInfo> priceInfos = Lists.newArrayList();
         for (int i = 0; i < nightlyLists.size(); i++) {
-            BigDecimal sumPrice = BigDecimal.ZERO; // 初始化累加器为0
+            BigDecimal sumPrice = BigDecimal.ZERO; // 初始化总价累加器为0
+            BigDecimal taxes = BigDecimal.ZERO; // 初始化税费累加器为0
+            BigDecimal roomPrice = BigDecimal.ZERO; // 初始化房费累加器为0
             for (QueryPriceResponse.Nightly nightly : nightlyLists.get(i)) {
                 sumPrice = sumPrice.add(new BigDecimal(nightly.getValue()));
+                if ("".equals(nightly.getType())) {
+                    roomPrice.add(new BigDecimal(nightly.getValue()));
+                } else {
+                    taxes.add(new BigDecimal(nightly.getValue()));
+                }
             }
             PriceInfo priceInfo = PriceInfo.builder()
                     .date(DateUtil.getFutureDay(checkIn, i))
@@ -324,7 +336,14 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                                     .checkHref(bedGroups.getLinks().getPrice_check().getHref())
                                     .build());
                         }
-                        QueryPriceResponse.Occupancy_pricing occupancyPricing = rate.getOccupancy_pricing().get(request.getAdultNum().toString());
+                        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" :
+                                request.getLanguage(),
+                                expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(bedCheckInfos.get(0).getCheckHref());
+                        if (!checkPriceResult.isSucc() || null == checkPriceResult.getData() || "sold_out".equals(checkPriceResult.getData().getStatus())) {
+                            log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
+                            return null;
+                        }
+                        QueryPriceResponse.Occupancy_pricing occupancyPricing = checkPriceResult.getData().getOccupancy_pricing().get(request.getAdultNum().toString());
                         ProductRespDTO productRespDTO = ProductRespDTO.builder()
                                 .hotelId(hotelPrice.getProperty_id())
                                 .productId(rate.getId())
@@ -332,58 +351,87 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                                 .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(room.getRoom_name()).build())
                                 .currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency())
                                 .totalPrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
-                                .roomPrice(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
+                                .storePayPrice(null == occupancyPricing.getTotals().getProperty_fees() ? 0 :
+                                        new BigDecimal(occupancyPricing.getTotals().getProperty_fees().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
+                                .roomTotalPrice(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()).multiply(new BigDecimal(
+                                        "100")).intValue())
                                 .priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn()))
-//                              .meal(Meal.builder().count(productVO.getBreakfast_count()).build())
+                                .meal(convertMeal(request.getAdultNum(), rate.getAmenities()))
 //                              .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                                 .maxOccupancy(request.getAdultNum())
                                 .priceFlag(queryPriceRequest.getSales_environment())
                                 .bedCheckInfos(bedCheckInfos)
                                 .build();
-                        productRespDTO.setTaxes(productRespDTO.getTotalPrice() - productRespDTO.getRoomPrice());
+                        productRespDTO.setTotalTaxes(productRespDTO.getTotalPrice() - productRespDTO.getRoomTotalPrice());
                         return Arrays.asList(productRespDTO);
                     }
                 }
             }
         }
         log.info("expedia查询价格失败,request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(result));
-        return new ArrayList<ProductRespDTO>();
+        return null;
     }
 
     @Override
     public CheckPriceResponse checkPrices(CheckPriceReq request) {
-        ResponseResult<CheckPriceResponse> result = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(),
-                expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(request.getExpediaCheckUrl());
-        if (!result.isSucc() && null == result.getData()) {
-            log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
-            return null;
-        }
-        result.getData().setAdultCount(request.getAdultCount());
-        return result.getData();
-    }
 
-    private void packageCheckPrice(CheckPriceReq request, ResponseResult<CheckPriceResponse> result) {
-        CheckPriceResponse.Occupancy_pricing occupancyPricing = result.getData().getOccupancy_pricing().get(request.getAdultCount().toString());
-        ProductRespDTO.builder()
-                .hotelId(request.getSHotelId())
-                .productId(request.getSProductId())
-                .supplierId(SupplierSourceEnum.EXPEDIA.getCode())
-//                .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomName).build())
-                .currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency())
-                .totalPrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
-                .priceInfos(buildCheckPriceInfos(occupancyPricing.getNightly(), request.getCheckIn()))
-//                              .meal(Meal.builder().count(productVO.getBreakfast_count()).build())
-//                              .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
-                .maxOccupancy(request.getAdultCount())
-//                .priceFlag(salesType)
+        QueryPriceRequest queryPriceRequest = QueryPriceRequest.builder()
+                .property_id(request.getSHotelId())
+                .checkin(request.getCheckIn())
+                .checkout(request.getCheckOut())
+                .currency("USD")
+                .billing_terms(billingTerms)
+                .payment_terms(paymentTerms)
+                .partner_point_of_sale(partnerPointOfSale)
                 .build();
+        List<String> occupancies = new ArrayList<>();
+        for (int i = 0; i < request.getRoomNum(); i++) {
+            String childrenList = "";
+            if (null != request.getChildNum() && 0 != request.getChildNum() && CollectionUtils.isNotEmpty(request.getChildAges())) {
+                for (Integer childAge : request.getChildAges()) {
+                    if (StringUtils.isBlank(childrenList)) {
+                        childrenList = "-" + childAge;
+                    } else {
+                        childrenList = childrenList + "," + childAge;
+                    }
+                }
+            }
+            occupancies.add(request.getAdultCount() + childrenList);
+        }
+        queryPriceRequest.setOccupancies(occupancies);
+        queryPriceRequest.setSales_environment(StringUtils.isBlank(request.getPriceFlag()) ? "hotel_package" : request.getPriceFlag());
+        ResponseResult<QueryPriceResponse> result = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(),
+                expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+        if (result != null && result.isSucc() && null != result.getData() && CollectionUtils.isNotEmpty(result.getData().getHotelPrices())) {
+            QueryPriceResponse.HotelPrice hotelPrice = result.getData().getHotelPrices().get(0);
+            for (QueryPriceResponse.Rooms room : hotelPrice.getRooms()) {
+                for (QueryPriceResponse.Rates rate : room.getRates()) {
+                    if (request.getSProductId().equals(rate.getId())) {
+                        QueryPriceResponse.Bed_groups bedGroups = rate.getBed_groups().get(request.getBedId());
+                        if (null == bedGroups) {
+                            log.info("expedia查价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
+                            return null;
+                        }
+                        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" :
+                                request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(bedGroups.getLinks().getPrice_check().getHref());
+                        if (!checkPriceResult.isSucc() && null == checkPriceResult.getData()) {
+                            log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
+                            return null;
+                        }
+                        checkPriceResult.getData().setAdultCount(request.getAdultCount());
+                        return checkPriceResult.getData();
+                    }
+                }
+            }
+        }
+        return null;
     }
 
-    public List<PriceInfo> buildCheckPriceInfos(List<List<CheckPriceResponse.Nightly>> nightlyLists, String checkIn) {
+    public List<PriceInfo> buildCheckPriceInfos(List<List<QueryPriceResponse.Nightly>> nightlyLists, String checkIn) {
         List<PriceInfo> priceInfos = Lists.newArrayList();
         for (int i = 0; i < nightlyLists.size(); i++) {
             BigDecimal sumPrice = BigDecimal.ZERO; // 初始化累加器为0
-            for (CheckPriceResponse.Nightly nightly : nightlyLists.get(i)) {
+            for (QueryPriceResponse.Nightly nightly : nightlyLists.get(i)) {
                 sumPrice = sumPrice.add(new BigDecimal(nightly.getValue()));
             }
             PriceInfo priceInfo = PriceInfo.builder()
@@ -394,5 +442,111 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         }
         return priceInfos;
     }
+
+    public Meal convertMeal(Integer adultNum, Map<String, QueryPriceResponse.Amenity> amenities) {
+        String[] meals = mealList.split(",");
+        String mealId = "";
+        for (String meal : meals) {
+            if (amenities.containsKey(meal)) {
+                mealId = meal;
+            }
+        }
+        Meal meal = new Meal();
+        switch (mealId) {
+            case "1073742857": //单早
+                meal = Meal.builder()
+                        .count(1)
+                        .lunchCount(0)
+                        .dinnerCount(0)
+                        .mealDesc(amenities.get(mealId).getName())
+                        .build();
+                break;
+            case "2102":  //三餐（早+中+晚）
+            case "2207":  //全包
+                meal = Meal.builder()
+                        .count(adultNum)
+                        .lunchCount(adultNum)
+                        .dinnerCount(adultNum)
+                        .mealDesc(amenities.get(mealId).getName())
+                        .build();
+                break;
+            case "2103":
+            case "2104":
+            case "2105":
+            case "2205":
+            case "1073742786":
+            case "1073744734":
+            case "1073744735":  //免费早餐（份数=入住人数）
+            case "1073744459":  //咖啡面包形式的早餐
+                meal = Meal.builder()
+                        .count(adultNum)
+                        .lunchCount(0)
+                        .dinnerCount(0)
+                        .mealDesc(amenities.get(mealId).getName())
+                        .build();
+                break;
+            case "2106":  //免费午餐
+                meal = Meal.builder()
+                        .count(0)
+                        .lunchCount(adultNum)
+                        .dinnerCount(0)
+                        .mealDesc(amenities.get(mealId).getName())
+                        .build();
+                break;
+            case "2107":  //免费晚餐
+                meal = Meal.builder()
+                        .count(0)
+                        .lunchCount(0)
+                        .dinnerCount(adultNum)
+                        .mealDesc(amenities.get(mealId).getName())
+                        .build();
+                break;
+            case "2193":
+            case "2194":  //双早（当入住人数=1时，只有一份）
+                meal = Meal.builder()
+                        .count(Math.min(2, adultNum))
+                        .lunchCount(0)
+                        .dinnerCount(adultNum)
+                        .mealDesc(amenities.get(mealId).getName())
+                        .build();
+                break;
+            case "2206":  //半包
+                meal = Meal.builder()
+                        .count(adultNum)
+                        .lunchCount(0)
+                        .dinnerCount(adultNum)
+                        .mealDesc(amenities.get(mealId).getName())
+                        .build();
+                break;
+            default:
+                meal = Meal.builder()
+                        .count(0)
+                        .lunchCount(0)
+                        .dinnerCount(0)
+                        .mealDesc("")
+                        .build();
+        }
+        return meal;
+    }
+
+    public List<CancelPolicy> convertCancelPolicy(List<QueryPriceResponse.CancelPolicy> cancelPolicies) {
+        List<CancelPolicy> cancelPolicyList = new ArrayList<>();
+        for (QueryPriceResponse.CancelPolicy cancelPolicy : cancelPolicies) {
+            cancelPolicies.add(CancelPolicy.builder()
+                    .cancelType()
+                    .moveUpCancelDays(cancelPolicy.getStart())
+                    .moveUpCancelHour()
+                    .amount(cancelPolicy.getAmount())
+                    .nights()
+                    .percent(cancelPolicy.getPercent())
+                    .timeZone()
+                    .before()
+                    .type()
+                    .value()
+                    .build());
+        }
+        return cancelPolicyList;
+    }
+
 
 }

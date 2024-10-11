@@ -16,7 +16,7 @@ public class CheckPriceResponse implements BaseResponse {
 
     private Integer adultCount;
     private String status;
-    private Map<String, Occupancy_pricing> occupancy_pricing;
+    private Map<String, QueryPriceResponse.Occupancy_pricing> occupancy_pricing;
     private Links links;
 
     public Integer getAdultCount() {
@@ -35,11 +35,11 @@ public class CheckPriceResponse implements BaseResponse {
         this.status = status;
     }
 
-    public Map<String, Occupancy_pricing> getOccupancy_pricing() {
+    public Map<String, QueryPriceResponse.Occupancy_pricing> getOccupancy_pricing() {
         return occupancy_pricing;
     }
 
-    public void setOccupancy_pricing(Map<String, Occupancy_pricing> occupancy_pricing) {
+    public void setOccupancy_pricing(Map<String, QueryPriceResponse.Occupancy_pricing> occupancy_pricing) {
         this.occupancy_pricing = occupancy_pricing;
     }
 
@@ -61,45 +61,7 @@ public class CheckPriceResponse implements BaseResponse {
         return false;
     }
 
-    public static class Occupancy_pricing {
 
-        private List<List<Nightly>> nightly;
-        private List<Stay> stay;
-        private Fees fees;
-        private Totals totals;
-
-        public List<List<Nightly>> getNightly() {
-            return nightly;
-        }
-
-        public void setNightly(List<List<Nightly>> nightly) {
-            this.nightly = nightly;
-        }
-
-        public List<Stay> getStay() {
-            return stay;
-        }
-
-        public void setStay(List<Stay> stay) {
-            this.stay = stay;
-        }
-
-        public Fees getFees() {
-            return fees;
-        }
-
-        public void setFees(Fees fees) {
-            this.fees = fees;
-        }
-
-        public Totals getTotals() {
-            return totals;
-        }
-
-        public void setTotals(Totals totals) {
-            this.totals = totals;
-        }
-    }
 
     public static class Fees {
 

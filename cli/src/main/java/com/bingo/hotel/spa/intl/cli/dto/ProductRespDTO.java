@@ -20,13 +20,17 @@ public class ProductRespDTO {
      */
     private Integer totalPrice;
     /**
-     * 税费 expedia专用
+     * 总税费 expedia专用
      */
-    private Integer taxes;
+    private Integer totalTaxes;
     /**
-     * 房价 expedia专用
+     * 总房价 expedia专用
      */
-    private Integer roomPrice;
+    private Integer roomTotalPrice;
+    /**
+     * 线下支付金额 expedia专用
+     */
+    private Integer storePayPrice;
     /**
      * 外币币种
      */
