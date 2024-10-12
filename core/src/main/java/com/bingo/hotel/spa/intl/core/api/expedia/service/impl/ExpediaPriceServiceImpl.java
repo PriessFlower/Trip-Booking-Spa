@@ -6,6 +6,7 @@ import com.bingo.hotel.spa.intl.cli.dto.Meal;
 import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
+import com.bingo.hotel.spa.intl.cli.enums.RefundType;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
@@ -30,13 +31,16 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.math.BigDecimal;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TimeZone;
 import java.util.stream.Collectors;
 
 
@@ -145,7 +149,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             return convertPriceResp(hotelPricePackage, "hotel_package", request);
         } else if (null == hotelPricePackage && null != hotelPriceOnly) {
             log.info("expedia查询打包价失败,request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(resultPackage));
-            return convertPriceResp(hotelPricePackage, "hotel_only", request);
+            return convertPriceResp(hotelPriceOnly, "hotel_only", request);
         } else {
             return convertPriceComparisonsResp(hotelPriceOnly, hotelPricePackage, request);
         }
@@ -173,7 +177,6 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
 
     private List<ProductRespDTO> convertPriceResp(QueryPriceResponse.HotelPrice hotelPrice, String salesType, PriceReq request) {
         List<ProductRespDTO> productRespDTOS = new ArrayList<>();
-
         hotelPrice.getRooms().forEach(room -> {
             convertRoomResp(hotelPrice.getProperty_id(), room, salesType, productRespDTOS, request);
         });
@@ -260,7 +263,8 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                     .roomTotalPrice(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
                     .priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn()))
                     .meal(convertMeal(request.getAdultNum(), rate.getAmenities()))
-                    .cancelPolicy(convertCancelPolicy(cancelPolicies))
+                    .cancelPolicy(CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) :
+                            convertCancelPolicy(request.getCheckIn(), cancelPolicies))
                     .maxOccupancy(request.getAdultNum())
                     .priceFlag(salesType)
                     .build();
@@ -277,7 +281,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             BigDecimal roomPrice = BigDecimal.ZERO; // 初始化房费累加器为0
             for (QueryPriceResponse.Nightly nightly : nightlyLists.get(i)) {
                 sumPrice = sumPrice.add(new BigDecimal(nightly.getValue()));
-                if ("".equals(nightly.getType())) {
+                if ("base_rate".equals(nightly.getType()) || "extra_person_fee".equals(nightly.getType())) {
                     roomPrice.add(new BigDecimal(nightly.getValue()));
                 } else {
                     taxes.add(new BigDecimal(nightly.getValue()));
@@ -286,6 +290,8 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             PriceInfo priceInfo = PriceInfo.builder()
                     .date(DateUtil.getFutureDay(checkIn, i))
                     .price(sumPrice.multiply(BigDecimal.valueOf(100)).intValue())
+                    .roomPrices(roomPrice.multiply(BigDecimal.valueOf(100)).intValue())
+                    .taxes(taxes.multiply(BigDecimal.valueOf(100)).intValue())
                     .build();
             priceInfos.add(priceInfo);
         }
@@ -344,6 +350,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                             return null;
                         }
                         QueryPriceResponse.Occupancy_pricing occupancyPricing = checkPriceResult.getData().getOccupancy_pricing().get(request.getAdultNum().toString());
+                        List<QueryPriceResponse.CancelPolicy> cancelPolicies = rate.getCancel_penalties();
                         ProductRespDTO productRespDTO = ProductRespDTO.builder()
                                 .hotelId(hotelPrice.getProperty_id())
                                 .productId(rate.getId())
@@ -357,7 +364,8 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                                         "100")).intValue())
                                 .priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn()))
                                 .meal(convertMeal(request.getAdultNum(), rate.getAmenities()))
-//                              .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+                                .cancelPolicy(CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) :
+                                        convertCancelPolicy(request.getCheckIn(), cancelPolicies))
                                 .maxOccupancy(request.getAdultNum())
                                 .priceFlag(queryPriceRequest.getSales_environment())
                                 .bedCheckInfos(bedCheckInfos)
@@ -529,23 +537,116 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         return meal;
     }
 
-    public List<CancelPolicy> convertCancelPolicy(List<QueryPriceResponse.CancelPolicy> cancelPolicies) {
+    public List<CancelPolicy> convertCancelPolicy(String checkIn, List<QueryPriceResponse.CancelPolicy> cancelPolicies) {
         List<CancelPolicy> cancelPolicyList = new ArrayList<>();
-        for (QueryPriceResponse.CancelPolicy cancelPolicy : cancelPolicies) {
-            cancelPolicies.add(CancelPolicy.builder()
-                    .cancelType()
-                    .moveUpCancelDays(cancelPolicy.getStart())
-                    .moveUpCancelHour()
-                    .amount(cancelPolicy.getAmount())
-                    .nights()
-                    .percent(cancelPolicy.getPercent())
-                    .timeZone()
-                    .before()
-                    .type()
-                    .value()
+
+        QueryPriceResponse.CancelPolicy cancelPolicy = null;
+        if (CollectionUtils.isEmpty(cancelPolicies)) {
+            cancelPolicyList.add(CancelPolicy.builder().cancelType(0).build());
+            return cancelPolicyList;
+        }
+        cancelPolicy = cancelPolicies.stream().min(Comparator.comparing(QueryPriceResponse.CancelPolicy::getStart)).get();
+        // 创建SimpleDateFormat对象，并设置日期时间模式
+        SimpleDateFormat sdfTime = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+        sdfTime.setTimeZone(TimeZone.getTimeZone("GMT"));
+        SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        int beforeEnd = 0;
+        int beforeStart = 0;
+        try {
+            beforeEnd = DateUtil.diffHour(sdfTime.parse(cancelPolicy.getEnd()), sdfDate.parse(checkIn + " 24:00:00"));
+            beforeStart = DateUtil.diffHour(sdfTime.parse(cancelPolicy.getStart()), sdfDate.parse(checkIn + " 24:00:00"));
+        } catch (Exception e) {
+            log.info("时间转换校验异常", e);
+        }
+        if (StringUtils.isNotBlank(cancelPolicy.getAmount())) {
+            cancelPolicyList.add(CancelPolicy.builder()
+                    .cancelType(1)
+                    .timeZone(subDateGMT(cancelPolicy.getStart()))
+                    .before(Math.max(25, beforeStart))
+                    .type(RefundType.NO_DEDUCTION)
                     .build());
+            if (beforeStart > 25) {
+                cancelPolicyList.add(CancelPolicy.builder()
+                        .cancelType(1)
+                        .timeZone(subDateGMT(cancelPolicy.getEnd()))
+                        .before(Math.max(25, beforeEnd))
+                        .type(RefundType.DEDUCT_BY_AMOUNT)
+                        .value(Double.valueOf(cancelPolicy.getAmount()))
+                        .build());
+            }
+        } else if (StringUtils.isNotBlank(cancelPolicy.getPercent())) {
+            if ("100%".equals(cancelPolicy.getPercent())) {
+                cancelPolicyList.add(CancelPolicy.builder().cancelType(0).build());
+            } else {
+                cancelPolicyList.add(CancelPolicy.builder()
+                        .cancelType(1)
+                        .timeZone(subDateGMT(cancelPolicy.getStart()))
+                        .before(Math.max(25, beforeStart))
+                        .type(RefundType.NO_DEDUCTION)
+                        .build());
+                if (beforeStart > 25) {
+                    cancelPolicyList.add(CancelPolicy.builder()
+                            .cancelType(1)
+                            .timeZone(subDateGMT(cancelPolicy.getEnd()))
+                            .before(Math.max(0, beforeEnd))
+                            .type(RefundType.DEDUCT_BY_PERCENT)
+                            .value(Double.valueOf(cancelPolicy.getPercent().replace("%", "")))
+                            .build());
+                }
+            }
+        } else if (StringUtils.isNotBlank(cancelPolicy.getNights())) {
+            if ("0".equals(cancelPolicy.getNights())) {
+                cancelPolicyList.add(CancelPolicy.builder()
+                        .cancelType(1)
+                        .timeZone(subDateGMT(cancelPolicy.getEnd()))
+                        .before(Math.max(25, beforeEnd))
+                        .type(RefundType.NO_DEDUCTION)
+                        .build());
+            } else {
+                cancelPolicyList.add(CancelPolicy.builder()
+                        .cancelType(1)
+                        .timeZone(subDateGMT(cancelPolicy.getStart()))
+                        .before(Math.max(25, beforeStart))
+                        .type(RefundType.NO_DEDUCTION)
+                        .build());
+                if (beforeStart > 25) {
+                    cancelPolicyList.add(CancelPolicy.builder()
+                            .cancelType(1)
+                            .timeZone(subDateGMT(cancelPolicy.getEnd()))
+                            .before(Math.max(25, beforeEnd))
+                            .type(RefundType.DEDUCT_DAY_NIGHT)
+                            .value(Double.valueOf(cancelPolicy.getNights()))
+                            .build());
+                }
+            }
+        } else {
+            cancelPolicyList.add(CancelPolicy.builder().cancelType(0).build());
         }
         return cancelPolicyList;
+    }
+
+    private static String subDateGMT(String cancelDate) {
+        return "GMT" + cancelDate.substring(cancelDate.length() - 6, cancelDate.length() - 3);
+    }
+
+    public static void main(String[] args) {
+//        // 创建一个LocalDate对象表示日期
+//        LocalDate date = LocalDate.of(2023, 10, 15); // 这里你可以用你想要查询的日期替换它
+//        // 使用一个明确的日期来构建LocalDateTime
+//        LocalDateTime localDateTime = LocalDateTime.of(date, LocalTime.now()); // LocalTime也可以指定为具体的本地时间
+//
+//        // 获取GMT时区
+//        ZoneId gmtZoneId = ZoneId.of("GMT");
+//        // 将本地日期时间转换为ZonedDateTime并设置到GMT时区
+//        ZonedDateTime gmtDateTime = ZonedDateTime.of(localDateTime, gmtZoneId);
+//
+//        // 打印结果，查看这个日期在GMT时区的时间
+//        System.out.println("Zoned DateTime in GMT: " + gmtDateTime);
+
+
+        String str = "{\"start\":\"2024-10-26T10:00:00.000-07:00\",\"end\":\"2024-10-28T10:00:00.000-07:00\",\"percent\":\"10%\",\"currency\":\"CNY\"}";
+        QueryPriceResponse.CancelPolicy cancelPolicy = new QueryPriceResponse.CancelPolicy();
+        convertCancelPolicy("2024-10-28", Arrays.asList(JsonUtils.readValue(str, QueryPriceResponse.CancelPolicy.class)));
     }
 
 
