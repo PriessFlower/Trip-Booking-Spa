@@ -72,6 +72,10 @@ public class ProductRespDTO {
      */
     private String priceFlag;
     /**
+     * 专属分销标识，可能是高佣金 true 是   false 否
+     */
+    private boolean distribution;
+    /**
      * 床型选择信息
      */
     private List<BedCheckInfo> bedCheckInfos;

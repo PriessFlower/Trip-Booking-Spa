@@ -34,6 +34,6 @@ public class PriceInfo implements Serializable{
     /**
      * 房价 expedia专用
      */
-    private Integer roomPrices;
+    private Integer roomPrice;
 
 }

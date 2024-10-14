@@ -36,4 +36,6 @@ public class PriceReq {
     private List<Supplier> suppliers;
 
     private String bedId;//床型id
+
+    private String priceFlag;//hotel_package-打包价 hotel_only-零售价
 }
