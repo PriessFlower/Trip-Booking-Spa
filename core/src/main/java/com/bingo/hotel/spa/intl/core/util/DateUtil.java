@@ -600,7 +600,7 @@ public class DateUtil {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
         // 获取当前日期
         java.time.LocalDate currentDate = java.time.LocalDate.now();
-        if (StringUtils.isBlank(dateStr)) {
+        if (StringUtils.isNotBlank(dateStr)) {
             currentDate = java.time.LocalDate.parse(dateStr, formatter); // 将字符串转换为LocalDate对象
         }
         // 计算当前日期前几天的日期
@@ -620,7 +620,7 @@ public class DateUtil {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
         // 获取当前日期
         java.time.LocalDate currentDate = java.time.LocalDate.now();
-        if (StringUtils.isBlank(dateStr)) {
+        if (StringUtils.isNotBlank(dateStr)) {
             currentDate = java.time.LocalDate.parse(dateStr, formatter); // 将字符串转换为LocalDate对象
         }
         // 计算当前日期未来几天的日期

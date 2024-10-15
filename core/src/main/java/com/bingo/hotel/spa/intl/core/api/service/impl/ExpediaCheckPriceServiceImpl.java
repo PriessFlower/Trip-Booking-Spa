@@ -32,8 +32,7 @@ public class ExpediaCheckPriceServiceImpl extends AbstractCheckPriceSyncSupportS
         QueryPriceResponse.Occupancy_pricing occupancyPricing = checkResponse.getOccupancy_pricing().get(checkResponse.getAdultCount().toString());
         return CheckPriceRespDTO.builder()
                 .checkStatus(true)
-                .prebookToken(null == checkResponse.getLinks().getBook() ? checkResponse.getLinks().getCommit().getHref() :
-                        checkResponse.getLinks().getBook().getHref())
+                .prebookToken(null == checkResponse.getLinks().getBook() ? "" : checkResponse.getLinks().getBook().getHref())
                 .salePrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
                 .subPrice(null == occupancyPricing.getTotals().getMarketing_fee() ? 0 :
                         new BigDecimal(occupancyPricing.getTotals().getMarketing_fee().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())

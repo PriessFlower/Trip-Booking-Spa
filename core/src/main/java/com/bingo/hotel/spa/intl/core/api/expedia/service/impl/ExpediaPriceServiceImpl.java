@@ -417,7 +417,14 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             for (QueryPriceResponse.Rooms room : hotelPrice.getRooms()) {
                 for (QueryPriceResponse.Rates rate : room.getRates()) {
                     if (request.getSProductId().equals(rate.getId())) {
-                        QueryPriceResponse.Bed_groups bedGroups = rate.getBed_groups().get(request.getBedId());
+                        QueryPriceResponse.Bed_groups bedGroups = null;
+                        if (StringUtils.isBlank(request.getBedId())) {
+                            for (String key : rate.getBed_groups().keySet()) {
+                                bedGroups = rate.getBed_groups().get(key);
+                            }
+                        } else {
+                            bedGroups = rate.getBed_groups().get(request.getBedId());
+                        }
                         if (null == bedGroups) {
                             log.info("expedia查价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
                             return null;
