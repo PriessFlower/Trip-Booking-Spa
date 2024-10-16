@@ -45,5 +45,7 @@ public class CheckPriceReq {
 
     private String bedId;
 
+    private String currency;//分销商币种
+
     private String expediaCheckUrl;//expedia验价链接 expedia专用
 }

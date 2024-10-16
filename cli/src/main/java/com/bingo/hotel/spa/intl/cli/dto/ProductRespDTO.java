@@ -28,6 +28,10 @@ public class ProductRespDTO {
      */
     private Integer roomTotalPrice;
     /**
+     * 酒店一次性收取费用 每日总价+酒店一次性收取费用=线上支付总价 expedia专用
+     */
+    private Integer stayPrice;
+    /**
      * 线下支付金额 expedia专用
      */
     private Integer storePayPrice;
