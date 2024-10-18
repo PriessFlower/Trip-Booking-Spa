@@ -261,6 +261,8 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                     .currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency())
                     .totalPrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
                     .roomTotalPrice(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
+                    .brokerage(null == occupancyPricing.getTotals().getMarketing_fee() ? 0 :
+                            new BigDecimal(occupancyPricing.getTotals().getMarketing_fee().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
                     .stayPrice(buildStayPrice(occupancyPricing.getStay()))
                     .priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn()))
                     .meal(convertMeal(request.getAdultNum(), rate.getAmenities()))
@@ -375,6 +377,8 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                                         new BigDecimal(occupancyPricing.getTotals().getProperty_fees().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
                                 .roomTotalPrice(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()).multiply(new BigDecimal(
                                         "100")).intValue())
+                                .brokerage(null == occupancyPricing.getTotals().getMarketing_fee() ? 0 :
+                                        new BigDecimal(occupancyPricing.getTotals().getMarketing_fee().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
                                 .priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn()))
                                 .meal(convertMeal(request.getAdultNum(), rate.getAmenities()))
                                 .cancelPolicy(CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) :

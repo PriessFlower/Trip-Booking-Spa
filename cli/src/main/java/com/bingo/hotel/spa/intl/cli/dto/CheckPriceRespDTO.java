@@ -21,9 +21,13 @@ public class CheckPriceRespDTO {
      */
     private Integer salePrice;
     /**
-     * 佣金
+     * 预定价格
      */
     private Integer subPrice;
+    /**
+     * 佣金
+     */
+    private Integer brokerage;
     /**
      * 剩余库存
      */

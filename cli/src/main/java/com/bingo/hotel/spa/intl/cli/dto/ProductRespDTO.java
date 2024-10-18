@@ -36,6 +36,10 @@ public class ProductRespDTO {
      */
     private Integer storePayPrice;
     /**
+     * 佣金
+     */
+    private Integer brokerage;
+    /**
      * 外币币种
      */
     private String currencyType;

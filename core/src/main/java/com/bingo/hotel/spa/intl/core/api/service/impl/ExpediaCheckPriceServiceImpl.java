@@ -34,7 +34,8 @@ public class ExpediaCheckPriceServiceImpl extends AbstractCheckPriceSyncSupportS
                 .checkStatus(true)
                 .prebookToken(null == checkResponse.getLinks().getBook() ? "" : checkResponse.getLinks().getBook().getHref())
                 .salePrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
-                .subPrice(null == occupancyPricing.getTotals().getMarketing_fee() ? 0 :
+                .subPrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
+                .brokerage(null == occupancyPricing.getTotals().getMarketing_fee() ? 0 :
                         new BigDecimal(occupancyPricing.getTotals().getMarketing_fee().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
                 .build();
     }
