@@ -71,7 +71,7 @@ public class ExpediaStaticInfoAdaptor {
         Map<String, String> checkinUS = resultUS.getCheckin();
         GlobalHotelBaseExtendDTO globalHotelBaseExtendUS = new GlobalHotelBaseExtendDTO()
                 .setHotelId(resultUS.getProperty_id())
-                .setLanguage("USD")
+                .setLanguage("en-US")
                 .setCheckIn(StringUtils.isBlank(checkinUS.get("24_hour")) ? checkinUS.get("begin_time") + "-" + checkinUS.get("end_time") : checkinUS.get(
                         "24_hour"))
                 .setCheckOut(null == resultUS.getCheckout() ? "" : resultUS.getCheckout().getTime())
@@ -85,7 +85,7 @@ public class ExpediaStaticInfoAdaptor {
         Map<String, String> checkinCN = resultCN.getCheckin();
         GlobalHotelBaseExtendDTO globalHotelBaseExtendCN = new GlobalHotelBaseExtendDTO()
                 .setHotelId(resultCN.getProperty_id())
-                .setLanguage("CNY")
+                .setLanguage("zh-CN")
                 .setCheckIn(StringUtils.isBlank(checkinCN.get("24_hour")) ? checkinCN.get("begin_time") + "-" + checkinCN.get("end_time") : checkinCN.get("24_hour"))
                 .setCheckOut(null == resultCN.getCheckout() ? "" : resultCN.getCheckout().getTime())
                 .setInstructions(checkinCN.get("instructions") + checkinCN.get("special_instructions"))
