@@ -132,7 +132,7 @@
         <dependency>
             <groupId>com.bingo.hotel.info.intl</groupId>
             <artifactId>cli</artifactId>
-            <version>0.0.5-SNAPSHOT</version>
+            <version>0.0.5</version>
         </dependency>
         <dependency>
             <groupId>com.bingo.hotel.base.intl</groupId>
