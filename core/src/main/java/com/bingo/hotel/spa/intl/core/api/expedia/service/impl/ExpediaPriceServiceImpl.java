@@ -99,6 +99,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             occupancies.add(request.getAdultNum() + childrenList);
         }
         queryPriceRequest.setOccupancies(occupancies);
+        request.setOccupancies(occupancies);
         if ("en-US".equals(request.getLanguage())) {
             if ("hotel_only".equals(request.getPriceFlag())) {
                 //先查询零售价
@@ -210,15 +211,15 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                         Integer onlyPrice = 0;
                         Integer packagePrice = 0;
                         QueryPriceResponse.Rates rateOnly = rateOnlyMap.get(rateId);
-                        if (rateOnly.getOccupancy_pricing().containsKey(request.getAdultNum().toString())) {
-                            QueryPriceResponse.Occupancy_pricing occupancyPricingOnly = rateOnly.getOccupancy_pricing().get(request.getAdultNum().toString());
+                        if (rateOnly.getOccupancy_pricing().containsKey(request.getOccupancies().get(0))) {
+                            QueryPriceResponse.Occupancy_pricing occupancyPricingOnly = rateOnly.getOccupancy_pricing().get(request.getOccupancies().get(0));
                             onlyPrice =
                                     new BigDecimal(occupancyPricingOnly.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue();
                         }
                         QueryPriceResponse.Rates ratePackage = ratePackageMap.get(rateId);
-                        if (ratePackage.getOccupancy_pricing().containsKey(request.getAdultNum().toString())) {
+                        if (ratePackage.getOccupancy_pricing().containsKey(request.getOccupancies().get(0))) {
                             QueryPriceResponse.Occupancy_pricing occupancyPricingPackage =
-                                    ratePackage.getOccupancy_pricing().get(request.getAdultNum().toString());
+                                    ratePackage.getOccupancy_pricing().get(request.getOccupancies().get(0));
                             packagePrice =
                                     new BigDecimal(occupancyPricingPackage.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue();
                         }
@@ -249,8 +250,8 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
 
     private void convertRateResp(String hotelId, String roomName, QueryPriceResponse.Rates rate, String salesType, List<ProductRespDTO> productRespDTOS,
                                  PriceReq request) {
-        if (rate.getOccupancy_pricing().containsKey(request.getAdultNum().toString())) {
-            QueryPriceResponse.Occupancy_pricing occupancyPricing = rate.getOccupancy_pricing().get(request.getAdultNum().toString());
+        if (rate.getOccupancy_pricing().containsKey(request.getOccupancies().get(0))) {
+            QueryPriceResponse.Occupancy_pricing occupancyPricing = rate.getOccupancy_pricing().get(request.getOccupancies().get(0));
             List<QueryPriceResponse.CancelPolicy> cancelPolicies = rate.getCancel_penalties();
 
             ProductRespDTO productRespDTO = ProductRespDTO.builder()
@@ -339,6 +340,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             occupancies.add(request.getAdultNum() + childrenList);
         }
         queryPriceRequest.setOccupancies(occupancies);
+        request.setOccupancies(occupancies);
         queryPriceRequest.setSales_environment(StringUtils.isBlank(request.getPriceFlag()) ? "hotel_package" : request.getPriceFlag());
         ResponseResult<QueryPriceResponse> result = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(),
                 expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
@@ -363,7 +365,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                             log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
                             return null;
                         }
-                        QueryPriceResponse.Occupancy_pricing occupancyPricing = checkPriceResult.getData().getOccupancy_pricing().get(request.getAdultNum().toString());
+                        QueryPriceResponse.Occupancy_pricing occupancyPricing = checkPriceResult.getData().getOccupancy_pricing().get(request.getOccupancies().get(0));
                         List<QueryPriceResponse.CancelPolicy> cancelPolicies = rate.getCancel_penalties();
                         ProductRespDTO productRespDTO = ProductRespDTO.builder()
                                 .hotelId(hotelPrice.getProperty_id())

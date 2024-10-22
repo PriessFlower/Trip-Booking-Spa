@@ -211,7 +211,6 @@ public class HttpUtils {
         for (Map.Entry<String, String> e : headers.entrySet()) {
             httpGet.addHeader(e.getKey(), e.getValue());
         }
-
         HttpResponse response = httpClient.execute(httpGet);
         HttpEntity entity = response.getEntity();
         if (entity == null && response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
