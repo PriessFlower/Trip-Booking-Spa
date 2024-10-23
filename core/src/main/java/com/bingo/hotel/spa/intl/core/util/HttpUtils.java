@@ -137,6 +137,7 @@ public class HttpUtils {
         }
         long start = System.currentTimeMillis();
         HttpResponse response = httpClient.execute(httpPost);
+        log.info("access>>>request:{},response:{}", JsonUtils.writeObject2Json(httpPost), JsonUtils.writeObject2Json(response));
         log.info("http调用耗时:{}", System.currentTimeMillis() - start);
         HttpEntity entity = response.getEntity();
 
@@ -176,6 +177,7 @@ public class HttpUtils {
         }
 
         HttpResponse response = httpClient.execute(httpGet);
+        log.info("accessGet>>>request:{},response:{}", JsonUtils.writeObject2Json(httpGet), JsonUtils.writeObject2Json(response));
         HttpEntity entity = response.getEntity();
 
         String entityStr;
@@ -212,6 +214,7 @@ public class HttpUtils {
             httpGet.addHeader(e.getKey(), e.getValue());
         }
         HttpResponse response = httpClient.execute(httpGet);
+        log.info("doGet>>>request:{},response:{}", JsonUtils.writeObject2Json(httpGet), JsonUtils.writeObject2Json(response));
         HttpEntity entity = response.getEntity();
         if (entity == null && response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
             return "";
