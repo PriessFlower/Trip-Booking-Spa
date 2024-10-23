@@ -1,6 +1,10 @@
 package com.bingo.hotel.spa.intl.cli.dto;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.util.List;
 
@@ -35,6 +39,10 @@ public class ProductRespDTO {
      * 线下支付金额 expedia专用
      */
     private Integer storePayPrice;
+    /**
+     * 线下支付金额币种
+     */
+    private String storePayCurrency;
     /**
      * 佣金
      */

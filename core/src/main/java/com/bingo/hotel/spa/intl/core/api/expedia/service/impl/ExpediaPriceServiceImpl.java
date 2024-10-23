@@ -376,7 +376,9 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                                 .totalPrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
                                 .stayPrice(buildStayPrice(occupancyPricing.getStay()))
                                 .storePayPrice(null == occupancyPricing.getTotals().getProperty_fees() ? 0 :
-                                        new BigDecimal(occupancyPricing.getTotals().getProperty_fees().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
+                                        new BigDecimal(occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getValue()).multiply(new BigDecimal("100")).intValue())
+                                .storePayCurrency(null == occupancyPricing.getTotals().getProperty_fees() ? request.getCurrency() :
+                                        occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getCurrency())
                                 .roomTotalPrice(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()).multiply(new BigDecimal(
                                         "100")).intValue())
                                 .brokerage(null == occupancyPricing.getTotals().getMarketing_fee() ? 0 :
