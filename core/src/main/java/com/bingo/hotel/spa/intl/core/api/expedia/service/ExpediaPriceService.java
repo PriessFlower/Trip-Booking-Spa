@@ -1,5 +1,6 @@
 package com.bingo.hotel.spa.intl.core.api.expedia.service;
 
+import com.bingo.hotel.spa.intl.cli.dto.CheckPriceRespDTO;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
@@ -21,6 +22,6 @@ public interface ExpediaPriceService {
 
     List<ProductRespDTO> queryProductPrice(PriceReq request, Supplier supplier);
 
-    CheckPriceResponse checkPrices(CheckPriceReq request);
+    CheckPriceRespDTO checkPrices(CheckPriceReq request);
 
 }

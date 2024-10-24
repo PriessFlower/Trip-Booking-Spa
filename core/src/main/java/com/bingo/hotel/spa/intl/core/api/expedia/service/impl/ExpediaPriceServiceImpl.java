@@ -2,6 +2,7 @@ package com.bingo.hotel.spa.intl.core.api.expedia.service.impl;
 
 import com.bingo.hotel.spa.intl.cli.dto.BedCheckInfo;
 import com.bingo.hotel.spa.intl.cli.dto.CancelPolicy;
+import com.bingo.hotel.spa.intl.cli.dto.CheckPriceRespDTO;
 import com.bingo.hotel.spa.intl.cli.dto.Meal;
 import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductInfo;
@@ -403,7 +404,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     }
 
     @Override
-    public CheckPriceResponse checkPrices(CheckPriceReq request) {
+    public CheckPriceRespDTO checkPrices(CheckPriceReq request) {
 
         QueryPriceRequest queryPriceRequest = QueryPriceRequest.builder()
                 .property_id(request.getSHotelId())
@@ -456,7 +457,16 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                             return null;
                         }
                         checkPriceResult.getData().setAdultCount(request.getAdultCount());
-                        return checkPriceResult.getData();
+                        QueryPriceResponse.Occupancy_pricing occupancyPricing =
+                                checkPriceResult.getData().getOccupancy_pricing().get(queryPriceRequest.getOccupancies().get(0));
+                        return CheckPriceRespDTO.builder()
+                                .checkStatus(true)
+                                .prebookToken(null == checkPriceResult.getData().getLinks().getBook() ? "" : checkPriceResult.getData().getLinks().getBook().getHref())
+                                .salePrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
+                                .subPrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
+                                .brokerage(null == occupancyPricing.getTotals().getMarketing_fee() ? 0 :
+                                        new BigDecimal(occupancyPricing.getTotals().getMarketing_fee().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
+                                .build();
                     }
                 }
             }
