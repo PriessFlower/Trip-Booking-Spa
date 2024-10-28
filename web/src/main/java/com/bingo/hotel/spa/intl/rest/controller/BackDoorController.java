@@ -82,8 +82,8 @@ public class BackDoorController {
 
     @GetMapping("/save/expedia/city")
     @ApiOperation("城市静态数据查询-expedia")
-    public HttpResponse expediaSaveCityInfo() {
-        expediaStaticInfoService.saveCityInfo();
+    public HttpResponse expediaSaveCityInfo(@RequestParam(value = "countryIds", required = false) List<String> countryIds) {
+        expediaStaticInfoService.saveCityInfo(countryIds);
         return HttpResponse.getSuccessInstance();
     }
 

@@ -15,7 +15,7 @@ public interface ExpediaStaticInfoService {
 
     void saveCountryInfo();
 
-    void saveCityInfo();
+    void saveCityInfo(List<String> countryIds);
 
     void saveOrUpdateHotelInfo(boolean downloadFlag, boolean allPushFlag, Integer updateDays, List<String> supplierHotelIds, Integer startLine);
 
