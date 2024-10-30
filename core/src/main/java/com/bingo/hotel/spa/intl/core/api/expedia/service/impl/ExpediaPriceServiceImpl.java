@@ -608,7 +608,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                 cancelPolicyList.add(CancelPolicy.builder()
                         .cancelType(1)
                         .timeZone(subDateGMT(cancelPolicy.getEnd()))
-                        .before(Math.max(25, beforeEnd))
+                        .before(beforeEnd)
                         .type(RefundType.DEDUCT_BY_AMOUNT)
                         .value(Double.valueOf(cancelPolicy.getAmount()))
                         .build());
