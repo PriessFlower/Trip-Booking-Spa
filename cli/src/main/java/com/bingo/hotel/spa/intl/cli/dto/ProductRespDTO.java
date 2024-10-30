@@ -17,6 +17,7 @@ public class ProductRespDTO {
 
     public String hotelId;
     public String productId;
+    private String expediaRoomId;//expedia房型id
     public Integer supplierId;
     public String planSession;
     /**
