@@ -21,5 +21,5 @@ public interface ExpediaStaticInfoService {
 
     void deleteHotelInfo(String deleteDate);
 
-    void saveOrUpdateProductInfo(String checkInDate, String checkOutDate, List<String> supplierHotelIds);
+    void saveOrUpdateProductInfo(String checkInDate, String checkOutDate, List<String> supplierHotelIds,Integer startNum);
 }
