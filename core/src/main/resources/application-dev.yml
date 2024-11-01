@@ -9,11 +9,11 @@ feign:
         readTimeout: 300000
 spring:
   datasource:
-    host: 8.146.211.133
+    host: pc-2ze0t0vwxj392d111.mysql.polardb.rds.aliyuncs.com
     port: 3306
     name: intl_bg_admin
-    username: bystest
-    password: bystest
+    username: dbadmin
+    password: VvTUbbEp$D6uGiLDb
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries = true&nullCatalogMeansCurrent=true&serverTimezone=CST&autoReconnect=true
   redis:
