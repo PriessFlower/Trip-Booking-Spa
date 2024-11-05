@@ -31,11 +31,12 @@ spring:
         server-addr: mse-00eb2a72-p.nacos-ans.mse.aliyuncs.com # Nacos 服务发现地址
         access-key: LTAI5tGbuCAyu93gUo9abSDG
         secret-key: cYPSEwvEB3jFhrEs5TikxOGc0NSldp
+        group:       # 配置分组
+#        group: DEV      # 配置分组
       config:
         server-addr: mse-00eb2a72-p.nacos-ans.mse.aliyuncs.com  # Nacos服务器地址
         file-extension: yaml         # 配置文件格式
         namespace: dev               # 命名空间ID，通常用于隔离不同的环境配置
-        group:         # 配置分组
         prefix: bingo-hotel-spa-intl      # 配置前缀，通常是应用名
       inetutils:
         preferred-networks: 192.168.111
