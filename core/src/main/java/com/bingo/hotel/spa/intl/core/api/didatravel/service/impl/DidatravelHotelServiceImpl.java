@@ -2,6 +2,7 @@ package com.bingo.hotel.spa.intl.core.api.didatravel.service.impl;
 
 import com.alibaba.fastjson.JSON;
 import com.bingo.hotel.base.intl.cli.enums.BedTypeAllEnum;
+import com.bingo.hotel.base.intl.cli.enums.BedTypeExpediaEnum;
 import com.bingo.hotel.info.intl.cli.client.HotelInfoIntlClient;
 import com.bingo.hotel.info.intl.cli.dto.BedInfoDTO;
 import com.bingo.hotel.info.intl.cli.enums.BroadnetEnum;
@@ -14,7 +15,11 @@ import com.bingo.hotel.info.intl.cli.result.InfoResult;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
-import com.bingo.hotel.spa.intl.core.api.didatravel.access.*;
+import com.bingo.hotel.spa.intl.core.api.didatravel.access.BedTypeAccess;
+import com.bingo.hotel.spa.intl.core.api.didatravel.access.DidaTravelAccess;
+import com.bingo.hotel.spa.intl.core.api.didatravel.access.PriceConfirmAccess;
+import com.bingo.hotel.spa.intl.core.api.didatravel.access.SearchAccess;
+import com.bingo.hotel.spa.intl.core.api.didatravel.access.StaticInfoAccess;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.BedTypeList;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.CheckPriceResponse;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.GetBedTypeListRSSuccess;
@@ -43,12 +48,9 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
-import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -133,6 +135,31 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
             }
         }
         return bedInfoMap;
+    }
+
+    private static String convertBedType(String bedName) {
+        switch (bedName) {
+            case "单人床":
+                return BedTypeExpediaEnum.TWIN_BED.getValue() + "";
+            case "大床":
+                return BedTypeExpediaEnum.QUEEN_BED.getValue() + "";
+            case "榻榻米":
+                return BedTypeExpediaEnum.FUTON.getValue() + "";
+            case "特大床":
+                return BedTypeExpediaEnum.KING_BED.getValue() + "";
+            case "双人床":
+                return BedTypeExpediaEnum.FULL_BED.getValue() + "";
+            case "沙发":
+                return BedTypeExpediaEnum.SOFA_BED.getValue() + "";
+            case "双层床":
+                return BedTypeExpediaEnum.BUNK_BED.getValue() + "";
+            case "水床":
+                return BedTypeExpediaEnum.WATER_BED.getValue() + "";
+            case "日式床":
+                return BedTypeExpediaEnum.FUTON.getValue() + "";
+            default:
+                return BedTypeExpediaEnum.OTHER.getValue() + "";
+        }
     }
 
     @Resource
@@ -520,7 +547,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         ResponseResult<DidaTravelResponse> access = new DidaTravelAccess(PRICE_URL, rateLimiter).access(didaTravelRequest.build());
 
 //        return JsonUtils.readValue(access.getOrigData(), DidaTravelResponse.class);
-            return access.getData();
+        return access.getData();
     }
 
     @Override

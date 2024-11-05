@@ -37,6 +37,8 @@ spring:
         namespace: dev               # 命名空间ID，通常用于隔离不同的环境配置
         group:         # 配置分组
         prefix: bingo-hotel-spa-intl      # 配置前缀，通常是应用名
+      inetutils:
+        preferred-networks: 192.168.111
 
   schedulerx2:
     endpoint: acm.aliyun.com
