@@ -24,6 +24,7 @@ public class RegionsInfoResponse implements BaseResponse {
     private Descendants descendants;
     private List<String> categories;
     private List<String> tags;
+    private List<HotelId> hotelIds;
 
     public String getId() {
         return id;
@@ -111,6 +112,14 @@ public class RegionsInfoResponse implements BaseResponse {
 
     public void setTags(List<String> tags) {
         this.tags = tags;
+    }
+
+    public List<HotelId> getHotelIds() {
+        return hotelIds;
+    }
+
+    public void setHotelIds(List<HotelId> hotelIds) {
+        this.hotelIds = hotelIds;
     }
 
     @Override
@@ -207,6 +216,20 @@ public class RegionsInfoResponse implements BaseResponse {
 
         public String getType() {
             return type;
+        }
+
+    }
+
+    public static class HotelId {
+
+        private String id;
+
+        public void setId(String id) {
+            this.id = id;
+        }
+
+        public String getId() {
+            return id;
         }
 
     }

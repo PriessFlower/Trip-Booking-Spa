@@ -12,7 +12,7 @@
 
     <groupId>com.bingo.hotel.spa.intel</groupId>
     <artifactId>cli</artifactId>
-    <version>0.0.6</version>
+    <version>0.0.7-SNAPSHOT</version>
     <name>cli</name>
     <packaging>jar</packaging>
     <description>cli</description>

@@ -78,4 +78,13 @@ public interface SPAFeignClient {
      */
     @PostMapping(value = "/push/priceAndInventory")
     ResponseDTO pushPriceAndInventory(@RequestBody @Validated PushProductsReq pushProductsReq);
+
+    /**
+     * expedia查询某个城市下所有酒店id
+     *
+     * @param cityId
+     * @return
+     */
+    @PostMapping(value = "/query/expediaHotelIdByCity")
+    ResponseDTO<List<String>> queryExpediaHotelIdByCity(String cityId);
 }

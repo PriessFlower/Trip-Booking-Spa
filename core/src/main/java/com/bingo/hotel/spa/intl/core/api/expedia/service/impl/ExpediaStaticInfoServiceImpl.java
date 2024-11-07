@@ -17,6 +17,7 @@ import com.bingo.hotel.spa.intl.core.api.expedia.access.HotelDetailsAccess;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.HotelFileAccess;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.HotelRemoveAccess;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.QueryProductAccess;
+import com.bingo.hotel.spa.intl.core.api.expedia.access.RegionAccess;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.RegionsAccess;
 import com.bingo.hotel.spa.intl.core.api.expedia.adaptor.ExpediaStaticInfoAdaptor;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.request.HotelInfoRequest;
@@ -84,9 +85,21 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
     private DistributedRateLimiter rateLimiter;
 
     @Override
+    public List<String> queryHotelIdByCity(String cityId) {
+        List<String> hotelIds = new ArrayList<>();
+
+        RegionsRequest regionsRequest = RegionsRequest.builder().include("property_ids").build();
+        ResponseResult<RegionsInfoResponse> result = new RegionAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(regionsRequest);
+        if (null != result && null != result.getData() && CollectionUtils.isNotEmpty(result.getData().getHotelIds())) {
+            hotelIds = result.getData().getHotelIds().stream().map(RegionsInfoResponse.HotelId::getId).collect(Collectors.toList());
+        }
+        return hotelIds;
+    }
+
+    @Override
     public void saveCountryInfo() {
 
-        ArrayList<CountryInfoRequest> countryInfoList = new ArrayList<>();
+        List<CountryInfoRequest> countryInfoList = new ArrayList<>();
 
         for (ExpediaContinentEnum expediaContinent : ExpediaContinentEnum.values()) {
             RegionsRequest regionsRequest = RegionsRequest.builder().include("details").build();

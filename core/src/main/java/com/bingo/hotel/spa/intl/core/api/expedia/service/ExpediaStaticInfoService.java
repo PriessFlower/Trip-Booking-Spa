@@ -1,7 +1,5 @@
 package com.bingo.hotel.spa.intl.core.api.expedia.service;
 
-import org.springframework.web.bind.annotation.RequestParam;
-
 import java.util.List;
 
 /**
@@ -13,6 +11,8 @@ import java.util.List;
  **/
 public interface ExpediaStaticInfoService {
 
+    List<String> queryHotelIdByCity(String cityId);
+
     void saveCountryInfo();
 
     void saveCityInfo(List<String> countryIds);
@@ -21,5 +21,5 @@ public interface ExpediaStaticInfoService {
 
     void deleteHotelInfo(String deleteDate);
 
-    void saveOrUpdateProductInfo(String checkInDate, String checkOutDate, List<String> supplierHotelIds,Integer startNum);
+    void saveOrUpdateProductInfo(String checkInDate, String checkOutDate, List<String> supplierHotelIds, Integer startNum);
 }
