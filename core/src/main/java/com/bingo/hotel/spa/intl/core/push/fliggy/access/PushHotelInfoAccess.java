@@ -1,19 +1,23 @@
 package com.bingo.hotel.spa.intl.core.push.fliggy.access;
 
 import com.bingo.hotel.spa.intl.core.api.aichotels.bean.price.availability.AvailabilityRequest;
-import com.bingo.hotel.spa.intl.core.api.aichotels.bean.price.availability.AvailabilityResponse;
 import com.bingo.hotel.spa.intl.core.api.common.access.BaseHttpAccess;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.IParser;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
 import com.bingo.hotel.spa.intl.core.api.common.enums.MonitorNameEnum;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierDataTypeEnum;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
+import com.bingo.hotel.spa.intl.core.push.fliggy.bean.FliggyPushResponse;
+import com.bingo.hotel.spa.intl.core.push.fliggy.bean.hotel.PushHotelVo;
+import com.taobao.api.ApiException;
 import com.taobao.api.DefaultTaobaoClient;
 import com.taobao.api.TaobaoClient;
+import com.taobao.api.request.XhotelCityCoordinatesBatchDownloadRequest;
 import com.taobao.api.request.XhotelUpdateRequest;
+import com.taobao.api.response.XhotelCityCoordinatesBatchDownloadResponse;
 import com.taobao.api.response.XhotelUpdateResponse;
 
-public class PushHotelInfoAccess extends BaseHttpAccess<AvailabilityRequest, AvailabilityResponse> {
+public class PushHotelInfoAccess extends BaseHttpAccess<PushHotelVo, FliggyPushResponse> {
     public PushHotelInfoAccess(SupplierSourceEnum supplier, SupplierDataTypeEnum dataType, MonitorNameEnum monitorKey) {
         super(supplier, dataType, monitorKey);
     }
@@ -23,57 +27,39 @@ public class PushHotelInfoAccess extends BaseHttpAccess<AvailabilityRequest, Ava
     }
 
     @Override
-    protected ResponseResult<AvailabilityResponse> request(String url, AvailabilityRequest request, IParser<AvailabilityResponse> parser) throws Exception {
+    protected ResponseResult<FliggyPushResponse> request(String url, PushHotelVo request, IParser<FliggyPushResponse> parser) throws Exception {
         TaobaoClient tc = new DefaultTaobaoClient("", "", "");
-//        XhotelUpdateRequest req = convertHotelInfoRequest(zyxHotel, cityCodeMap, sessionKey);
-//        XhotelUpdateResponse resp = tc.execute(req, "");
+        XhotelUpdateRequest req = convertHotelInfoRequest(request);
+        XhotelUpdateResponse resp = tc.execute(req, "");
         return null;
     }
 
-    private XhotelUpdateRequest convertHotelInfoRequest() {
+    private XhotelUpdateRequest convertHotelInfoRequest(PushHotelVo request) {
         XhotelUpdateRequest req = new XhotelUpdateRequest();
 
-        // required只推英文名
-//        req.setName(zyxHotel.getNameEn());
-//        req.setOuterId(zyxHotel.getCode());
+        req.setName(request.getHotelName());
+        req.setOuterId(request.getHotelId());
 //        req.setCity(getAliCityCode(cityCodeMap, zyxHotel.getCityCode()));
-//
-//        // optional
-//        req.setDomestic(1L); // 海外酒店
-//        req.setProvince(0L);
+
+        // optional
+        req.setDomestic(1L); // 海外酒店
+        req.setProvince(0L);
 //        req.setCountry(AliCodeMapper.getAliCountryCode(zyxHotel.getCountryCode()));
-//        req.setNameE(zyxHotel.getNameEn());
-//        req.setAddress(zyxHotel.getAddrEn());
-//        req.setLongitude(truncate(zyxHotel.getLongitude(), 10));
-//        req.setLatitude(truncate(zyxHotel.getLatitude(), 10));
-//        req.setPositionType("G"); // G: Google, B:Baidu, A:Amap
-//        if (!Strings.isNullOrEmpty(zyxHotel.getTelephone())) {
-//            req.setTel(zyxHotel.getTelephone());
-//        } else {
-//            req.setTel("0");
-//        }
-//
-//        req.setStar(zyxHotel.getStar());
-//        req.setVendor("zyxkr");
-//        req.setSupplier("zyxkr");
-        //req.setUsedName();
-        //req.setOpeningTime();
-        //req.setDecorateTime();
-        //req.setFloors();
-        //req.setRooms();
-        //req.setDescription();
-        //req.setHotelFacilities();
-        //req.setRoomFacilities();
-        //req.setService();
-        //req.setPics();
-        //req.setBrand();
-        //req.setPostalCode();
+        req.setNameE(request.getHotelName());
+        req.setAddress(request.getAddress());
+        req.setLongitude(request.getLongitude());
+        req.setLatitude(request.getLatitude());
+        req.setPositionType("G"); // G: Google, B:Baidu, A:Amap
+        req.setTel(request.getTelephone());
+//        req.setStar(request.get);
+        req.setVendor("intl_Bingotravel");
+        req.setSupplier("intl_Bingotravel");
 
         return req;
     }
 
     @Override
-    protected void beforeAccess(AvailabilityRequest request) {
+    protected void beforeAccess(PushHotelVo request) {
 
     }
 
@@ -83,7 +69,7 @@ public class PushHotelInfoAccess extends BaseHttpAccess<AvailabilityRequest, Ava
     }
 
     @Override
-    protected AvailabilityResponse parseResponse(String data) {
+    protected FliggyPushResponse parseResponse(String data) {
         return null;
     }
 }
