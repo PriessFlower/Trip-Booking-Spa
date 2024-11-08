@@ -28,9 +28,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.compress.utils.Lists;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
@@ -152,8 +154,8 @@ public class HotelFeignClientImpl implements SPAFeignClient {
     }
 
     @Override
-    @PostMapping(value = "/query/expediaHotelIdByCity")
-    public ResponseDTO<List<String>> queryExpediaHotelIdByCity(String cityId) {
+    @GetMapping(value = "/query/expediaHotelIdByCity")
+    public ResponseDTO<List<String>> queryExpediaHotelIdByCity(@RequestParam("cityId") String cityId) {
         return ResponseDTO.success(expediaStaticInfoService.queryHotelIdByCity(cityId));
     }
 }
