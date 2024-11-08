@@ -49,7 +49,8 @@ public class HuiTravelCheckPriceServiceImpl extends AbstractCheckPriceSyncSuppor
                         .map(NightlyRate::getCost).reduce(BigDecimal.ZERO, BigDecimal::add).multiply(new BigDecimal(100)).intValue())
                 .totalPriceBefore(checkResponse.getResult().getNightlyrate().stream()
                         .map(NightlyRate::getCost).reduce(BigDecimal.ZERO, BigDecimal::add).multiply(new BigDecimal(100)).intValue())
-                .message(costs.substring(1))
+                .prebookToken(costs.substring(1))
+                .message("CNY")
                 .bedTypeCode(list)
                 .build();
     }

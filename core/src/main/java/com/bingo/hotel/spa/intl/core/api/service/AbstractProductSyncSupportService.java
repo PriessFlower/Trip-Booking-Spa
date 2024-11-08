@@ -23,9 +23,9 @@ public abstract class AbstractProductSyncSupportService<T> implements ProductSyn
                         JsonUtils.writeObject2Json(priceReq), JsonUtils.writeObject2Json(supplier));
                 return null;
             }
-            log.info("ProductSyncService priceReq : {},supplier : {},useTime:{}",
-                    JsonUtils.writeObject2Json(priceReq),
-                    JsonUtils.writeObject2Json(supplier), System.currentTimeMillis() - start);
+            log.info("ProductSyncService priceReq : {},supplier : {},response: {},useTime:{}",
+                    JsonUtils.writeObject2Json(priceReq), JsonUtils.writeObject2Json(supplier),
+                    JsonUtils.writeObject2Json(t), System.currentTimeMillis() - start);
             List<ProductRespDTO> list = productRespConvert(t);
             if (CollectionUtils.isEmpty(list)) {
                 log.error("ProductSyncService productRespConvert is null,priceReq : {},supplier : {} T : {}", JsonUtils.writeObject2Json(priceReq),
@@ -36,7 +36,6 @@ public abstract class AbstractProductSyncSupportService<T> implements ProductSyn
             log.error("ProductSyncService is error e:", e);
             return null;
         }
-
     }
 
     public abstract T querySupplierPrice(PriceReq priceReq, Supplier supplier);

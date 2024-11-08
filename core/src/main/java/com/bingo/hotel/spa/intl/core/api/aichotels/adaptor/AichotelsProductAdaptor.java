@@ -2,7 +2,6 @@ package com.bingo.hotel.spa.intl.core.api.aichotels.adaptor;
 
 import com.bingo.hotel.info.intl.cli.request.SupplierProductBaseRequest;
 import com.bingo.hotel.spa.intl.core.api.aichotels.bean.price.availability.AvailabilityResponse;
-import com.bingo.hotel.spa.intl.core.api.travelconnect.bean.search.response.SearchResponse;
 import org.apache.commons.compress.utils.Lists;
 
 import java.util.List;

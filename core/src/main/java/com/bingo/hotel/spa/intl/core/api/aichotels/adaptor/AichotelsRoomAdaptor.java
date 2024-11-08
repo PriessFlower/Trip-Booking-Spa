@@ -1,6 +1,7 @@
 package com.bingo.hotel.spa.intl.core.api.aichotels.adaptor;
 
 
+import com.bingo.hotel.base.intl.cli.enums.BedTypeExpediaEnum;
 import com.bingo.hotel.info.intl.cli.dto.BedInfoDTO;
 import com.bingo.hotel.info.intl.cli.request.SupplierRoomBaseRequest;
 import com.bingo.hotel.spa.intl.core.api.aichotels.bean.hotel.room.RoomInfoResponse;
@@ -63,19 +64,19 @@ public class AichotelsRoomAdaptor {
                 BedInfoDTO bedInfoDTO = new BedInfoDTO();
                 switch (k) {
                     case "K":
-                        bedInfoDTO.setBedType("8");
+                        bedInfoDTO.setBedType(BedTypeExpediaEnum.KING_BED.getValue());
                         break;
                     case "Q":
-                        bedInfoDTO.setBedType("1");
+                        bedInfoDTO.setBedType(BedTypeExpediaEnum.QUEEN_BED.getValue());
                         break;
                     case "D":
-                        bedInfoDTO.setBedType("25");
+                        bedInfoDTO.setBedType(BedTypeExpediaEnum.FULL_BED.getValue());
                         break;
                     case "T":
-                        bedInfoDTO.setBedType("3");
+                        bedInfoDTO.setBedType(BedTypeExpediaEnum.TWIN_BED.getValue());
                         break;
                     default:
-                        bedInfoDTO.setBedType("0");
+                        bedInfoDTO.setBedType(BedTypeExpediaEnum.OTHER.getValue());
                         break;
                 }
 

@@ -15,8 +15,10 @@ import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PushProductsReq;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 
@@ -78,4 +80,13 @@ public interface SPAFeignClient {
      */
     @PostMapping(value = "/push/priceAndInventory")
     ResponseDTO pushPriceAndInventory(@RequestBody @Validated PushProductsReq pushProductsReq);
+
+    /**
+     * expedia查询某个城市下所有酒店id
+     *
+     * @param cityId
+     * @return
+     */
+    @GetMapping(value = "/query/expediaHotelIdByCity")
+    ResponseDTO<List<String>> queryExpediaHotelIdByCity(@RequestParam("cityId") String cityId);
 }

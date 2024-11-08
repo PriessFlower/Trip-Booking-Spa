@@ -1,12 +1,10 @@
 package com.bingo.hotel.spa.intl.core.api.huitravel.adaptor;
 
 
-import com.bingo.hotel.base.intl.cli.enums.BedTypeAllEnum;
+import com.bingo.hotel.base.intl.cli.enums.BedTypeExpediaEnum;
 import com.bingo.hotel.info.intl.cli.dto.BedInfoDTO;
 import com.bingo.hotel.info.intl.cli.request.SupplierRoomBaseRequest;
-import com.bingo.hotel.spa.intl.core.api.aichotels.bean.hotel.room.RoomInfoResponse;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.hotel.detail.Room;
-import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.lang3.StringUtils;
@@ -14,7 +12,6 @@ import org.apache.commons.lang3.StringUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 @Slf4j
 public class HuiTravelRoomAdaptor {
@@ -89,25 +86,27 @@ public class HuiTravelRoomAdaptor {
                 list.add(bedInfoDTOSOr);
             }
             return list;
-        }catch (Exception e) {
-            log.error("HuiTravelRoomAdaptor.convertBed error:{}",beds, e);
+        } catch (Exception e) {
+            log.error("HuiTravelRoomAdaptor.convertBed error:{}", beds, e);
             return Collections.emptyList();
         }
     }
 
-    private static String convertBedName(String bedName){
+    private static String convertBedName(String bedName) {
         switch (bedName) {
             case "单床":
             case "单人床":
-                return BedTypeAllEnum.SINGLE_BED.getValue() + "";
+                return BedTypeExpediaEnum.TWIN_BED.getValue() + "";
             case "大床":
-                return BedTypeAllEnum.LARGE_BED.getValue() + "";
-            case "榻榻米":
-                return BedTypeAllEnum.TATAMI.getValue() + "";
+                return BedTypeExpediaEnum.QUEEN_BED.getValue() + "";
+//            case "榻榻米":
+//                return BedTypeExpediaEnum.OTHER.getValue() + "";
             case "特大床":
-                return BedTypeAllEnum.EXTRA_LARGE_BED.getValue() + "";
+                return BedTypeExpediaEnum.KING_BED.getValue() + "";
+            case "双人床":
+                return BedTypeExpediaEnum.FULL_BED.getValue() + "";
             default:
-                return BedTypeAllEnum.OTHER.getValue() + "";
+                return BedTypeExpediaEnum.OTHER.getValue() + "";
         }
     }
 

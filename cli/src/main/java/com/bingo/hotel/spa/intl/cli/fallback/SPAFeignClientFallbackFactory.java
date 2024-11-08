@@ -59,6 +59,10 @@ public class SPAFeignClientFallbackFactory implements FallbackFactory<SPAFeignCl
                 return ResponseDTO.error("服务异常，请稍等");
             }
 
+            @Override
+            public ResponseDTO<List<String>> queryExpediaHotelIdByCity(String cityId) {
+                return ResponseDTO.error("服务异常，请稍等");
+            }
         };
     }
 }

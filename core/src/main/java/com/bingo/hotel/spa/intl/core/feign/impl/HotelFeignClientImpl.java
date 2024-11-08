@@ -15,6 +15,7 @@ import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PushProductsReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
+import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaStaticInfoService;
 import com.bingo.hotel.spa.intl.core.api.service.BookingSyncService;
 import com.bingo.hotel.spa.intl.core.api.service.CancelSyncService;
 import com.bingo.hotel.spa.intl.core.api.service.CheckPriceSyncService;
@@ -27,17 +28,23 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.compress.utils.Lists;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.annotation.Resource;
 import java.util.List;
 
 @RestController
 @RequestMapping("/client/spa")
 @Slf4j
 public class HotelFeignClientImpl implements SPAFeignClient {
+
+    @Resource
+    private ExpediaStaticInfoService expediaStaticInfoService;
 
 
     @Override
@@ -144,5 +151,11 @@ public class HotelFeignClientImpl implements SPAFeignClient {
 //                        + "ProductPushService");
 //        productPushService.pushPriceAndInventory(pushProductsReq.getPushProductsDTO());
         return ResponseDTO.success(null);
+    }
+
+    @Override
+    @GetMapping(value = "/query/expediaHotelIdByCity")
+    public ResponseDTO<List<String>> queryExpediaHotelIdByCity(@RequestParam("cityId") String cityId) {
+        return ResponseDTO.success(expediaStaticInfoService.queryHotelIdByCity(cityId));
     }
 }

@@ -9,11 +9,11 @@ feign:
         readTimeout: 300000
 spring:
   datasource:
-    host: 8.146.211.133
+    host: pc-2ze0t0vwxj392d111.mysql.polardb.rds.aliyuncs.com
     port: 3306
     name: intl_bg_admin
-    username: bystest
-    password: bystest
+    username: dbadmin
+    password: VvTUbbEp$D6uGiLDb
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries = true&nullCatalogMeansCurrent=true&serverTimezone=CST&autoReconnect=true
   redis:
@@ -31,12 +31,14 @@ spring:
         server-addr: mse-00eb2a72-p.nacos-ans.mse.aliyuncs.com # Nacos 服务发现地址
         access-key: LTAI5tGbuCAyu93gUo9abSDG
         secret-key: cYPSEwvEB3jFhrEs5TikxOGc0NSldp
+#        group: DEV      # 配置分组
       config:
         server-addr: mse-00eb2a72-p.nacos-ans.mse.aliyuncs.com  # Nacos服务器地址
         file-extension: yaml         # 配置文件格式
         namespace: dev               # 命名空间ID，通常用于隔离不同的环境配置
-        group:         # 配置分组
         prefix: bingo-hotel-spa-intl      # 配置前缀，通常是应用名
+      inetutils:
+        preferred-networks: 192.168.111
 
   schedulerx2:
     endpoint: acm.aliyun.com
@@ -150,3 +152,14 @@ huitravel:
     checkavailability: http://cithotelsellapi.test.huizhi-intl.com/hotelsell/cithotelsell/checkavailability
   appkey: boqiaotest
   secretKey: d1e205262c06132733faa748dc3e29ab
+expedia:
+  apiKey: 6urn54ijk30uttcqm64c3it6gf
+  sharedSecret: 708a6tdaqvm7
+  session: abcdefg
+  ownIp: 5.5.5.5
+  localFilePath: D:\working\file\导出文件\hotel_info
+  partner_point_of_sale: B2B_SA_PKG_MOD_VCC
+  payment_terms: 1
+  billing_terms: VCC
+  url:
+    host: https://test.ean.com
