@@ -22,6 +22,7 @@ public class RegionsInfoResponse implements BaseResponse {
     private Associations associations;
     private List<Ancestors> ancestors;
     private Descendants descendants;
+    private List<String> property_ids;
     private List<String> categories;
     private List<String> tags;
     private List<HotelId> hotelIds;
@@ -96,6 +97,14 @@ public class RegionsInfoResponse implements BaseResponse {
 
     public void setDescendants(Descendants descendants) {
         this.descendants = descendants;
+    }
+
+    public List<String> getProperty_ids() {
+        return property_ids;
+    }
+
+    public void setProperty_ids(List<String> property_ids) {
+        this.property_ids = property_ids;
     }
 
     public List<String> getCategories() {

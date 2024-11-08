@@ -88,10 +88,11 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
     public List<String> queryHotelIdByCity(String cityId) {
         List<String> hotelIds = new ArrayList<>();
 
-        RegionsRequest regionsRequest = RegionsRequest.builder().include("property_ids").ancestor_id(cityId).build();
-        ResponseResult<RegionsInfoResponse> result = new RegionAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(regionsRequest);
-        if (null != result && null != result.getData() && CollectionUtils.isNotEmpty(result.getData().getHotelIds())) {
-            hotelIds = result.getData().getHotelIds().stream().map(RegionsInfoResponse.HotelId::getId).collect(Collectors.toList());
+        RegionsRequest regionsRequest = RegionsRequest.builder().include("property_ids").build();
+        ResponseResult<RegionsInfoResponse> result =
+                new RegionsAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, cityId, rateLimiter).access(regionsRequest);
+        if (null != result && null != result.getData() && CollectionUtils.isNotEmpty(result.getData().getProperty_ids())) {
+            hotelIds = result.getData().getProperty_ids();
         }
         return hotelIds;
     }
