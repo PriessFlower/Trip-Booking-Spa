@@ -43,8 +43,8 @@ spring:
   schedulerx2:
     endpoint: acm.aliyun.com
     namespace: 5da3a313-f372-45f4-af32-e5474a74a218
-    groupId: bingo-hotel-spa
-    appKey: daeI3PeZuBC6sPjh+IhuVg==
+    groupId: bingo-hotel-spa-intl
+    appKey: H77sXtmIszlXo4Z28cO8Iw
 
 management:
   endpoints:
