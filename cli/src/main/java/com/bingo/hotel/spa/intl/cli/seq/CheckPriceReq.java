@@ -33,10 +33,8 @@ public class CheckPriceReq {
 
     private Integer adultCount;
 
-    @NonNull
     private Integer childNum; //儿童数
 
-    @NonNull
     private List<Integer> childAges; //儿童年龄
 
     private String priceFlag;//hotel_package-打包价 hotel_only-零售价
