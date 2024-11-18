@@ -117,3 +117,14 @@ huitravel:
     checkavailability: http://hapi.huizhi-intl.com/hotelsell/cithotelsell/yoppay/checkavailability
   appkey: bsgl
   secretKey: C340EB9BF816799573229D66B6F11555
+expedia:
+  apiKey: 6urn54ijk30uttcqm64c3it6gf
+  sharedSecret: 708a6tdaqvm7
+  session: abcdefg
+  ownIp: 5.5.5.5
+  localFilePath: /home/webrun/logs/file
+  partner_point_of_sale: B2B_SA_PKG_MOD_VCC
+  payment_terms: 1
+  billing_terms: VCC
+  url:
+    host: https://test.ean.com

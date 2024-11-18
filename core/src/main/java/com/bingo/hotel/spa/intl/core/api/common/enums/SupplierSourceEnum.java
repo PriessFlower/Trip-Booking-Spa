@@ -8,7 +8,9 @@ public enum SupplierSourceEnum {
     TRAVELCONNECT(10001, "travelConnect"),
     AICHOTELS(10002, "aicHotels"),
     DIDATRAVEL(10003, "didatravel"),
-    HUITRAVEL(10004, "huitravel");
+    HUITRAVEL(10004, "huitravel"),
+    EXPEDIA(10005, "expedia"),
+    ;
 
     SupplierSourceEnum(int code, String desc) {
         this.code = code;

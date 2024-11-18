@@ -8,5 +8,11 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Meal {
-    public Integer count;
+    public Integer count;//早餐数
+
+    public Integer lunchCount;//午餐数
+
+    public Integer dinnerCount;//晚餐数
+
+    public String mealDesc;//餐食描述
 }

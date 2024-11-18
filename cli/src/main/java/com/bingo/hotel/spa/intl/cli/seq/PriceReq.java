@@ -27,5 +27,17 @@ public class PriceReq {
     @NonNull
     private Integer guestType;//宾客类型
 
+    private String salesType;//售卖类型 expedia专用
+
+    private String currency;//币种
+
+    private String language;//语言
+
     private List<Supplier> suppliers;
+
+    private String bedId;//床型id
+
+    private String priceFlag;//hotel_package-打包价 hotel_only-零售价
+
+    private List<String> occupancies;
 }

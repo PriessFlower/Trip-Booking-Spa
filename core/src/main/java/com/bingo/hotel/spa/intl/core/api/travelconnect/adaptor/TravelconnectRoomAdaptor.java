@@ -1,6 +1,6 @@
 package com.bingo.hotel.spa.intl.core.api.travelconnect.adaptor;
 
-import com.bingo.hotel.base.intl.cli.enums.BedTypeAllEnum;
+import com.bingo.hotel.base.intl.cli.enums.BedTypeExpediaEnum;
 import com.bingo.hotel.info.intl.cli.dto.BedInfoDTO;
 import com.bingo.hotel.info.intl.cli.request.SupplierRoomBaseRequest;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.bean.search.response.SearchResponse;
@@ -47,16 +47,16 @@ public class TravelconnectRoomAdaptor {
             case "FullBed":
             case "QueenBed":
             case "DoubleBed":
-                return BedTypeAllEnum.LARGE_BED.getValue() + "";
+                return BedTypeExpediaEnum.QUEEN_BED.getValue() + "";
             case "TwinBed":
             case "TwinXLBed":
-                return BedTypeAllEnum.TWIN_BED.getValue() + "";
+                return BedTypeExpediaEnum.FULL_BED.getValue() + "";
             case "BunkBed":
-                return BedTypeAllEnum.BUNK_BED.getValue() + "";
+                return BedTypeExpediaEnum.BUNK_BED.getValue() + "";
             case "KingBed":
-                return BedTypeAllEnum.EXTRA_LARGE_BED.getValue() + "";
+                return BedTypeExpediaEnum.KING_BED.getValue() + "";
             case "SofaBed":
-                return BedTypeAllEnum.SOFA_BED.getValue() + "";
+                return BedTypeExpediaEnum.SOFA_BED.getValue() + "";
             default:
                 return bedType;
         }

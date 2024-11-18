@@ -2,6 +2,7 @@ package com.bingo.hotel.spa.intl.core.api.didatravel.service.impl;
 
 import com.alibaba.fastjson.JSON;
 import com.bingo.hotel.base.intl.cli.enums.BedTypeAllEnum;
+import com.bingo.hotel.base.intl.cli.enums.BedTypeExpediaEnum;
 import com.bingo.hotel.info.intl.cli.client.HotelInfoIntlClient;
 import com.bingo.hotel.info.intl.cli.dto.BedInfoDTO;
 import com.bingo.hotel.info.intl.cli.enums.BroadnetEnum;
@@ -14,7 +15,11 @@ import com.bingo.hotel.info.intl.cli.result.InfoResult;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
-import com.bingo.hotel.spa.intl.core.api.didatravel.access.*;
+import com.bingo.hotel.spa.intl.core.api.didatravel.access.BedTypeAccess;
+import com.bingo.hotel.spa.intl.core.api.didatravel.access.DidaTravelAccess;
+import com.bingo.hotel.spa.intl.core.api.didatravel.access.PriceConfirmAccess;
+import com.bingo.hotel.spa.intl.core.api.didatravel.access.SearchAccess;
+import com.bingo.hotel.spa.intl.core.api.didatravel.access.StaticInfoAccess;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.BedTypeList;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.CheckPriceResponse;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.GetBedTypeListRSSuccess;
@@ -28,6 +33,7 @@ import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.priceConfirm.Pric
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.priceConfirm.PriceConfirmResponse;
 import com.bingo.hotel.spa.intl.core.api.didatravel.service.DidatravelHotelService;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
+import com.bingo.hotel.spa.intl.core.util.FileDealUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.ctrip.framework.apollo.spring.annotation.ApolloJsonValue;
 import com.google.errorprone.annotations.concurrent.LazyInit;
@@ -42,12 +48,9 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
-import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -134,6 +137,31 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         return bedInfoMap;
     }
 
+    private static String convertBedType(String bedName) {
+        switch (bedName) {
+            case "单人床":
+                return BedTypeExpediaEnum.TWIN_BED.getValue() + "";
+            case "大床":
+                return BedTypeExpediaEnum.QUEEN_BED.getValue() + "";
+            case "榻榻米":
+                return BedTypeExpediaEnum.FUTON.getValue() + "";
+            case "特大床":
+                return BedTypeExpediaEnum.KING_BED.getValue() + "";
+            case "双人床":
+                return BedTypeExpediaEnum.FULL_BED.getValue() + "";
+            case "沙发":
+                return BedTypeExpediaEnum.SOFA_BED.getValue() + "";
+            case "双层床":
+                return BedTypeExpediaEnum.BUNK_BED.getValue() + "";
+            case "水床":
+                return BedTypeExpediaEnum.WATER_BED.getValue() + "";
+            case "日式床":
+                return BedTypeExpediaEnum.FUTON.getValue() + "";
+            default:
+                return BedTypeExpediaEnum.OTHER.getValue() + "";
+        }
+    }
+
     @Resource
     private HotelInfoIntlClient hotelInfoIntlClient;
 
@@ -161,7 +189,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
             String csvUrl = result.getData().getUrl();
             String localFilePath = LOCAL_FILE_PATH + csvUrl.substring(csvUrl.lastIndexOf("/"), csvUrl.indexOf("?"));
             if (downloadFlag) {
-                downloadFile(csvUrl, localFilePath);
+                FileDealUtils.downloadFile(csvUrl, localFilePath);
             }
             //4.解析文件数据并推送base服务
 //            readCSVFromURL(localFilePath, staticType);
@@ -171,36 +199,6 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         } catch (Exception e) {
             log.error("道旅静态数据获取异常", e);
             e.printStackTrace();
-        }
-    }
-
-    public static void downloadFile(String remoteFilePath, String localFilePath) {
-        URL website = null;
-        ReadableByteChannel rbc = null;
-        FileOutputStream fos = null;
-        try {
-            website = new URL(remoteFilePath);
-            rbc = Channels.newChannel(website.openStream());
-            fos = new FileOutputStream(localFilePath);//本地要存储的文件地址 例如：test.txt
-            fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            if (fos != null) {
-                try {
-                    fos.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (rbc != null) {
-                try {
-                    rbc.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
-            }
         }
     }
 
@@ -549,7 +547,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
         ResponseResult<DidaTravelResponse> access = new DidaTravelAccess(PRICE_URL, rateLimiter).access(didaTravelRequest.build());
 
 //        return JsonUtils.readValue(access.getOrigData(), DidaTravelResponse.class);
-            return access.getData();
+        return access.getData();
     }
 
     @Override

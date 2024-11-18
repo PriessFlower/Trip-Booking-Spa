@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.util.Date;
 
 @Getter
@@ -23,8 +24,16 @@ public class PriceInfo implements Serializable{
      */
     private String date;
     /**
-     * 价格：房费
+     * 价格：总费用
      */
     private Integer price;
+    /**
+     * 税费 expedia专用
+     */
+    private Integer taxes;
+    /**
+     * 房价 expedia专用
+     */
+    private Integer roomPrice;
 
 }
