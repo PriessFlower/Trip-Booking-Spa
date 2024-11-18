@@ -137,7 +137,7 @@
         <dependency>
             <groupId>com.bingo.hotel.base.intl</groupId>
             <artifactId>cli</artifactId>
-            <version>0.0.12-SNAPSHOT</version>
+            <version>0.0.12</version>
         </dependency>
         <dependency>
             <groupId>joda-time</groupId>
@@ -166,7 +166,7 @@
         <dependency>
             <groupId>com.bingo.hotel.spa.intel</groupId>
             <artifactId>cli</artifactId>
-            <version>0.0.7-SNAPSHOT</version>
+            <version>0.0.7</version>
         </dependency>
 
         <dependency>
