@@ -123,5 +123,8 @@ expedia:
   session: abcdefg
   ownIp: 5.5.5.5
   localFilePath: /home/webrun/logs/file
+  partner_point_of_sale: B2B_SA_PKG_MOD_VCC
+  payment_terms: 1
+  billing_terms: VCC
   url:
     host: https://test.ean.com

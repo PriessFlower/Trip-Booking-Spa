@@ -157,7 +157,7 @@ expedia:
   sharedSecret: 708a6tdaqvm7
   session: abcdefg
   ownIp: 5.5.5.5
-  localFilePath: D:\working\file\导出文件\hotel_info
+  localFilePath: /home/webrun/spa/logs/file
   partner_point_of_sale: B2B_SA_PKG_MOD_VCC
   payment_terms: 1
   billing_terms: VCC
