@@ -66,10 +66,10 @@ public class AvailabilityAccess extends BaseHttpAccess<AvailabilityRequest, Avai
 
     @Override
     protected void beforeAccess(AvailabilityRequest request) {
-//        if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
-//            throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
-//                    + "request = " + JsonUtils.writeObject2Json(request));
-//        }
+        if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
+            throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
+                    + "request = " + JsonUtils.writeObject2Json(request));
+        }
     }
 
     @Override
