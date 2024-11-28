@@ -214,7 +214,7 @@ public class FastPayServiceImpl implements FastPayService {
             for (SearchResponse.AvailRoomRate availRoomRate : hotelAvail.getAvailRoomRates()) {
                 ProductRespDTO productRespDTO = ProductRespDTO.builder()
                         .hotelId(hotelAvail.getHotelInfo().getCode())
-                        .productId(availRoomRate.getRatePlanCode())
+                        .productId(hotelAvail.getHotelInfo().getCode() + "_" + availRoomRate.getRoomCode() + "_" + availRoomRate.getRatePlanCode())
                         .supplierId(SupplierSourceEnum.FASTPAYHOTELS.getCode())
                         .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(availRoomRate.getRoomName()).build())
                         .currencyType(availRoomRate.getCurrency())
@@ -277,8 +277,8 @@ public class FastPayServiceImpl implements FastPayService {
         List<SearchResponse.HotelAvail> hotelAvails = searchResult.getData().getHotelAvails();
         for (SearchResponse.HotelAvail hotelAvail : hotelAvails) {
             for (SearchResponse.AvailRoomRate availRoomRate : hotelAvail.getAvailRoomRates()) {
-                String[] productInfo = supplier.getSProductId().split("_");
-                if (productInfo[2].equals(availRoomRate.getRatePlanCode())) {
+                String productId = supplier.getSHotelId() + "_" + availRoomRate.getRoomCode() + "_" + availRoomRate.getRatePlanCode();
+                if (supplier.getSProductId().equals(productId)) {
                     CheckPriceRequest checkPriceRequest = CheckPriceRequest.builder()
                             .messageID(UUID.randomUUID().toString())
                             .currency("USD")
@@ -298,7 +298,7 @@ public class FastPayServiceImpl implements FastPayService {
                     SearchResponse.AvailRoomRate roomInfo = hotelInfo.getAvailRoomRates().get(0);
                     ProductRespDTO productRespDTO = ProductRespDTO.builder()
                             .hotelId(hotelInfo.getHotelInfo().getCode())
-                            .productId(roomInfo.getRatePlanCode())
+                            .productId(productId)
                             .supplierId(SupplierSourceEnum.FASTPAYHOTELS.getCode())
                             .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomInfo.getRoomName()).build())
                             .currencyType(roomInfo.getCurrency())
@@ -342,8 +342,8 @@ public class FastPayServiceImpl implements FastPayService {
         List<SearchResponse.HotelAvail> hotelAvails = searchResult.getData().getHotelAvails();
         for (SearchResponse.HotelAvail hotelAvail : hotelAvails) {
             for (SearchResponse.AvailRoomRate availRoomRate : hotelAvail.getAvailRoomRates()) {
-                String[] productInfo = request.getSProductId().split("_");
-                if (productInfo[2].equals(availRoomRate.getRatePlanCode())) {
+                String productId = request.getSHotelId() + "_" + availRoomRate.getRoomCode() + "_" + availRoomRate.getRatePlanCode();
+                if (request.getSProductId().equals(productId)) {
                     CheckPriceRequest checkPriceRequest = CheckPriceRequest.builder()
                             .messageID(UUID.randomUUID().toString())
                             .currency("USD")
