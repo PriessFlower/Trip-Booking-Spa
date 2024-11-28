@@ -163,3 +163,12 @@ expedia:
   billing_terms: VCC
   url:
     host: https://test.ean.com
+fastPayHotels:
+  username: APIBaosheng
+  password: A~FjN68p
+  client_id: Baosheng.fph.com
+  client_secret: NRF5yadWnV9gX1qs9uIWdn/d4qf1qQieixKTcjuCDck=
+  url:
+    catalogue: https://catalogue.fastpayhotels.net/api/v2
+    availability: https://avail-baosheng.fastpayhotels.net/api/v2
+    booking: https://booking.fastpayhotels.net/api/v2

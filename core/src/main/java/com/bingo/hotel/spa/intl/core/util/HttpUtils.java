@@ -1,9 +1,9 @@
 package com.bingo.hotel.spa.intl.core.util;
 
+import com.alibaba.fastjson.JSON;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.BaseResponse;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.IParser;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
-import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.HotelStaticInfo;
 import com.google.common.collect.Lists;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.MapUtils;
@@ -35,6 +35,7 @@ import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.message.BasicNameValuePair;
@@ -45,6 +46,8 @@ import org.apache.logging.log4j.util.Strings;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLHandshakeException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.InterruptedIOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -65,7 +68,6 @@ public class HttpUtils {
         httpRequestBase.setHeader("Accept", "application/json, text/plain, */*");
         httpRequestBase.setHeader("Accept-Language", "zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3");
         httpRequestBase.setHeader("Accept-Charset", "UTF-8");
-        httpRequestBase.setHeader("Content-Type", "application/json");
 
         // 配置请求的超时设置
         RequestConfig requestConfig = RequestConfig.custom()
@@ -267,6 +269,70 @@ public class HttpUtils {
         return result;
     }
 
+
+    /**
+     * 处理post请求
+     *
+     * @param url     地址
+     * @param params  参数
+     * @param headers 请求头 header key-value
+     * @return
+     */
+    public static String doPostObject(String url, Map<String, Object> params, Map<String, Object> headers) {
+        HttpResponse response = null;
+        try {
+            CloseableHttpClient httpClient = HttpClientBuilder.create().build();
+            //1.处理参数
+            HttpPost post = new HttpPost(url);
+            post.setHeader("Content-Type", "application/json");
+            String jsonParam = JSON.toJSONString(params);
+            StringEntity se = new StringEntity(jsonParam, ContentType.APPLICATION_JSON);
+//            se.setContentType("application/json");
+            post.setEntity(se);
+            //2.处理请求头信息
+            if (headers != null && !headers.isEmpty()) {
+                for (String key : headers.keySet()) {
+                    post.setHeader(key, String.valueOf(headers.get(key)));
+                }
+            }
+//            log.info("HttpClientUtil-doPost>>>requestBody:{}", JSON.toJSONString(params));
+            //3.请求数据
+            response = httpClient.execute(post);
+//            log.info("HttpClientUtil-doPost>>>request:{},response:{}", JSON.toJSONString(post), JSON.toJSONString(response));
+            //4.解析数据
+            String result = null;
+            if (response != null) {
+                result = handleData(response.getEntity().getContent());
+            }
+//            log.info("HttpClientUtil-doPost>>>responseBody:{}", JSON.toJSONString(result));
+            return result;
+        } catch (Exception e) {
+            log.info("HttpClientUtil-POST 出错：{}", e.getMessage());
+            return null;
+        }
+    }
+
+
+    /**
+     * 流对象
+     *
+     * @param is 流
+     * @return
+     * @throws Exception
+     */
+    private static String handleData(InputStream is) throws Exception {
+        int len = 0;
+        //将is字节流，转化为字符流
+        InputStreamReader reader = new InputStreamReader(is);
+        //创建StringBuffer对象
+        char[] buf = new char[1024];
+        StringBuffer result = new StringBuffer();
+        while ((len = reader.read(buf)) != -1) {
+            result.append(String.valueOf(buf, 0, len));
+        }
+        reader.close();
+        return String.valueOf(result);
+    }
 
     private static String buildUrl(String url, Map<String, String> params)
             throws UnsupportedEncodingException {

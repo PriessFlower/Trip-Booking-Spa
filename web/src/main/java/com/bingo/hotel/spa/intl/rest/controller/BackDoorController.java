@@ -4,6 +4,7 @@ package com.bingo.hotel.spa.intl.rest.controller;
 import com.bingo.hotel.spa.intl.core.api.aichotels.service.AichotelsHotelService;
 import com.bingo.hotel.spa.intl.core.api.didatravel.service.DidatravelHotelService;
 import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaStaticInfoService;
+import com.bingo.hotel.spa.intl.core.api.fastpay.service.FastPayService;
 import com.bingo.hotel.spa.intl.core.api.huitravel.service.HuiTravelService;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.service.TravelconnectHotelService;
 import com.bingo.hotel.spa.intl.rest.common.HttpResponse;
@@ -33,6 +34,8 @@ public class BackDoorController {
     private HuiTravelService huiTravelService;
     @Autowired
     private ExpediaStaticInfoService expediaStaticInfoService;
+    @Resource
+    private FastPayService fastPayStaticInfoService;
 
     @GetMapping("/push")
     @ApiOperation("HotelList查询")
@@ -113,6 +116,14 @@ public class BackDoorController {
                                                @RequestParam(value = "supplierHotelIds", required = false) List<String> supplierHotelIds,
                                                @RequestParam(value = "startNum", required = false) Integer startNum) {
         expediaStaticInfoService.saveOrUpdateProductInfo(checkInDate, checkOutDate, supplierHotelIds, startNum);
+        return HttpResponse.getSuccessInstance();
+    }
+
+    @GetMapping("/save/fastPayHotels/hotel")
+    @ApiOperation("酒店静态数据保存-fastPayHotels")
+    public HttpResponse expediaSaveHotelInfo(@RequestParam(name = "days") int days,
+                                             @RequestParam("type") String type) {
+        fastPayStaticInfoService.saveHotelList(days, type);
         return HttpResponse.getSuccessInstance();
     }
 }
