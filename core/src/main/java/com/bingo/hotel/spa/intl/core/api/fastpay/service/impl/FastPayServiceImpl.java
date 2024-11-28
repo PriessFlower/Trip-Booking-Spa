@@ -3,6 +3,7 @@ package com.bingo.hotel.spa.intl.core.api.fastpay.service.impl;
 import com.bingo.hotel.info.intl.cli.client.HotelInfoIntlClient;
 import com.bingo.hotel.info.intl.cli.request.SupplierHotelBaseRequest;
 import com.bingo.hotel.info.intl.cli.request.SupplierProductBaseRequest;
+import com.bingo.hotel.spa.intl.cli.dto.CancelPolicy;
 import com.bingo.hotel.spa.intl.cli.dto.CheckPriceRespDTO;
 import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductInfo;
@@ -222,8 +223,7 @@ public class FastPayServiceImpl implements FastPayService {
                         .brokerage(0)
                         .priceInfos(buildQueryPriceInfos(availRoomRate.getTotalPrice(), request.getCheckIn(), request.getCheckout()))
 //                        .meal(convertMeal(request.getAdultNum(), rate.getAmenities()))
-//                        .cancelPolicy(CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) :
-//                                convertCancelPolicy(request.getCheckIn(), cancelPolicies))
+                        .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                         .build();
                 productRespList.add(productRespDTO);
             }
@@ -306,8 +306,8 @@ public class FastPayServiceImpl implements FastPayService {
                             .brokerage(0)
                             .priceInfos(buildQueryPriceInfos(roomInfo.getTotalPrice(), request.getCheckIn(), request.getCheckout()))
 //                        .meal(convertMeal(request.getAdultNum(), rate.getAmenities()))
-//                        .cancelPolicy(CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) :
-//                                convertCancelPolicy(request.getCheckIn(), cancelPolicies))
+                            .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+
                             .build();
                     return Arrays.asList(productRespDTO);
                 }
