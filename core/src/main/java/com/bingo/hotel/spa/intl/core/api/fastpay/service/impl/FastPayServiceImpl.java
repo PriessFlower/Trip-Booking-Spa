@@ -365,12 +365,15 @@ public class FastPayServiceImpl implements FastPayService {
                     }
                     SearchResponse.HotelAvail hotelInfo = checkPriceResult.getData().getHotelAvails().get(0);
                     SearchResponse.AvailRoomRate roomInfo = hotelInfo.getAvailRoomRates().get(0);
+                    BigDecimal totalPrice = (null == roomInfo.getPriceBinding() || true != roomInfo.getPriceBinding()) ? roomInfo.getTotalPrice() :
+                            roomInfo.getPublicPrice();
                     return CheckPriceRespDTO.builder()
                             .checkStatus(true)
                             .prebookToken(roomInfo.getReservationToken())
-                            .salePrice(roomInfo.getTotalPrice().multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP).intValue())
-                            .subPrice(roomInfo.getPublicPrice().multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP).intValue())
-                            .brokerage(0)
+                            .salePrice(totalPrice.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP).intValue())
+                            .totalPriceAfter(totalPrice.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP).intValue())
+                            .totalPriceBefore(totalPrice.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP).intValue())
+                            .message(roomInfo.getCurrency())
                             .build();
                 }
             }
