@@ -213,15 +213,17 @@ public class FastPayServiceImpl implements FastPayService {
         ArrayList<ProductRespDTO> productRespList = new ArrayList<>();
         for (SearchResponse.HotelAvail hotelAvail : hotelAvails) {
             for (SearchResponse.AvailRoomRate availRoomRate : hotelAvail.getAvailRoomRates()) {
+                BigDecimal totalPrice = (null == availRoomRate.getPriceBinding() || true != availRoomRate.getPriceBinding()) ? availRoomRate.getTotalPrice() :
+                        availRoomRate.getPublicPrice();
                 ProductRespDTO productRespDTO = ProductRespDTO.builder()
                         .hotelId(hotelAvail.getHotelInfo().getCode())
                         .productId(hotelAvail.getHotelInfo().getCode() + "_" + availRoomRate.getRoomCode() + "_" + availRoomRate.getRatePlanCode())
                         .supplierId(SupplierSourceEnum.FASTPAYHOTELS.getCode())
                         .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(availRoomRate.getRoomName()).build())
                         .currencyType(availRoomRate.getCurrency())
-                        .totalPrice(availRoomRate.getTotalPrice().multiply(new BigDecimal("100")).intValue())
-                        .brokerage(0)
-                        .priceInfos(buildQueryPriceInfos(availRoomRate.getTotalPrice(), request.getCheckIn(), request.getCheckout()))
+                        .totalPrice(totalPrice.multiply(new BigDecimal("100")).intValue())
+                        .brokerage(null == availRoomRate.getCommission() ? 0 : availRoomRate.getCommission().multiply(new BigDecimal("100")).intValue())
+                        .priceInfos(buildQueryPriceInfos(totalPrice, request.getCheckIn(), request.getCheckout()))
 //                        .meal(convertMeal(request.getAdultNum(), rate.getAmenities()))
                         .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                         .build();
@@ -296,15 +298,17 @@ public class FastPayServiceImpl implements FastPayService {
                     }
                     SearchResponse.HotelAvail hotelInfo = checkPriceResult.getData().getHotelAvails().get(0);
                     SearchResponse.AvailRoomRate roomInfo = hotelInfo.getAvailRoomRates().get(0);
+                    BigDecimal totalPrice = (null == roomInfo.getPriceBinding() || true != roomInfo.getPriceBinding()) ? roomInfo.getTotalPrice() :
+                            roomInfo.getPublicPrice();
                     ProductRespDTO productRespDTO = ProductRespDTO.builder()
                             .hotelId(hotelInfo.getHotelInfo().getCode())
                             .productId(productId)
                             .supplierId(SupplierSourceEnum.FASTPAYHOTELS.getCode())
                             .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomInfo.getRoomName()).build())
                             .currencyType(roomInfo.getCurrency())
-                            .totalPrice(roomInfo.getTotalPrice().multiply(new BigDecimal("100")).intValue())
-                            .brokerage(0)
-                            .priceInfos(buildQueryPriceInfos(roomInfo.getTotalPrice(), request.getCheckIn(), request.getCheckout()))
+                            .totalPrice(totalPrice.multiply(new BigDecimal("100")).intValue())
+                            .brokerage(null == availRoomRate.getCommission() ? 0 : availRoomRate.getCommission().multiply(new BigDecimal("100")).intValue())
+                            .priceInfos(buildQueryPriceInfos(totalPrice, request.getCheckIn(), request.getCheckout()))
 //                        .meal(convertMeal(request.getAdultNum(), rate.getAmenities()))
                             .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
 
