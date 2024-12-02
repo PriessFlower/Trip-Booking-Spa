@@ -72,7 +72,7 @@ public class PushRoomInfoAccess extends BaseHttpAccess<RoomBaseResponse, FliggyP
         req.setMaxOccupancy(request.getCapacity().longValue()); // 0？
         req.setArea(request.getArea());
         req.setFloor(request.getFloor());
-        req.setWindowType(request.getHasWindows().longValue());
+        req.setWindowType(1L);
         req.setVendor("intl_Bingotravel");
         return req;
     }
