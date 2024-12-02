@@ -199,6 +199,11 @@
             <artifactId>jsoup</artifactId>
             <version>1.15.3</version>
         </dependency>
+        <dependency>
+            <groupId>intl.fliggy.hotel</groupId>
+            <artifactId>intl</artifactId>
+            <version>1.0.0</version>
+        </dependency>
 
         <dependency>
             <groupId>cn.hutool</groupId>

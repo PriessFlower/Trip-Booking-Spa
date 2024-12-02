@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bingo.hotel.spa.intl.core.api.common.mapper.UpHotelMapper">
+
+    <resultMap id="BaseResultMap" type="com.bingo.hotel.spa.intl.core.push.model.UpHotel">
+        <result column="id" property="id"/>
+        <result column="distribute_id" property="distributeId"/>
+        <result column="supplier_id" property="supplierId"/>
+        <result column="hotel_id" property="hotelId"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id
+        ,
+                distribute_id,
+                supplier_id,
+                hotel_id
+    </sql>
+
+    <select id="getHotelList" resultType="java.lang.String">
+        select distinct
+        hotel_id
+        from db_up_hotel
+        where distribute_id = #{dId}
+        group by hotel_id
+    </select>
+
+    <select id="getSellerHotel" resultType="com.bingo.hotel.spa.intl.core.push.model.UpHotel">
+        select
+        <include refid="Base_Column_List"/>
+        from db_up_hotel
+        where distribute_id = #{dId} and supplier_id = #{sId} and hotel_id = #{hId}
+    </select>
+
+    <select id="getSellerHotels" resultType="java.lang.Integer">
+        select
+        count(1)
+        from db_up_hotel
+        where distribute_id in
+        <foreach collection="dList" item="dId" open="(" separator="," close=")">
+            #{dId}
+        </foreach> and supplier_id = #{sId} and hotel_id = #{hId}
+    </select>
+
+    <select id="getAll" resultType="com.bingo.hotel.spa.intl.core.push.model.UpHotel">
+        select id
+        from db_up_hotel
+        where distribute_id = #{dId}
+          and supplier_id = #{sId}
+    </select>
+    <select id="getUpHotelsWithLimit" resultType="com.bingo.hotel.spa.intl.core.push.model.UpHotel">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM db_up_hotel
+        WHERE id > #{lastId}
+        ORDER BY id ASC
+        LIMIT #{pageSize}
+    </select>
+    <select id="delMeituanHotel" resultType="com.bingo.hotel.spa.intl.core.push.model.UpHotel">
+        DELETE
+        FROM db_up_hotel
+        where distribute_id = 20002
+          and supplier_id = 10002
+          and hotel_id = #{hId}
+    </select>
+
+    <select id="delElongHotel" resultType="com.bingo.hotel.spa.intl.core.push.model.UpHotel">
+        DELETE
+        FROM db_up_hotel
+        where distribute_id = 20007
+        and supplier_id = 10004
+        and hotel_id = #{hId}
+    </select>
+
+    <select id="getUpHotelListByDistributeIdAndSupplierIdAndPage" resultType="java.lang.String">
+        select distinct
+        hotel_id
+        from db_up_hotel
+        where distribute_id = #{dId}
+        and supplier_id in
+        <foreach collection="sList" item="sId" open="(" separator="," close=")">
+            #{sId}
+        </foreach>
+        group by hotel_id
+        limit #{pageNum},#{pageSize}
+    </select>
+
+
+</mapper>
