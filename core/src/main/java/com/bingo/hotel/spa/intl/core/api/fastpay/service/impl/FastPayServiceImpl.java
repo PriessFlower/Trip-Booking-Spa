@@ -5,6 +5,7 @@ import com.bingo.hotel.info.intl.cli.request.SupplierHotelBaseRequest;
 import com.bingo.hotel.info.intl.cli.request.SupplierProductBaseRequest;
 import com.bingo.hotel.spa.intl.cli.dto.CancelPolicy;
 import com.bingo.hotel.spa.intl.cli.dto.CheckPriceRespDTO;
+import com.bingo.hotel.spa.intl.cli.dto.Meal;
 import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
@@ -224,7 +225,7 @@ public class FastPayServiceImpl implements FastPayService {
                         .totalPrice(totalPrice.multiply(new BigDecimal("100")).intValue())
                         .brokerage(null == availRoomRate.getCommission() ? 0 : availRoomRate.getCommission().multiply(new BigDecimal("100")).intValue())
                         .priceInfos(buildQueryPriceInfos(totalPrice, request.getCheckIn(), request.getCheckout()))
-//                        .meal(convertMeal(request.getAdultNum(), rate.getAmenities()))
+                        .meal(convertMeal(request.getAdultNum(), availRoomRate.getMealPlanName()))
                         .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                         .build();
                 productRespList.add(productRespDTO);
@@ -252,6 +253,71 @@ public class FastPayServiceImpl implements FastPayService {
         return priceInfos;
     }
 
+    public Meal convertMeal(Integer adultNum, String mealName) {
+
+        Meal meal = new Meal();
+        switch (mealName) {
+            case "All Inclusive":
+            case "All Inclusive Plus":
+            case "All Inclusive Soft":
+            case "American Breakfast":
+            case "Bed & Breakfast":
+            case "Buffet Breakfast":
+            case "Continental Breakfast":
+            case "Half Board":
+            case "Half Board Premium":
+                meal = Meal.builder()
+                        .count(adultNum)
+                        .lunchCount(0)
+                        .dinnerCount(0)
+                        .mealDesc(mealName)
+                        .build();
+                break;
+            case "Brunch":
+            case "Half Board (BB  & Lunch)":
+                meal = Meal.builder()
+                        .count(adultNum)
+                        .lunchCount(adultNum)
+                        .dinnerCount(0)
+                        .mealDesc(mealName)
+                        .build();
+                break;
+            case "Dinner Only":
+            case "Half Board (Dinner Adults Only) ":
+                meal = Meal.builder()
+                        .count(0)
+                        .lunchCount(0)
+                        .dinnerCount(adultNum)
+                        .mealDesc(mealName)
+                        .build();
+                break;
+            case "Full Board":
+            case "Full Board Plus":
+                meal = Meal.builder()
+                        .count(adultNum)
+                        .lunchCount(adultNum)
+                        .dinnerCount(adultNum)
+                        .mealDesc(mealName)
+                        .build();
+                break;
+            case "Half Board (BB  & Dinner)":
+                meal = Meal.builder()
+                        .count(adultNum)
+                        .lunchCount(0)
+                        .dinnerCount(adultNum)
+                        .mealDesc(mealName)
+                        .build();
+                break;
+            default:
+                meal = Meal.builder()
+                        .count(0)
+                        .lunchCount(0)
+                        .dinnerCount(0)
+                        .mealDesc(mealName)
+                        .build();
+        }
+        return meal;
+    }
 
     @Override
     public List<ProductRespDTO> queryProductPrice(PriceReq request, Supplier supplier) {
@@ -309,9 +375,8 @@ public class FastPayServiceImpl implements FastPayService {
                             .totalPrice(totalPrice.multiply(new BigDecimal("100")).intValue())
                             .brokerage(null == availRoomRate.getCommission() ? 0 : availRoomRate.getCommission().multiply(new BigDecimal("100")).intValue())
                             .priceInfos(buildQueryPriceInfos(totalPrice, request.getCheckIn(), request.getCheckout()))
-//                        .meal(convertMeal(request.getAdultNum(), rate.getAmenities()))
+                            .meal(convertMeal(request.getAdultNum(), availRoomRate.getMealPlanName()))
                             .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
-
                             .build();
                     return Arrays.asList(productRespDTO);
                 }
