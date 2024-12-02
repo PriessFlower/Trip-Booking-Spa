@@ -1,4 +1,4 @@
-package com.bingo.hotel.spa.intl.core.push.mapper;
+package com.bingo.hotel.spa.intl.core.api.common.mapper;
 
 import com.bingo.hotel.spa.intl.core.push.model.UpHotel;
 import org.apache.ibatis.annotations.Param;
@@ -21,7 +21,7 @@ public interface UpHotelMapper {
      * @param distributeId
      * @return
      */
-    List<Long> getHotelList(@Param("dId") Integer distributeId);
+    List<String> getHotelList(@Param("dId") Integer distributeId);
 
     /**
      * 获取酒店通过酒店ID

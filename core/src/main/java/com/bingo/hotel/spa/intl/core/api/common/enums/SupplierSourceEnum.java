@@ -10,6 +10,7 @@ public enum SupplierSourceEnum {
     DIDATRAVEL(10003, "didatravel"),
     HUITRAVEL(10004, "huitravel"),
     EXPEDIA(10005, "expedia"),
+    FLIGGY(20002, "fliggy"),
     ;
 
     SupplierSourceEnum(int code, String desc) {

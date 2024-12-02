@@ -6,6 +6,7 @@ import com.bingo.hotel.spa.intl.core.api.didatravel.service.DidatravelHotelServi
 import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaStaticInfoService;
 import com.bingo.hotel.spa.intl.core.api.huitravel.service.HuiTravelService;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.service.TravelconnectHotelService;
+import com.bingo.hotel.spa.intl.core.push.fliggy.service.FliggyPushService;
 import com.bingo.hotel.spa.intl.rest.common.HttpResponse;
 import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,8 @@ public class BackDoorController {
     private HuiTravelService huiTravelService;
     @Autowired
     private ExpediaStaticInfoService expediaStaticInfoService;
+    @Autowired
+    private FliggyPushService fliggyPushService;
 
     @GetMapping("/push")
     @ApiOperation("HotelList查询")
@@ -115,4 +118,19 @@ public class BackDoorController {
         expediaStaticInfoService.saveOrUpdateProductInfo(checkInDate, checkOutDate, supplierHotelIds, startNum);
         return HttpResponse.getSuccessInstance();
     }
+
+    @GetMapping("/fliggy/pushFliggyHotel")
+    @ApiOperation("获取飞猪RPId")
+    public HttpResponse pushFliggyHotel(@RequestParam("hotelId") String hotelId) throws Exception {
+        fliggyPushService.pushFliggyHotel(hotelId);
+        return HttpResponse.getSuccessInstance(null);
+    }
+
+    @GetMapping("/fliggy/pushFliggyRoom")
+    @ApiOperation("获取飞猪RPId")
+    public HttpResponse pushFliggyRoom(@RequestParam("hotelId") String hotelId) throws Exception {
+        fliggyPushService.pushFliggyRoom(hotelId);
+        return HttpResponse.getSuccessInstance(null);
+    }
+
 }

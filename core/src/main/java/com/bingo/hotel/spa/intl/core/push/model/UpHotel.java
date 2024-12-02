@@ -36,6 +36,6 @@ public class UpHotel implements Serializable {
     /**
     * BG酒店ID
     */
-    private Long hotelId;
+    private String hotelId;
 
 }

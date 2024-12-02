@@ -1,7 +1,7 @@
 package com.bingo.hotel.spa.intl.core.push.service.impl;
 
 
-import com.bingo.hotel.spa.intl.core.push.mapper.UpHotelMapper;
+import com.bingo.hotel.spa.intl.core.api.common.mapper.UpHotelMapper;
 import com.bingo.hotel.spa.intl.core.push.model.UpHotel;
 import com.bingo.hotel.spa.intl.core.push.service.UpHotelService;
 import lombok.extern.slf4j.Slf4j;
@@ -18,9 +18,9 @@ public class UpHotelServiceImpl implements UpHotelService {
     private UpHotelMapper upHotelMapper;
 
     @Override
-    public List<Long> getHotelListByDistributeId(Integer distributeId) {
+    public List<String> getHotelListByDistributeId(Integer distributeId) {
 
-        List<Long> upHotelDTOList =
+        List<String> upHotelDTOList =
                 upHotelMapper.getHotelList(distributeId);
 
         if (CollectionUtils.isEmpty(upHotelDTOList)) {
@@ -47,8 +47,8 @@ public class UpHotelServiceImpl implements UpHotelService {
 
 
     @Override
-    public List<Long> getHotelListByDistributeId(Integer distributeId, List<Integer> supplierIds) {
-        List<Long> upHotelDTOList =
+    public List<String> getHotelListByDistributeId(Integer distributeId, List<Integer> supplierIds) {
+        List<String> upHotelDTOList =
                 upHotelMapper.getHotelList(distributeId);
 
         if (CollectionUtils.isEmpty(upHotelDTOList)) {

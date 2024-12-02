@@ -12,7 +12,7 @@ public interface UpHotelService {
      * @param distributeId
      * @return
      */
-    List<Long> getHotelListByDistributeId(Integer distributeId);
+    List<String> getHotelListByDistributeId(Integer distributeId);
 
     /**
      * 获取酒店通过酒店ID
@@ -50,7 +50,7 @@ public interface UpHotelService {
      * @param distributeId
      * @return
      */
-    List<Long> getHotelListByDistributeId(Integer distributeId,List<Integer> supplierIds);
+    List<String> getHotelListByDistributeId(Integer distributeId,List<Integer> supplierIds);
 
 
     List<Long> getUpHotelListByDistributeIdAndSupplierIdAndPage(Integer distributeId,List<Integer> supplierIds,int pageNum, int pageSize);
