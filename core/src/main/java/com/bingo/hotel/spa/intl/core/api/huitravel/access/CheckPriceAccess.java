@@ -9,8 +9,6 @@ import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.common.exception.ParseException;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.Head;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.HuiTravelBaseRequest;
-import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.AvailabilityRequest;
-import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.AvailabilityResponse;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.check.CheckRequest;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.check.CheckResponse;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
