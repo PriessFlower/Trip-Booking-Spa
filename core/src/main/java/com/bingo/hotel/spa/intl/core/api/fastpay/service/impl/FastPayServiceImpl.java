@@ -9,9 +9,11 @@ import com.bingo.hotel.spa.intl.cli.dto.Meal;
 import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
+import com.bingo.hotel.spa.intl.cli.enums.RefundType;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
+import com.bingo.hotel.spa.intl.core.api.aichotels.utils.AichotelsProductConvertUtil;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.expedia.utils.ThreadPoolUtils;
@@ -34,6 +36,7 @@ import com.bingo.hotel.spa.intl.core.api.fastpay.service.FastPayService;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.DateUtil;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
+import com.google.common.util.concurrent.RateLimiter;
 import com.google.errorprone.annotations.concurrent.LazyInit;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -43,6 +46,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.ParseException;
@@ -54,6 +60,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 
@@ -83,6 +91,8 @@ public class FastPayServiceImpl implements FastPayService {
     @Resource
     private DistributedRateLimiter rateLimiter;
     private static String token = "";
+
+    private static RateLimiter FASTPAY_QUERY_HOTEL_LIMITER = RateLimiter.create(14);
 
     public String getToken() {
         if (StringUtils.isBlank(token)) {
@@ -114,6 +124,7 @@ public class FastPayServiceImpl implements FastPayService {
             try {
                 ThreadPoolUtils.execute(() -> {
                     if ("HOTEL".equals(type)) {
+                        FASTPAY_QUERY_HOTEL_LIMITER.acquire();
                         HotelInfoRequest hotelInfoRequest = HotelInfoRequest.builder()
                                 .messageID(UUID.randomUUID().toString())
                                 .code(hotelCode)
@@ -226,7 +237,7 @@ public class FastPayServiceImpl implements FastPayService {
                         .brokerage(null == availRoomRate.getCommission() ? 0 : availRoomRate.getCommission().multiply(new BigDecimal("100")).intValue())
                         .priceInfos(buildQueryPriceInfos(totalPrice, request.getCheckIn(), request.getCheckout()))
                         .meal(convertMeal(request.getAdultNum(), availRoomRate.getMealPlanName()))
-                        .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+                        .cancelPolicy(convertCancelPolicy(supplier.getSHotelId(), availRoomRate.getCancellationPolicy()))
                         .build();
                 productRespList.add(productRespDTO);
             }
@@ -376,7 +387,7 @@ public class FastPayServiceImpl implements FastPayService {
                             .brokerage(null == availRoomRate.getCommission() ? 0 : availRoomRate.getCommission().multiply(new BigDecimal("100")).intValue())
                             .priceInfos(buildQueryPriceInfos(totalPrice, request.getCheckIn(), request.getCheckout()))
                             .meal(convertMeal(request.getAdultNum(), availRoomRate.getMealPlanName()))
-                            .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+                            .cancelPolicy(convertCancelPolicy(supplier.getSHotelId(), availRoomRate.getCancellationPolicy()))
                             .build();
                     return Arrays.asList(productRespDTO);
                 }
@@ -444,6 +455,144 @@ public class FastPayServiceImpl implements FastPayService {
             }
         }
         return null;
+    }
+
+    public static List<CancelPolicy> convertCancelPolicy(String hotelCode, SearchResponse.CancellationPolicy cancelPolicy) {
+        List<CancelPolicy> cancelPolicyList = new ArrayList<>();
+        try {
+            AichotelsProductConvertUtil aichotelsProductConvertUtil = new AichotelsProductConvertUtil();
+            String timeZone = aichotelsProductConvertUtil.getTimeZone(null, hotelCode, SupplierSourceEnum.FASTPAYHOTELS.getCode());
+            if (StringUtils.isBlank(cancelPolicy.getCode())) {
+                cancelPolicyList.add(CancelPolicy.builder().cancelType(0).build());
+                return cancelPolicyList;
+            }
+            if (isInCorrectFormat(cancelPolicy.getCode(), "^(100P|100P_0D1N|1N_0D1N|1N)_([0-9]+)D([0-9]+)N$")) {
+                Pattern pattern = Pattern.compile("^(100P|100P_0D1N|1N_0D1N|1N)_([0-9]+)D([0-9]+)N$"); // 注意这里简化了正则以只匹配一个数字
+                Matcher matcher = pattern.matcher(cancelPolicy.getCode());
+                Integer hours = 0;
+                Integer days = 1;
+                if (matcher.find()) {
+                    // 获取捕获组中的第二个组，即第二个括号里的内容，它应该是我们需要的数字。
+                    hours = Integer.parseInt(matcher.group(2)) * 24;
+                    days = Integer.parseInt(matcher.group(3));
+                }
+                cancelPolicyList.add(CancelPolicy.builder()
+                        .cancelType(1)
+                        .timeZone(timeZone)
+                        .before(Math.max(25, hours))
+                        .type(RefundType.NO_DEDUCTION)
+                        .build());
+                if (hours > 25) {
+                    cancelPolicyList.add(CancelPolicy.builder()
+                            .cancelType(1)
+                            .timeZone(timeZone)
+                            .before(25)
+                            .type(RefundType.DEDUCT_DAY_NIGHT)
+                            .value(Double.valueOf(days))
+                            .build());
+                }
+            } else if (isInCorrectFormat(cancelPolicy.getCode(), "^(100P|100P_0D1N|1N_0D1N|1N)_([0-9]+)D([0-9]+)N#([0-9]{2})(AM|PM)$")) {
+                Pattern pattern = Pattern.compile("^(100P|100P_0D1N|1N_0D1N|1N)_([0-9]+)D([0-9]+)N#([0-9]{2})(AM|PM)$"); // 注意这里简化了正则以只匹配一个数字
+                Matcher matcher = pattern.matcher(cancelPolicy.getCode());
+                if (matcher.find()) {
+                    // 获取捕获组中的第二个组，即第二个括号里的内容，它应该是我们需要的数字。
+                    Integer hours = Integer.parseInt(matcher.group(2)) * 24 + ("AM".equals(matcher.group(5)) ? 24 - Integer.parseInt(matcher.group(4)) :
+                            12 - Integer.parseInt(matcher.group(4)));
+                    Integer days = Integer.parseInt(matcher.group(3));
+                    cancelPolicyList.add(CancelPolicy.builder()
+                            .cancelType(1)
+                            .timeZone(timeZone)
+                            .before(Math.max(25, hours))
+                            .type(RefundType.NO_DEDUCTION)
+                            .build());
+                    if (hours > 25) {
+                        cancelPolicyList.add(CancelPolicy.builder()
+                                .cancelType(1)
+                                .timeZone(timeZone)
+                                .before(25)
+                                .type(RefundType.DEDUCT_DAY_NIGHT)
+                                .value(Double.valueOf(days))
+                                .build());
+                    }
+                }
+            } else if (isInCorrectFormat(cancelPolicy.getCode(), "^(100P|100P_0D1N|1N_0D1N|1N)_([0-9]+)D(\\d+)P#([0-9]{2})(AM|PM)$")) {
+                Pattern pattern = Pattern.compile("^(100P|100P_0D1N|1N_0D1N|1N)_([0-9]+)D(\\d+)P#([0-9]{2})(AM|PM)$");
+                Matcher matcher = pattern.matcher(cancelPolicy.getCode());
+                if (matcher.find()) {
+                    // 获取捕获组中的第二个组，即第二个括号里的内容，它应该是我们需要的数字。
+                    Integer hours = Integer.parseInt(matcher.group(2)) * 24 + ("AM".equals(matcher.group(4)) ? 24 - Integer.parseInt(matcher.group(4)) :
+                            12 - Integer.parseInt(matcher.group(3)));
+                    cancelPolicyList.add(CancelPolicy.builder()
+                            .cancelType(1)
+                            .timeZone(timeZone)
+                            .before(Math.max(25, hours))
+                            .type(RefundType.NO_DEDUCTION)
+                            .build());
+                }
+            } else if (isInCorrectFormat(cancelPolicy.getCode(), "^(100P|100P_0D1N|1N_0D1N|1N)_([0-9]+)D(\\d+)P$")) {
+                Pattern pattern = Pattern.compile("^(100P|100P_0D1N|1N_0D1N|1N)_([0-9]+)D(\\d+)P$");
+                Matcher matcher = pattern.matcher(cancelPolicy.getCode());
+                if (matcher.find()) {
+                    // 获取捕获组中的第二个组，即第二个括号里的内容，它应该是我们需要的数字。
+                    Integer hours = Integer.parseInt(matcher.group(2)) * 24;
+                    cancelPolicyList.add(CancelPolicy.builder()
+                            .cancelType(1)
+                            .timeZone(timeZone)
+                            .before(Math.max(25, hours))
+                            .type(RefundType.NO_DEDUCTION)
+                            .build());
+                }
+            } else {
+                cancelPolicyList.add(CancelPolicy.builder().cancelType(0).build());
+            }
+        } catch (Exception e) {
+            log.error("取消规则计算异常 info:{}", JsonUtils.writeObject2Json(cancelPolicy), e);
+            cancelPolicyList.add(CancelPolicy.builder().cancelType(0).build());
+        }
+        return cancelPolicyList;
+    }
+
+    public static void main(String[] args) {
+        // 定义你想要读取的文件的名称（假设是"example.txt"）
+        String fileName = "D:\\working\\idea\\international-hotel\\hotel-spa-intl\\core\\src\\main\\java\\com\\bingo\\hotel\\spa\\intl\\core\\api\\fastpay\\service\\impl\\cancelFile";
+
+        // 定义文件的路径。如果文件和你的Java类在同一目录下，你只需要文件名即可。
+        String filePath = fileName;
+
+        try {
+            // 使用BufferedReader读取文件
+            BufferedReader br = new BufferedReader(new FileReader(filePath));
+            String line;
+            while ((line = br.readLine()) != null) {
+                // 处理每一行的内容
+                SearchResponse.CancellationPolicy cancellationPolicy = JsonUtils.readValue(line, SearchResponse.CancellationPolicy.class);
+                System.out.println(JsonUtils.writeObject2Json(convertCancelPolicy("", cancellationPolicy)));
+            }
+            br.close(); // 关闭流
+        } catch (IOException e) {
+            e.printStackTrace(); // 如果出现错误，打印堆栈信息
+        }
+    }
+
+    public static boolean isInCorrectFormat(String str, String patternStr) {
+        // 正则表达式匹配格式：数字N_数字D数字N
+        // 例如：1N_2D1N 这样的格式
+        Pattern pattern = Pattern.compile(patternStr);
+        Matcher matcher = pattern.matcher(str);
+        return matcher.matches(); // 如果字符串符合正则表达式的格式，则返回true
+    }
+
+    public static int getNumberBeforeD(String str, String patternStr) {
+        // 提取D前面的数字，假设D前面只有一个数字且格式正确
+        Pattern pattern = Pattern.compile(patternStr); // 注意这里简化了正则以只匹配一个数字
+        Matcher matcher = pattern.matcher(str);
+        if (matcher.find()) {
+            // 获取捕获组中的第二个组，即第二个括号里的内容，它应该是我们需要的数字。
+            String beforeDStr = matcher.group(1); // 注意，正则表达式中组的索引是从1开始的。
+            return Integer.parseInt(beforeDStr); // 将字符串转换为整数。如果可能抛出NumberFormatException，需处理异常。
+        } else {
+            return -1; // 如果没有找到匹配项，返回-1或其他错误值。
+        }
     }
 
 }

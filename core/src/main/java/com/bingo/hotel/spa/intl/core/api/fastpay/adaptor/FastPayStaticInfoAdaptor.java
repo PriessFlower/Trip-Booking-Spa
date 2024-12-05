@@ -1,5 +1,6 @@
 package com.bingo.hotel.spa.intl.core.api.fastpay.adaptor;
 
+import com.alibaba.fastjson.JSON;
 import com.bingo.hotel.info.intl.cli.dto.BedInfoDTO;
 import com.bingo.hotel.info.intl.cli.request.SupplierHotelBaseRequest;
 import com.bingo.hotel.info.intl.cli.request.SupplierProductBaseRequest;
@@ -89,7 +90,7 @@ public class FastPayStaticInfoAdaptor {
                         .setSupplierRoomId(availRoomRate.getRoomCode())
                         .setSupplierProductId(hotelAvail.getHotelInfo().getCode() + "_" + availRoomRate.getRoomCode() + "_" + availRoomRate.getRatePlanCode())
                         .setSupplierProductName(availRoomRate.getRoomName())
-                        .setSupplierProductNameCN("")
+                        .setSupplierProductNameCN(JSON.toJSONString(availRoomRate.getCancellationPolicy()))
                         .setBreakfast(0)
                         .setCancelType(0);
                 supplierProductBaseRequests.add(supplierProductBaseRequest);

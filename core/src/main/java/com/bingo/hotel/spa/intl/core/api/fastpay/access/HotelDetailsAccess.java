@@ -13,12 +13,10 @@ import com.bingo.hotel.spa.intl.core.exception.RedisLimitException;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RateIntervalUnit;
 
-import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
@@ -31,7 +29,7 @@ public class HotelDetailsAccess extends BaseHttpAccess<HotelInfoRequest, HotelDe
 
     private final static String PATH = "/hotel/details";
 
-    private static int QPS = 500;
+    private static int QPS = 10;
 
     public HotelDetailsAccess(String host, String authorization, DistributedRateLimiter redisRateLimiter) {
         super(SupplierSourceEnum.FASTPAYHOTELS, SupplierDataTypeEnum.STATIC_DATA, MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_INFO, 0);
@@ -57,9 +55,13 @@ public class HotelDetailsAccess extends BaseHttpAccess<HotelInfoRequest, HotelDe
     @Override
     protected void beforeAccess(HotelInfoRequest request) {
         if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
-            log.info("expedia接口请求超过限制，每秒请求超过{}次", QPS);
-            throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
-                    + "request = " + JsonUtils.writeObject2Json(request));
+            try {
+                log.info("fastpay接口请求超过限制，每秒请求超过{}次", QPS);
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
+                        + "request = " + JsonUtils.writeObject2Json(request));
+            }
         }
     }
 

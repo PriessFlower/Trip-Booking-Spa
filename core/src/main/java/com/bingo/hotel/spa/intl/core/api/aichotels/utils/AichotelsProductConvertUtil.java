@@ -130,7 +130,7 @@ public class AichotelsProductConvertUtil {
                 }
                 return List.of(CancelPolicy.builder()
                     .cancelType(1)
-                    .timeZone("GMT" + getTimeZone(ratePlanCancellationPolicy.getTimezone(),hotelId))
+                        .timeZone("GMT" + getTimeZone(ratePlanCancellationPolicy.getTimezone(), hotelId, SupplierSourceEnum.AICHOTELS.getCode()))
                     .before(25)
                     .type(type)
                     .value(Double.valueOf(policyOne.getFee_type_value())).build());
@@ -143,7 +143,7 @@ public class AichotelsProductConvertUtil {
 
                 CancelPolicy cancelPolicyFirst = CancelPolicy.builder()
                         .cancelType(1)
-                        .timeZone("GMT" + getTimeZone(ratePlanCancellationPolicy.getTimezone(), hotelId))
+                        .timeZone("GMT" + getTimeZone(ratePlanCancellationPolicy.getTimezone(), hotelId, SupplierSourceEnum.AICHOTELS.getCode()))
                         .before(DateUtil.diffHour(formatDate(first.getDatetime()), solveCheckIn(checkIn)))
                         .type(RefundType.NO_DEDUCTION)
                         .value(0.0).build();
@@ -156,7 +156,7 @@ public class AichotelsProductConvertUtil {
                     if(!type1.equals(RefundType.NO_CANCEL)) {
                         CancelPolicy cancelPolicyLast = CancelPolicy.builder()
                                 .cancelType(1)
-                                .timeZone("GMT" + getTimeZone(ratePlanCancellationPolicy.getTimezone(), hotelId))
+                                .timeZone("GMT" + getTimeZone(ratePlanCancellationPolicy.getTimezone(), hotelId, SupplierSourceEnum.AICHOTELS.getCode()))
                                 .before(25)
                                 .type(type1)
                                 .value(Double.valueOf(first.getFee_type_value())).build();
@@ -171,7 +171,7 @@ public class AichotelsProductConvertUtil {
                         int before = DateUtil.diffHour(formatDate(policyList.get(i).getDatetime()), solveCheckIn(checkIn));
                         CancelPolicy cancelPolicy = CancelPolicy.builder()
                                 .cancelType(1)
-                                .timeZone("GMT" + getTimeZone(ratePlanCancellationPolicy.getTimezone(), hotelId))
+                                .timeZone("GMT" + getTimeZone(ratePlanCancellationPolicy.getTimezone(), hotelId, SupplierSourceEnum.AICHOTELS.getCode()))
                                 .before(before <= 24 ? 25 : before)
                                 .type(type1)
                                 .value(Double.valueOf(policyList.get(i-1).getFee_type_value())).build();
@@ -186,7 +186,7 @@ public class AichotelsProductConvertUtil {
                         if(!(lastBefore <= 25)){
                             CancelPolicy lastCancelPolicy = CancelPolicy.builder()
                                     .cancelType(1)
-                                    .timeZone("GMT" + getTimeZone(ratePlanCancellationPolicy.getTimezone(), hotelId))
+                                    .timeZone("GMT" + getTimeZone(ratePlanCancellationPolicy.getTimezone(), hotelId, SupplierSourceEnum.AICHOTELS.getCode()))
                                     .before(25)
                                     .type(lastType)
                                     .value(Double.valueOf(policyList.get(policyList.size()-1).getFee_type_value())).build();
@@ -234,9 +234,9 @@ public class AichotelsProductConvertUtil {
         return convertCancelPolicy(preBookCancellationPolicy,checkIn,checkOut,totalPrice, hotelId);
     }
 
-    public String getTimeZone(String timeZone,String hotelId) {
+    public String getTimeZone(String timeZone, String hotelId, Integer supplierId) {
         if(StringUtils.isBlank(timeZone)){
-            SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(hotelId, SupplierSourceEnum.AICHOTELS.getCode());
+            SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(hotelId, supplierId);
             BaseResult<GetCityInfoBySupplierHotelIdResponse> result = hotelBaseIntlClient.getCityInfoBySupplierHotelId(supplierHotelRequest);
             return didaTravelProductConvertUtil.getTimeZone(result.getData().getCityName(), result.getData().getCountryName());
         }
