@@ -9,7 +9,6 @@ import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.common.exception.ParseException;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.request.HotelInfoRequest;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.HotelFileResponse;
-import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.HotelFileResponse;
 import com.bingo.hotel.spa.intl.core.api.expedia.utils.ExpediaUtils;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;

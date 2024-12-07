@@ -178,3 +178,9 @@ fastPayHotels:
     catalogue: https://catalogue.fastpayhotels.net/api/v2
     availability: https://avail-baosheng.fastpayhotels.net/api/v2
     booking: https://booking.fastpayhotels.net/api/v2
+ratehawk:
+  key_id: 10501
+  api_key: 1c79daa2-1262-4cf2-8547-3595628de48c
+  url: https://api.worldota.net/api/b2b/v3/hotel
+system:
+  localFilePath: D:\working\file\导出文件\hotel_info\

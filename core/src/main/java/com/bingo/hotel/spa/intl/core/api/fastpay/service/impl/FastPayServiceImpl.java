@@ -554,19 +554,19 @@ public class FastPayServiceImpl implements FastPayService {
 
     public static void main(String[] args) {
         // 定义你想要读取的文件的名称（假设是"example.txt"）
-        String fileName = "D:\\working\\idea\\international-hotel\\hotel-spa-intl\\core\\src\\main\\java\\com\\bingo\\hotel\\spa\\intl\\core\\api\\fastpay\\service\\impl\\cancelFile";
-
-        // 定义文件的路径。如果文件和你的Java类在同一目录下，你只需要文件名即可。
-        String filePath = fileName;
+//        String fileName = "D:\\working\\idea\\international-hotel\\hotel-spa-intl\\core\\src\\main\\java\\com\\bingo\\hotel\\spa\\intl\\core\\api\\fastpay\\service\\impl\\cancelFile";
+        String filePath = "D:\\GPT浏览器下载/partner_feed_en_v3.jsonl";
 
         try {
             // 使用BufferedReader读取文件
             BufferedReader br = new BufferedReader(new FileReader(filePath));
             String line;
             while ((line = br.readLine()) != null) {
-                // 处理每一行的内容
-                SearchResponse.CancellationPolicy cancellationPolicy = JsonUtils.readValue(line, SearchResponse.CancellationPolicy.class);
-                System.out.println(JsonUtils.writeObject2Json(convertCancelPolicy("", cancellationPolicy)));
+                System.out.println(JsonUtils.writeObject2Json(line));
+
+//                // 处理每一行的内容
+//                SearchResponse.CancellationPolicy cancellationPolicy = JsonUtils.readValue(line, SearchResponse.CancellationPolicy.class);
+//                System.out.println(JsonUtils.writeObject2Json(convertCancelPolicy("", cancellationPolicy)));
             }
             br.close(); // 关闭流
         } catch (IOException e) {

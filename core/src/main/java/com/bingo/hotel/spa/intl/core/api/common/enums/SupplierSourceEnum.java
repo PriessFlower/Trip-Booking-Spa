@@ -11,6 +11,7 @@ public enum SupplierSourceEnum {
     HUITRAVEL(10004, "huitravel"),
     EXPEDIA(10005, "expedia"),
     FASTPAYHOTELS(10006, "FastpayHotels"),
+    RATEHAWK(10007, "ratehawk"),
     FLIGGY(20002, "fliggy"),
     ;
 

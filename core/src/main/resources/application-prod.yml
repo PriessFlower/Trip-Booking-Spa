@@ -134,3 +134,9 @@ fliggy:
     sessionKey: 6100528c57015c382fc6cb6b4049d1d001b91c145dc5d792217553435874
     appKey: 34784001
     appSecret: c4b6ee3e5015cee006a75aa8acd66275
+ratehawk:
+  key_id: 10501
+  api_key: 1c79daa2-1262-4cf2-8547-3595628de48c
+  url: https://api.worldota.net/api/b2b/v3/hotel
+system:
+  localFilePath: /home/webrun/spa/logs/file

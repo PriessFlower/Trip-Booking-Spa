@@ -1,11 +1,18 @@
 package com.bingo.hotel.spa.intl.core.util;
 
+import com.github.luben.zstd.ZstdInputStream;
+import lombok.extern.slf4j.Slf4j;
+
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
 import java.net.URL;
+import java.net.URLConnection;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.util.zip.GZIPInputStream;
@@ -17,6 +24,8 @@ import java.util.zip.GZIPInputStream;
  * @version : 1.0 2024/09/10
  * @since : 1.0
  **/
+
+@Slf4j
 public class FileDealUtils {
 
     /**
@@ -31,8 +40,11 @@ public class FileDealUtils {
         FileOutputStream fos = null;
         try {
             website = new URL(remoteFilePath);
-            rbc = Channels.newChannel(website.openStream());
-            fos = new FileOutputStream(localFilePath);//本地要存储的文件地址 例如：test.txt
+            // 设置代理服务器信息
+            Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress("127.0.0.1", 33210));
+            URLConnection urlConnection = website.openConnection(proxy);
+            rbc = Channels.newChannel(urlConnection.getInputStream());
+            fos = new FileOutputStream(localFilePath);//本地要存储的文件地址 例如：a/b/test.txt
             fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
         } catch (Exception e) {
             e.printStackTrace();
@@ -62,6 +74,8 @@ public class FileDealUtils {
      * @param localFilePath 本地存储位置
      */
     public static void gzipFile(String gzFilePath, String localFilePath) {
+        OutputStream out = null;
+
         try (InputStream in = new FileInputStream(gzFilePath);
              OutputStream out = new FileOutputStream(localFilePath);
              GZIPInputStream gzipIn = new GZIPInputStream(in)) {
@@ -76,4 +90,31 @@ public class FileDealUtils {
         }
     }
 
+    /**
+     * 解压zst后缀文件并分块存储
+     *
+     * @param zstdFilePath  压缩文件位置
+     * @param localFilePath 本地存储位置
+     */
+
+    public static void zstdFiles(String zstdFilePath, String localFilePath) {
+        int chunkSize = 1024 * 1024 * 1024; // 分片大小，默认1GB
+
+        try (InputStream inputStream = new FileInputStream(zstdFilePath);
+             ZstdInputStream zstdInputStream = new ZstdInputStream(inputStream)) {
+            byte[] buffer = new byte[chunkSize];
+            int bytesRead;
+            int chunkCount = 1;
+            while ((bytesRead = zstdInputStream.read(buffer)) != -1) {
+                String outputFilePath = localFilePath.replace(".jsonl", "") + "_" + chunkCount + ".jsonl";
+                try (FileOutputStream fileOutputStream = new FileOutputStream(outputFilePath)) {
+                    fileOutputStream.write(buffer, 0, bytesRead);
+                }
+                chunkCount++;
+            }
+        }catch (Exception e){
+            log.info("解压文件异常");
+            e.printStackTrace();
+        }
+    }
 }
