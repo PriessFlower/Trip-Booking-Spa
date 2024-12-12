@@ -20,7 +20,7 @@ import lombok.Setter;
 public class BaseResult<T> {
 
     private T data;
-    private String debug;
+    private Object debug;
     private String error;
     private String status;
 }

@@ -1,11 +1,13 @@
 package com.bingo.hotel.spa.intl.rest.controller;
 
 
+import com.bingo.hotel.spa.intl.cli.dto.ResponseDTO;
 import com.bingo.hotel.spa.intl.core.api.aichotels.service.AichotelsHotelService;
 import com.bingo.hotel.spa.intl.core.api.didatravel.service.DidatravelHotelService;
 import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaStaticInfoService;
 import com.bingo.hotel.spa.intl.core.api.fastpay.service.FastPayService;
 import com.bingo.hotel.spa.intl.core.api.huitravel.service.HuiTravelService;
+import com.bingo.hotel.spa.intl.core.api.ratehawk.service.RateHawkService;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.service.TravelconnectHotelService;
 import com.bingo.hotel.spa.intl.core.push.fliggy.service.FliggyPushService;
 import com.bingo.hotel.spa.intl.rest.common.HttpResponse;
@@ -39,6 +41,8 @@ public class BackDoorController {
     private FliggyPushService fliggyPushService;
     @Resource
     private FastPayService fastPayStaticInfoService;
+    @Resource
+    private RateHawkService rateHawkService;
 
     @GetMapping("/push")
     @ApiOperation("HotelList查询")
@@ -141,6 +145,23 @@ public class BackDoorController {
     public HttpResponse expediaSaveHotelInfo(@RequestParam(name = "days") int days,
                                              @RequestParam("type") String type) {
         fastPayStaticInfoService.saveHotelList(days, type);
+        return HttpResponse.getSuccessInstance();
+    }
+
+    @GetMapping(value = "/save/rateHawk/hotel")
+    @ApiOperation("酒店静态数据保存-rateHawk")
+    public HttpResponse rateHawkSaveHotelInfo(@RequestParam(value = "downloadFlag", required = false) Boolean downloadFlag) {
+        rateHawkService.queryAndSaveStaticInfo(downloadFlag);
+        return HttpResponse.getSuccessInstance();
+    }
+
+    @GetMapping(value = "/save/rateHawk/product")
+    @ApiOperation("产品静态数据保存-rateHawk")
+    public HttpResponse rateHawkSaveProductInfo(@RequestParam(value = "checkInDate", required = false) String checkInDate,
+                                                @RequestParam(value = "checkOutDate", required = false) String checkOutDate,
+                                                @RequestParam(value = "supplierHotelIds", required = false) List<String> supplierHotelIds,
+                                                @RequestParam(value = "startNum", required = false) Integer startNum) {
+        rateHawkService.queryAndSaveProductInfo(checkInDate, checkOutDate, supplierHotelIds, startNum);
         return HttpResponse.getSuccessInstance();
     }
 }

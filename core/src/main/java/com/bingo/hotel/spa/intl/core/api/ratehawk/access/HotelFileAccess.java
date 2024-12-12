@@ -30,9 +30,9 @@ public class HotelFileAccess extends BaseHttpAccess<HotelInfoRequest, HotelFileR
     private DistributedRateLimiter redisRateLimiter;
 
     //首次全量地址
-    private final static String PATH = "/info/dump/";
+    private final static String PATH = "/hotel/info/dump/";
     //后续增量地址
-//    private final static String PATH = "/info/incremental_dump/";
+//    private final static String PATH = "/hotel/info/incremental_dump/";
 
     private static int QPS = 30;
 
@@ -61,6 +61,7 @@ public class HotelFileAccess extends BaseHttpAccess<HotelInfoRequest, HotelFileR
         BaseResult<HotelFileResponse> hotelFileResponse = JsonUtils.decodeJson(hotelFileStr, new TypeReference<>() {
         });
         if (null == hotelFileResponse || null == hotelFileResponse.getData() || "error".equals(hotelFileResponse.getError())) {
+            log.info("ratehawk酒店静态查询异常 request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(hotelFileStr));
             return null;
         }
         return new ResponseResult<>(hotelFileResponse.getData());

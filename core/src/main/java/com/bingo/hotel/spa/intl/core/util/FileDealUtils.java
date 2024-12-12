@@ -3,18 +3,22 @@ package com.bingo.hotel.spa.intl.core.util;
 import com.github.luben.zstd.ZstdInputStream;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.File;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.charset.StandardCharsets;
 import java.util.zip.GZIPInputStream;
 
 /**
@@ -74,7 +78,6 @@ public class FileDealUtils {
      * @param localFilePath 本地存储位置
      */
     public static void gzipFile(String gzFilePath, String localFilePath) {
-        OutputStream out = null;
 
         try (InputStream in = new FileInputStream(gzFilePath);
              OutputStream out = new FileOutputStream(localFilePath);
@@ -97,24 +100,75 @@ public class FileDealUtils {
      * @param localFilePath 本地存储位置
      */
 
+//    public static void zstdFiles(String zstdFilePath, String localFilePath) {
+//        int chunkSize = 1024 * 1024 * 1024; // 分片大小，默认1GB
+//
+//        try (InputStream inputStream = new FileInputStream(zstdFilePath);
+//             ZstdInputStream zstdInputStream = new ZstdInputStream(inputStream)) {
+//            byte[] buffer = new byte[chunkSize];
+//            int bytesRead;
+//            int chunkCount = 1;
+//            while ((bytesRead = zstdInputStream.read(buffer)) != -1) {
+//                String outputFilePath = localFilePath + "_" + chunkCount + ".jsonl";
+//                try (FileOutputStream fileOutputStream = new FileOutputStream(outputFilePath)) {
+//                    fileOutputStream.write(buffer, 0, bytesRead);
+//                }
+//                chunkCount++;
+//            }
+//        }catch (Exception e){
+//            log.info("解压文件异常");
+//            e.printStackTrace();
+//        }
+//    }
+
     public static void zstdFiles(String zstdFilePath, String localFilePath) {
         int chunkSize = 1024 * 1024 * 1024; // 分片大小，默认1GB
 
         try (InputStream inputStream = new FileInputStream(zstdFilePath);
-             ZstdInputStream zstdInputStream = new ZstdInputStream(inputStream)) {
-            byte[] buffer = new byte[chunkSize];
-            int bytesRead;
+             ZstdInputStream zstdInputStream = new ZstdInputStream(inputStream);
+             BufferedReader reader = new BufferedReader(new InputStreamReader(zstdInputStream, StandardCharsets.UTF_8))) {
+
+            String line;
             int chunkCount = 1;
-            while ((bytesRead = zstdInputStream.read(buffer)) != -1) {
-                String outputFilePath = localFilePath.replace(".jsonl", "") + "_" + chunkCount + ".jsonl";
-                try (FileOutputStream fileOutputStream = new FileOutputStream(outputFilePath)) {
-                    fileOutputStream.write(buffer, 0, bytesRead);
+            long currentSize = 0;
+
+            // 文件输出流，用于写入分块内容
+            FileOutputStream fileOutputStream = null;
+            BufferedWriter writer = null;
+
+            while ((line = reader.readLine()) != null) {
+                if (fileOutputStream == null) {
+                    String outputFilePath = localFilePath + "_" + chunkCount + ".jsonl";
+                    fileOutputStream = new FileOutputStream(outputFilePath);
+                    writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8));
                 }
-                chunkCount++;
+
+                writer.write(line);
+                writer.newLine(); // 确保每行后都有换行符
+
+                currentSize += line.getBytes(StandardCharsets.UTF_8).length + 1; // 加1是因为我们写了换行符
+
+                if (currentSize >= chunkSize) {
+                    // 当前块大小超过限制，切换到下一个块
+                    writer.close();
+                    fileOutputStream.close();
+
+                    chunkCount++;
+                    currentSize = 0;
+                    fileOutputStream = null;
+                    writer = null;
+                }
             }
-        }catch (Exception e){
-            log.info("解压文件异常");
+
+            // 确保最后的文件被正确关闭
+            if (writer != null) {
+                writer.close();
+                fileOutputStream.close();
+            }
+
+        } catch (Exception e) {
             e.printStackTrace();
+            System.out.println("解压文件异常");
         }
     }
 }

@@ -181,6 +181,6 @@ fastPayHotels:
 ratehawk:
   key_id: 10501
   api_key: 1c79daa2-1262-4cf2-8547-3595628de48c
-  url: https://api.worldota.net/api/b2b/v3/hotel
+  url: https://api.worldota.net/api/b2b/v3
 system:
   localFilePath: D:\working\file\导出文件\hotel_info\

@@ -16,6 +16,7 @@ import com.bingo.hotel.spa.intl.cli.seq.PushProductsReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaStaticInfoService;
+import com.bingo.hotel.spa.intl.core.api.ratehawk.service.RateHawkService;
 import com.bingo.hotel.spa.intl.core.api.service.BookingSyncService;
 import com.bingo.hotel.spa.intl.core.api.service.CancelSyncService;
 import com.bingo.hotel.spa.intl.core.api.service.CheckPriceSyncService;
@@ -45,6 +46,9 @@ public class HotelFeignClientImpl implements SPAFeignClient {
 
     @Resource
     private ExpediaStaticInfoService expediaStaticInfoService;
+
+    @Resource
+    private RateHawkService rateHawkService;
 
 
     @Override
@@ -158,4 +162,5 @@ public class HotelFeignClientImpl implements SPAFeignClient {
     public ResponseDTO<List<String>> queryExpediaHotelIdByCity(@RequestParam("cityId") String cityId) {
         return ResponseDTO.success(expediaStaticInfoService.queryHotelIdByCity(cityId));
     }
+
 }
