@@ -13,12 +13,13 @@ import com.bingo.hotel.spa.intl.cli.dto.Meal;
 import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
+import com.bingo.hotel.spa.intl.cli.enums.RefundType;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
+import com.bingo.hotel.spa.intl.core.api.aichotels.utils.AichotelsProductConvertUtil;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
-import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.QueryPriceResponse;
 import com.bingo.hotel.spa.intl.core.api.expedia.utils.ThreadPoolUtils;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.access.CheckPriceAccess;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.access.HotelFileAccess;
@@ -51,10 +52,16 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.Duration;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 
@@ -239,15 +246,15 @@ public class RateHawkServiceImpl implements RateHawkService {
                         QueryProductResponse.Payment_types paymentTypes = rate.getPayment_options().getPayment_types().get(0);
                         ProductRespDTO productRespDTO = ProductRespDTO.builder()
                                 .hotelId(String.valueOf(hotel.getHid()))
-                                .productId(hotel.getHid() + "_" + rate.getRoom_name() + "_" + rate.getMeal() + "_" + (StringUtils.isBlank(paymentTypes.getCancellation_penalties().getFree_cancellation_before()) ? "1" : "0"))
+                                .productId(hotel.getHid() + "_" + rate.getRoom_name() + "_" + rate.getMeal() + "_" + (StringUtils.isNotBlank(paymentTypes.getCancellation_penalties().getFree_cancellation_before()) ? "1" : "0"))
                                 .supplierId(SupplierSourceEnum.RATEHAWK.getCode())
                                 .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(rate.getRoom_name()).build())
                                 .currencyType(queryProductRequest.getCurrency())
                                 .totalPrice(new BigDecimal(paymentTypes.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
                                 .brokerage(new BigDecimal(paymentTypes.getCommission_info().getShow().getAmount_commission()).multiply(BigDecimal.valueOf(100)).intValue())
                                 .priceInfos(buildQueryPriceInfos(rate.getDaily_prices(), request.getCheckIn()))
-                                .meal(null)
-                                .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+                                .meal(convertMeal(rate.getMeal(), request.getAdultNum()))
+                                .cancelPolicy(convertCancelPolicy(supplier.getSHotelId(), request.getCheckIn(), paymentTypes.getCancellation_penalties()))
                                 .maxOccupancy(request.getAdultNum())
                                 .build();
                         productRespList.add(productRespDTO);
@@ -260,6 +267,9 @@ public class RateHawkServiceImpl implements RateHawkService {
         } catch (Exception e) {
             log.error("推送产品信息异常：request:{} ", JsonUtils.writeObject2Json(queryProductRequest), e);
         }
+        if (CollectionUtils.isNotEmpty(productRespList)) {
+            return disProductInfo(productRespList);
+        }
         return productRespList;
     }
 
@@ -267,7 +277,7 @@ public class RateHawkServiceImpl implements RateHawkService {
     @Override
     public List<ProductRespDTO> queryProductPrice(PriceReq request, Supplier supplier) {
 
-        ArrayList<ProductRespDTO> productRespList = new ArrayList<>();
+        List<ProductRespDTO> productRespList = new ArrayList<>();
 
         List<QueryProductRequest.Guests> guestsList = new ArrayList<>();
         for (Integer integer = 0; integer < request.getRoomNum(); integer++) {
@@ -299,32 +309,44 @@ public class RateHawkServiceImpl implements RateHawkService {
                         String[] productInfo = supplier.getSProductId().split("_");
                         QueryProductResponse.Payment_types paymentTypes = rate.getPayment_options().getPayment_types().get(0);
                         if (productInfo[0].equals(String.valueOf(hotel.getHid())) && productInfo[1].equals(rate.getRoom_name()) && productInfo[2].equals(rate.getMeal()) &&
-                                productInfo[3].equals(StringUtils.isBlank(paymentTypes.getCancellation_penalties().getFree_cancellation_before()) ? "1" : "0")) {
-                            //有产品信息去做验价
-                            CheckPriceRequest checkPriceRequest = CheckPriceRequest.builder().book_hash(rate.getBook_hash()).language("en").build();
-                            ResponseResult<CheckPriceResponse> checkPriceResponse = new CheckPriceAccess(url, generateBasicAuth(), redisRateLimiter).access(checkPriceRequest);
-                            if (null != checkPriceResponse.getData() && CollectionUtils.isNotEmpty(checkPriceResponse.getData().getHotels())) {
-                                ProductRespDTO productRespDTO = ProductRespDTO.builder()
-                                        .hotelId(String.valueOf(hotel.getHid()))
-                                        .productId(hotel.getHid() + "_" + rate.getRoom_name() + "_" + rate.getMeal() + "_" + (StringUtils.isBlank(paymentTypes.getCancellation_penalties().getFree_cancellation_before()) ? "1" : "0"))
-                                        .supplierId(SupplierSourceEnum.RATEHAWK.getCode())
-                                        .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(rate.getRoom_name()).build())
-                                        .currencyType(queryProductRequest.getCurrency())
-                                        .totalPrice(new BigDecimal(paymentTypes.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
-                                        .brokerage(new BigDecimal(paymentTypes.getCommission_info().getShow().getAmount_commission()).multiply(BigDecimal.valueOf(100)).intValue())
-                                        .priceInfos(buildQueryPriceInfos(rate.getDaily_prices(), request.getCheckIn()))
-                                        .meal(null)
-                                        .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
-                                        .maxOccupancy(request.getAdultNum())
-                                        .build();
-                                productRespList.add(productRespDTO);
-                            }
+                                productInfo[3].equals(StringUtils.isNotBlank(paymentTypes.getCancellation_penalties().getFree_cancellation_before()) ? "1" : "0")) {
+                            ProductRespDTO productRespDTO = ProductRespDTO.builder()
+                                    .hotelId(String.valueOf(hotel.getHid()))
+                                    .productId(hotel.getHid() + "_" + rate.getRoom_name() + "_" + rate.getMeal() + "_" + (StringUtils.isNotBlank(paymentTypes.getCancellation_penalties().getFree_cancellation_before()) ? "1" : "0"))
+                                    .totalPrice(new BigDecimal(paymentTypes.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
+                                    .planSession(rate.getBook_hash())
+                                    .build();
+                            productRespList.add(productRespDTO);
                         }
                     }
                 }
             } else {
                 log.info("请求ratehawk查询产品信息异常：request:{},response:{}", JsonUtils.writeObject2Json(queryProductRequest),
                         JsonUtils.writeObject2Json(queryProductResult));
+            }
+            if (CollectionUtils.isNotEmpty(productRespList)) {
+                ProductRespDTO productInfo = disProductInfo(productRespList).get(0);
+                //有产品信息去做验价
+                CheckPriceRequest checkPriceRequest = CheckPriceRequest.builder().book_hash(productInfo.getPlanSession()).language("en").build();
+                ResponseResult<CheckPriceResponse> checkPriceResponse = new CheckPriceAccess(url, generateBasicAuth(), redisRateLimiter).access(checkPriceRequest);
+                if (null != checkPriceResponse.getData() && CollectionUtils.isNotEmpty(checkPriceResponse.getData().getHotels())) {
+                    QueryProductResponse.Hotels hotelCheckInfo = checkPriceResponse.getData().getHotels().get(0);
+                    QueryProductResponse.Rates rateCheckInfo = hotelCheckInfo.getRates().get(0);
+                    QueryProductResponse.Payment_types checkPriceInfo = rateCheckInfo.getPayment_options().getPayment_types().get(0);
+                    ProductRespDTO productRespDTO = ProductRespDTO.builder()
+                            .hotelId(String.valueOf(hotelCheckInfo.getHid()))
+                            .productId(hotelCheckInfo.getHid() + "_" + rateCheckInfo.getRoom_name() + "_" + rateCheckInfo.getMeal() + "_" + (StringUtils.isNotBlank(checkPriceInfo.getCancellation_penalties().getFree_cancellation_before()) ? "1" : "0"))
+                            .supplierId(SupplierSourceEnum.RATEHAWK.getCode())
+                            .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(rateCheckInfo.getRoom_name()).build())
+                            .currencyType(queryProductRequest.getCurrency())
+                            .brokerage(new BigDecimal(checkPriceInfo.getCommission_info().getShow().getAmount_commission()).multiply(BigDecimal.valueOf(100)).intValue())
+                            .priceInfos(buildQueryPriceInfos(rateCheckInfo.getDaily_prices(), request.getCheckIn()))
+                            .meal(convertMeal(rateCheckInfo.getMeal(), request.getAdultNum()))
+                            .cancelPolicy(convertCancelPolicy(supplier.getSHotelId(), request.getCheckIn(), checkPriceInfo.getCancellation_penalties()))
+                            .maxOccupancy(request.getAdultNum())
+                            .build();
+                    return Arrays.asList(productRespDTO);
+                }
             }
         } catch (Exception e) {
             log.error("验价信息异常：request:{} ", JsonUtils.writeObject2Json(queryProductRequest), e);
@@ -344,16 +366,131 @@ public class RateHawkServiceImpl implements RateHawkService {
         return priceInfos;
     }
 
-    public Meal convertMeal(Integer adultNum) {
-        return null;
+    public Meal convertMeal(String mealStr, Integer adultNum) {
+        Meal meal = new Meal();
+        switch (mealStr) {
+            //全包
+            case "all-inclusive":
+            case "full-board":
+            case "soft-all-inclusive":
+            case "super-all-inclusive":
+            case "ultra-all-inclusive":
+                meal = Meal.builder()
+                        .count(adultNum)
+                        .lunchCount(adultNum)
+                        .dinnerCount(adultNum)
+                        .mealDesc("全包")
+                        .build();
+                break;
+            //早餐
+            case "american-breakfast":
+            case "asian-breakfast":
+            case "breakfast":
+            case "breakfast-buffet":
+            case "chinese-breakfast":
+            case "continental-breakfast":
+            case "english-breakfast":
+            case "half-board":
+            case "irish-breakfast":
+            case "israeli-breakfast":
+            case "japanese-breakfast":
+            case "scandinavian-breakfast":
+            case "scottish-breakfast":
+            case "some-meal":
+                meal = Meal.builder()
+                        .count(adultNum)
+                        .lunchCount(0)
+                        .dinnerCount(0)
+                        .mealDesc("")
+                        .build();
+                break;
+            //单早
+            case "breakfast-for-1":
+                meal = Meal.builder()
+                        .count(1)
+                        .lunchCount(0)
+                        .dinnerCount(0)
+                        .mealDesc("单早")
+                        .build();
+                break;
+            //双早
+            case "breakfast-for-2":
+                meal = Meal.builder()
+                        .count(2)
+                        .lunchCount(0)
+                        .dinnerCount(0)
+                        .mealDesc("双早")
+                        .build();
+                break;
+            //
+            case "dinner":
+                meal = Meal.builder()
+                        .count(0)
+                        .lunchCount(0)
+                        .dinnerCount(adultNum)
+                        .mealDesc("晚餐")
+                        .build();
+                break;
+            case "half-board-dinner": //单早
+                meal = Meal.builder()
+                        .count(adultNum)
+                        .lunchCount(0)
+                        .dinnerCount(adultNum)
+                        .mealDesc("早晚餐")
+                        .build();
+                break;
+            case "half-board-lunch": //单早
+                meal = Meal.builder()
+                        .count(adultNum)
+                        .lunchCount(adultNum)
+                        .dinnerCount(0)
+                        .mealDesc("早午餐")
+                        .build();
+                break;
+            default:
+                meal = Meal.builder()
+                        .count(0)
+                        .lunchCount(0)
+                        .dinnerCount(0)
+                        .mealDesc("")
+                        .build();
+        }
+        return meal;
     }
 
-    public List<CancelPolicy> convertCancelPolicy(String checkIn, List<QueryPriceResponse.CancelPolicy> cancelPolicies) {
-        return null;
+    public List<CancelPolicy> convertCancelPolicy(String hotelCode, String checkIn, QueryProductResponse.Cancellation_penalties cancelPolicies) {
+        if (StringUtils.isBlank(cancelPolicies.getFree_cancellation_before())) {
+            return Arrays.asList(CancelPolicy.builder().cancelType(0).build());
+        }
+        AichotelsProductConvertUtil aichotelsProductConvertUtil = new AichotelsProductConvertUtil();
+        String timeZone = aichotelsProductConvertUtil.getTimeZone(null, hotelCode, SupplierSourceEnum.FASTPAYHOTELS.getCode());
+
+        // 取消时间
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+        ZonedDateTime zonedDateTime = ZonedDateTime.parse(cancelPolicies.getFree_cancellation_before(), formatter.withZone(ZoneId.of("UTC")));
+        ZonedDateTime zonedDateTimeLocal = zonedDateTime.plusHours(StringUtils.isBlank(timeZone) ? 0 : Integer.parseInt(timeZone));
+        // checkIn时间24点
+        DateTimeFormatter checkFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        ZonedDateTime currentTime = ZonedDateTime.parse(checkIn, checkFormatter.withZone(ZoneId.of("Asia/Shanghai")));
+
+        // 计算两个时间之间的持续时间
+        Duration duration = Duration.between(zonedDateTimeLocal, currentTime);
+        // 计算小时差
+        long hoursDifference = duration.toHours();
+        List<CancelPolicy> cancelPolicyList = new ArrayList<>();
+        cancelPolicyList.add(CancelPolicy.builder()
+                .cancelType(1)
+                .timeZone("GMT" + timeZone)
+                .before(Math.max(25, (int) hoursDifference))
+                .type(RefundType.NO_DEDUCTION)
+                .build());
+        return cancelPolicyList;
     }
 
     @Override
     public CheckPriceRespDTO checkPrices(CheckPriceReq request) {
+
+        List<ProductRespDTO> productRespList = new ArrayList<>();
 
         List<QueryProductRequest.Guests> guestsList = new ArrayList<>();
         for (Integer integer = 0; integer < request.getRoomNum(); integer++) {
@@ -385,23 +522,14 @@ public class RateHawkServiceImpl implements RateHawkService {
                         String[] productInfo = request.getSProductId().split("_");
                         QueryProductResponse.Payment_types paymentTypes = rate.getPayment_options().getPayment_types().get(0);
                         if (productInfo[0].equals(String.valueOf(hotel.getHid())) && productInfo[1].equals(rate.getRoom_name()) && productInfo[2].equals(rate.getMeal()) &&
-                                productInfo[3].equals(StringUtils.isBlank(paymentTypes.getCancellation_penalties().getFree_cancellation_before()) ? "1" : "0")) {
-                            //有产品信息去做验价
-                            CheckPriceRequest checkPriceRequest = CheckPriceRequest.builder().book_hash(rate.getBook_hash()).language("en").build();
-                            ResponseResult<CheckPriceResponse> checkPriceResponse = new CheckPriceAccess(url, generateBasicAuth(), redisRateLimiter).access(checkPriceRequest);
-                            if (null != checkPriceResponse.getData() && CollectionUtils.isNotEmpty(checkPriceResponse.getData().getHotels())) {
-                                QueryProductResponse.Hotels hotelCheckInfo = checkPriceResponse.getData().getHotels().get(0);
-                                QueryProductResponse.Rates rateCheckInfo = hotelCheckInfo.getRates().get(0);
-                                QueryProductResponse.Payment_types checkPriceInfo = rateCheckInfo.getPayment_options().getPayment_types().get(0);
-                                return CheckPriceRespDTO.builder()
-                                        .checkStatus(true)
-                                        .prebookToken(rateCheckInfo.getBook_hash())
-                                        .salePrice(new BigDecimal(checkPriceInfo.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
-                                        .totalPriceAfter(new BigDecimal(checkPriceInfo.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
-                                        .totalPriceBefore(new BigDecimal(checkPriceInfo.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
-                                        .message("USD")
-                                        .build();
-                            }
+                                productInfo[3].equals(StringUtils.isNotBlank(paymentTypes.getCancellation_penalties().getFree_cancellation_before()) ? "1" : "0")) {
+                            ProductRespDTO productRespDTO = ProductRespDTO.builder()
+                                    .hotelId(String.valueOf(hotel.getHid()))
+                                    .productId(hotel.getHid() + "_" + rate.getRoom_name() + "_" + rate.getMeal() + "_" + (StringUtils.isNotBlank(paymentTypes.getCancellation_penalties().getFree_cancellation_before()) ? "1" : "0"))
+                                    .totalPrice(new BigDecimal(paymentTypes.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
+                                    .planSession(rate.getBook_hash())
+                                    .build();
+                            productRespList.add(productRespDTO);
                         }
                     }
                 }
@@ -409,10 +537,46 @@ public class RateHawkServiceImpl implements RateHawkService {
                 log.info("请求ratehawk查询产品信息异常：request:{},response:{}", JsonUtils.writeObject2Json(queryProductRequest),
                         JsonUtils.writeObject2Json(queryProductResult));
             }
+            if (CollectionUtils.isNotEmpty(productRespList)) {
+                ProductRespDTO productInfo = disProductInfo(productRespList).get(0);
+                //有产品信息去做验价
+                CheckPriceRequest checkPriceRequest = CheckPriceRequest.builder().book_hash(productInfo.getPlanSession()).language("en").build();
+                ResponseResult<CheckPriceResponse> checkPriceResponse = new CheckPriceAccess(url, generateBasicAuth(), redisRateLimiter).access(checkPriceRequest);
+                if (null != checkPriceResponse.getData() && CollectionUtils.isNotEmpty(checkPriceResponse.getData().getHotels())) {
+                    QueryProductResponse.Hotels hotelCheckInfo = checkPriceResponse.getData().getHotels().get(0);
+                    QueryProductResponse.Rates rateCheckInfo = hotelCheckInfo.getRates().get(0);
+                    QueryProductResponse.Payment_types checkPriceInfo = rateCheckInfo.getPayment_options().getPayment_types().get(0);
+                    return CheckPriceRespDTO.builder()
+                            .checkStatus(true)
+                            .prebookToken(rateCheckInfo.getBook_hash())
+                            .salePrice(new BigDecimal(checkPriceInfo.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
+                            .totalPriceAfter(new BigDecimal(checkPriceInfo.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
+                            .totalPriceBefore(new BigDecimal(checkPriceInfo.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
+                            .message("USD")
+                            .build();
+                }
+            }
         } catch (Exception e) {
             log.error("验价信息异常：request:{} ", JsonUtils.writeObject2Json(queryProductRequest), e);
         }
         return null;
+    }
+
+    public static List<ProductRespDTO> disProductInfo(List<ProductRespDTO> productRespDTOList) {
+        // 使用Map来存储每个产品对应的最小金额报价
+        Map<String, ProductRespDTO> orderMap = new HashMap<>();
+
+        for (ProductRespDTO productRespDTO : productRespDTOList) {
+            String productId = productRespDTO.getProductId();
+            Integer totalPrice = productRespDTO.getTotalPrice();
+
+            // 如果Map中还没有这个订单号，或者当前订单的金额比Map中存储的小，则更新Map
+            if (!orderMap.containsKey(productId) || totalPrice < orderMap.get(productId).getTotalPrice()) {
+                orderMap.put(productId, productRespDTO);
+            }
+        }
+        // 将Map中的值转换为List
+        return new ArrayList<>(orderMap.values());
     }
 
     public String generateBasicAuth() {
