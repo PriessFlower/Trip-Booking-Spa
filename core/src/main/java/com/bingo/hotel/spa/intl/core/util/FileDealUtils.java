@@ -45,9 +45,10 @@ public class FileDealUtils {
         try {
             website = new URL(remoteFilePath);
             // 设置代理服务器信息
-            Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress("127.0.0.1", 33210));
-            URLConnection urlConnection = website.openConnection(proxy);
-            rbc = Channels.newChannel(urlConnection.getInputStream());
+//            Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress("127.0.0.1", 33210));
+//            URLConnection urlConnection = website.openConnection(proxy);
+//            rbc = Channels.newChannel(urlConnection.getInputStream());
+            rbc = Channels.newChannel(website.openStream());
             fos = new FileOutputStream(localFilePath);//本地要存储的文件地址 例如：a/b/test.txt
             fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
         } catch (Exception e) {
