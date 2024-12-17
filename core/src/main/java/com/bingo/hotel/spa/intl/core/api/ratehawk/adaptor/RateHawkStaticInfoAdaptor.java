@@ -5,6 +5,7 @@ import com.bingo.hotel.info.intl.cli.dto.BedInfoDTO;
 import com.bingo.hotel.info.intl.cli.request.SupplierHotelBaseRequest;
 import com.bingo.hotel.info.intl.cli.request.SupplierProductBaseRequest;
 import com.bingo.hotel.info.intl.cli.request.SupplierRoomBaseRequest;
+import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.response.CancellationInfo;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.response.HotelStaticInfo;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.response.QueryProductResponse;
 import org.apache.commons.collections4.CollectionUtils;
@@ -97,7 +98,7 @@ public class RateHawkStaticInfoAdaptor {
         queryProductResponse.getHotels().forEach(hotelPrice -> {
             if (CollectionUtils.isNotEmpty(hotelPrice.getRates())) {
                 hotelPrice.getRates().forEach(rate -> {
-                    QueryProductResponse.Cancellation_penalties cancellationPenalties = rate.getPayment_options().getPayment_types().get(0).getCancellation_penalties();
+                    CancellationInfo cancellationPenalties = rate.getPayment_options().getPayment_types().get(0).getCancellation_penalties();
                     SupplierProductBaseRequest request = new SupplierProductBaseRequest()
                             .setSupplierId(10007)
                             .setSupplierHotelId(String.valueOf(hotelPrice.getHid()))

@@ -11,6 +11,7 @@ import com.bingo.hotel.spa.intl.core.api.common.exception.ParseException;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.request.CheckPriceRequest;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.response.BaseResult;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.response.CheckPriceResponse;
+import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.response.QueryProductResponse;
 import com.bingo.hotel.spa.intl.core.exception.RedisLimitException;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;

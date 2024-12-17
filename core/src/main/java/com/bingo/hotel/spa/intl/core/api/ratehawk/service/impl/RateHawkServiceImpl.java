@@ -28,6 +28,7 @@ import com.bingo.hotel.spa.intl.core.api.ratehawk.adaptor.RateHawkStaticInfoAdap
 import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.request.CheckPriceRequest;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.request.HotelInfoRequest;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.request.QueryProductRequest;
+import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.response.CancellationInfo;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.response.CheckPriceResponse;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.response.HotelFileResponse;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.response.HotelStaticInfo;
@@ -52,6 +53,8 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -59,6 +62,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -330,9 +334,9 @@ public class RateHawkServiceImpl implements RateHawkService {
                 CheckPriceRequest checkPriceRequest = CheckPriceRequest.builder().book_hash(productInfo.getPlanSession()).language("en").build();
                 ResponseResult<CheckPriceResponse> checkPriceResponse = new CheckPriceAccess(url, generateBasicAuth(), redisRateLimiter).access(checkPriceRequest);
                 if (null != checkPriceResponse.getData() && CollectionUtils.isNotEmpty(checkPriceResponse.getData().getHotels())) {
-                    QueryProductResponse.Hotels hotelCheckInfo = checkPriceResponse.getData().getHotels().get(0);
-                    QueryProductResponse.Rates rateCheckInfo = hotelCheckInfo.getRates().get(0);
-                    QueryProductResponse.Payment_types checkPriceInfo = rateCheckInfo.getPayment_options().getPayment_types().get(0);
+                    CheckPriceResponse.Hotels hotelCheckInfo = checkPriceResponse.getData().getHotels().get(0);
+                    CheckPriceResponse.Rates rateCheckInfo = hotelCheckInfo.getRates().get(0);
+                    CheckPriceResponse.Payment_types checkPriceInfo = rateCheckInfo.getPayment_options().getPayment_types().get(0);
                     ProductRespDTO productRespDTO = ProductRespDTO.builder()
                             .hotelId(String.valueOf(hotelCheckInfo.getHid()))
                             .productId(hotelCheckInfo.getHid() + "_" + rateCheckInfo.getRoom_name() + "_" + rateCheckInfo.getMeal() + "_" + (StringUtils.isNotBlank(checkPriceInfo.getCancellation_penalties().getFree_cancellation_before()) ? "1" : "0"))
@@ -458,30 +462,29 @@ public class RateHawkServiceImpl implements RateHawkService {
         return meal;
     }
 
-    public List<CancelPolicy> convertCancelPolicy(String hotelCode, String checkIn, QueryProductResponse.Cancellation_penalties cancelPolicies) {
+    public List<CancelPolicy> convertCancelPolicy(String hotelCode, String checkIn, CancellationInfo cancelPolicies) {
         if (StringUtils.isBlank(cancelPolicies.getFree_cancellation_before())) {
             return Arrays.asList(CancelPolicy.builder().cancelType(0).build());
         }
         AichotelsProductConvertUtil aichotelsProductConvertUtil = new AichotelsProductConvertUtil();
-        String timeZone = aichotelsProductConvertUtil.getTimeZone(null, hotelCode, SupplierSourceEnum.FASTPAYHOTELS.getCode());
+        String timeZone = aichotelsProductConvertUtil.getTimeZone("America/Toronto UTC-05:00", hotelCode, SupplierSourceEnum.FASTPAYHOTELS.getCode());
 
-        // 取消时间
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
-        ZonedDateTime zonedDateTime = ZonedDateTime.parse(cancelPolicies.getFree_cancellation_before(), formatter.withZone(ZoneId.of("UTC")));
-        ZonedDateTime zonedDateTimeLocal = zonedDateTime.plusHours(StringUtils.isBlank(timeZone) ? 0 : Integer.parseInt(timeZone));
+        // 取消时间格式
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
         // checkIn时间24点
-        DateTimeFormatter checkFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        ZonedDateTime currentTime = ZonedDateTime.parse(checkIn, checkFormatter.withZone(ZoneId.of("Asia/Shanghai")));
-
-        // 计算两个时间之间的持续时间
-        Duration duration = Duration.between(zonedDateTimeLocal, currentTime);
-        // 计算小时差
-        long hoursDifference = duration.toHours();
+        SimpleDateFormat checkFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        int hoursDifference = 0;
+        try {
+            Date cancelDate = formatter.parse(cancelPolicies.getFree_cancellation_before());
+            hoursDifference = DateUtil.diffHour(DateUtil.addDay(cancelDate, StringUtils.isBlank(timeZone) ? 0 : Integer.parseInt(timeZone)), checkFormatter.parse(checkIn + " 24:00:00"));
+        } catch (ParseException e) {
+            log.info("时间转换校验异常", e);
+        }
         List<CancelPolicy> cancelPolicyList = new ArrayList<>();
         cancelPolicyList.add(CancelPolicy.builder()
                 .cancelType(1)
                 .timeZone("GMT" + timeZone)
-                .before(Math.max(25, (int) hoursDifference))
+                .before(Math.max(25, hoursDifference))
                 .type(RefundType.NO_DEDUCTION)
                 .build());
         return cancelPolicyList;
@@ -543,9 +546,9 @@ public class RateHawkServiceImpl implements RateHawkService {
                 CheckPriceRequest checkPriceRequest = CheckPriceRequest.builder().book_hash(productInfo.getPlanSession()).language("en").build();
                 ResponseResult<CheckPriceResponse> checkPriceResponse = new CheckPriceAccess(url, generateBasicAuth(), redisRateLimiter).access(checkPriceRequest);
                 if (null != checkPriceResponse.getData() && CollectionUtils.isNotEmpty(checkPriceResponse.getData().getHotels())) {
-                    QueryProductResponse.Hotels hotelCheckInfo = checkPriceResponse.getData().getHotels().get(0);
-                    QueryProductResponse.Rates rateCheckInfo = hotelCheckInfo.getRates().get(0);
-                    QueryProductResponse.Payment_types checkPriceInfo = rateCheckInfo.getPayment_options().getPayment_types().get(0);
+                    CheckPriceResponse.Hotels hotelCheckInfo = checkPriceResponse.getData().getHotels().get(0);
+                    CheckPriceResponse.Rates rateCheckInfo = hotelCheckInfo.getRates().get(0);
+                    CheckPriceResponse.Payment_types checkPriceInfo = rateCheckInfo.getPayment_options().getPayment_types().get(0);
                     return CheckPriceRespDTO.builder()
                             .checkStatus(true)
                             .prebookToken(rateCheckInfo.getBook_hash())

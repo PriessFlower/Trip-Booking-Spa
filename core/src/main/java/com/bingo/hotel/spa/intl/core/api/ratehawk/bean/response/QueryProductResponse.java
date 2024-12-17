@@ -326,7 +326,7 @@ public class QueryProductResponse implements BaseResponse {
         private Tax_data tax_data;
         private Perks perks;
         private Commission_info commission_info;
-        private Cancellation_penalties cancellation_penalties;
+        private CancellationInfo cancellation_penalties;
         private String recommended_price;
 
         public String getAmount() {
@@ -425,11 +425,11 @@ public class QueryProductResponse implements BaseResponse {
             this.commission_info = commission_info;
         }
 
-        public Cancellation_penalties getCancellation_penalties() {
+        public CancellationInfo getCancellation_penalties() {
             return cancellation_penalties;
         }
 
-        public void setCancellation_penalties(Cancellation_penalties cancellation_penalties) {
+        public void setCancellation_penalties(CancellationInfo cancellation_penalties) {
             this.cancellation_penalties = cancellation_penalties;
         }
 
