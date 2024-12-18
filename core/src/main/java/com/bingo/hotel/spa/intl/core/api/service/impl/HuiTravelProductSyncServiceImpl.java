@@ -48,9 +48,10 @@ public class HuiTravelProductSyncServiceImpl extends AbstractProductSyncSupportS
 
     @Override
     public List<ProductRespDTO> productRespConvert(AvailabilityResponse searchResponse) {
+        HuiTravelProductConvertUtil util=new HuiTravelProductConvertUtil();
         if (searchResponse.getCheckResponse()!= null) {
-            return HuiTravelProductConvertUtil.convertRatePlanCheckVO(searchResponse);
+            return util.convertRatePlanCheckVO(searchResponse);
         }
-        return HuiTravelProductConvertUtil.convertRatePlanVO(searchResponse);
+        return util.convertRatePlanVO(searchResponse);
     }
 }
