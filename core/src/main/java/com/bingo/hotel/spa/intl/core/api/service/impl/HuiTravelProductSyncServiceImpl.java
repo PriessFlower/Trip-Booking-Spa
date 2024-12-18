@@ -23,6 +23,8 @@ public class HuiTravelProductSyncServiceImpl extends AbstractProductSyncSupportS
 
     @Autowired
     private HuiTravelService huiTravelService;
+    @Autowired
+    private HuiTravelProductConvertUtil util;
 
     @Resource(name = "redisRecordLogServiceImpl")
     private RecordLogService redisRecordLogServiceImpl;
@@ -48,9 +50,9 @@ public class HuiTravelProductSyncServiceImpl extends AbstractProductSyncSupportS
 
     @Override
     public List<ProductRespDTO> productRespConvert(AvailabilityResponse searchResponse) {
-        if (searchResponse.getCheckResponse()!= null) {
-            return HuiTravelProductConvertUtil.convertRatePlanCheckVO(searchResponse);
+        if (searchResponse.getCheckResponse() != null) {
+            return util.convertRatePlanCheckVO(searchResponse);
         }
-        return HuiTravelProductConvertUtil.convertRatePlanVO(searchResponse);
+        return util.convertRatePlanVO(searchResponse);
     }
 }

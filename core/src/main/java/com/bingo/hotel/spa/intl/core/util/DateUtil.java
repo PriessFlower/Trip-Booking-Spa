@@ -27,6 +27,9 @@ public class DateUtil {
 
     public static final FastDateFormat DATE_FORMAT = FastDateFormat.getInstance("yyyy-MM-dd");
 
+    public static final FastDateFormat DATE_TIME_FORMAT = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss");
+
+
     public static final FastDateFormat DATE_FORMAT_HMS = FastDateFormat.getInstance("yyyy-MM-dd");
 
     /**
@@ -553,6 +556,15 @@ public class DateUtil {
         try {
             //date 2013-08-09
             return DATE_FORMAT.parse(date);
+        } catch (Exception e) {
+            log.error("DateUtil getDateStr ParseException", e);
+        }
+        return null;
+    }
+
+    public static Date getDateTime(String date) {
+        try {
+            return DATE_TIME_FORMAT.parse(date);
         } catch (Exception e) {
             log.error("DateUtil getDateStr ParseException", e);
         }
