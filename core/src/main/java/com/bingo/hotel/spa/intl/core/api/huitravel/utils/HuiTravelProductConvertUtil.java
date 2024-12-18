@@ -61,9 +61,9 @@ public class HuiTravelProductConvertUtil {
 
     public List<ProductRespDTO> convertRatePlanVO(AvailabilityResponse availabilityResponse) {
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
-        SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(availabilityResponse.getResult().getPrices().get(0).getHid().toString(), SupplierSourceEnum.HUITRAVEL.getCode());
-        BaseResult<GetCityInfoBySupplierHotelIdResponse> result = hotelBaseIntlClient.getCityInfoBySupplierHotelId(supplierHotelRequest);
-        String timeZone = getTimeZone(result.getData().getCityName(), result.getData().getCountryName());
+//        SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(availabilityResponse.getResult().getPrices().get(0).getHid().toString(), SupplierSourceEnum.HUITRAVEL.getCode());
+//        BaseResult<GetCityInfoBySupplierHotelIdResponse> result = hotelBaseIntlClient.getCityInfoBySupplierHotelId(supplierHotelRequest);
+//        String timeZone = getTimeZone(result.getData().getCityName(), result.getData().getCountryName());
         availabilityResponse.getResult().getPrices().forEach(productVO -> respDTOList.add(ProductRespDTO.builder()
                         .productId(productVO.getRpid() + "")
 //                        .currencyType(productVO.getCurrency())
@@ -86,9 +86,9 @@ public class HuiTravelProductConvertUtil {
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
         BigDecimal totalPrice = availabilityResponse.getCheckResponse().getResult().getNightlyrate().stream()
                 .map(NightlyRate::getCost).reduce(BigDecimal.ZERO, BigDecimal::add);
-        SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(availabilityResponse.getResult().getPrices().get(0).getHid().toString(), SupplierSourceEnum.HUITRAVEL.getCode());
-        BaseResult<GetCityInfoBySupplierHotelIdResponse> result = hotelBaseIntlClient.getCityInfoBySupplierHotelId(supplierHotelRequest);
-        String timeZone = getTimeZone(result.getData().getCityName(), result.getData().getCountryName());
+//        SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(availabilityResponse.getResult().getPrices().get(0).getHid().toString(), SupplierSourceEnum.HUITRAVEL.getCode());
+//        BaseResult<GetCityInfoBySupplierHotelIdResponse> result = hotelBaseIntlClient.getCityInfoBySupplierHotelId(supplierHotelRequest);
+//        String timeZone = getTimeZone(result.getData().getCityName(), result.getData().getCountryName());
         availabilityResponse.getResult().getPrices().forEach(productVO -> respDTOList.add(ProductRespDTO.builder()
                         .productId(productVO.getRpid() + "")
 //                        .currencyType(productVO.getCurrency())
