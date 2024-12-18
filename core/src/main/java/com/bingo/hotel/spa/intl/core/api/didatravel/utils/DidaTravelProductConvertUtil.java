@@ -1,5 +1,6 @@
 package com.bingo.hotel.spa.intl.core.api.didatravel.utils;
 
+import cn.hutool.core.date.DateTime;
 import com.bingo.hotel.base.intl.cli.client.HotelBaseIntlClient;
 import com.bingo.hotel.base.intl.cli.request.SupplierHotelInfoRequest;
 import com.bingo.hotel.base.intl.cli.response.GetCityInfoBySupplierHotelIdResponse;
@@ -105,13 +106,13 @@ public class DidaTravelProductConvertUtil {
 
     public String getTimeZone(String cityName, String countryName) {
         String timeZone = redisUtils.hmGet(InitTimeZoneServiceImpl.TIME_ZONE_KEY_PREFIX + cityName, countryName);
-        if(StringUtils.isBlank(timeZone)){
+        if (StringUtils.isBlank(timeZone)) {
             timeZone = initTimeZoneMapper.getCityZoneByCityName(cityName, countryName);
-            if(StringUtils.isBlank(timeZone)){
+            if (StringUtils.isBlank(timeZone)) {
                 DataRecord cityInfo = getCityInfo(cityName, countryName);
-                if(cityInfo != null){
+                if (cityInfo != null) {
                     timeZone = getTimeZone(cityInfo.getUrl());
-                    if(StringUtils.isNotBlank(timeZone)){
+                    if (StringUtils.isNotBlank(timeZone)) {
                         redisUtils.hmSet(InitTimeZoneServiceImpl.TIME_ZONE_KEY_PREFIX + cityName, countryName, timeZone);
                     }
                 } else {
@@ -121,11 +122,12 @@ public class DidaTravelProductConvertUtil {
         }
         return timeZone;
     }
+
     public List<CancelPolicy> convertCancelPolicy(List<DidaTravelResponse.CancellationPolicyListTypeCancellationPolicy>
-                                                                 policyList, Date checkIn, BigDecimal totalPrice, String timeZone)  {
+                                                          policyList, Date checkIn, BigDecimal totalPrice, String timeZone) {
 
         // 如果道旅给的取消规则是null，则表示不可取消
-        if(CollectionUtils.isEmpty(policyList) || StringUtils.isBlank(timeZone)){
+        if (CollectionUtils.isEmpty(policyList) || StringUtils.isBlank(timeZone)) {
             return List.of(CancelPolicy.builder().cancelType(0).build());
         }
         // 根据取消时间从小到大排序
@@ -133,13 +135,17 @@ public class DidaTravelProductConvertUtil {
 
         // 取出第一条数据，如果第一条数据checkIn - formDate <= 24小时,则直接改为25
         DidaTravelResponse.CancellationPolicyListTypeCancellationPolicy policyOne = policyList.get(0);
+        int day = DateFormatUtils.diff(new Date(), policyOne.getFromDate());
+        if (day <= 0) {
+            return List.of(CancelPolicy.builder().cancelType(0).build());
+        }
         String firstDate = convertToOffsetTime(policyOne.getFromDate(), timeZone);
         String fisrtCheckIn = convertToOffsetTime(solveCheckIn(checkIn), timeZone);
         int hour = DateUtil.diffHour(DateFormatUtils.parse4y2M2d2h2m2s(firstDate), DateFormatUtils.parse4y2M2d2h2m2s(fisrtCheckIn));
-        if(hour <= 24){
+        if (hour <= 24) {
             BigDecimal amount = policyOne.getAmount();
             RefundType type = getRefundType(totalPrice, amount);
-            if(type.equals(RefundType.NO_CANCEL)){
+            if (type.equals(RefundType.NO_CANCEL)) {
                 return List.of(CancelPolicy.builder().cancelType(0).build());
             }
             return List.of(CancelPolicy.builder()
@@ -152,7 +158,7 @@ public class DidaTravelProductConvertUtil {
             List<CancelPolicy> cancelPolicyList = Lists.newArrayList();
             DidaTravelResponse.CancellationPolicyListTypeCancellationPolicy firstPolicy = policyList.get(0);
             RefundType firstType = getRefundType(totalPrice, firstPolicy.getAmount());
-            if(firstType.equals(RefundType.NO_CANCEL)){
+            if (firstType.equals(RefundType.NO_CANCEL)) {
                 return List.of(CancelPolicy.builder().cancelType(0).build());
             }
             CancelPolicy cancelPolicyFirst = CancelPolicy.builder()
@@ -210,12 +216,13 @@ public class DidaTravelProductConvertUtil {
     }
 
     public RefundType getRefundType(BigDecimal totalPrice, BigDecimal amount) {
-        if(totalPrice.subtract(amount).compareTo(BigDecimal.ZERO) == 0){
+        if (totalPrice.subtract(amount).compareTo(BigDecimal.ZERO) == 0) {
             return RefundType.NO_DEDUCTION;
         }
         return RefundType.DEDUCT_BY_AMOUNT;
     }
-    public Date solveCheckIn(Date checkIn){
+
+    public Date solveCheckIn(Date checkIn) {
         Date date = DateUtil.addDay(checkIn, 1);
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
         String format = sdf.format(date);
@@ -248,7 +255,7 @@ public class DidaTravelProductConvertUtil {
         }
     }
 
-    public List<PriceInfo> buildPriceInfos(List<DidaTravelResponse.HotelTypeRatePlanPriceInfo> hotelTypeRatePlanPriceInfo ) {
+    public List<PriceInfo> buildPriceInfos(List<DidaTravelResponse.HotelTypeRatePlanPriceInfo> hotelTypeRatePlanPriceInfo) {
         List<PriceInfo> priceInfos = Lists.newArrayList();
         hotelTypeRatePlanPriceInfo.forEach(ratePlanPriceInfo -> {
             PriceInfo priceInfo = PriceInfo.builder()
@@ -261,10 +268,10 @@ public class DidaTravelProductConvertUtil {
     }
 
     /*
-    * 获取时区
-    * */
+     * 获取时区
+     * */
     public String getTimeZone(String url) {
-        String html = ZoneHttpUtils.sendGet("https://www.timeanddate.com"+ url);
+        String html = ZoneHttpUtils.sendGet("https://www.timeanddate.com" + url);
         Document doc = Jsoup.parse(html);
         // table table--left table--inner-borders-rows
         Elements tables = doc.select("table.table.table--left.table--inner-borders-rows");
@@ -273,7 +280,7 @@ public class DidaTravelProductConvertUtil {
         Elements rows = table.select("tr");
         for (Element row : rows) {
             Elements th = row.select("th");
-            if(th.text().equals("Current Offset:")){
+            if (th.text().equals("Current Offset:")) {
                 Elements td = row.select("td");
                 String text = td.text();
                 String[] s = text.split(" ");
@@ -285,23 +292,23 @@ public class DidaTravelProductConvertUtil {
     }
 
     /*
-    * 根据城市名称获取城市信息
-    * */
+     * 根据城市名称获取城市信息
+     * */
     public DataRecord getCityInfo(String cityName, String countryName) {
         countryName = sloveCountryName(countryName);
         String input = ZoneHttpUtils.sendGet("https://www.timeanddate.com/scripts/completion.php?query=" + cityName + "&xd=3&mode=ci");
         List<DataRecord> records = parseData(input);
         for (DataRecord record : records) {
-            if(record.getName().contains(cityName) && record.getCountry().contains(countryName)) {
+            if (record.getName().contains(cityName) && record.getCountry().contains(countryName)) {
                 return record;
             }
         }
-        log.error("未找到城市信息: cityName:{},countryName:{}" , cityName, countryName);
+        log.error("未找到城市信息: cityName:{},countryName:{}", cityName, countryName);
         return null;
     }
 
     private String sloveCountryName(String countryName) {
-        if(countryName.equals("United States of America")){
+        if (countryName.equals("United States of America")) {
             return "USA";
         } else if (countryName.equals("The United Kingdom of Great Britain and Northern Ireland")) {
             return "United Kingdom";
