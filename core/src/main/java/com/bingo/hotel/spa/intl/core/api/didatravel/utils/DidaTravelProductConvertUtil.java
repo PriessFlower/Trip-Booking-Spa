@@ -94,8 +94,8 @@ public class DidaTravelProductConvertUtil {
                         .room(room)
                         .currency(ratePlan.getCurrency())
                         .meal(ratePlan.getPriceList().get(0).getMealType() == 1 ? Meal.builder().count(0).build() : Meal.builder().count(ratePlan.getPriceList().get(0).getMealAmount()).build())
-//                        .cancelPolicy(cancelPolicies)
-                        .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+                        .cancelPolicy(cancelPolicies)
+//                        .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                         .maxOccupancy(null == ratePlan.getMaxOccupancy() ? 0 : ratePlan.getMaxOccupancy())
                         .build();
                 respDTOList.add(build);
