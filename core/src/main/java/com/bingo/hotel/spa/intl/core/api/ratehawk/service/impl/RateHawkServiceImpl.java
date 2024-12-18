@@ -113,6 +113,13 @@ public class RateHawkServiceImpl implements RateHawkService {
         int chunkCount = 1;
         while (Files.exists(Paths.get(fileName + "_" + chunkCount + ".jsonl"))) {
             parseFile(fileName + "_" + chunkCount + ".jsonl");
+            //删除文件
+            try {
+                Files.deleteIfExists(Paths.get(fileName + "_" + chunkCount + ".jsonl"));
+            } catch (IOException e) {
+                log.error("删除本地缓存文件失败：",e);
+            }
+            chunkCount++;
         }
     }
 
@@ -137,8 +144,6 @@ public class RateHawkServiceImpl implements RateHawkService {
                 });
             }
             log.info("酒店静态信息推送完毕,共：{}", sumHotel);
-            //删除文件
-            Files.deleteIfExists(Paths.get(localFilePath));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -343,6 +348,7 @@ public class RateHawkServiceImpl implements RateHawkService {
                             .supplierId(SupplierSourceEnum.RATEHAWK.getCode())
                             .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(rateCheckInfo.getRoom_name()).build())
                             .currencyType(queryProductRequest.getCurrency())
+                            .totalPrice(new BigDecimal(checkPriceInfo.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
                             .brokerage(new BigDecimal(checkPriceInfo.getCommission_info().getShow().getAmount_commission()).multiply(BigDecimal.valueOf(100)).intValue())
                             .priceInfos(buildQueryPriceInfos(rateCheckInfo.getDaily_prices(), request.getCheckIn()))
                             .meal(convertMeal(rateCheckInfo.getMeal(), request.getAdultNum()))

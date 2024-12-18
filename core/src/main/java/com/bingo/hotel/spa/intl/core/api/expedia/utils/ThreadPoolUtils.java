@@ -66,7 +66,7 @@ public class ThreadPoolUtils {
         if (executor.getQueue().size() > 200) {
             try {
                 log.info("等待ing");
-                Thread.sleep(20 * 1000);
+                Thread.sleep(1 * 1000);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
