@@ -61,9 +61,9 @@ public class HuiTravelProductConvertUtil {
 
     public List<ProductRespDTO> convertRatePlanVO(AvailabilityResponse availabilityResponse) {
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
-//        SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(availabilityResponse.getResult().getPrices().get(0).getHid().toString(), SupplierSourceEnum.HUITRAVEL.getCode());
-//        BaseResult<GetCityInfoBySupplierHotelIdResponse> result = hotelBaseIntlClient.getCityInfoBySupplierHotelId(supplierHotelRequest);
-//        String timeZone = getTimeZone(result.getData().getCityName(), result.getData().getCountryName());
+        SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(availabilityResponse.getResult().getPrices().get(0).getHid().toString(), SupplierSourceEnum.HUITRAVEL.getCode());
+        BaseResult<GetCityInfoBySupplierHotelIdResponse> result = hotelBaseIntlClient.getCityInfoBySupplierHotelId(supplierHotelRequest);
+        String timeZone = getTimeZone(result.getData().getCityName(), result.getData().getCountryName());
         availabilityResponse.getResult().getPrices().forEach(productVO -> respDTOList.add(ProductRespDTO.builder()
                         .productId(productVO.getRpid() + "")
 //                        .currencyType(productVO.getCurrency())
@@ -72,10 +72,10 @@ public class HuiTravelProductConvertUtil {
                         .totalPrice(productVO.getNightlyrate().stream()
                                 .map(NightlyRate::getCost).reduce(BigDecimal.ZERO, BigDecimal::add).multiply(new BigDecimal(100)).intValue())
                         .hotelId(productVO.getHid() + "")
-//                        .cancelPolicy(convertCancelPolicy(productVO.getNew_cancel_policy(), DateUtil.getDate(productVO.getCheckin()), timeZone))
+                        .cancelPolicy(convertCancelPolicy(productVO.getNew_cancel_policy(), DateUtil.getDate(productVO.getCheckin()), timeZone))
                         .priceInfos(buildPriceInfos(productVO.getNightlyrate()))
                         .meal(Meal.builder().count(productVO.getBreakfast_count()).build())
-                        .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
+//                        .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                         .maxOccupancy(productVO.getMax_occupancy())
                         .build())
         );
