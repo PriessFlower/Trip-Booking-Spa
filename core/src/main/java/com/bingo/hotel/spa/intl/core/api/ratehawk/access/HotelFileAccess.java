@@ -92,7 +92,7 @@ public class HotelFileAccess extends BaseHttpAccess<HotelInfoRequest, HotelFileR
             headers.put("Authorization", generateBasicAuth("10501", "1c79daa2-1262-4cf2-8547-3595628de48c"));
             headers.put("Content-Type", "application/json");
             Map<String, Object> body = Maps.newHashMap();
-            body.put("inventory", "all");
+            body.put("inventory", "preferable");
             body.put("language", "en");
             String hotelFileStr = HttpUtils.doPostObject("https://api.worldota.net/api/b2b/v3/hotel/info/dump/", body, headers);
             BaseResult<HotelFileResponse> hotelFileResponse = JsonUtils.decodeJson(hotelFileStr, new TypeReference<>() {

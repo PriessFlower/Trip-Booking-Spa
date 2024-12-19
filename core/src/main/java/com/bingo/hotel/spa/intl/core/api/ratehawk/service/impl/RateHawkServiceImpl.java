@@ -92,7 +92,7 @@ public class RateHawkServiceImpl implements RateHawkService {
 
         //1.获取酒店文件
         ResponseResult<HotelFileResponse> hotelFileResult = new HotelFileAccess(url, generateBasicAuth(), redisRateLimiter).access(HotelInfoRequest.builder()
-                .inventory("all")
+                .inventory("preferable")
                 .language("en")
                 .build());
 
