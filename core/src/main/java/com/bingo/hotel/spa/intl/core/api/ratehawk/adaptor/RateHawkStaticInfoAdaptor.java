@@ -103,7 +103,7 @@ public class RateHawkStaticInfoAdaptor {
                             .setSupplierId(10007)
                             .setSupplierHotelId(String.valueOf(hotelPrice.getHid()))
                             .setSupplierRoomId(hotelPrice.getHid() + "_" + rate.getRoom_data_trans().getMain_name() + "_" + rate.getRg_ext().getBedding() + "_" + rate.getRg_ext().getCapacity())
-                            .setSupplierProductId(hotelPrice.getHid() + "_" + rate.getRoom_name() + "_" + rate.getMeal() + "_" + (StringUtils.isBlank(cancellationPenalties.getFree_cancellation_before()) ? 1 : 0))
+                            .setSupplierProductId(hotelPrice.getHid() + "_" + rate.getRoom_name() + "_" + rate.getMeal() + "_" + (StringUtils.isNotBlank(cancellationPenalties.getFree_cancellation_before()) ? "1" : "0"))
                             .setSupplierProductName(rate.getRoom_name())
                             .setHasWindow(0)
                             .setBreakfast(0)
