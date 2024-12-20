@@ -11,6 +11,8 @@ public class Price {
     private String rpid;
     private String name;
     private String en_name;
+    private String room_name;
+    private String room_en_name;
     private String checkin;
     private String checkout;
     private Integer max_occupancy;
