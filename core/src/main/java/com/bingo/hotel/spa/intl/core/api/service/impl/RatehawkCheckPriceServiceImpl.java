@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
  * @since : 1.0
  **/
 
-@Service("ratehawkHotelsCheckPriceSyncService")
+@Service("ratehawkCheckPriceSyncService")
 public class RatehawkCheckPriceServiceImpl extends AbstractCheckPriceSyncSupportService<CheckPriceRespDTO> {
 
     @Autowired
