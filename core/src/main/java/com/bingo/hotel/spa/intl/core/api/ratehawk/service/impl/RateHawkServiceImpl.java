@@ -88,7 +88,7 @@ public class RateHawkServiceImpl implements RateHawkService {
 
         //1.获取酒店文件
         ResponseResult<HotelFileResponse> hotelFileResult = new HotelFileAccess(url, generateBasicAuth(), redisRateLimiter).access(HotelInfoRequest.builder()
-                .inventory("preferable")
+                .inventory("top")
                 .language("en")
                 .build());
 
@@ -428,7 +428,7 @@ public class RateHawkServiceImpl implements RateHawkService {
                         .mealDesc("双早")
                         .build();
                 break;
-            //
+            //晚餐
             case "dinner":
                 meal = Meal.builder()
                         .count(0)
