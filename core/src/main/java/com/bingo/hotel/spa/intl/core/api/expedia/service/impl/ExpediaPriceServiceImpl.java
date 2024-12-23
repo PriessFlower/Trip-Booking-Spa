@@ -7,6 +7,7 @@ import com.bingo.hotel.spa.intl.cli.dto.Meal;
 import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
+import com.bingo.hotel.spa.intl.cli.dto.Room;
 import com.bingo.hotel.spa.intl.cli.enums.RefundType;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
@@ -224,12 +225,12 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                             packagePrice =
                                     new BigDecimal(occupancyPricingPackage.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue();
                         }
-                        convertRateResp(hotelPriceOnly.getProperty_id(), roomOnly.getRoom_name(), packagePrice < onlyPrice ? ratePackage : rateOnly,
+                        convertRateResp(hotelPriceOnly.getProperty_id(), roomOnly.getRoom_name(),roomOnly.getId(), packagePrice < onlyPrice ? ratePackage : rateOnly,
                                 packagePrice < onlyPrice ? "hotel_package" : "hotel_only", productRespDTOS, request);
                     } else if (rateOnlyMap.containsKey(rateId)) {
-                        convertRateResp(hotelPriceOnly.getProperty_id(), roomOnly.getRoom_name(), rateOnlyMap.get(rateId), "hotel_only", productRespDTOS, request);
+                        convertRateResp(hotelPriceOnly.getProperty_id(), roomOnly.getRoom_name(),roomOnly.getId(), rateOnlyMap.get(rateId), "hotel_only", productRespDTOS, request);
                     } else if (ratePackageMap.containsKey(rateId)) {
-                        convertRateResp(hotelPricePackage.getProperty_id(), roomPackage.getRoom_name(), ratePackageMap.get(rateId), "hotel_package", productRespDTOS, request);
+                        convertRateResp(hotelPricePackage.getProperty_id(), roomPackage.getRoom_name(),roomPackage.getId(), ratePackageMap.get(rateId), "hotel_package", productRespDTOS, request);
                     }
                 }
             } else if (roomOnlyMap.containsKey(roomId)) {
@@ -244,12 +245,12 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     private void convertRoomResp(String hotelId, QueryPriceResponse.Rooms room, String salesType, List<ProductRespDTO> productRespDTOS, PriceReq request) {
         if (CollectionUtils.isNotEmpty(room.getRates())) {
             for (QueryPriceResponse.Rates rate : room.getRates()) {
-                convertRateResp(hotelId, room.getRoom_name(), rate, salesType, productRespDTOS, request);
+                convertRateResp(hotelId, room.getRoom_name(),room.getId(), rate, salesType, productRespDTOS, request);
             }
         }
     }
 
-    private void convertRateResp(String hotelId, String roomName, QueryPriceResponse.Rates rate, String salesType, List<ProductRespDTO> productRespDTOS,
+    private void convertRateResp(String hotelId, String roomName,String roomId, QueryPriceResponse.Rates rate, String salesType, List<ProductRespDTO> productRespDTOS,
                                  PriceReq request) {
         if (rate.getOccupancy_pricing().containsKey(request.getOccupancies().get(0))) {
             QueryPriceResponse.Occupancy_pricing occupancyPricing = rate.getOccupancy_pricing().get(request.getOccupancies().get(0));
@@ -259,6 +260,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                     .hotelId(hotelId)
                     .productId(rate.getId())
                     .supplierId(SupplierSourceEnum.EXPEDIA.getCode())
+                    .room(Room.builder().roomName(roomName).roomId(roomId).build())
                     .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomName).build())
                     .currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency())
                     .totalPrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())

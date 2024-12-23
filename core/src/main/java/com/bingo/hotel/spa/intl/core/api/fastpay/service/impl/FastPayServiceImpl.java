@@ -9,6 +9,7 @@ import com.bingo.hotel.spa.intl.cli.dto.Meal;
 import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
+import com.bingo.hotel.spa.intl.cli.dto.Room;
 import com.bingo.hotel.spa.intl.cli.enums.RefundType;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
@@ -231,6 +232,7 @@ public class FastPayServiceImpl implements FastPayService {
                         .hotelId(hotelAvail.getHotelInfo().getCode())
                         .productId(hotelAvail.getHotelInfo().getCode() + "_" + availRoomRate.getRoomCode() + "_" + availRoomRate.getRatePlanCode())
                         .supplierId(SupplierSourceEnum.FASTPAYHOTELS.getCode())
+                        .room(Room.builder().roomId(availRoomRate.getRoomCode()).roomName(availRoomRate.getRoomName()).build())
                         .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(availRoomRate.getRoomName()).build())
                         .currencyType(availRoomRate.getCurrency())
                         .totalPrice(totalPrice.multiply(new BigDecimal("100")).intValue())

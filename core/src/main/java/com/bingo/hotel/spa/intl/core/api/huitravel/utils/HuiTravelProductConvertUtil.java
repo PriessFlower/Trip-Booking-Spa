@@ -9,6 +9,7 @@ import com.bingo.hotel.spa.intl.cli.dto.Meal;
 import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
+import com.bingo.hotel.spa.intl.cli.dto.Room;
 import com.bingo.hotel.spa.intl.cli.enums.RefundType;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.common.mapper.InitTimeZoneMapper;
@@ -75,6 +76,7 @@ public class HuiTravelProductConvertUtil {
                         .cancelPolicy(convertCancelPolicy(productVO.getNew_cancel_policy(), DateUtil.getDate(productVO.getCheckin()), timeZone))
                         .priceInfos(buildPriceInfos(productVO.getNightlyrate()))
                         .meal(Meal.builder().count(productVO.getBreakfast_count()).build())
+                        .room(Room.builder().roomId(productVO.getRid().toString()).roomName(productVO.getRoom_name()).build())
 //                        .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                         .maxOccupancy(productVO.getMax_occupancy())
                         .build())
@@ -99,6 +101,7 @@ public class HuiTravelProductConvertUtil {
 //                        .cancelPolicy(convertCancelPolicy(productVO.getNew_cancel_policy(), DateUtil.getDate(productVO.getCheckin()), timeZone))
                         .priceInfos(buildPriceInfos(availabilityResponse.getCheckResponse().getResult().getNightlyrate()))
                         .meal(Meal.builder().count(productVO.getBreakfast_count()).build())
+                        .room(Room.builder().roomId(productVO.getRid().toString()).roomName(productVO.getRoom_name()).build())
                         .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                         .maxOccupancy(productVO.getMax_occupancy())
                         .build())
