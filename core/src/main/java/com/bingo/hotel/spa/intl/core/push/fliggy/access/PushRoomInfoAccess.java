@@ -90,7 +90,9 @@ public class PushRoomInfoAccess extends BaseHttpAccess<RoomBaseResponse, FliggyP
             sb.deleteCharAt(sb.length() - 1);
             sb.append("/");
         }
-        sb.deleteCharAt(sb.length() - 1);
+        if (StringUtils.isNotEmpty(sb)) {
+            sb.deleteCharAt(sb.length() - 1);
+        }
         return sb.toString();
     }
 
