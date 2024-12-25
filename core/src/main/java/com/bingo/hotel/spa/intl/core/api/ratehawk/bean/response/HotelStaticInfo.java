@@ -77,7 +77,7 @@ public class HotelStaticInfo {
         private String name;
         private List<String> room_amenities;
         private Rg_ext rg_ext;
-//        private Name_struct name_struct;
+        private Name_struct name_struct;
 
         public int getRoom_group_id() {
             return room_group_id;
@@ -119,13 +119,13 @@ public class HotelStaticInfo {
             this.rg_ext = rg_ext;
         }
 
-//        public Name_struct getName_struct() {
-//            return name_struct;
-//        }
-//
-//        public void setName_struct(Name_struct name_struct) {
-//            this.name_struct = name_struct;
-//        }
+        public Name_struct getName_struct() {
+            return name_struct;
+        }
+
+        public void setName_struct(Name_struct name_struct) {
+            this.name_struct = name_struct;
+        }
     }
 
     public static class Rg_ext {
@@ -240,12 +240,36 @@ public class HotelStaticInfo {
         }
     }
 
-//    public static class Name_struct {
-//
-//        private String bathroom;
-//        private String bedding_type;
-//        private String main_name;
-//    }
+    public static class Name_struct {
+
+        private String bathroom;
+        private String bedding_type;
+        private String main_name;
+
+        public String getBathroom() {
+            return bathroom;
+        }
+
+        public void setBathroom(String bathroom) {
+            this.bathroom = bathroom;
+        }
+
+        public String getBedding_type() {
+            return bedding_type;
+        }
+
+        public void setBedding_type(String bedding_type) {
+            this.bedding_type = bedding_type;
+        }
+
+        public String getMain_name() {
+            return main_name;
+        }
+
+        public void setMain_name(String main_name) {
+            this.main_name = main_name;
+        }
+    }
 
     public static class Region {
 
