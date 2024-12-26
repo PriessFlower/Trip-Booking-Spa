@@ -16,9 +16,11 @@ import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.Avail
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.bingo.hotel.spa.intl.core.util.Md5Utils;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 
+@Slf4j
 public class GetPriceAccess extends BaseHttpAccess<AvailabilityRequest, AvailabilityResponse> {
     private String host;
 
@@ -26,9 +28,9 @@ public class GetPriceAccess extends BaseHttpAccess<AvailabilityRequest, Availabi
 
     private String secretKey;
 
-    public GetPriceAccess(String host, String appKey, String secretKey) {
+    public GetPriceAccess(String host, String appKey, String secretKey,int retries) {
         super(SupplierSourceEnum.HUITRAVEL, SupplierDataTypeEnum.STATIC_DATA,
-                MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_LIST, 0);
+                MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_LIST, retries);
         this.host = host;
         this.appKey = appKey;
         this.secretKey = secretKey;
@@ -43,6 +45,9 @@ public class GetPriceAccess extends BaseHttpAccess<AvailabilityRequest, Availabi
                 .data(request)
                 .build();
         ResponseResult<AvailabilityResponse> result = HttpUtils.access(url, new HashMap<>(), JsonUtils.writeObject2Json(baseRequest), parser);
+        if (!result.getData().getCode().equals("0")) {
+            log.info("HuiTravel getPrice error: " + result.getData().getMsg());
+        }
         return result;
     }
 

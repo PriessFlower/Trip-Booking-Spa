@@ -2,10 +2,19 @@ package com.bingo.hotel.spa.intl.core.api.huitravel.bean;
 
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.BaseResponse;
 
+
 public class HuiTravelBaseResponse implements BaseResponse {
     private String msg;
 
     private String code;
+
+    public String getMsg() {
+        return msg;
+    }
+
+    public String getCode() {
+        return code;
+    }
 
     @Override
     public boolean isSucc() {
@@ -16,4 +25,8 @@ public class HuiTravelBaseResponse implements BaseResponse {
     public boolean isEmptyResult() {
         return false;
     }
+
+
+
+
 }

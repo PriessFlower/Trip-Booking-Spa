@@ -71,7 +71,7 @@ public class HuiTravelServiceImpl implements HuiTravelService {
                         .adultnum(2)
                         .nationality("CN")
                         .build();
-                ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess(getPrice, appKey, secretKey).access(availabilityRequest);
+                ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess(getPrice, appKey, secretKey,0).access(availabilityRequest);
                 InfoResult infoResult = hotelInfoIntlClient.saveHotelInfo(HuiTravelHotelAdaptor.transform(hotelDetailResponse.getData().getResult().getHoteldetail().get(0)));
                 InfoResult roomResult = hotelInfoIntlClient.saveRoomInfo(HuiTravelRoomAdaptor.transform(hotelDetailResponse.getData().getResult().getHoteldetail().get(0).getRooms(), hotelId));
                 InfoResult productResult = hotelInfoIntlClient.saveProductInfo(HuiTravelProductAdaptor.transform(availabilityResponse.getData(), hotelId));
@@ -92,7 +92,7 @@ public class HuiTravelServiceImpl implements HuiTravelService {
                 .adultnum(priceReq.getAdultNum())
                 .nationality("CN")
                 .build();
-        ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess(getPrice, appKey, secretKey).access(availabilityRequest);
+        ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess(getPrice, appKey, secretKey,0).access(availabilityRequest);
         return availabilityResponse.getData();
     }
 
@@ -107,7 +107,7 @@ public class HuiTravelServiceImpl implements HuiTravelService {
                 .adultnum(priceReq.getAdultCount())
                 .nationality("CN")
                 .build();
-        ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess(getPrice, appKey, secretKey).access(availabilityRequest);
+        ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess(getPrice, appKey, secretKey,5).access(availabilityRequest);
         BigDecimal total = BigDecimal.ZERO;
         StringBuilder costs = new StringBuilder();
         for (NightlyRate item : availabilityResponse.getData().getResult().getPrices().get(0).getNightlyrate()) {
@@ -142,7 +142,7 @@ public class HuiTravelServiceImpl implements HuiTravelService {
                 .adultnum(priceReq.getAdultCount())
                 .nationality("CN")
                 .build();
-        ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess(getPrice, appKey, secretKey).access(availabilityRequest);
+        ResponseResult<AvailabilityResponse> availabilityResponse = new GetPriceAccess(getPrice, appKey, secretKey,5).access(availabilityRequest);
         BigDecimal total = BigDecimal.ZERO;
         StringBuilder costs = new StringBuilder();
         for (NightlyRate item : availabilityResponse.getData().getResult().getPrices().get(0).getNightlyrate()) {
