@@ -9,6 +9,7 @@ import com.bingo.hotel.spa.intl.cli.dto.Meal;
 import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
+import com.bingo.hotel.spa.intl.cli.dto.Room;
 import com.bingo.hotel.spa.intl.cli.enums.RefundType;
 import com.bingo.hotel.spa.intl.core.api.aichotels.bean.price.availability.AvailabilityResponse;
 import com.bingo.hotel.spa.intl.core.api.aichotels.bean.price.prebook.PreBookResponse;
@@ -68,6 +69,7 @@ public class AichotelsProductConvertUtil {
                                     .hotelId(availabilityResponse.getHotelCode())
                                     .priceInfos(buildPriceInfos(productVO.getRates()))
                                     .meal(productVO.getBreakfast().getInclude() == 1 ? Meal.builder().count(productVO.getBreakfast().getCount()).build() : Meal.builder().count(0).build())
+                                    .room(Room.builder().roomId(roomVO.getRoom_type()).roomName(roomVO.getRoom_name()).build())
                                     .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                                     .cancelPolicy(cancelPolicies)
                                     .maxOccupancy(0)
@@ -96,6 +98,7 @@ public class AichotelsProductConvertUtil {
                                     .totalPrice((int) (Double.parseDouble(productVO.getTotal_amount_after_tax()) * 100))
                                     .hotelId(hotelCode)
                                     .priceInfos(buildPriceInfosCheck(productVO.getRates(), preBookResponse.getCheckIn(), preBookResponse.getCheckOut()))
+                                    .room(Room.builder().roomId(roomVO.getRoom_type()).roomName(roomVO.getRoom_name()).build())
                                     .meal(productVO.getBreakfast().getInclude() == 1 ? Meal.builder().count(productVO.getBreakfast().getCount()).build() : Meal.builder().count(0).build())
                                     // .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                                     .cancelPolicy(cancelPolicies)

@@ -13,6 +13,7 @@ import com.bingo.hotel.spa.intl.cli.dto.Meal;
 import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
+import com.bingo.hotel.spa.intl.cli.dto.Room;
 import com.bingo.hotel.spa.intl.cli.enums.RefundType;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
@@ -252,6 +253,7 @@ public class RateHawkServiceImpl implements RateHawkService {
                         ProductRespDTO productRespDTO = ProductRespDTO.builder()
                                 .hotelId(String.valueOf(hotel.getHid()))
                                 .productId(hotel.getHid() + "_" + rate.getRoom_name() + "_" + rate.getMeal() + "_" + (StringUtils.isNotBlank(paymentTypes.getCancellation_penalties().getFree_cancellation_before()) ? "1" : "0"))
+                                .room(Room.builder().roomId(hotel.getHid() + "_" + rate.getRoom_data_trans().getMain_name() + "_" + rate.getRg_ext().getBathroom() + "_" + rate.getRg_ext().getBedding() + "_" + rate.getRg_ext().getCapacity()).roomName(rate.getRoom_name()).build())
                                 .supplierId(SupplierSourceEnum.RATEHAWK.getCode())
                                 .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(rate.getRoom_name()).build())
                                 .currencyType(queryProductRequest.getCurrency())
@@ -341,6 +343,7 @@ public class RateHawkServiceImpl implements RateHawkService {
                     ProductRespDTO productRespDTO = ProductRespDTO.builder()
                             .hotelId(String.valueOf(hotelCheckInfo.getHid()))
                             .productId(hotelCheckInfo.getHid() + "_" + rateCheckInfo.getRoom_name() + "_" + rateCheckInfo.getMeal() + "_" + (StringUtils.isNotBlank(checkPriceInfo.getCancellation_penalties().getFree_cancellation_before()) ? "1" : "0"))
+                            .room(Room.builder().roomId(hotelCheckInfo.getHid() + "_" + rateCheckInfo.getRoom_data_trans().getMain_name() + "_" + rateCheckInfo.getRg_ext().getBathroom() + "_" + rateCheckInfo.getRg_ext().getBedding() + "_" + rateCheckInfo.getRg_ext().getCapacity()).roomName(rateCheckInfo.getRoom_name()).build())
                             .supplierId(SupplierSourceEnum.RATEHAWK.getCode())
                             .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(rateCheckInfo.getRoom_name()).build())
                             .currencyType(queryProductRequest.getCurrency())

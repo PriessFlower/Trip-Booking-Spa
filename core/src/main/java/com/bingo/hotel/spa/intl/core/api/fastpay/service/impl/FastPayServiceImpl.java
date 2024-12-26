@@ -382,6 +382,7 @@ public class FastPayServiceImpl implements FastPayService {
                     ProductRespDTO productRespDTO = ProductRespDTO.builder()
                             .hotelId(hotelInfo.getHotelInfo().getCode())
                             .productId(productId)
+                            .room(Room.builder().roomId(availRoomRate.getRoomCode()).roomName(availRoomRate.getRoomName()).build())
                             .supplierId(SupplierSourceEnum.FASTPAYHOTELS.getCode())
                             .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomInfo.getRoomName()).build())
                             .currencyType(roomInfo.getCurrency())
