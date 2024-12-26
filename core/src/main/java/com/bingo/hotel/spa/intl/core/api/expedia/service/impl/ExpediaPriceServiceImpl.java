@@ -374,6 +374,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                                 .hotelId(hotelPrice.getProperty_id())
                                 .productId(rate.getId())
                                 .supplierId(SupplierSourceEnum.EXPEDIA.getCode())
+                                .room(Room.builder().roomName(room.getRoom_name()).roomId(room.getId()).build())
                                 .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(room.getRoom_name()).build())
                                 .currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency())
                                 .totalPrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
