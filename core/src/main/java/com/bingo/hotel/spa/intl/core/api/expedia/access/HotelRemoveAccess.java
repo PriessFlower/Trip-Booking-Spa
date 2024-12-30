@@ -1,5 +1,6 @@
 package com.bingo.hotel.spa.intl.core.api.expedia.access;
 
+import com.bingo.hotel.base.intl.cli.dto.BedInfoDTO;
 import com.bingo.hotel.spa.intl.core.api.common.access.BaseHttpAccess;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.IParser;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
@@ -11,12 +12,14 @@ import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.HotelIdsResponse;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpStatus;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -70,7 +73,10 @@ public class HotelRemoveAccess extends BaseHttpAccess<String, HotelIdsResponse> 
     @Override
     protected HotelIdsResponse parseResponse(String data) {
         try {
-            return JsonUtils.readValue(data, HotelIdsResponse.class);
+            HotelIdsResponse hotelIdsResponse = new HotelIdsResponse();
+            hotelIdsResponse.setHotelIds(JsonUtils.decodeJson(data, new TypeReference<List<HotelIdsResponse.Property_id>>() {
+            }));
+            return hotelIdsResponse;
         } catch (Exception e) {
             throw new ParseException(e);
         }

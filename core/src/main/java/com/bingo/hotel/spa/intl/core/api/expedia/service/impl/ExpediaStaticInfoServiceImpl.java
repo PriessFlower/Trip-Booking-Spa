@@ -17,7 +17,6 @@ import com.bingo.hotel.spa.intl.core.api.expedia.access.HotelDetailsAccess;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.HotelFileAccess;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.HotelRemoveAccess;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.QueryProductAccess;
-import com.bingo.hotel.spa.intl.core.api.expedia.access.RegionAccess;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.RegionsAccess;
 import com.bingo.hotel.spa.intl.core.api.expedia.adaptor.ExpediaStaticInfoAdaptor;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.request.HotelInfoRequest;
@@ -53,7 +52,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 import java.util.TimeZone;
 import java.util.stream.Collectors;
 
@@ -487,20 +485,18 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
             return;
         }
 
-        List<Map<String, String>> hotelIds = result.getData().getHotelIds();
+        List<HotelIdsResponse.Property_id> hotelIds = result.getData().getHotelIds();
         int batchSize = 50;
         int currentBatch = 0;
         //批量方式
         for (int i = 0; i < hotelIds.size(); i += batchSize) {
             // 截取当前批次的数据
-            List<Map<String, String>> requestHotelInfos = hotelIds.subList(currentBatch * batchSize, Math.min(hotelIds.size(), (currentBatch + 1) * batchSize));
+            List<HotelIdsResponse.Property_id> requestHotelInfos = hotelIds.subList(currentBatch * batchSize, Math.min(hotelIds.size(), (currentBatch + 1) * batchSize));
             List<String> requestHotelIds = new ArrayList<>();
             if (requestHotelInfos != null) {
-                for (Map<String, String> map : requestHotelInfos) {
-                    // 从map中获取"property_id"对应的值并添加到结果列表中
-                    String propertyId = map.get("property_id");
-                    if (propertyId != null) {
-                        requestHotelIds.add(propertyId);
+                for (HotelIdsResponse.Property_id property_id : requestHotelInfos) {
+                    if (StringUtils.isNotBlank(property_id.getProperty_id())) {
+                        requestHotelIds.add(property_id.getProperty_id());
                     }
                 }
             }
