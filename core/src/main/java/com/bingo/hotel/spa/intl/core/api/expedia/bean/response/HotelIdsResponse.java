@@ -13,13 +13,13 @@ import java.util.Map;
  * @since : 1.0
  **/
 public class HotelIdsResponse implements BaseResponse {
-    private List<String> hotelIds;
+    private List<Map<String, String>> hotelIds;
 
-    public List<String> getHotelIds() {
+    public List<Map<String, String>> getHotelIds() {
         return hotelIds;
     }
 
-    public void setHotelIds(List<String> hotelIds) {
+    public void setHotelIds(List<Map<String, String>> hotelIds) {
         this.hotelIds = hotelIds;
     }
 

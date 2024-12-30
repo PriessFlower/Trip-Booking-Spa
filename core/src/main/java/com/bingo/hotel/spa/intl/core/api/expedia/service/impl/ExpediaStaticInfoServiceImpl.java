@@ -53,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 import java.util.stream.Collectors;
 
@@ -485,13 +486,24 @@ public class ExpediaStaticInfoServiceImpl implements ExpediaStaticInfoService {
             log.info("请求expedia获取酒店文件接口错误：request:{},response:{}", deleteDate, JsonUtils.writeObject2Json(result));
             return;
         }
-        List<String> hotelIds = result.getData().getHotelIds();
+
+        List<Map<String, String>> hotelIds = result.getData().getHotelIds();
         int batchSize = 50;
         int currentBatch = 0;
         //批量方式
         for (int i = 0; i < hotelIds.size(); i += batchSize) {
             // 截取当前批次的数据
-            List<String> requestHotelIds = hotelIds.subList(currentBatch * batchSize, Math.min(hotelIds.size(), (currentBatch + 1) * batchSize));
+            List<Map<String, String>> requestHotelInfos = hotelIds.subList(currentBatch * batchSize, Math.min(hotelIds.size(), (currentBatch + 1) * batchSize));
+            List<String> requestHotelIds = new ArrayList<>();
+            if (requestHotelInfos != null) {
+                for (Map<String, String> map : requestHotelInfos) {
+                    // 从map中获取"property_id"对应的值并添加到结果列表中
+                    String propertyId = map.get("property_id");
+                    if (propertyId != null) {
+                        requestHotelIds.add(propertyId);
+                    }
+                }
+            }
             hotelBaseIntlClient.removeHotelDetails(requestHotelIds);
             // 每处理完一组，增加当前批次计数器
             currentBatch++;
