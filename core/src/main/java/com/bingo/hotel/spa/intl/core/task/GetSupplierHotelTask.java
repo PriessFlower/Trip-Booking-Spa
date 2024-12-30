@@ -27,6 +27,9 @@ public class GetSupplierHotelTask extends JavaProcessor {
 
     @Override
     public ProcessResult process(JobContext context) {
+
+        log.info("GetSupplierHotelTask is start!");
+
         try {
             HashMap<String, String> parametersMap = JsonUtils.readValue(context.getJobParameters(), HashMap.class);
             if (null == parametersMap.get("supplierId")) {
@@ -48,6 +51,9 @@ public class GetSupplierHotelTask extends JavaProcessor {
         } catch (Exception e) {
             log.error("GetSupplierHotelTask ,error:", e);
         }
+
+        log.info("GetSupplierHotelTask is end!");
+
         return new ProcessResult(true);
     }
 }
