@@ -39,7 +39,7 @@ public class GetSupplierHotelTask extends JavaProcessor {
 //            Integer frequency = null == parametersMap.get("frequency") ? 1 : Integer.parseInt(parametersMap.get("orderStatus").toString());
             switch (supplierId) {
                 case 10005:
-                    int updateDays = null == parametersMap.get("supplierId") ? 1 : Integer.parseInt(parametersMap.get("updateDays").toString());
+                    int updateDays = null == parametersMap.get("updateDays") ? 1 : Integer.parseInt(parametersMap.get("updateDays").toString());
                     expediaStaticInfoService.saveOrUpdateHotelInfo(true, false, updateDays, null, 0);
                     break;
                 default:
