@@ -276,8 +276,9 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                     .stayPrice(buildStayPrice(occupancyPricing.getStay()))
                     .priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn(), sumCommission))
                     .meal(convertMeal(request.getAdultNum(), rate.getAmenities()))
-                    .cancelPolicy(CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) :
-                            convertCancelPolicy(request.getCheckIn(), cancelPolicies))
+//                    .cancelPolicy(CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) :
+//                            convertCancelPolicy(request.getCheckIn(), cancelPolicies))
+                    .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                     .maxOccupancy(request.getAdultNum())
                     .priceFlag(salesType)
                     .distribution(rate.getSale_scenario().getDistribution())
@@ -400,8 +401,9 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                                 .brokerage(sumCommission)
                                 .priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn(), sumCommission))
                                 .meal(convertMeal(request.getAdultNum(), rate.getAmenities()))
-                                .cancelPolicy(CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) :
-                                        convertCancelPolicy(request.getCheckIn(), cancelPolicies))
+//                                .cancelPolicy(CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) :
+//                                        convertCancelPolicy(request.getCheckIn(), cancelPolicies))
+                                .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                                 .maxOccupancy(request.getAdultNum())
                                 .priceFlag(queryPriceRequest.getSales_environment())
                                 .distribution(rate.getSale_scenario().getDistribution())
