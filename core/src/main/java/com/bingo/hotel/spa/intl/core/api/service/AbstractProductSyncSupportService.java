@@ -6,6 +6,7 @@ import com.bingo.hotel.spa.intl.cli.seq.Supplier;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import java.util.List;
 
@@ -23,9 +24,11 @@ public abstract class AbstractProductSyncSupportService<T> implements ProductSyn
                         JsonUtils.writeObject2Json(priceReq), JsonUtils.writeObject2Json(supplier));
                 return null;
             }
-//            log.info("ProductSyncService priceReq : {},supplier : {},response: {},useTime:{}",
-//                    JsonUtils.writeObject2Json(priceReq), JsonUtils.writeObject2Json(supplier),
-//                    JsonUtils.writeObject2Json(t), System.currentTimeMillis() - start);
+            if (10005 == supplier.getSupplierId() && StringUtils.isNotBlank(supplier.getSProductId())) {
+                log.info("ProductSyncService priceReq : {},supplier : {},response: {},useTime:{}",
+                        JsonUtils.writeObject2Json(priceReq), JsonUtils.writeObject2Json(supplier),
+                        JsonUtils.writeObject2Json(t), System.currentTimeMillis() - start);
+            }
             List<ProductRespDTO> list = productRespConvert(t);
             if (CollectionUtils.isEmpty(list)) {
                 log.error("ProductSyncService productRespConvert is null,priceReq : {},supplier : {} T : {}", JsonUtils.writeObject2Json(priceReq),
