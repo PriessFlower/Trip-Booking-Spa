@@ -120,14 +120,14 @@ huitravel:
 expedia:
   apiKey: 6urn54ijk30uttcqm64c3it6gf
   sharedSecret: 708a6tdaqvm7
-  session: abcdefg
-  ownIp: 5.5.5.5
+  session: binggoOnline
+  ownIp: 10.18.136.35
   localFilePath: /home/webrun/logs/file
   partner_point_of_sale: B2B_SA_PKG_MOD_VCC
   payment_terms: 1
   billing_terms: VCC
   url:
-    host: https://test.ean.com
+    host: https://api.ean.com
 fliggy:
   distrib:
     url: http://gw.api.taobao.com/router/rest
