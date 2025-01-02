@@ -13,6 +13,7 @@ import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
+import com.bingo.hotel.spa.intl.core.api.common.asynchttp.SupplierApiConstants;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.CheckPriceAccess;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.QueryProductAccess;
@@ -21,6 +22,7 @@ import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.CheckPriceRespons
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.QueryPriceResponse;
 import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaPriceService;
 import com.bingo.hotel.spa.intl.core.api.expedia.utils.ExpediaUtils;
+import com.bingo.hotel.spa.intl.core.monitor.Monitor;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.DateUtil;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
@@ -145,17 +147,21 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         if (resultPackage != null && resultPackage.isSucc() && null != resultPackage.getData() && CollectionUtils.isNotEmpty(resultPackage.getData().getHotelPrices())) {
             hotelPricePackage = resultPackage.getData().getHotelPrices().get(0);
         }
+        Monitor.recordOne("expedia_all_query");
         if (null == hotelPriceOnly && null == hotelPricePackage) {
-            log.info("expedia查询零售价失败,request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(resultOnly));
-            log.info("expedia查询打包价失败,request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(resultPackage));
+            log.info("expedia查询零售价和打包价全部失败,request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(resultOnly));
+            Monitor.recordOne("expedia_all_query_fail");
             return null;
         } else if (null == hotelPriceOnly && null != hotelPricePackage) {
             log.info("expedia查询零售价失败,request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(resultOnly));
+            Monitor.recordOne("expedia_all_query_hotel_only_fail");
             return convertPriceResp(hotelPricePackage, "hotel_package", request);
         } else if (null == hotelPricePackage && null != hotelPriceOnly) {
             log.info("expedia查询打包价失败,request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(resultPackage));
+            Monitor.recordOne("expedia_all_query_hotel_package_fail");
             return convertPriceResp(hotelPriceOnly, "hotel_only", request);
         } else {
+            Monitor.recordOne("expedia_all_query_all_success");
             return convertPriceComparisonsResp(hotelPriceOnly, hotelPricePackage, request);
         }
     }
