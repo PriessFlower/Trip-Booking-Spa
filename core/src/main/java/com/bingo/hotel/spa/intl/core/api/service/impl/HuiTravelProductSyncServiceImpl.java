@@ -39,7 +39,7 @@ public class HuiTravelProductSyncServiceImpl extends AbstractProductSyncSupportS
             return huiTravelService.getPrice(priceReq, supplier.getSHotelId());
         } else {
             //汇智不能超过30天的查询
-            if (DateUtil.dateBefore(priceReq.getCheckIn(), DateUtil.addDay(new Date(), 30))) {
+            if (!DateUtil.dateBefore(priceReq.getCheckIn(), DateUtil.addDay(new Date(), 30))) {
                 AvailabilityResponse response = new AvailabilityResponse();
                 AvailabilityResult result = new AvailabilityResult();
                 response.setResult(result);
