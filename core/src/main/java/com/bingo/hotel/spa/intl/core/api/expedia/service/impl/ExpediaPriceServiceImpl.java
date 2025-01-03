@@ -13,7 +13,6 @@ import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
-import com.bingo.hotel.spa.intl.core.api.common.asynchttp.SupplierApiConstants;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.CheckPriceAccess;
 import com.bingo.hotel.spa.intl.core.api.expedia.access.QueryProductAccess;
@@ -233,12 +232,12 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                             packagePrice =
                                     new BigDecimal(occupancyPricingPackage.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue();
                         }
-                        convertRateResp(hotelPriceOnly.getProperty_id(), roomOnly.getRoom_name(),roomOnly.getId(), packagePrice < onlyPrice ? ratePackage : rateOnly,
+                        convertRateResp(hotelPriceOnly.getProperty_id(), roomOnly.getRoom_name(), roomOnly.getId(), packagePrice < onlyPrice ? ratePackage : rateOnly,
                                 packagePrice < onlyPrice ? "hotel_package" : "hotel_only", productRespDTOS, request);
                     } else if (rateOnlyMap.containsKey(rateId)) {
-                        convertRateResp(hotelPriceOnly.getProperty_id(), roomOnly.getRoom_name(),roomOnly.getId(), rateOnlyMap.get(rateId), "hotel_only", productRespDTOS, request);
+                        convertRateResp(hotelPriceOnly.getProperty_id(), roomOnly.getRoom_name(), roomOnly.getId(), rateOnlyMap.get(rateId), "hotel_only", productRespDTOS, request);
                     } else if (ratePackageMap.containsKey(rateId)) {
-                        convertRateResp(hotelPricePackage.getProperty_id(), roomPackage.getRoom_name(),roomPackage.getId(), ratePackageMap.get(rateId), "hotel_package", productRespDTOS, request);
+                        convertRateResp(hotelPricePackage.getProperty_id(), roomPackage.getRoom_name(), roomPackage.getId(), ratePackageMap.get(rateId), "hotel_package", productRespDTOS, request);
                     }
                 }
             } else if (roomOnlyMap.containsKey(roomId)) {
@@ -253,12 +252,12 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     private void convertRoomResp(String hotelId, QueryPriceResponse.Rooms room, String salesType, List<ProductRespDTO> productRespDTOS, PriceReq request) {
         if (CollectionUtils.isNotEmpty(room.getRates())) {
             for (QueryPriceResponse.Rates rate : room.getRates()) {
-                convertRateResp(hotelId, room.getRoom_name(),room.getId(), rate, salesType, productRespDTOS, request);
+                convertRateResp(hotelId, room.getRoom_name(), room.getId(), rate, salesType, productRespDTOS, request);
             }
         }
     }
 
-    private void convertRateResp(String hotelId, String roomName,String roomId, QueryPriceResponse.Rates rate, String salesType, List<ProductRespDTO> productRespDTOS,
+    private void convertRateResp(String hotelId, String roomName, String roomId, QueryPriceResponse.Rates rate, String salesType, List<ProductRespDTO> productRespDTOS,
                                  PriceReq request) {
         if (rate.getOccupancy_pricing().containsKey(request.getOccupancies().get(0))) {
             QueryPriceResponse.Occupancy_pricing occupancyPricing = rate.getOccupancy_pricing().get(request.getOccupancies().get(0));
@@ -661,7 +660,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                         .before(Math.max(25, beforeEnd))
                         .type(RefundType.NO_DEDUCTION)
                         .build());
-            } else {
+            } else if ("1".equals(cancelPolicy.getNights())) {
                 cancelPolicyList.add(CancelPolicy.builder()
                         .cancelType(1)
                         .timeZone(subDateGMT(cancelPolicy.getStart()))
@@ -673,10 +672,12 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                             .cancelType(1)
                             .timeZone(subDateGMT(cancelPolicy.getEnd()))
                             .before(Math.max(25, beforeEnd))
-                            .type(RefundType.DEDUCT_DAY_NIGHT)
-                            .value(Double.valueOf(cancelPolicy.getNights()))
+                            .type(RefundType.DEDUCT_FIRST_NIGHT)
+                            .value(1.0)
                             .build());
                 }
+            } else {
+                cancelPolicyList.add(CancelPolicy.builder().cancelType(0).build());
             }
         } else {
             cancelPolicyList.add(CancelPolicy.builder().cancelType(0).build());
