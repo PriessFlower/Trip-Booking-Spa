@@ -660,7 +660,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                         .before(Math.max(25, beforeEnd))
                         .type(RefundType.NO_DEDUCTION)
                         .build());
-            } else if ("1".equals(cancelPolicy.getNights())) {
+            } else {
                 cancelPolicyList.add(CancelPolicy.builder()
                         .cancelType(1)
                         .timeZone(subDateGMT(cancelPolicy.getStart()))
@@ -672,12 +672,10 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                             .cancelType(1)
                             .timeZone(subDateGMT(cancelPolicy.getEnd()))
                             .before(Math.max(25, beforeEnd))
-                            .type(RefundType.DEDUCT_FIRST_NIGHT)
-                            .value(1.0)
+                            .type(RefundType.DEDUCT_DAY_NIGHT)
+                            .value(Double.valueOf(cancelPolicy.getNights()))
                             .build());
                 }
-            } else {
-                cancelPolicyList.add(CancelPolicy.builder().cancelType(0).build());
             }
         } else {
             cancelPolicyList.add(CancelPolicy.builder().cancelType(0).build());
