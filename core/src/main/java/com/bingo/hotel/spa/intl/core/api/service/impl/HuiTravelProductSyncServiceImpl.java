@@ -36,8 +36,6 @@ public class HuiTravelProductSyncServiceImpl extends AbstractProductSyncSupportS
     public AvailabilityResponse querySupplierPrice(PriceReq priceReq, Supplier supplier) {
         redisRecordLogServiceImpl.recordAichotelsQps();
         if (StringUtils.isEmpty(supplier.getSProductId())) {
-            return huiTravelService.getPrice(priceReq, supplier.getSHotelId());
-        } else {
             //汇智不能超过30天的查询
             if (!DateUtil.dateBefore(priceReq.getCheckIn(), DateUtil.addDay(new Date(), 30))) {
                 AvailabilityResponse response = new AvailabilityResponse();
@@ -45,6 +43,8 @@ public class HuiTravelProductSyncServiceImpl extends AbstractProductSyncSupportS
                 response.setResult(result);
                 return response;
             }
+            return huiTravelService.getPrice(priceReq, supplier.getSHotelId());
+        } else {
             return huiTravelService.getPriceByProductId(CheckPriceReq.builder()
                     .checkIn(priceReq.getCheckIn())
                     .checkOut(priceReq.getCheckout())
