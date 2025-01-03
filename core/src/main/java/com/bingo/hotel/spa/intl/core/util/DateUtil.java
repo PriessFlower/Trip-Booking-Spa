@@ -641,4 +641,19 @@ public class DateUtil {
         return pastDate.format(formatter);
     }
 
+    public static Boolean dateBefore(String startTime, Date endTime) {
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            Date startDate = sdf.parse(startTime);
+            Calendar start = Calendar.getInstance();
+            Calendar end = Calendar.getInstance();
+            start.setTime(startDate);
+            end.setTime(endTime);
+            return start.before(end);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
 }

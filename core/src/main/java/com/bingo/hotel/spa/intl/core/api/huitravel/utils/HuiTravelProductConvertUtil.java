@@ -62,6 +62,9 @@ public class HuiTravelProductConvertUtil {
 
     public List<ProductRespDTO> convertRatePlanVO(AvailabilityResponse availabilityResponse) {
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
+        if (CollectionUtils.isEmpty(availabilityResponse.getResult().getPrices())) {
+            return respDTOList;
+        }
 //        SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(availabilityResponse.getResult().getPrices().get(0).getHid().toString(), SupplierSourceEnum.HUITRAVEL.getCode());
 //        BaseResult<GetCityInfoBySupplierHotelIdResponse> result = hotelBaseIntlClient.getCityInfoBySupplierHotelId(supplierHotelRequest);
 //        String timeZone = getTimeZone(result.getData().getCityName(), result.getData().getCountryName());
