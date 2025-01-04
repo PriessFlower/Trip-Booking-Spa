@@ -26,7 +26,7 @@ public class CheckPriceAccess extends BaseHttpAccess<CheckRequest, CheckResponse
 
     public CheckPriceAccess(String host, String appKey, String secretKey) {
         super(SupplierSourceEnum.HUITRAVEL, SupplierDataTypeEnum.STATIC_DATA,
-                MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_LIST, 0);
+                MonitorNameEnum.SPA_SUPPLIER_API_ORDER_PRICE, 0);
         this.host = host;
         this.appKey = appKey;
         this.secretKey = secretKey;

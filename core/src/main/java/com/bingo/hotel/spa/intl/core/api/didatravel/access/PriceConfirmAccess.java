@@ -17,7 +17,7 @@ public class PriceConfirmAccess extends BaseHttpAccess<PriceConfirmRequest, Pric
     private String host;
     public PriceConfirmAccess(String host) {
         super(SupplierSourceEnum.DIDATRAVEL, SupplierDataTypeEnum.STATIC_DATA,
-                MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_LIST, 0);
+                MonitorNameEnum.SPA_SUPPLIER_API_ORDER_PRICE, 0);
         this.host = host;
     }
 

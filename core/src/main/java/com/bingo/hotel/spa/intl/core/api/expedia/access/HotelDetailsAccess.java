@@ -87,11 +87,11 @@ public class HotelDetailsAccess extends BaseHttpAccess<HotelInfoRequest, HotelSt
 
     @Override
     protected void beforeAccess(HotelInfoRequest request) {
-        if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
-            log.info("expedia接口请求超过限制，每秒请求超过{}次", QPS);
-            throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
-                    + "request = " + JsonUtils.writeObject2Json(request));
-        }
+//        if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
+//            log.info("expedia接口请求超过限制，每秒请求超过{}次", QPS);
+//            throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
+//                    + "request = " + JsonUtils.writeObject2Json(request));
+//        }
     }
 
     @Override

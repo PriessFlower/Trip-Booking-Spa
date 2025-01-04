@@ -34,7 +34,7 @@ public class HuiTravelProductSyncServiceImpl extends AbstractProductSyncSupportS
 
     @Override
     public AvailabilityResponse querySupplierPrice(PriceReq priceReq, Supplier supplier) {
-        redisRecordLogServiceImpl.recordAichotelsQps();
+        redisRecordLogServiceImpl.recordHuiTravelQps();
         if (StringUtils.isEmpty(supplier.getSProductId())) {
             //汇智不能超过30天的查询
             if (!DateUtil.dateBefore(priceReq.getCheckIn(), DateUtil.addDay(new Date(), 30))) {

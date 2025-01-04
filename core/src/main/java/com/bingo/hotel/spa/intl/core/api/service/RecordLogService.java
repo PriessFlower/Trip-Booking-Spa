@@ -9,4 +9,7 @@ public interface RecordLogService {
 
     void recordTravelconnectQps();
 
+    void recordHuiTravelQps();
+
+    void recordExpediaQps();
 }

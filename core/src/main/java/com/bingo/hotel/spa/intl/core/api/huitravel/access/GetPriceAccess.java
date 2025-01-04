@@ -30,7 +30,7 @@ public class GetPriceAccess extends BaseHttpAccess<AvailabilityRequest, Availabi
 
     public GetPriceAccess(String host, String appKey, String secretKey,int retries) {
         super(SupplierSourceEnum.HUITRAVEL, SupplierDataTypeEnum.STATIC_DATA,
-                MonitorNameEnum.SPA_SUPPLIER_API_HOTEL_LIST, retries);
+                MonitorNameEnum.SPA_SUPPLIER_API_PRODUCT_PRICES, retries);
         this.host = host;
         this.appKey = appKey;
         this.secretKey = secretKey;

@@ -31,6 +31,7 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
 
     @Override
     public List<ProductRespDTO> querySupplierPrice(PriceReq priceReq, Supplier supplier) {
+        redisRecordLogServiceImpl.recordExpediaQps();
         if (StringUtils.isNotBlank(supplier.getSProductId())) {
             return expediaPriceService.queryProductPrice(priceReq, supplier);
         }
