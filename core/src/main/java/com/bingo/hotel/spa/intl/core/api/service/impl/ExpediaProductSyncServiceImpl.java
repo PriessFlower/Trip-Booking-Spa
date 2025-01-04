@@ -38,7 +38,7 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
         }
         //日本酒店和连锁酒店入住日期要大于2025-02-14
         if ((cityList.contains(priceReq.getSuppliers().get(0).getSCityCode()) ||
-                ExpediaHelper.hotelIdList.contains(priceReq.getSuppliers().get(0).getSCityCode())
+                ExpediaHelper.hotelIdList.contains(priceReq.getSuppliers().get(0).getSHotelId())
         ) && DateUtil.getDate(priceReq.getCheckIn()).compareTo(DateUtil.getDate("2025-02-14")) <= 0) {
             List<ProductRespDTO> response = Lists.newArrayList();
             return response;
