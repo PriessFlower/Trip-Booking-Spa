@@ -4,7 +4,7 @@ import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
 import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaPriceService;
-import com.bingo.hotel.spa.intl.core.api.expedia.utils.HotelList;
+import com.bingo.hotel.spa.intl.core.api.expedia.utils.ExpediaHelper;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.AvailabilityResponse;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.AvailabilityResult;
 import com.bingo.hotel.spa.intl.core.api.service.AbstractProductSyncSupportService;
@@ -38,8 +38,8 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
         }
         //日本酒店和连锁酒店入住日期要大于2025-02-14
         if ((cityList.contains(priceReq.getSuppliers().get(0).getSCityCode()) ||
-                HotelList.hotelList.contains(priceReq.getSuppliers().get(0).getSCityCode())
-                )&& DateUtil.getDate(priceReq.getCheckIn()).compareTo(DateUtil.getDate("2025-02-14"))>0) {
+                ExpediaHelper.hotelIdList.contains(priceReq.getSuppliers().get(0).getSCityCode())
+        ) && DateUtil.getDate(priceReq.getCheckIn()).compareTo(DateUtil.getDate("2025-02-14")) > 0) {
             List<ProductRespDTO> response = Lists.newArrayList();
             return response;
         }
