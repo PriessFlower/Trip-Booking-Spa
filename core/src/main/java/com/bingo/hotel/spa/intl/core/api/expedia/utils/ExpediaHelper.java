@@ -13,8 +13,8 @@ public class ExpediaHelper {
     private static void initCityCodeMap() {
         JSONArray config = JSONArray.parseArray(ResourceUtil.readText("expediaHotelList.json"));
         for (int i = 0; i < config.size(); i++) {
-            JSONObject hotelIds = config.getJSONObject(i);
-            hotelIdList.add(hotelIds.toString());
+            String hotelIds = config.getString(i);
+            hotelIdList.add(hotelIds);
         }
     }
 
