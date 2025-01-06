@@ -37,13 +37,14 @@ public class HuiTravelProductSyncServiceImpl extends AbstractProductSyncSupportS
         redisRecordLogServiceImpl.recordHuiTravelQps();
         if (StringUtils.isEmpty(supplier.getSProductId())) {
             //汇智不能超过30天的查询
-            if (!DateUtil.dateBefore(priceReq.getCheckIn(), DateUtil.addDay(new Date(), 30))) {
+            if (!DateUtil.dateBefore(priceReq.getCheckIn(), DateUtil.addDay(new Date(), 20))) {
                 AvailabilityResponse response = new AvailabilityResponse();
                 AvailabilityResult result = new AvailabilityResult();
                 response.setResult(result);
                 return response;
+            } else {
+                return huiTravelService.getPrice(priceReq, supplier.getSHotelId());
             }
-            return huiTravelService.getPrice(priceReq, supplier.getSHotelId());
         } else {
             return huiTravelService.getPriceByProductId(CheckPriceReq.builder()
                     .checkIn(priceReq.getCheckIn())

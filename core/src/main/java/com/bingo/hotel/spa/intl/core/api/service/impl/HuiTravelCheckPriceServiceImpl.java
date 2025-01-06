@@ -27,7 +27,7 @@ public class HuiTravelCheckPriceServiceImpl extends AbstractCheckPriceSyncSuppor
 
     @Override
     public CheckResponse doCheckPrice(CheckPriceReq checkPriceReq) {
-        redisRecordLogServiceImpl.recordDaolvQps();
+        redisRecordLogServiceImpl.recordHuiTravelQps();
         return huiTravelService.checkPrice(checkPriceReq);
     }
 

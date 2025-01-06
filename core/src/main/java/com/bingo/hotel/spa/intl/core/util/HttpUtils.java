@@ -111,7 +111,7 @@ public class HttpUtils {
         if (HTTP_CLIENT == null) {
             synchronized (SYNC_LOCK) {
                 if (HTTP_CLIENT == null) {
-                    HTTP_CLIENT = createHttpClient(200, 40, 100, hostname, port);
+                    HTTP_CLIENT = createHttpClient(500, 100, 250, hostname, port);
                 }
             }
         }
@@ -140,7 +140,6 @@ public class HttpUtils {
         long start = System.currentTimeMillis();
         HttpResponse response = httpClient.execute(httpPost);
 //        log.info("access>>>request:{},response:{}", JsonUtils.writeObject2Json(httpPost), JsonUtils.writeObject2Json(response));
-        log.info("http调用耗时:{}", System.currentTimeMillis() - start);
         HttpEntity entity = response.getEntity();
 
         String entityStr;
@@ -154,7 +153,6 @@ public class HttpUtils {
             entityStr = EntityUtils.toString(entity, "UTF-8");
             data = parser.parse(entityStr);
         }
-        log.info("http结果转义调用耗时:{}", System.currentTimeMillis() - start1);
         ResponseResult<T> result = new ResponseResult(response.getStatusLine().getStatusCode(), entityStr, data);
 
         EntityUtils.consume(entity);
