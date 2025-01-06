@@ -43,7 +43,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TimeZone;
 import java.util.stream.Collectors;
 
 
@@ -606,8 +605,9 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         }
         cancelPolicy = cancelPolicies.stream().min(Comparator.comparing(QueryPriceResponse.CancelPolicy::getStart)).get();
         // 创建SimpleDateFormat对象，并设置日期时间模式
-        SimpleDateFormat sdfTime = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
-        sdfTime.setTimeZone(TimeZone.getTimeZone("GMT"));
+//        SimpleDateFormat sdfTime = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+//        sdfTime.setTimeZone(TimeZone.getTimeZone("GMT"));
+        SimpleDateFormat sdfTime = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
         SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         int beforeEnd = 0;
         int beforeStart = 0;
@@ -635,7 +635,12 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             }
         } else if (StringUtils.isNotBlank(cancelPolicy.getPercent())) {
             if ("100%".equals(cancelPolicy.getPercent())) {
-                cancelPolicyList.add(CancelPolicy.builder().cancelType(0).build());
+                cancelPolicyList.add(CancelPolicy.builder()
+                        .cancelType(1)
+                        .timeZone(subDateGMT(cancelPolicy.getStart()))
+                        .before(Math.max(25, beforeStart))
+                        .type(RefundType.NO_DEDUCTION)
+                        .build());
             } else {
                 cancelPolicyList.add(CancelPolicy.builder()
                         .cancelType(1)
