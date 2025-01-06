@@ -634,7 +634,12 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             }
         } else if (StringUtils.isNotBlank(cancelPolicy.getPercent())) {
             if ("100%".equals(cancelPolicy.getPercent())) {
-                cancelPolicyList.add(CancelPolicy.builder().cancelType(0).build());
+                cancelPolicyList.add(CancelPolicy.builder()
+                        .cancelType(1)
+                        .timeZone(subDateGMT(cancelPolicy.getStart()))
+                        .before(Math.max(25, beforeStart))
+                        .type(RefundType.NO_DEDUCTION)
+                        .build());
             } else {
                 cancelPolicyList.add(CancelPolicy.builder()
                         .cancelType(1)
