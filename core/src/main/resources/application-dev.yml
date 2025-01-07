@@ -9,11 +9,11 @@ feign:
         readTimeout: 300000
 spring:
   datasource:
-    host: pc-2ze0t0vwxj392d111.mysql.polardb.rds.aliyuncs.com
+    host: 8.146.211.133
     port: 3306
     name: intl_bg_admin
-    username: dbadmin
-    password: VvTUbbEp$D6uGiLDb
+    username: bystest
+    password: bystest
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries = true&nullCatalogMeansCurrent=true&serverTimezone=CST&autoReconnect=true
   redis:
@@ -184,3 +184,52 @@ ratehawk:
   url: https://api.worldota.net/api/b2b/v3
 system:
   localFilePath: /home/webrun/spa/logs/file/
+meituan:
+  url: https://fenxiao.meituan.com/opdtor/api
+  method:
+    list:
+      path: hotel.oversea.poi.list
+      qps: 10
+      maxId: 0
+      pageSize: 10
+      version: 1.0
+    detail:
+      path: hotel.oversea.detail
+      qps: 20
+      version: 2.0
+    avail:
+      path: hotel.shopping.avail
+      qps: 10
+      version: 2.0
+    multi:
+      path: hotel.shopping.multi
+      qps: 20
+      version: 2.0
+    check:
+      path: hotel.order.check
+      qps: 7
+      version: 1.0
+    booking:
+      path: hotel.order.booking
+      qps: 30
+      version: 1.0
+    room:
+      path: hotel.oversea.realroom.info
+      qps: 20
+      version: 2.0
+    order:
+      path: hotel.order.query
+      qps: 30
+      version: 1.0
+    cancel:
+      path: hotel.order.cancel
+      qps: 20
+      version: 1.0
+  partner-id: 35047
+  change-queue:
+    page-size: 20
+  key:
+    public: b67fe369816140e33e072ee71b0c43c9
+    secret: bbb82d7d96266cb5c008c63d596d98a7
+  test: test
+  language: zh_CN

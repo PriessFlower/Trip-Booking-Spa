@@ -1,12 +1,12 @@
 package com.bingo.hotel.spa.intl.rest.controller;
 
 
-import com.bingo.hotel.spa.intl.cli.dto.ResponseDTO;
 import com.bingo.hotel.spa.intl.core.api.aichotels.service.AichotelsHotelService;
 import com.bingo.hotel.spa.intl.core.api.didatravel.service.DidatravelHotelService;
 import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaStaticInfoService;
 import com.bingo.hotel.spa.intl.core.api.fastpay.service.FastPayService;
 import com.bingo.hotel.spa.intl.core.api.huitravel.service.HuiTravelService;
+import com.bingo.hotel.spa.intl.core.api.meituan.service.MeituanStaticInfoService;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.service.RateHawkService;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.service.TravelconnectHotelService;
 import com.bingo.hotel.spa.intl.core.push.fliggy.service.FliggyPushService;
@@ -43,6 +43,8 @@ public class BackDoorController {
     private FastPayService fastPayStaticInfoService;
     @Resource
     private RateHawkService rateHawkService;
+    @Resource
+    private MeituanStaticInfoService meituanStaticInfoService;
 
     @GetMapping("/push")
     @ApiOperation("HotelList查询")
@@ -162,6 +164,26 @@ public class BackDoorController {
                                                 @RequestParam(value = "supplierHotelIds", required = false) List<String> supplierHotelIds,
                                                 @RequestParam(value = "startNum", required = false) Integer startNum) {
         rateHawkService.queryAndSaveProductInfo(checkInDate, checkOutDate, supplierHotelIds, startNum);
+        return HttpResponse.getSuccessInstance();
+    }
+
+    @GetMapping("/meituan/hotel/list")
+    @ApiOperation("美团hotelIdList查询")
+    public HttpResponse meituanHotelList(@RequestParam("maxId") Long maxId,
+                                         @RequestParam("pageSize") Integer pageSize) {
+
+        meituanStaticInfoService.queryHotelIdList(maxId, pageSize);
+
+        return HttpResponse.getSuccessInstance();
+    }
+
+    @GetMapping("/meituan/hotel/push")
+    @ApiOperation("美团酒店/房型push")
+    public HttpResponse meituanHotelList(@RequestParam(value = "pageNumber", required = false) Integer pageNumber,
+                                         @RequestParam(value = "pageSize", required = false) Integer pageSize,
+                                         @RequestParam(value = "type", required = false) String type) {
+
+        meituanStaticInfoService.saveOrUpdateHotelInfo(pageNumber, pageSize, type);
         return HttpResponse.getSuccessInstance();
     }
 }
