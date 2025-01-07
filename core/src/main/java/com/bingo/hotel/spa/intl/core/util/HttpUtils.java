@@ -58,7 +58,7 @@ import java.util.Map;
 @Slf4j
 public class HttpUtils {
 
-    private static final int TIME_OUT = 100 * 1000;
+    private static final int TIME_OUT = 10 * 1000;
     private static CloseableHttpClient HTTP_CLIENT = null;
     private final static Object SYNC_LOCK = new Object();
 
@@ -111,7 +111,7 @@ public class HttpUtils {
         if (HTTP_CLIENT == null) {
             synchronized (SYNC_LOCK) {
                 if (HTTP_CLIENT == null) {
-                    HTTP_CLIENT = createHttpClient(500, 100, 250, hostname, port);
+                    HTTP_CLIENT = createHttpClient(250, 200, 200, hostname, port);
                 }
             }
         }
