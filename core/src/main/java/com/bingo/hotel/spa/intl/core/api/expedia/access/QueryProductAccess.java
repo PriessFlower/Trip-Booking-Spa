@@ -83,7 +83,6 @@ public class QueryProductAccess extends BaseHttpAccess<QueryPriceRequest, QueryP
         body.put("partner_point_of_sale", request.getPartner_point_of_sale());
         long start = System.currentTimeMillis();
         String result = HttpUtils.doGet(url, headers, body);
-        log.info("EXPEDIA_ORIGINAL_QUERY:{}", System.currentTimeMillis() - start);
         Monitor.recordOne("EXPEDIA_ORIGINAL_QUERY",
                 System.currentTimeMillis() - start);
         List<QueryPriceResponse.HotelPrice> hotelPrices = JsonUtils.decodeJson(result, new TypeReference<List<QueryPriceResponse.HotelPrice>>() {
