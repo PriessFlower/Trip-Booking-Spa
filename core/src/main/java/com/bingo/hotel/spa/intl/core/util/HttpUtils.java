@@ -213,8 +213,10 @@ public class HttpUtils {
         for (Map.Entry<String, String> e : headers.entrySet()) {
             httpGet.addHeader(e.getKey(), e.getValue());
         }
+        long start = System.currentTimeMillis();
         HttpResponse response = httpClient.execute(httpGet);
 //        log.info("doGet>>>request:{},response:{}", JsonUtils.writeObject2Json(httpGet), JsonUtils.writeObject2Json(response));
+        log.info("expedia原始http耗时:{}", System.currentTimeMillis() - start);
         HttpEntity entity = response.getEntity();
         if (entity == null && response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
             return "";

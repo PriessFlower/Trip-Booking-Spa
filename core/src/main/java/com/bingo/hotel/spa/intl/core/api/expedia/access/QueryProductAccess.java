@@ -3,6 +3,7 @@ package com.bingo.hotel.spa.intl.core.api.expedia.access;
 import com.bingo.hotel.spa.intl.core.api.common.access.BaseHttpAccess;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.IParser;
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.ResponseResult;
+import com.bingo.hotel.spa.intl.core.api.common.asynchttp.SupplierApiConstants;
 import com.bingo.hotel.spa.intl.core.api.common.enums.MonitorNameEnum;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierDataTypeEnum;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
@@ -11,6 +12,7 @@ import com.bingo.hotel.spa.intl.core.api.expedia.bean.request.QueryPriceRequest;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.HotelStaticInfo;
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.QueryPriceResponse;
 import com.bingo.hotel.spa.intl.core.exception.RedisLimitException;
+import com.bingo.hotel.spa.intl.core.monitor.Monitor;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
@@ -79,7 +81,10 @@ public class QueryProductAccess extends BaseHttpAccess<QueryPriceRequest, QueryP
         body.put("billing_terms", request.getBilling_terms());
         body.put("payment_terms", request.getPayment_terms());
         body.put("partner_point_of_sale", request.getPartner_point_of_sale());
+        long start = System.currentTimeMillis();
         String result = HttpUtils.doGet(url, headers, body);
+        Monitor.recordOne("EXPEDIA_ORIGINAL_QUERY",
+                System.currentTimeMillis() - start);
         List<QueryPriceResponse.HotelPrice> hotelPrices = JsonUtils.decodeJson(result, new TypeReference<List<QueryPriceResponse.HotelPrice>>() {
         });
         QueryPriceResponse queryPriceResponse = new QueryPriceResponse();
