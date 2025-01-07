@@ -377,7 +377,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                                 request.getLanguage(),
                                 expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(bedCheckInfos.get(0).getCheckHref());
                         if (!checkPriceResult.isSucc() || null == checkPriceResult.getData() || "sold_out".equals(checkPriceResult.getData().getStatus())) {
-                            log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
+                            log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(checkPriceResult));
                             return null;
                         }
                         QueryPriceResponse.Occupancy_pricing occupancyPricing = checkPriceResult.getData().getOccupancy_pricing().get(request.getOccupancies().get(0));
@@ -472,7 +472,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                         ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" :
                                 request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(bedGroups.getLinks().getPrice_check().getHref());
                         if (!checkPriceResult.isSucc() && null == checkPriceResult.getData()) {
-                            log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
+                            log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(checkPriceResult));
                             return null;
                         }
                         checkPriceResult.getData().setAdultCount(request.getAdultCount());
