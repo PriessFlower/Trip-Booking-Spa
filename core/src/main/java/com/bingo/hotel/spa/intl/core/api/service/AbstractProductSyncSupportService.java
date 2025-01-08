@@ -31,8 +31,8 @@ public abstract class AbstractProductSyncSupportService<T> implements ProductSyn
             }
             List<ProductRespDTO> list = productRespConvert(t);
             if (CollectionUtils.isEmpty(list)) {
-                log.error("ProductSyncService productRespConvert is null,priceReq : {},supplier : {} T : {}", JsonUtils.writeObject2Json(priceReq),
-                        JsonUtils.writeObject2Json(supplier), JsonUtils.writeObject2Json(t));
+//                log.error("ProductSyncService productRespConvert is null,priceReq : {},supplier : {} T : {}", JsonUtils.writeObject2Json(priceReq),
+//                        JsonUtils.writeObject2Json(supplier), JsonUtils.writeObject2Json(t));
             }
             return list;
         } catch (Exception e) {

@@ -18,7 +18,7 @@ public class HuiTravelBaseResponse implements BaseResponse {
 
     @Override
     public boolean isSucc() {
-        return false;
+        return code.equals("0");
     }
 
     @Override

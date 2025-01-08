@@ -355,6 +355,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         }
         queryPriceRequest.setOccupancies(occupancies);
         request.setOccupancies(occupancies);
+        //TODO:这里有逻辑bug，上游没有PriceFlag传递时默认使用hotel_package如果不是这个类型的话 验价就失败了
         queryPriceRequest.setSales_environment(StringUtils.isBlank(request.getPriceFlag()) ? "hotel_package" : request.getPriceFlag());
         ResponseResult<QueryPriceResponse> result = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(),
                 expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
@@ -376,7 +377,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                                 request.getLanguage(),
                                 expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(bedCheckInfos.get(0).getCheckHref());
                         if (!checkPriceResult.isSucc() || null == checkPriceResult.getData() || "sold_out".equals(checkPriceResult.getData().getStatus())) {
-                            log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
+                            log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(checkPriceResult));
                             return null;
                         }
                         QueryPriceResponse.Occupancy_pricing occupancyPricing = checkPriceResult.getData().getOccupancy_pricing().get(request.getOccupancies().get(0));
@@ -471,7 +472,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                         ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" :
                                 request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(bedGroups.getLinks().getPrice_check().getHref());
                         if (!checkPriceResult.isSucc() && null == checkPriceResult.getData()) {
-                            log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
+                            log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(checkPriceResult));
                             return null;
                         }
                         checkPriceResult.getData().setAdultCount(request.getAdultCount());
