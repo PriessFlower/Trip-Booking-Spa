@@ -37,8 +37,8 @@ spring:
         file-extension: yaml         # 配置文件格式
         namespace: dev               # 命名空间ID，通常用于隔离不同的环境配置
         prefix: bingo-hotel-spa-intl      # 配置前缀，通常是应用名
-      inetutils:
-        preferred-networks: 192.168.111
+    inetutils:
+      preferred-networks: 192.168.111.198
 
   schedulerx2:
     endpoint: acm.aliyun.com
@@ -195,7 +195,7 @@ meituan:
       version: 1.0
     detail:
       path: hotel.oversea.detail
-      qps: 20
+      qps: 16
       version: 2.0
     avail:
       path: hotel.shopping.avail
@@ -215,8 +215,12 @@ meituan:
       version: 1.0
     room:
       path: hotel.oversea.realroom.info
+      qps: 16
+      version: 1.0
+    goods:
+      path: hotel.oversea.batch.goods.rp
       qps: 20
-      version: 2.0
+      version: 1.0
     order:
       path: hotel.order.query
       qps: 30

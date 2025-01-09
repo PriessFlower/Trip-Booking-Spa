@@ -178,7 +178,7 @@ public class BackDoorController {
     }
 
     @GetMapping("/meituan/hotel/push")
-    @ApiOperation("美团酒店/房型push")
+    @ApiOperation("美团酒店/酒店/房型/产品push")
     public HttpResponse meituanHotelList(@RequestParam(value = "pageNumber", required = false) Integer pageNumber,
                                          @RequestParam(value = "pageSize", required = false) Integer pageSize,
                                          @RequestParam(value = "type", required = false) String type) {

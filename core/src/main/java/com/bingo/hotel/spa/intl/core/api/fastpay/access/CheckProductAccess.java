@@ -32,7 +32,7 @@ public class CheckProductAccess extends BaseHttpAccess<CheckPriceRequest, CheckP
     private static int QPS = 100;
 
     public CheckProductAccess(String host, String authorization, DistributedRateLimiter redisRateLimiter) {
-        super(SupplierSourceEnum.EXPEDIA, SupplierDataTypeEnum.PRODUCT_PRICE, MonitorNameEnum.SPA_SUPPLIER_API_PRODUCT_PRICES, 0);
+        super(SupplierSourceEnum.FASTPAYHOTELS, SupplierDataTypeEnum.PRODUCT_PRICE, MonitorNameEnum.SPA_SUPPLIER_API_PRODUCT_PRICES, 0);
         this.host = host;
         this.authorization = authorization;
         this.redisRateLimiter = redisRateLimiter;

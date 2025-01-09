@@ -31,7 +31,7 @@ public class RoomInfoResponse implements BaseResponse {
 
     @Override
     public boolean isEmptyResult() {
-        return result == null;
+        return result == null || result.realRoomInfos == null;
     }
 
     @Getter

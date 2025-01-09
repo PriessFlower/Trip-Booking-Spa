@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 
 @Service
 @Slf4j
-public class MeituanStaticInfoServiceImpl implements MeituanStaticInfoService {
+public class MeituanPriceServiceImpl implements MeituanStaticInfoService {
 
     @Value("${meituan.url}")
     String host;

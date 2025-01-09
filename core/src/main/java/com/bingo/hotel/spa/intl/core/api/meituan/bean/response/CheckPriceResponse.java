@@ -17,9 +17,9 @@ import java.util.List;
 
 @Getter
 @Setter
-public class ProductInfoResponse implements BaseResponse {
+public class CheckPriceResponse implements BaseResponse {
 
-    private List<Result> result;
+    private Result result;
     private Integer code;
     private Integer partnerId;
     private String message;
@@ -31,20 +31,31 @@ public class ProductInfoResponse implements BaseResponse {
 
     @Override
     public boolean isEmptyResult() {
-        return CollectionUtils.isEmpty(result);
+        return null == result;
     }
 
     @Getter
     @Setter
     public static class Result {
 
-        private List<GoodsList> goodsList;
-        private Long hotelId;
+        private List<PriceModelList> priceModelList;
+        private String preferenceGroupList;
+        private String goodsName;
+        private List<List<OtaBeds>> otaBeds;
+        private MealType mealType;
+        private Long realRoomId;
+        private Integer refundable;
+        private List<CpApply> cpApply;
+        private String checkPolicy;
+        private boolean immediateConfirm;
+        private Integer confirmType;
+        private OhTargetUser ohTargetUser;
+        private String fxOrderId;
     }
 
     @Getter
     @Setter
-    public class GoodsList {
+    public static class GoodsList {
 
         private List<PriceModelList> priceModelList;
         private Long goodsId;
@@ -70,7 +81,27 @@ public class ProductInfoResponse implements BaseResponse {
 
     @Getter
     @Setter
-    public class PriceModelList {
+    public static class CpApply {
+
+        private String endDate;
+        private Integer refound;
+        private Integer penalty;
+        private String refoundStd;
+        private String penaltyStd;
+        private String endDateLocal;
+    }
+
+    @Getter
+    @Setter
+    public static class OhTargetUser {
+
+        private int targetUserRule;
+        private List<String> targetUserRestrictionList;
+    }
+
+    @Getter
+    @Setter
+    public static class PriceModelList {
 
         private String date;
         private Integer price;
@@ -78,7 +109,7 @@ public class ProductInfoResponse implements BaseResponse {
 
     @Getter
     @Setter
-    public class MealType {
+    public static class MealType {
 
         private Integer count;
         private String desc;
@@ -86,7 +117,7 @@ public class ProductInfoResponse implements BaseResponse {
 
     @Getter
     @Setter
-    public class OtaBeds {
+    public static class OtaBeds {
 
         private Integer otaBedCount;
         private String otaBedDesc;
@@ -95,7 +126,7 @@ public class ProductInfoResponse implements BaseResponse {
 
     @Getter
     @Setter
-    public class TargetUser {
+    public static class TargetUser {
 
         private List<TargetUserRestrictionList> targetUserRestrictionList;
         private Integer targetUserRule;
@@ -103,7 +134,7 @@ public class ProductInfoResponse implements BaseResponse {
 
     @Getter
     @Setter
-    public class TargetUserRestrictionList {
+    public static class TargetUserRestrictionList {
 
         private Integer restrictionType;
         private String restrictionName;
