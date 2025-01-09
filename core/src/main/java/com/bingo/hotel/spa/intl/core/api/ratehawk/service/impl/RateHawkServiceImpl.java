@@ -472,7 +472,7 @@ public class RateHawkServiceImpl implements RateHawkService {
             return Arrays.asList(CancelPolicy.builder().cancelType(0).build());
         }
         AichotelsProductConvertUtil aichotelsProductConvertUtil = new AichotelsProductConvertUtil();
-        String timeZone = aichotelsProductConvertUtil.getTimeZone("America/Toronto UTC-05:00", hotelCode, SupplierSourceEnum.FASTPAYHOTELS.getCode());
+        String timeZone = aichotelsProductConvertUtil.getTimeZone("America/Toronto UTC-05:00", hotelCode, SupplierSourceEnum.RATEHAWK.getCode());
 
         // 取消时间格式
         SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
