@@ -23,4 +23,9 @@ public class InitTimeZoneController {
     }
 
 
+    @RequestMapping("/initCityZone")
+    public String initCityZone() {
+        initTimeZoneService.initCityZone();
+        return "success";
+    }
 }

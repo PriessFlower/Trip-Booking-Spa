@@ -82,4 +82,13 @@ public interface UpHotelMapper {
      * @return
      */
     List<Long> getUpHotelListByDistributeIdAndSupplierIdAndPage(@Param("sList") List<Integer> supplierList, @Param("dId") Integer distributeId,@Param("pageNum") int pageNum,@Param("pageSize") int pageSize);
+
+    /**
+     * @description:获取全量可售酒店id
+     * @author: dick_w
+     * @date: 2025/1/14 14:47
+     * @param: []
+     * @return: java.util.List<java.lang.String>
+     **/
+    List<String> getAllUpHotelList();
 }

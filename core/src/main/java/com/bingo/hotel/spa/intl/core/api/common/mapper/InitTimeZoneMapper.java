@@ -22,4 +22,6 @@ public interface InitTimeZoneMapper {
 
     @Select("select 1")
     int test();
+
+    List<CityZone> getCityZoneListByCityNamesNew(@Param("list") List<CityZone> cityZoneList);
 }

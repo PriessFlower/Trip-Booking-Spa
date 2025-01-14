@@ -1,10 +1,13 @@
 package com.bingo.hotel.spa.intl.core.api.service.impl;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.nacos.client.utils.JSONUtils;
 import com.bingo.hotel.base.intl.cli.client.HotelBaseIntlClient;
 import com.bingo.hotel.base.intl.cli.response.GetCityInfoBySupplierHotelIdResponse;
 import com.bingo.hotel.base.intl.cli.result.BaseResult;
 import com.bingo.hotel.spa.intl.core.api.common.bean.CityZone;
 import com.bingo.hotel.spa.intl.core.api.common.mapper.InitTimeZoneMapper;
+import com.bingo.hotel.spa.intl.core.api.common.mapper.UpHotelMapper;
 import com.bingo.hotel.spa.intl.core.api.didatravel.utils.DidaTravelProductConvertUtil;
 import com.bingo.hotel.spa.intl.core.api.model.DataRecord;
 import com.bingo.hotel.spa.intl.core.api.service.InitTimeZoneService;
@@ -18,6 +21,7 @@ import org.springframework.util.CollectionUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * InitTimeZoneServiceImpl
@@ -44,6 +48,9 @@ public class InitTimeZoneServiceImpl implements InitTimeZoneService {
 
 
     public static final String TIME_ZONE_KEY_PREFIX = "time_zone:";
+
+    @Autowired
+    private UpHotelMapper upHotelMapper;
 
     @Override
     public void initTimeZone() {
@@ -82,6 +89,55 @@ public class InitTimeZoneServiceImpl implements InitTimeZoneService {
          addDataBase(cityZoneList);
     }
 
+    @Override
+    public void initCityZone() {
+        //查询可售酒店id
+        List<String> hotelIdList = upHotelMapper.getAllUpHotelList();
+        int batchSize = 1000;
+        for (int i = 0; i < hotelIdList.size(); i += batchSize) {
+            List<String> hotelIds = hotelIdList.subList(i, Math.min(i + batchSize, hotelIdList.size()));
+            System.out.println(hotelIds.stream()
+                    .map(item -> "'" + item + "'") // 为每个元素加单引号
+                    .collect(Collectors.joining(", ")));
+            //根据bgOrderId查询城市和国家信息
+            List<GetCityInfoBySupplierHotelIdResponse> cityInfos =  getAllCityInfoByHotelIds(hotelIds);
+            List<CityZone> cityZoneList = new ArrayList<>();
+            List<CityZone> cityZoneListNew = new ArrayList<>();
+            //判断城市和国家在表中是否已有数据，如果有则不查询第三方
+            for (GetCityInfoBySupplierHotelIdResponse cityInfo : cityInfos) {
+                CityZone cityZone = CityZone.builder()
+                        .cityName(cityInfo.getCityName())
+                        .countryName(cityInfo.getCountryName())
+                        .build();
+                cityZoneList.add(cityZone);
+            }
+            excludeData(cityZoneList);
+            if(!CollectionUtils.isEmpty(cityZoneList)){
+                for (CityZone cityZone : cityZoneList) {
+                    DataRecord record = didaTravelProductConvertUtil.getCityInfo(cityZone.getCityName(), cityZone.getCountryName());
+                    String timeZone = "";
+                    if(record != null){
+                        System.out.println(record.getUrl());
+                        timeZone = didaTravelProductConvertUtil.getTimeZone(record.getUrl());
+                    }
+                    if(StringUtils.isNotBlank(timeZone)) {
+                        redisUtils.hmSet(TIME_ZONE_KEY_PREFIX + cityZone.getCountryName(), cityZone.getCityName(), timeZone);
+                    }
+                    cityZone.setTimezone(timeZone);
+                    cityZoneListNew.add(cityZone);
+//                    try {
+//                        Thread.sleep(100);
+//                    } catch (InterruptedException e) {
+//                        e.printStackTrace();
+//                    }
+                }
+                addDataBaseNew(cityZoneListNew);
+            }
+            break;
+        }
+
+    }
+
     private void addDataBase(List<CityZone> cityZoneList) { //60
         // 先查询，根据cityZoneList里面的cityName
         List<CityZone> dataBaseList = initTimeZoneMapper.getCityZoneListByCityNames(cityZoneList);
@@ -98,4 +154,47 @@ public class InitTimeZoneServiceImpl implements InitTimeZoneService {
         }
 
     }
+
+    /**
+     * @description:获取cityname和countryname
+     * @author: dick_w
+     * @date: 2025/1/14 17:33
+     * @param: [hotelIds]
+     * @return: java.util.List<com.bingo.hotel.base.intl.cli.response.GetCityInfoBySupplierHotelIdResponse>
+     **/
+    private List<GetCityInfoBySupplierHotelIdResponse> getAllCityInfoByHotelIds(List<String> hotelIds){
+        List<GetCityInfoBySupplierHotelIdResponse> getCityInfoBySupplierHotelIdResponses = new ArrayList<>();
+        BaseResult<List<GetCityInfoBySupplierHotelIdResponse>> cityInfos = hotelBaseIntlClient.getCityInfoByHotelIds(hotelIds);
+        if(cityInfos.isSUCCESS() && !CollectionUtils.isEmpty(cityInfos.getData())){
+            getCityInfoBySupplierHotelIdResponses = cityInfos.getData();
+        }
+        return getCityInfoBySupplierHotelIdResponses;
+    }
+
+    /**
+     * @description:剔除已存在的数据
+     * @author: dick_w 
+     * @date: 2025/1/14 16:08
+     * @param: [cityZoneList]
+     * @return: java.util.List<com.bingo.hotel.spa.intl.core.api.common.bean.CityZone>
+     **/
+    private List<CityZone> excludeData(List<CityZone> cityZoneList) {
+        // 先查询，根据cityZoneList里面的cityName
+        List<CityZone> dataBaseList = initTimeZoneMapper.getCityZoneListByCityNamesNew(cityZoneList);
+        //剔除查询到的数据 但可能时区发生变化了
+        cityZoneList.removeAll(dataBaseList);
+        return cityZoneList;
+    }
+
+    /**
+     * @description:添加数据
+     * @author: dick_w 
+     * @date: 2025/1/14 16:08
+     * @param: [cityZoneList]
+     * @return: void
+     **/
+    private void addDataBaseNew(List<CityZone> cityZoneList) {
+        initTimeZoneMapper.insertBatch(cityZoneList);
+    }
+
 }

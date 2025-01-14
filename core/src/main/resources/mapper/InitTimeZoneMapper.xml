@@ -32,4 +32,11 @@
             #{item.countryName}
         </foreach>
     </delete>
+
+    <select id="getCityZoneListByCityNamesNew" resultType="com.bingo.hotel.spa.intl.core.api.common.bean.CityZone">
+        select city_name,country_name from city_zone where city_name in
+        <foreach collection="list" item="item" open="(" separator="," close=")">
+            #{item.cityName}
+        </foreach>
+    </select>
 </mapper>

@@ -6,4 +6,6 @@ package com.bingo.hotel.spa.intl.core.api.service;
  */
 public interface InitTimeZoneService {
     void initTimeZone();
+
+    void initCityZone();
 }

@@ -296,7 +296,13 @@ public class DidaTravelProductConvertUtil {
      * */
     public DataRecord getCityInfo(String cityName, String countryName) {
         countryName = sloveCountryName(countryName);
-        String input = ZoneHttpUtils.sendGet("https://www.timeanddate.com/scripts/completion.php?query=" + cityName + "&xd=3&mode=ci");
+//        String input = ZoneHttpUtils.sendGet("https://www.timeanddate.com/scripts/completion.php?query=" + cityName + "&xd=3&mode=ci");
+        String scheme = "https";
+        String host = "www.timeanddate.com";
+        String path = "/scripts/completion.php";
+        String query = "query=" + cityName + "&xd=3&mode=ci";
+        String input = ZoneHttpUtils.sendGetNew(scheme,host,path,query);
+        log.info("getCityInfo intput:{}",input);
         List<DataRecord> records = parseData(input);
         for (DataRecord record : records) {
             if (record.getName().contains(cityName) && record.getCountry().contains(countryName)) {
