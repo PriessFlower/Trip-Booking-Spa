@@ -3,6 +3,7 @@ package com.bingo.hotel.spa.intl.core.api.service.impl;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.nacos.client.utils.JSONUtils;
 import com.bingo.hotel.base.intl.cli.client.HotelBaseIntlClient;
+import com.bingo.hotel.base.intl.cli.request.SupplierHotelInfoRequest;
 import com.bingo.hotel.base.intl.cli.response.GetCityInfoBySupplierHotelIdResponse;
 import com.bingo.hotel.base.intl.cli.result.BaseResult;
 import com.bingo.hotel.spa.intl.core.api.common.bean.CityZone;
@@ -165,6 +166,19 @@ public class InitTimeZoneServiceImpl implements InitTimeZoneService {
             System.out.println("updateCityZoneList.size()---"+updateCityZoneList.size());
             initTimeZoneMapper.updateBatch(updateCityZoneList);
         }
+    }
+
+    @Override
+    public String getCityZoneByHotelId(String timeZone,String hotelId,Integer supplierId) {
+        if(StringUtils.isBlank(timeZone)){
+            SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(hotelId, supplierId);
+            BaseResult<GetCityInfoBySupplierHotelIdResponse> result = hotelBaseIntlClient.getCityInfoBySupplierHotelId(supplierHotelRequest);
+            return didaTravelProductConvertUtil.getTimeZoneNew(result.getData().getCityName(), result.getData().getCountryName());
+        }
+        String[] partRight = timeZone.split(" ");
+        String[] zone = partRight[1].split(":");
+        String hour = zone[0].substring(3, zone[0].length());
+        return hour;
     }
 
     private void addDataBase(List<CityZone> cityZoneList) { //60

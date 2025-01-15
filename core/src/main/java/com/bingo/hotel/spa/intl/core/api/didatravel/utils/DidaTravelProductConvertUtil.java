@@ -131,6 +131,25 @@ public class DidaTravelProductConvertUtil {
         return timeZone;
     }
 
+    public String getTimeZoneNew(String cityName, String countryName) {
+        String timeZone = redisUtils.hmGet(InitTimeZoneServiceImpl.TIME_ZONE_KEY_PREFIX + countryName, cityName);
+        if (StringUtils.isBlank(timeZone)) {
+            timeZone = initTimeZoneMapper.getCityZoneByCityName(cityName, countryName);
+            if (StringUtils.isBlank(timeZone)) {
+                DataRecord cityInfo = getCityInfo(cityName, countryName);
+                if (cityInfo != null) {
+                    timeZone = getTimeZone(cityInfo.getUrl());
+                    if (StringUtils.isNotBlank(timeZone)) {
+                        redisUtils.hmSet(InitTimeZoneServiceImpl.TIME_ZONE_KEY_PREFIX + countryName, cityName, timeZone);
+                    }
+                } else {
+                    timeZone = "";
+                }
+            }
+        }
+        return timeZone;
+    }
+
     public List<CancelPolicy> convertCancelPolicy(List<DidaTravelResponse.CancellationPolicyListTypeCancellationPolicy>
                                                           policyList, Date checkIn, BigDecimal totalPrice, String timeZone) {
 
