@@ -17,6 +17,7 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
@@ -42,6 +43,11 @@ public class ZoneHttpUtils
         return sendGet(url, StringUtils.EMPTY);
     }
 
+    public static String sendGetNew(String scheme,String host,String path,String query)
+    {
+        return sendGetNew( scheme, host, path, query, StringUtils.EMPTY);
+    }
+
     /**
      * 向指定 URL 发送GET方法的请求
      *
@@ -52,6 +58,11 @@ public class ZoneHttpUtils
     public static String sendGet(String url, String param)
     {
         return sendGet(url, param, "UTF-8");
+    }
+
+    public static String sendGetNew(String scheme,String host,String path,String query, String param)
+    {
+        return sendGetNew(scheme, host, path, query, param, "UTF-8");
     }
 
     /**
@@ -112,6 +123,70 @@ public class ZoneHttpUtils
             catch (Exception ex)
             {
                 log.error("调用in.close Exception, url=" + url + ",param=" + param, ex);
+            }
+        }
+        return result.toString();
+    }
+
+    public static String sendGetNew(String scheme,String host,String path,String query, String param, String contentType)
+    {
+        StringBuilder result = new StringBuilder();
+        BufferedReader in = null;
+        URI uri = null;
+        try
+        {
+//            String urlNameString = StringUtils.isNotBlank(param) ? url + "?" + param : url;
+            // 使用 URI 构造函数自动编码 query
+            uri = new URI(
+                    scheme,                  // scheme (协议)
+                    host,                    // authority (主机)
+                    path,                    // path (路径)
+                    query,                   // query (查询参数)
+                    null                     // fragment (片段，可选)
+            );
+//            log.info("sendGet - {}", urlNameString);
+            URL realUrl = new URL(uri.toASCIIString());
+            URLConnection connection = realUrl.openConnection();
+            connection.setRequestProperty("accept", "*/*");
+            connection.setRequestProperty("connection", "Keep-Alive");
+            connection.setRequestProperty("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+            connection.connect();
+            in = new BufferedReader(new InputStreamReader(connection.getInputStream(), contentType));
+            String line;
+            while ((line = in.readLine()) != null)
+            {
+                result.append(line + "\n");
+            }
+//            log.info("recv - {}", result);
+        }
+        catch (ConnectException e)
+        {
+            log.error("调用HttpUtils.sendGet ConnectException, url=" + uri.toASCIIString() + ",param=" + param, e);
+        }
+        catch (SocketTimeoutException e)
+        {
+            log.error("调用HttpUtils.sendGet SocketTimeoutException, url=" + uri.toASCIIString() + ",param=" + param, e);
+        }
+        catch (IOException e)
+        {
+            log.error("调用HttpUtils.sendGet IOException, url=" + uri.toASCIIString() + ",param=" + param, e);
+        }
+        catch (Exception e)
+        {
+            log.error("调用HttpsUtil.sendGet Exception, url=" + uri.toASCIIString() + ",param=" + param, e);
+        }
+        finally
+        {
+            try
+            {
+                if (in != null)
+                {
+                    in.close();
+                }
+            }
+            catch (Exception ex)
+            {
+                log.error("调用in.close Exception, url=" + uri.toASCIIString() + ",param=" + param, ex);
             }
         }
         return result.toString();

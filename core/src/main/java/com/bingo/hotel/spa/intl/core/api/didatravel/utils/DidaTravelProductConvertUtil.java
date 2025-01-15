@@ -1,5 +1,9 @@
 package com.bingo.hotel.spa.intl.core.api.didatravel.utils;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
+import com.alibaba.nacos.client.utils.JSONUtils;
 import com.bingo.hotel.base.intl.cli.client.HotelBaseIntlClient;
 import com.bingo.hotel.base.intl.cli.request.SupplierHotelInfoRequest;
 import com.bingo.hotel.base.intl.cli.response.GetCityInfoBySupplierHotelIdResponse;
@@ -15,11 +19,14 @@ import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.common.mapper.InitTimeZoneMapper;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.DidaTravelResponse;
 import com.bingo.hotel.spa.intl.core.api.model.DataRecord;
+import com.bingo.hotel.spa.intl.core.api.model.GeonamesCityInfo;
 import com.bingo.hotel.spa.intl.core.api.service.impl.InitTimeZoneServiceImpl;
 import com.bingo.hotel.spa.intl.core.redis.RedisUtils;
 import com.bingo.hotel.spa.intl.core.util.DateFormatUtils;
 import com.bingo.hotel.spa.intl.core.util.DateUtil;
+import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.bingo.hotel.spa.intl.core.util.ZoneHttpUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.lang3.StringUtils;
@@ -32,6 +39,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.DateTimeException;
@@ -114,6 +122,25 @@ public class DidaTravelProductConvertUtil {
                     timeZone = getTimeZone(cityInfo.getUrl());
                     if (StringUtils.isNotBlank(timeZone)) {
                         redisUtils.hmSet(InitTimeZoneServiceImpl.TIME_ZONE_KEY_PREFIX + cityName, countryName, timeZone);
+                    }
+                } else {
+                    timeZone = "";
+                }
+            }
+        }
+        return timeZone;
+    }
+
+    public String getTimeZoneNew(String cityName, String countryName) {
+        String timeZone = redisUtils.hmGet(InitTimeZoneServiceImpl.TIME_ZONE_KEY_PREFIX + countryName, cityName);
+        if (StringUtils.isBlank(timeZone)) {
+            timeZone = initTimeZoneMapper.getCityZoneByCityName(cityName, countryName);
+            if (StringUtils.isBlank(timeZone)) {
+                DataRecord cityInfo = getCityInfo(cityName, countryName);
+                if (cityInfo != null) {
+                    timeZone = getTimeZone(cityInfo.getUrl());
+                    if (StringUtils.isNotBlank(timeZone)) {
+                        redisUtils.hmSet(InitTimeZoneServiceImpl.TIME_ZONE_KEY_PREFIX + countryName, cityName, timeZone);
                     }
                 } else {
                     timeZone = "";
@@ -296,10 +323,20 @@ public class DidaTravelProductConvertUtil {
      * */
     public DataRecord getCityInfo(String cityName, String countryName) {
         countryName = sloveCountryName(countryName);
-        String input = ZoneHttpUtils.sendGet("https://www.timeanddate.com/scripts/completion.php?query=" + cityName + "&xd=3&mode=ci");
+//        String input = ZoneHttpUtils.sendGet("https://www.timeanddate.com/scripts/completion.php?query=" + cityName + "&xd=3&mode=ci");
+        String scheme = "https";
+        String host = "www.timeanddate.com";
+        String path = "/scripts/completion.php";
+        String query = "query=" + cityName + "&xd=3&mode=ci";
+        String input = ZoneHttpUtils.sendGetNew(scheme,host,path,query);
+//        log.info("getCityInfo intput:{}",input);
         List<DataRecord> records = parseData(input);
         for (DataRecord record : records) {
-            if (record.getName().contains(cityName) && record.getCountry().contains(countryName)) {
+            // 使用Normalizer类来去除音调符号
+            String cityNameTransfer = Normalizer.normalize(cityName, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+            String cityNameGet = Normalizer.normalize(record.getName(), Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+            if ((cityNameGet.contains(cityNameTransfer) || cityNameTransfer.contains(cityNameGet))
+                    && (record.getCountry().contains(countryName) || countryName.contains(record.getCountry()))) {
                 return record;
             }
         }
@@ -312,6 +349,8 @@ public class DidaTravelProductConvertUtil {
             return "USA";
         } else if (countryName.equals("The United Kingdom of Great Britain and Northern Ireland")) {
             return "United Kingdom";
+        }else if (countryName.equals("Türkiye")) {
+            return "Turkey";
         }
         return countryName;
     }
@@ -325,7 +364,7 @@ public class DidaTravelProductConvertUtil {
             if (parts.length < 11) {
                 continue;  // 如果数据不完整则跳过
             }
-
+            // /time/zone/@1818485	5	hk		Tsing Yi (island)		Hong Kong	//c.tadst.com/gfx/n/fl/16/hk.png			p
             DataRecord record = new DataRecord();
             record.setUrl(parts[0]);
             record.setCode(parseInt(parts[1]));
@@ -343,6 +382,72 @@ public class DidaTravelProductConvertUtil {
         }
 
         return records;
+    }
+
+    /**
+     * @description:获取城市信息
+     * @author: dick_w
+     * @date: 2025/1/15 10:52
+     * @param: [cityName, countryName]
+     * @return: com.bingo.hotel.spa.intl.core.api.model.GeonamesCityInfo
+     **/
+    public GeonamesCityInfo getCityInfoByGeonames(String cityName, String countryName) {
+//        countryName = sloveCountryName(countryName);
+        String scheme = "http";
+        String host = "api.geonames.org";
+        String path = "/searchJSON";
+        String query = "q="+cityName+"&maxRows=1000&username=dickf117";
+        String input = ZoneHttpUtils.sendGetNew(scheme,host,path,query);
+//        log.info("getCityInfoByGeonames intput:{}",input);
+        List<GeonamesCityInfo> records = parseDataByGeonames(input);
+        for (GeonamesCityInfo geonamesCityInfo : records) {
+            // 使用Normalizer类来去除音调符号
+            String cityNameTransfer = Normalizer.normalize(cityName, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+            String cityNameGet = Normalizer.normalize(geonamesCityInfo.getName(), Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+            if ((cityNameTransfer.contains(cityNameGet) || cityNameGet.contains(cityNameTransfer))
+                    && StringUtils.isNotBlank(geonamesCityInfo.getCountryName())
+                    && (countryName.contains(geonamesCityInfo.getCountryName()) || geonamesCityInfo.getCountryName().contains(countryName))) {
+                return geonamesCityInfo;
+            }
+        }
+        log.error("未找到城市信息: cityName:{},countryName:{}", cityName, countryName);
+        return null;
+    }
+
+    /**
+     * @description:转换取值
+     * @author: dick_w
+     * @date: 2025/1/15 10:50
+     * @param: [input]
+     * @return: java.util.List<com.bingo.hotel.spa.intl.core.api.model.GeonamesCityInfo>
+     **/
+    public List<GeonamesCityInfo> parseDataByGeonames(String input) {
+//        System.out.println("input---"+input);
+        JSONObject jsonObject = JSON.parseObject(input);
+        JSONArray jsonArray = jsonObject.getJSONArray("geonames");
+//        System.out.println("jsonArray.toJSONString()---"+jsonArray.toJSONString());
+        List<GeonamesCityInfo> records = JsonUtils.decodeJson(jsonArray.toJSONString(),new TypeReference<>() {});
+//        System.out.println("records---"+JsonUtils.writeObject2Json(records));
+        return records;
+    }
+
+    /**
+     * @description:获取时区
+     * @author: dick_w
+     * @date: 2025/1/15 11:00
+     * @param: [geonamesCityInfo]
+     * @return: java.lang.String
+     **/
+    public String getTimeZoneByGeonames(GeonamesCityInfo geonamesCityInfo) {
+        String timezoneJson = ZoneHttpUtils.sendGet("http://api.geonames.org/timezoneJSON?" +
+                "lat="+geonamesCityInfo.getLat()+"&lng="+geonamesCityInfo.getLng()+"&username=dickf117");
+//        System.out.println("timezoneJson---"+timezoneJson);
+        if(StringUtils.isNotBlank(timezoneJson)){
+            JSONObject jsonObject = JSON.parseObject(timezoneJson);
+            return jsonObject.get("gmtOffset").toString();
+        }
+        log.error("获取时区失败, geonamesCityInfo: {}", JsonUtils.writeObject2Json(geonamesCityInfo));
+        return null;
     }
 }
 
