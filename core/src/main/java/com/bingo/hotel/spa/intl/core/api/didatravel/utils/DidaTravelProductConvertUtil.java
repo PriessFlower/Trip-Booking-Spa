@@ -39,6 +39,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.DateTimeException;
@@ -309,10 +310,14 @@ public class DidaTravelProductConvertUtil {
         String path = "/scripts/completion.php";
         String query = "query=" + cityName + "&xd=3&mode=ci";
         String input = ZoneHttpUtils.sendGetNew(scheme,host,path,query);
-        log.info("getCityInfo intput:{}",input);
+//        log.info("getCityInfo intput:{}",input);
         List<DataRecord> records = parseData(input);
         for (DataRecord record : records) {
-            if (record.getName().contains(cityName) && record.getCountry().contains(countryName)) {
+            // 使用Normalizer类来去除音调符号
+            String cityNameTransfer = Normalizer.normalize(cityName, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+            String cityNameGet = Normalizer.normalize(record.getName(), Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+            if ((cityNameGet.contains(cityNameTransfer) || cityNameTransfer.contains(cityNameGet))
+                    && (record.getCountry().contains(countryName) || countryName.contains(record.getCountry()))) {
                 return record;
             }
         }
@@ -325,6 +330,8 @@ public class DidaTravelProductConvertUtil {
             return "USA";
         } else if (countryName.equals("The United Kingdom of Great Britain and Northern Ireland")) {
             return "United Kingdom";
+        }else if (countryName.equals("Türkiye")) {
+            return "Turkey";
         }
         return countryName;
     }
@@ -338,7 +345,7 @@ public class DidaTravelProductConvertUtil {
             if (parts.length < 11) {
                 continue;  // 如果数据不完整则跳过
             }
-
+            // /time/zone/@1818485	5	hk		Tsing Yi (island)		Hong Kong	//c.tadst.com/gfx/n/fl/16/hk.png			p
             DataRecord record = new DataRecord();
             record.setUrl(parts[0]);
             record.setCode(parseInt(parts[1]));
@@ -375,7 +382,12 @@ public class DidaTravelProductConvertUtil {
 //        log.info("getCityInfoByGeonames intput:{}",input);
         List<GeonamesCityInfo> records = parseDataByGeonames(input);
         for (GeonamesCityInfo geonamesCityInfo : records) {
-            if (cityName.contains(geonamesCityInfo.getName()) && countryName.contains(geonamesCityInfo.getCountryName())) {
+            // 使用Normalizer类来去除音调符号
+            String cityNameTransfer = Normalizer.normalize(cityName, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+            String cityNameGet = Normalizer.normalize(geonamesCityInfo.getName(), Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+            if ((cityNameTransfer.contains(cityNameGet) || cityNameGet.contains(cityNameTransfer))
+                    && StringUtils.isNotBlank(geonamesCityInfo.getCountryName())
+                    && (countryName.contains(geonamesCityInfo.getCountryName()) || geonamesCityInfo.getCountryName().contains(countryName))) {
                 return geonamesCityInfo;
             }
         }
