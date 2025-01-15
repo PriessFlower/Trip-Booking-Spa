@@ -51,7 +51,7 @@ public class ProductInfoAccess extends BaseHttpAccess<ProductInfoReqBody, Produc
         this.test = test;
         this.path = path;
         this.version = version;
-        this.redisRateLimiter = redisRateLimiter;;
+        this.redisRateLimiter = redisRateLimiter;
     }
 
     @Override

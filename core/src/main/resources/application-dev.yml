@@ -196,22 +196,10 @@ meituan:
     detail:
       path: hotel.oversea.detail
       qps: 16
-      version: 2.0
-    avail:
-      path: hotel.shopping.avail
-      qps: 10
-      version: 2.0
-    multi:
-      path: hotel.shopping.multi
-      qps: 20
-      version: 2.0
-    check:
-      path: hotel.order.check
-      qps: 7
       version: 1.0
-    booking:
-      path: hotel.order.booking
-      qps: 30
+    check:
+      path: hotel.oversea.order.check
+      qps: 7
       version: 1.0
     room:
       path: hotel.oversea.realroom.info
@@ -219,14 +207,6 @@ meituan:
       version: 1.0
     goods:
       path: hotel.oversea.batch.goods.rp
-      qps: 20
-      version: 1.0
-    order:
-      path: hotel.order.query
-      qps: 30
-      version: 1.0
-    cancel:
-      path: hotel.order.cancel
       qps: 20
       version: 1.0
   partner-id: 35047

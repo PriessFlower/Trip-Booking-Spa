@@ -53,7 +53,6 @@ public class CheckPriceAccess extends BaseHttpAccess<CheckReqBody, CheckPriceRes
         this.path = path;
         this.version = version;
         this.redisRateLimiter = redisRateLimiter;
-        ;
     }
 
     @Override

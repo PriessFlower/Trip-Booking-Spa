@@ -44,7 +44,7 @@ public class ProductInfoResponse implements BaseResponse {
 
     @Getter
     @Setter
-    public class GoodsList {
+    public static class GoodsList {
 
         private List<PriceModelList> priceModelList;
         private Long goodsId;
@@ -56,7 +56,7 @@ public class ProductInfoResponse implements BaseResponse {
         private Integer quotedOccupancy;
         private Long realRoomId;
         private Integer rateOccupancy;
-        private List<String> cpApply;
+        private List<CpApply> cpApply;
         private List<List<OtaBeds>> otaBeds;
         private List<String> giftPackageList;
         private String checkPolicy;
@@ -70,7 +70,7 @@ public class ProductInfoResponse implements BaseResponse {
 
     @Getter
     @Setter
-    public class PriceModelList {
+    public static class PriceModelList {
 
         private String date;
         private Integer price;
@@ -78,7 +78,7 @@ public class ProductInfoResponse implements BaseResponse {
 
     @Getter
     @Setter
-    public class MealType {
+    public static class MealType {
 
         private Integer count;
         private String desc;
@@ -86,7 +86,7 @@ public class ProductInfoResponse implements BaseResponse {
 
     @Getter
     @Setter
-    public class OtaBeds {
+    public static class OtaBeds {
 
         private Integer otaBedCount;
         private String otaBedDesc;
@@ -95,7 +95,7 @@ public class ProductInfoResponse implements BaseResponse {
 
     @Getter
     @Setter
-    public class TargetUser {
+    public static class TargetUser {
 
         private List<TargetUserRestrictionList> targetUserRestrictionList;
         private Integer targetUserRule;
@@ -103,11 +103,23 @@ public class ProductInfoResponse implements BaseResponse {
 
     @Getter
     @Setter
-    public class TargetUserRestrictionList {
+    public static class TargetUserRestrictionList {
 
         private Integer restrictionType;
         private String restrictionName;
         private String restrictionNameEn;
         private String restrictionNameCode;
+    }
+
+    @Getter
+    @Setter
+    public static class CpApply {
+
+        private String endDate;
+        private Integer refound;
+        private Integer penalty;
+        private String refoundStd;
+        private String penaltyStd;
+        private String endDateLocal;
     }
 }

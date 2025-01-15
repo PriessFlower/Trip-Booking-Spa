@@ -1,5 +1,13 @@
 package com.bingo.hotel.spa.intl.core.api.meituan.service;
 
+import com.bingo.hotel.spa.intl.cli.dto.CheckPriceRespDTO;
+import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
+import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
+import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
+import com.bingo.hotel.spa.intl.cli.seq.Supplier;
+
+import java.util.List;
+
 /**
  * 价格相关接口.
  *
@@ -9,9 +17,9 @@ package com.bingo.hotel.spa.intl.core.api.meituan.service;
  **/
 public interface MeituanPriceService {
 
-    void queryPrices(Long maxId, Integer pageSize);
+    List<ProductRespDTO> queryPrices(PriceReq request, Supplier supplier);
 
-    void queryPrice(Long maxId, Integer pageSize);
+    List<ProductRespDTO> queryProductPrice(PriceReq request, Supplier supplier);
 
-    void checkPrice(Integer pageNumber, Integer pageSize, String type);
+    CheckPriceRespDTO checkPrices(CheckPriceReq request);
 }

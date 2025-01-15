@@ -37,7 +37,7 @@ public class RoomInfoResponse implements BaseResponse {
     @Getter
     @Setter
     public static class Result {
-        private Map<Integer, List<RealRoomInfos>> realRoomInfos;
+        private Map<Long, List<RealRoomInfos>> realRoomInfos;
     }
 
     @Getter

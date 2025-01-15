@@ -5,7 +5,6 @@ import com.bingo.hotel.info.intl.cli.dto.BedInfoDTO;
 import com.bingo.hotel.info.intl.cli.request.SupplierHotelBaseRequest;
 import com.bingo.hotel.info.intl.cli.request.SupplierProductBaseRequest;
 import com.bingo.hotel.info.intl.cli.request.SupplierRoomBaseRequest;
-import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.QueryPriceResponse;
 import com.bingo.hotel.spa.intl.core.api.meituan.bean.response.HotelInfoResponse;
 import com.bingo.hotel.spa.intl.core.api.meituan.bean.response.ProductInfoResponse;
 import com.bingo.hotel.spa.intl.core.api.meituan.bean.response.RoomInfoResponse;
@@ -58,10 +57,10 @@ public class MeiTuanStaticInfoAdaptor {
                     .setArea(realRoomBaseInfo.getUseableArea())
                     .setDescription("")
                     .setFloor(realRoomBaseInfo.getFloor())
-                    .setBroadNet(convertInternet(realRoomBaseInfo.getInternetWay()))
-                    .setBedInfoList(convertBedList(roomInfo.getBedInfoList()))
+                    .setBroadNet(null == realRoomBaseInfo.getInternetWay() ? 0 : convertInternet(realRoomBaseInfo.getInternetWay()))
+                    .setBedInfoList(CollectionUtils.isEmpty(roomInfo.getBedInfoList()) ? new ArrayList<>() : convertBedList(roomInfo.getBedInfoList()))
                     .setHasBathroom(0)
-                    .setHasWindows(convertWindows(realRoomBaseInfo.getWindow()))
+                    .setHasWindows(null == realRoomBaseInfo.getWindow() ? 0 : convertWindows(realRoomBaseInfo.getWindow()))
                     .setIsSmoking(0);
             roomBaseList.add(roomBaseRequest);
         });
@@ -155,7 +154,7 @@ public class MeiTuanStaticInfoAdaptor {
             return list;
         }
         productInfoResult.forEach(hotelInfo -> {
-            hotelInfo.getGoodsList().forEach(productInfo->{
+            hotelInfo.getGoodsList().forEach(productInfo -> {
                 SupplierProductBaseRequest request = new SupplierProductBaseRequest()
                         .setSupplierId(10009)
                         .setSupplierHotelId(hotelInfo.getHotelId().toString())

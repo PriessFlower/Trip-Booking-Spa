@@ -2,7 +2,6 @@ package com.bingo.hotel.spa.intl.core.api.meituan.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.bingo.hotel.base.intl.cli.client.HotelBaseIntlClient;
 import com.bingo.hotel.info.intl.cli.client.HotelInfoIntlClient;
 import com.bingo.hotel.info.intl.cli.request.SupplierHotelBaseRequest;
 import com.bingo.hotel.info.intl.cli.request.SupplierProductBaseRequest;
@@ -84,19 +83,8 @@ public class MeituanStaticInfoServiceImpl implements MeituanStaticInfoService {
     @Value("${meituan.method.goods.version}")
     String goodsVersion;
 
-    @Value("${meituan.method.multi.path}")
-    String multiPath;
-    @Value("${meituan.method.multi.version}")
-    String multiVersion;
-
-    @Value("${meituan.method.avail.path}")
-    String availPath;
-    @Value("${meituan.method.avail.version}")
-    String availVersion;
     @Resource
     private HotelInfoIntlClient hotelInfoIntlClient;
-    @Resource
-    private HotelBaseIntlClient hotelBaseIntlClient;
     @Resource
     private DistributedRateLimiter rateLimiter;
     @Resource
@@ -163,9 +151,9 @@ public class MeituanStaticInfoServiceImpl implements MeituanStaticInfoService {
             iSupplierHotelIdListService.saveBatch(list);
             return hotelIdsResponse.getResult().getMaxId();
         } catch (RedisLimitException e) {
-            log.error("queryHotelIdList limit is error e:{}", e.getMessage());
+            log.error("queryHotelIdList limit is error e:{}", e);
         } catch (Exception e) {
-            log.error("queryHotelIdList error e : {}", e.getMessage());
+            log.error("queryHotelIdList error e :", e);
         }
         return null;
     }
@@ -257,9 +245,9 @@ public class MeituanStaticInfoServiceImpl implements MeituanStaticInfoService {
             hotelInfoIntlClient.saveHotelInfo(list);
 
         } catch (RedisLimitException e) {
-            log.error("getMeituanHotelDetail limit is error e:{}", e.getMessage());
+            log.error("getMeituanHotelDetail limit is error e:", e);
         } catch (Exception e) {
-            log.error("getMeituanHotelDetail error e : {}", e.getMessage());
+            log.error("getMeituanHotelDetail error e :", e);
         }
     }
 
@@ -290,9 +278,9 @@ public class MeituanStaticInfoServiceImpl implements MeituanStaticInfoService {
             }
 
             log.debug("getMeituanRoomInfo response is success request:{}, result:{} ",
-                    JsonUtils.writeObject2Json(roomReqBody), response.getOrigData());
+                    JsonUtils.writeObject2Json(roomReqBody), roomInfoResponse);
 
-            Map<Integer, List<RoomInfoResponse.RealRoomInfos>> realRoomInfoMap = roomInfoResponse.getResult().getRealRoomInfos();
+            Map<Long, List<RoomInfoResponse.RealRoomInfos>> realRoomInfoMap = roomInfoResponse.getResult().getRealRoomInfos();
             for (Long hotelId : hotelIds) {
                 if (realRoomInfoMap.containsKey(hotelId)) {
                     List<SupplierRoomBaseRequest> supplierRoomBaseRequests = MeiTuanStaticInfoAdaptor.transformInfoRoomReq(realRoomInfoMap.get(hotelId), hotelId);
@@ -302,9 +290,9 @@ public class MeituanStaticInfoServiceImpl implements MeituanStaticInfoService {
                 }
             }
         } catch (RedisLimitException e) {
-            log.error("getMeituanRoomInfo limit is error e:{}", e.getMessage());
+            log.error("getMeituanRoomInfo limit is error e:", e);
         } catch (Exception e) {
-            log.error("getMeituanRoomInfo error e : {}", e.getMessage());
+            log.error("getMeituanRoomInfo error e :", e);
         }
     }
 
@@ -359,9 +347,9 @@ public class MeituanStaticInfoServiceImpl implements MeituanStaticInfoService {
             }
 
         } catch (RedisLimitException e) {
-            log.error("getMeituanProductInfo limit is error e:{}", e.getMessage());
+            log.error("getMeituanProductInfo limit is error e:", e);
         } catch (Exception e) {
-            log.error("getMeituanProductInfo error e : {}", e.getMessage());
+            log.error("getMeituanProductInfo error e :", e);
         }
     }
 

@@ -1,5 +1,6 @@
 package com.bingo.hotel.spa.intl.core.api.meituan.bean.request;
 
+import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -13,6 +14,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
+@Builder
 public class CheckReqBody {
 
     private String checkoutDate;

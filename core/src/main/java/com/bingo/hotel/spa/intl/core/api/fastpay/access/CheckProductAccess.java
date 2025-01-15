@@ -60,7 +60,7 @@ public class CheckProductAccess extends BaseHttpAccess<CheckPriceRequest, CheckP
     @Override
     protected void beforeAccess(CheckPriceRequest request) {
         if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
-            log.info("expedia接口请求超过限制，每秒请求超过{}次", QPS);
+            log.info("fastpay接口请求超过限制，每秒请求超过{}次", QPS);
             throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
                     + "request = " + JsonUtils.writeObject2Json(request));
         }

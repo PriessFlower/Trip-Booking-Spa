@@ -38,14 +38,14 @@ public class CheckPriceResponse implements BaseResponse {
     @Setter
     public static class Result {
 
-        private List<PriceModelList> priceModelList;
+        private List<ProductInfoResponse.PriceModelList> priceModelList;
         private String preferenceGroupList;
         private String goodsName;
         private List<List<OtaBeds>> otaBeds;
-        private MealType mealType;
+        private ProductInfoResponse.MealType mealType;
         private Long realRoomId;
         private Integer refundable;
-        private List<CpApply> cpApply;
+        private List<ProductInfoResponse.CpApply> cpApply;
         private String checkPolicy;
         private boolean immediateConfirm;
         private Integer confirmType;
@@ -55,64 +55,10 @@ public class CheckPriceResponse implements BaseResponse {
 
     @Getter
     @Setter
-    public static class GoodsList {
-
-        private List<PriceModelList> priceModelList;
-        private Long goodsId;
-        private MealType mealType;
-        private Long hotelId;
-        private Integer invoiceMode;
-        private Integer goodsSource;
-        private Integer minGuestAge;
-        private Integer quotedOccupancy;
-        private Long realRoomId;
-        private Integer rateOccupancy;
-        private List<String> cpApply;
-        private List<List<OtaBeds>> otaBeds;
-        private List<String> giftPackageList;
-        private String checkPolicy;
-        private Integer refundable;
-        private Integer averagePrice;
-        private String goodsName;
-        private TargetUser targetUser;
-        private Integer confirmType;
-        private Integer smokingPreferences;
-    }
-
-    @Getter
-    @Setter
-    public static class CpApply {
-
-        private String endDate;
-        private Integer refound;
-        private Integer penalty;
-        private String refoundStd;
-        private String penaltyStd;
-        private String endDateLocal;
-    }
-
-    @Getter
-    @Setter
     public static class OhTargetUser {
 
         private int targetUserRule;
         private List<String> targetUserRestrictionList;
-    }
-
-    @Getter
-    @Setter
-    public static class PriceModelList {
-
-        private String date;
-        private Integer price;
-    }
-
-    @Getter
-    @Setter
-    public static class MealType {
-
-        private Integer count;
-        private String desc;
     }
 
     @Getter
