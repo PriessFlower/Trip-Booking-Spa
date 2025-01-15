@@ -16,6 +16,7 @@ import com.ctrip.framework.apollo.spring.annotation.ApolloJsonValue;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -90,15 +91,16 @@ public class InitTimeZoneServiceImpl implements InitTimeZoneService {
     }
 
     @Override
+    @Async
     public void initCityZone() {
         //查询可售酒店id
         List<String> hotelIdList = upHotelMapper.getAllUpHotelList();
         int batchSize = 1000;
         for (int i = 0; i < hotelIdList.size(); i += batchSize) {
             List<String> hotelIds = hotelIdList.subList(i, Math.min(i + batchSize, hotelIdList.size()));
-            System.out.println(hotelIds.stream()
-                    .map(item -> "'" + item + "'") // 为每个元素加单引号
-                    .collect(Collectors.joining(", ")));
+//            System.out.println(hotelIds.stream()
+//                    .map(item -> "'" + item + "'") // 为每个元素加单引号
+//                    .collect(Collectors.joining(", ")));
             //根据bgOrderId查询城市和国家信息
             List<GetCityInfoBySupplierHotelIdResponse> cityInfos =  getAllCityInfoByHotelIds(hotelIds);
             List<CityZone> cityZoneList = new ArrayList<>();
@@ -133,7 +135,7 @@ public class InitTimeZoneServiceImpl implements InitTimeZoneService {
                 }
                 addDataBaseNew(cityZoneListNew);
             }
-            break;
+//            break;
         }
 
     }
@@ -181,8 +183,29 @@ public class InitTimeZoneServiceImpl implements InitTimeZoneService {
     private List<CityZone> excludeData(List<CityZone> cityZoneList) {
         // 先查询，根据cityZoneList里面的cityName
         List<CityZone> dataBaseList = initTimeZoneMapper.getCityZoneListByCityNamesNew(cityZoneList);
-        //剔除查询到的数据 但可能时区发生变化了
-        cityZoneList.removeAll(dataBaseList);
+        List<CityZone> delDataList = new ArrayList<>();
+        List<CityZone> ignoreDataList = new ArrayList<>();
+        //查询到库中存在的，判断是忽略还是删除重插
+        for(CityZone cityZone:dataBaseList){
+            if(StringUtils.isBlank(cityZone.getTimezone())){
+                //需要删除重新插的
+                delDataList.add(cityZone);
+            }else{
+                ignoreDataList.add(cityZone);
+            }
+        }
+        System.out.println("delDataList---"+JSON.toJSONString(delDataList));
+        System.out.println("ignoreDataList---"+JSON.toJSONString(ignoreDataList));
+        if(!CollectionUtils.isEmpty(delDataList)){
+            //删除时区空的数据
+            initTimeZoneMapper.delBatchByIds(delDataList);
+        }
+        if(!CollectionUtils.isEmpty(ignoreDataList)){
+            //剔除查询到的数据 但可能时区发生变化了 暂时先不考虑
+            ignoreDataList.stream().forEach(a->a.setTimezone(null));
+            cityZoneList.removeAll(ignoreDataList);
+        }
+        System.out.println("cityZoneList---"+JSON.toJSONString(cityZoneList));
         return cityZoneList;
     }
 
