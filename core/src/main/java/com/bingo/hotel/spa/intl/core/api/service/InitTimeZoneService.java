@@ -8,4 +8,6 @@ public interface InitTimeZoneService {
     void initTimeZone();
 
     void initCityZone();
+
+    void initCityZoneNone();
 }

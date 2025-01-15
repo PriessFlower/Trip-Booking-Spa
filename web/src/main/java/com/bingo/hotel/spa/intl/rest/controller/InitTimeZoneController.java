@@ -22,10 +22,29 @@ public class InitTimeZoneController {
         return "success";
     }
 
-
+    /**
+     * @description:通过可售酒店初始化时区
+     * @author: dick_w
+     * @date: 2025/1/15 13:46
+     * @param: []
+     * @return: java.lang.String
+     **/
     @RequestMapping("/initCityZone")
     public String initCityZone() {
         initTimeZoneService.initCityZone();
+        return "success";
+    }
+
+    /**
+     * @description:再次初始化时区为空的城市
+     * @author: dick_w
+     * @date: 2025/1/15 13:46
+     * @param: []
+     * @return: java.lang.String
+     **/
+    @RequestMapping("/initCityZoneNone")
+    public String initCityZoneNone() {
+        initTimeZoneService.initCityZoneNone();
         return "success";
     }
 }

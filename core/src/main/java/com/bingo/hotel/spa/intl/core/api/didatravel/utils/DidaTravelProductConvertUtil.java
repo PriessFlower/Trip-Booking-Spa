@@ -1,5 +1,9 @@
 package com.bingo.hotel.spa.intl.core.api.didatravel.utils;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
+import com.alibaba.nacos.client.utils.JSONUtils;
 import com.bingo.hotel.base.intl.cli.client.HotelBaseIntlClient;
 import com.bingo.hotel.base.intl.cli.request.SupplierHotelInfoRequest;
 import com.bingo.hotel.base.intl.cli.response.GetCityInfoBySupplierHotelIdResponse;
@@ -15,11 +19,14 @@ import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.common.mapper.InitTimeZoneMapper;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.DidaTravelResponse;
 import com.bingo.hotel.spa.intl.core.api.model.DataRecord;
+import com.bingo.hotel.spa.intl.core.api.model.GeonamesCityInfo;
 import com.bingo.hotel.spa.intl.core.api.service.impl.InitTimeZoneServiceImpl;
 import com.bingo.hotel.spa.intl.core.redis.RedisUtils;
 import com.bingo.hotel.spa.intl.core.util.DateFormatUtils;
 import com.bingo.hotel.spa.intl.core.util.DateUtil;
+import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.bingo.hotel.spa.intl.core.util.ZoneHttpUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.lang3.StringUtils;
@@ -349,6 +356,67 @@ public class DidaTravelProductConvertUtil {
         }
 
         return records;
+    }
+
+    /**
+     * @description:获取城市信息
+     * @author: dick_w
+     * @date: 2025/1/15 10:52
+     * @param: [cityName, countryName]
+     * @return: com.bingo.hotel.spa.intl.core.api.model.GeonamesCityInfo
+     **/
+    public GeonamesCityInfo getCityInfoByGeonames(String cityName, String countryName) {
+//        countryName = sloveCountryName(countryName);
+        String scheme = "http";
+        String host = "api.geonames.org";
+        String path = "/searchJSON";
+        String query = "q="+cityName+"&maxRows=1000&username=dickf117";
+        String input = ZoneHttpUtils.sendGetNew(scheme,host,path,query);
+//        log.info("getCityInfoByGeonames intput:{}",input);
+        List<GeonamesCityInfo> records = parseDataByGeonames(input);
+        for (GeonamesCityInfo geonamesCityInfo : records) {
+            if (cityName.contains(geonamesCityInfo.getName()) && countryName.contains(geonamesCityInfo.getCountryName())) {
+                return geonamesCityInfo;
+            }
+        }
+        log.error("未找到城市信息: cityName:{},countryName:{}", cityName, countryName);
+        return null;
+    }
+
+    /**
+     * @description:转换取值
+     * @author: dick_w
+     * @date: 2025/1/15 10:50
+     * @param: [input]
+     * @return: java.util.List<com.bingo.hotel.spa.intl.core.api.model.GeonamesCityInfo>
+     **/
+    public List<GeonamesCityInfo> parseDataByGeonames(String input) {
+//        System.out.println("input---"+input);
+        JSONObject jsonObject = JSON.parseObject(input);
+        JSONArray jsonArray = jsonObject.getJSONArray("geonames");
+//        System.out.println("jsonArray.toJSONString()---"+jsonArray.toJSONString());
+        List<GeonamesCityInfo> records = JsonUtils.decodeJson(jsonArray.toJSONString(),new TypeReference<>() {});
+//        System.out.println("records---"+JsonUtils.writeObject2Json(records));
+        return records;
+    }
+
+    /**
+     * @description:获取时区
+     * @author: dick_w
+     * @date: 2025/1/15 11:00
+     * @param: [geonamesCityInfo]
+     * @return: java.lang.String
+     **/
+    public String getTimeZoneByGeonames(GeonamesCityInfo geonamesCityInfo) {
+        String timezoneJson = ZoneHttpUtils.sendGet("http://api.geonames.org/timezoneJSON?" +
+                "lat="+geonamesCityInfo.getLat()+"&lng="+geonamesCityInfo.getLng()+"&username=dickf117");
+//        System.out.println("timezoneJson---"+timezoneJson);
+        if(StringUtils.isNotBlank(timezoneJson)){
+            JSONObject jsonObject = JSON.parseObject(timezoneJson);
+            return jsonObject.get("gmtOffset").toString();
+        }
+        log.error("获取时区失败, geonamesCityInfo: {}", JsonUtils.writeObject2Json(geonamesCityInfo));
+        return null;
     }
 }
 

@@ -23,7 +23,9 @@ public interface InitTimeZoneMapper {
     @Select("select 1")
     int test();
 
-    List<CityZone> getCityZoneListByCityNamesNew(@Param("list") List<CityZone> cityZoneList);
+    List<CityZone> getCityZoneNoneList();
 
     void delBatchByIds(@Param("cityZoneIds") List<CityZone> cityZoneIds);
+
+    int updateBatch(@Param("list") List<CityZone> cityZones);
 }
