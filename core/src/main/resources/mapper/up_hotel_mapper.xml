@@ -87,4 +87,12 @@
     </select>
 
 
+    <select id="getAllUpHotelList" resultType="java.lang.String">
+        select distinct
+        hotel_id
+        from db_up_hotel
+        group by hotel_id
+    </select>
+
+
 </mapper>

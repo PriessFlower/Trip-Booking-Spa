@@ -32,4 +32,26 @@
             #{item.countryName}
         </foreach>
     </delete>
+
+    <select id="getCityZoneNoneList" resultType="com.bingo.hotel.spa.intl.core.api.common.bean.CityZone">
+        select * from city_zone where  timezone = '' or timezone is null
+    </select>
+
+    <delete id="delBatchByIds">
+        delete from city_zone where
+        id in
+        <foreach collection="cityZoneIds" item="item" separator="," open="(" close=")">
+            #{item.id}
+        </foreach>
+    </delete>
+
+    <update id="updateBatch" parameterType="java.util.List">
+        <foreach collection="list" item="item" index="index" separator=";">
+            UPDATE city_zone
+            SET
+            timezone = #{item.timezone}
+            WHERE id = #{item.id}
+        </foreach>
+    </update>
+
 </mapper>
