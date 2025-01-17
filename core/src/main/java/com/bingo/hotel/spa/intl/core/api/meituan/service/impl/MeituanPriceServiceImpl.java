@@ -355,7 +355,7 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
     public int getHours(String checkInDate, String endDateLocal) {
         // 定义格式化模式
         DateTimeFormatter endDateFormatter = DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm");
-        DateTimeFormatter checkInFormatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
+        DateTimeFormatter checkInFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
         // 定义UTC
         ZoneId utcZone = ZoneId.of("UTC");
