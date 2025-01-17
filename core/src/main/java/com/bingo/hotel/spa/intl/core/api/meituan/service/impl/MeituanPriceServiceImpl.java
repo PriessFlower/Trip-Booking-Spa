@@ -9,6 +9,7 @@ import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
 import com.bingo.hotel.spa.intl.cli.dto.Room;
+import com.bingo.hotel.spa.intl.cli.enums.RefundType;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
@@ -33,6 +34,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -131,7 +137,7 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
                     .brokerage(0)
                     .priceInfos(convertPriceInfo(priceInfo.getPriceModelList()))
                     .meal(convertMeal(priceInfo.getMealType()))
-                    .cancelPolicy(convertCancelPolicy(priceInfo.getRefundable(), priceInfo.getCpApply()))
+                    .cancelPolicy(convertCancelPolicy(request.getCheckIn(), priceInfo.getRefundable(), priceInfo.getCpApply()))
                     .maxOccupancy(priceInfo.getQuotedOccupancy())
                     .build();
             productRespDTOS.add(productRespDTO);
@@ -187,7 +193,7 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
                 .brokerage(0)
                 .priceInfos(convertPriceInfo(checkPriceResponse.getPriceModelList()))
                 .meal(convertMeal(checkPriceResponse.getMealType()))
-                .cancelPolicy(convertCancelPolicy(checkPriceResponse.getRefundable(), checkPriceResponse.getCpApply()))
+                .cancelPolicy(convertCancelPolicy(request.getCheckIn(), checkPriceResponse.getRefundable(), checkPriceResponse.getCpApply()))
                 .build();
 
         return Arrays.asList(productRespDTO);
@@ -329,17 +335,66 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
         return meal;
     }
 
-    private List<CancelPolicy> convertCancelPolicy(Integer refundable, List<ProductInfoResponse.CpApply> cpApply) {
+    private List<CancelPolicy> convertCancelPolicy(String checkInDate, Integer refundable, List<ProductInfoResponse.CpApply> cpApply) {
         if (1 == refundable || CollectionUtils.isEmpty(cpApply)) {
             return Arrays.asList(CancelPolicy.builder().cancelType(0).build());
         }
         List<CancelPolicy> cancelPolicies = new ArrayList<>();
         cpApply.forEach(cancelInfo -> {
-            //
             CancelPolicy cancelPolicy = CancelPolicy.builder()
+                    .cancelType(1)
+                    .timeZone(timeZoneConversion(cancelInfo.getEndDate(), cancelInfo.getEndDateLocal()))
+                    .before(Math.max(25, getHours(checkInDate, cancelInfo.getEndDateLocal())))
+                    .type(RefundType.DEDUCT_BY_AMOUNT)
                     .build();
             cancelPolicies.add(cancelPolicy);
         });
         return cancelPolicies;
+    }
+
+    public int getHours(String checkInDate, String endDateLocal) {
+        // 定义格式化模式
+        DateTimeFormatter endDateFormatter = DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm");
+        DateTimeFormatter checkInFormatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
+
+        // 定义UTC
+        ZoneId utcZone = ZoneId.of("UTC");
+
+        LocalDateTime checkInDateTime = LocalDateTime.parse(checkInDate + " 24:00", endDateFormatter);
+        ZonedDateTime checkInZonedDateTime = ZonedDateTime.of(checkInDateTime, utcZone);
+        // 定义某地时间
+        LocalDateTime targetDateTime = LocalDateTime.parse(endDateLocal, checkInFormatter);
+        ZonedDateTime targetZonedDateTime = ZonedDateTime.of(targetDateTime, utcZone);
+
+        // 计算时差（以小时为单位）
+        Duration duration = Duration.between(targetZonedDateTime.toInstant(), checkInZonedDateTime.toInstant());
+        return (int) duration.toHours();
+    }
+
+    public String timeZoneConversion(String endDate, String endDateLocal) {
+        // 定义格式化模式
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm");
+        // 定义北京时间
+        LocalDateTime beijingDateTime = LocalDateTime.parse(endDate, formatter);
+        ZoneId beijingZone = ZoneId.of("Asia/Shanghai");
+        ZonedDateTime beijingZonedDateTime = ZonedDateTime.of(beijingDateTime, beijingZone);
+
+        // 定义某地时间
+        LocalDateTime targetDateTime = LocalDateTime.parse(endDateLocal, formatter);
+        ZoneId utcZone = ZoneId.of("UTC");
+        ZonedDateTime targetZonedDateTime = ZonedDateTime.of(targetDateTime, utcZone);
+
+        // 计算时差（以小时为单位）
+        Duration duration = Duration.between(beijingZonedDateTime.toInstant(), targetZonedDateTime.toInstant());
+        long hoursDifference = duration.toHours();
+
+        // 确定时区偏移量
+        int offsetHours = (int) hoursDifference;
+        return "GMT" + (offsetHours >= 0 ? "+" : "") + offsetHours;
+    }
+
+    public static void main(String[] args) {
+        MeituanPriceServiceImpl meituanPriceService = new MeituanPriceServiceImpl();
+        meituanPriceService.timeZoneConversion("02/10/2025 20:30", "02/10/2025 14:30");
     }
 }
