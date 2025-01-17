@@ -360,10 +360,10 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
         // 定义UTC
         ZoneId utcZone = ZoneId.of("UTC");
 
-        LocalDateTime checkInDateTime = LocalDateTime.parse(checkInDate + " 24:00", endDateFormatter);
+        LocalDateTime checkInDateTime = LocalDateTime.parse(checkInDate + " 24:00", checkInFormatter);
         ZonedDateTime checkInZonedDateTime = ZonedDateTime.of(checkInDateTime, utcZone);
         // 定义某地时间
-        LocalDateTime targetDateTime = LocalDateTime.parse(endDateLocal, checkInFormatter);
+        LocalDateTime targetDateTime = LocalDateTime.parse(endDateLocal, endDateFormatter);
         ZonedDateTime targetZonedDateTime = ZonedDateTime.of(targetDateTime, utcZone);
 
         // 计算时差（以小时为单位）
