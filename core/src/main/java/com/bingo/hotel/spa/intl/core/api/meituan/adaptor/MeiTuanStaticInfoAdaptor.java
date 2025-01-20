@@ -163,7 +163,7 @@ public class MeiTuanStaticInfoAdaptor {
                         .setSupplierProductName(productInfo.getGoodsName())
                         .setSupplierProductNameCN(productInfo.getGoodsName())
                         .setHasWindow(0)
-                        .setBreakfast(productInfo.getMealType().getCount())
+                        .setBreakfast(-1 == productInfo.getMealType().getCount() ? 0 : productInfo.getMealType().getCount())
                         .setCancelType(1 == productInfo.getRefundable() ? 0 : 1);
                 list.add(request);
             });
