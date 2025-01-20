@@ -195,6 +195,10 @@ public class MeituanStaticInfoServiceImpl implements MeituanStaticInfoService {
                     } else if ("PRODUCT".equals(type)) {
                         log.info("发起产品请求：{}", JsonUtils.writeObject2Json(sHotelIds));
                         saveProductInfo(sHotelIds);
+                    } else {
+                        saveHotelInfo(sHotelIds);
+                        saveRoomInfo(sHotelIds);
+                        saveProductInfo(sHotelIds);
                     }
                 } catch (Exception e) {
                     log.error("保存酒店房型信息异常 request:{}, 异常信息：", JsonUtils.writeObject2Json(sHotelIds), e);
