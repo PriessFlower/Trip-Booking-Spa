@@ -74,7 +74,7 @@ public class HotelListAccess extends BaseHttpAccess<HotelIdsReqBody, HotelIdsRes
             log.error(this.getClass().getName() + " request is error");
             return null;
         }
-
+        log.info("HotelListAccess>>>request:{}", JsonUtils.writeObject2Json(request));
         return HttpUtils.access(url, Maps.newHashMap(), JsonUtils.writeObject2Json(request), parser);
     }
 
