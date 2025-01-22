@@ -1,6 +1,8 @@
 package com.bingo.hotel.spa.intl.core.api.common.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bingo.hotel.spa.intl.core.api.common.bean.CityZone;
+import com.bingo.hotel.spa.intl.core.api.common.bean.SupplierHotelIdList;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.springframework.stereotype.Repository;
@@ -11,7 +13,7 @@ import java.util.List;
  * @author xrt
  */
 @Repository
-public interface InitTimeZoneMapper {
+public interface InitTimeZoneMapper extends BaseMapper<CityZone> {
     List<CityZone> getCityZoneListByCityNames(@Param("list") List<CityZone> cityZoneList);
 
     String getCityZoneByCityName(@Param("cityName") String cityName, @Param("countryName") String countryName);

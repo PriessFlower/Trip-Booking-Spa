@@ -66,4 +66,17 @@ public class InitTimeZoneController {
         return timeZone;
     }
 
+
+    /**
+     * @description:city_zone数据刷到redis
+     * @author: dick_w
+     * @date: 2025/1/22 10:54
+     * @param: []
+     * @return: java.lang.String
+     **/
+    @GetMapping("/initDatabaseToRedis")
+    public String initDatabaseToRedis() {
+        initTimeZoneService.initDatabaseToRedis();
+        return "success";
+    }
 }

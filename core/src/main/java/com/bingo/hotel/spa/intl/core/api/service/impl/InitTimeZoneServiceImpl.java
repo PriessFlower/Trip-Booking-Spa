@@ -2,6 +2,7 @@ package com.bingo.hotel.spa.intl.core.api.service.impl;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.nacos.client.utils.JSONUtils;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.bingo.hotel.base.intl.cli.client.HotelBaseIntlClient;
 import com.bingo.hotel.base.intl.cli.request.SupplierHotelInfoRequest;
 import com.bingo.hotel.base.intl.cli.response.GetCityInfoBySupplierHotelIdResponse;
@@ -179,6 +180,20 @@ public class InitTimeZoneServiceImpl implements InitTimeZoneService {
         String[] zone = partRight[1].split(":");
         String hour = zone[0].substring(3, zone[0].length());
         return hour;
+    }
+
+    @Override
+    public void initDatabaseToRedis() {
+        //查询全量信息
+        List<CityZone> cityZoneNoneList = initTimeZoneMapper.selectList(new QueryWrapper<>());
+        //遍历刷入redis，timezone是空的不刷入
+        if(!CollectionUtils.isEmpty(cityZoneNoneList)){
+            for(CityZone cityZone:cityZoneNoneList){
+                if(StringUtils.isNotBlank(cityZone.getTimezone())){
+                    redisUtils.hmSet(TIME_ZONE_KEY_PREFIX + cityZone.getCountryName(), cityZone.getCityName(), cityZone.getTimezone());
+                }
+            }
+        }
     }
 
     private void addDataBase(List<CityZone> cityZoneList) { //60

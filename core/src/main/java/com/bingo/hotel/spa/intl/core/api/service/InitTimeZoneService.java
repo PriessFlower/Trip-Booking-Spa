@@ -14,4 +14,6 @@ public interface InitTimeZoneService {
     void initCityZoneNone();
 
     String getCityZoneByHotelId(String timeZone,String hotelId,Integer supplierId);
+
+    void initDatabaseToRedis();
 }
