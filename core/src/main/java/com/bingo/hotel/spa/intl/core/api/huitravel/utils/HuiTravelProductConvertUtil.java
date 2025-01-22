@@ -65,9 +65,9 @@ public class HuiTravelProductConvertUtil {
         if (CollectionUtils.isEmpty(availabilityResponse.getResult().getPrices())) {
             return respDTOList;
         }
-//        SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(availabilityResponse.getResult().getPrices().get(0).getHid().toString(), SupplierSourceEnum.HUITRAVEL.getCode());
-//        BaseResult<GetCityInfoBySupplierHotelIdResponse> result = hotelBaseIntlClient.getCityInfoBySupplierHotelId(supplierHotelRequest);
-//        String timeZone = getTimeZone(result.getData().getCityName(), result.getData().getCountryName());
+        SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(availabilityResponse.getResult().getPrices().get(0).getHid().toString(), SupplierSourceEnum.HUITRAVEL.getCode());
+        BaseResult<GetCityInfoBySupplierHotelIdResponse> result = hotelBaseIntlClient.getCityInfoBySupplierHotelId(supplierHotelRequest);
+        String timeZone = getTimeZoneNew(result.getData().getCityName(), result.getData().getCountryName());
         availabilityResponse.getResult().getPrices().forEach(productVO -> respDTOList.add(ProductRespDTO.builder()
                         .productId(productVO.getRpid() + "")
 //                        .currencyType(productVO.getCurrency())
@@ -76,11 +76,10 @@ public class HuiTravelProductConvertUtil {
                         .totalPrice(productVO.getNightlyrate().stream()
                                 .map(NightlyRate::getCost).reduce(BigDecimal.ZERO, BigDecimal::add).multiply(new BigDecimal(100)).intValue())
                         .hotelId(productVO.getHid() + "")
-//                        .cancelPolicy(convertCancelPolicy(productVO.getNew_cancel_policy(), DateUtil.getDate(productVO.getCheckin()), timeZone))
+                        .cancelPolicy(convertCancelPolicy(productVO.getNew_cancel_policy(), DateUtil.getDate(productVO.getCheckin()), timeZone))
                         .priceInfos(buildPriceInfos(productVO.getNightlyrate()))
                         .meal(Meal.builder().count(productVO.getBreakfast_count()).build())
                         .room(Room.builder().roomId(productVO.getRid().toString()).roomName(productVO.getRoom_name()).build())
-                        .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                         .maxOccupancy(productVO.getMax_occupancy())
                         .build())
         );
@@ -91,9 +90,9 @@ public class HuiTravelProductConvertUtil {
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
         BigDecimal totalPrice = availabilityResponse.getCheckResponse().getResult().getNightlyrate().stream()
                 .map(NightlyRate::getCost).reduce(BigDecimal.ZERO, BigDecimal::add);
-//        SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(availabilityResponse.getResult().getPrices().get(0).getHid().toString(), SupplierSourceEnum.HUITRAVEL.getCode());
-//        BaseResult<GetCityInfoBySupplierHotelIdResponse> result = hotelBaseIntlClient.getCityInfoBySupplierHotelId(supplierHotelRequest);
-//        String timeZone = getTimeZone(result.getData().getCityName(), result.getData().getCountryName());
+        SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(availabilityResponse.getResult().getPrices().get(0).getHid().toString(), SupplierSourceEnum.HUITRAVEL.getCode());
+        BaseResult<GetCityInfoBySupplierHotelIdResponse> result = hotelBaseIntlClient.getCityInfoBySupplierHotelId(supplierHotelRequest);
+        String timeZone = getTimeZoneNew(result.getData().getCityName(), result.getData().getCountryName());
         availabilityResponse.getResult().getPrices().forEach(productVO -> respDTOList.add(ProductRespDTO.builder()
                         .productId(productVO.getRpid() + "")
 //                        .currencyType(productVO.getCurrency())
@@ -101,11 +100,10 @@ public class HuiTravelProductConvertUtil {
                         .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(productVO.getName()).build())
                         .totalPrice(totalPrice.multiply(new BigDecimal(100)).intValue())
                         .hotelId(productVO.getHid() + "")
-//                        .cancelPolicy(convertCancelPolicy(productVO.getNew_cancel_policy(), DateUtil.getDate(productVO.getCheckin()), timeZone))
+                        .cancelPolicy(convertCancelPolicy(productVO.getNew_cancel_policy(), DateUtil.getDate(productVO.getCheckin()), timeZone))
                         .priceInfos(buildPriceInfos(availabilityResponse.getCheckResponse().getResult().getNightlyrate()))
                         .meal(Meal.builder().count(productVO.getBreakfast_count()).build())
                         .room(Room.builder().roomId(productVO.getRid().toString()).roomName(productVO.getRoom_name()).build())
-                        .cancelPolicy(List.of(CancelPolicy.builder().cancelType(0).build()))
                         .maxOccupancy(productVO.getMax_occupancy())
                         .build())
         );
@@ -167,6 +165,25 @@ public class HuiTravelProductConvertUtil {
         return timeZone;
     }
 
+    public String getTimeZoneNew(String cityName, String countryName) {
+        String timeZone = redisUtils.hmGet(InitTimeZoneServiceImpl.TIME_ZONE_KEY_PREFIX + countryName, cityName);
+        if (StringUtils.isBlank(timeZone)) {
+            timeZone = initTimeZoneMapper.getCityZoneByCityName(cityName, countryName);
+            if (StringUtils.isBlank(timeZone)) {
+                DataRecord cityInfo = getCityInfo(cityName, countryName);
+                if (cityInfo != null) {
+                    timeZone = getTimeZone(cityInfo.getUrl());
+                    if (StringUtils.isNotBlank(timeZone)) {
+                        redisUtils.hmSet(InitTimeZoneServiceImpl.TIME_ZONE_KEY_PREFIX + countryName, cityName, timeZone);
+                    }
+                } else {
+                    timeZone = "";
+                }
+            }
+        }
+        return timeZone;
+    }
+
     /*
      * 根据城市名称获取城市信息
      * */
@@ -188,6 +205,8 @@ public class HuiTravelProductConvertUtil {
             return "USA";
         } else if (countryName.equals("The United Kingdom of Great Britain and Northern Ireland")) {
             return "United Kingdom";
+        }else if (countryName.equals("Türkiye")) {
+            return "Turkey";
         }
         return countryName;
     }
