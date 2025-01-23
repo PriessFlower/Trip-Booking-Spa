@@ -69,6 +69,7 @@ public class DidaTravelProductConvertUtil {
     private InitTimeZoneMapper initTimeZoneMapper;
 
     public List<ProductRespDTO> convertRatePlanVO(DidaTravelResponse didaTravelResponse) {
+//        System.out.println(JSON.toJSONString(didaTravelResponse));
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
         for (DidaTravelResponse.HotelType hotelType : didaTravelResponse.getSuccess().getPriceDetails().getHotelList()) {
             SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(hotelType.getHotelID().toString(), SupplierSourceEnum.DIDATRAVEL.getCode());
@@ -203,6 +204,10 @@ public class DidaTravelProductConvertUtil {
                             .before(25)
                             .type(type1)
                             .value(firstPolicy.getAmount().doubleValue()).build();
+                    //最后一个区间 如果lastType.getCode().equals(RefundType.NO_DEDUCTION) 则等于不可取消(扣除所有房费)
+                    if(type1.getCode().equals(RefundType.NO_DEDUCTION.getCode())){
+                        return cancelPolicyList;
+                    }
                     cancelPolicyList.add(cancelPolicyLast);
                 }
             } else {
@@ -233,6 +238,10 @@ public class DidaTravelProductConvertUtil {
                                 .before(25)
                                 .type(lastType)
                                 .value(policyList.get(policyList.size()-1).getAmount().doubleValue()).build();
+                        //最后一个区间 如果lastType.getCode().equals(RefundType.NO_DEDUCTION) 则等于不可取消(扣除所有房费)
+                        if(lastType.getCode().equals(RefundType.NO_DEDUCTION.getCode())){
+                            return cancelPolicyList;
+                        }
                         cancelPolicyList.add(lastCancelPolicy);
                     }
                 }
