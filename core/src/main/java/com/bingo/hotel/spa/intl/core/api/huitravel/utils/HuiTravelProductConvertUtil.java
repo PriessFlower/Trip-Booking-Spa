@@ -1,5 +1,6 @@
 package com.bingo.hotel.spa.intl.core.api.huitravel.utils;
 
+import com.alibaba.fastjson.JSON;
 import com.bingo.hotel.base.intl.cli.client.HotelBaseIntlClient;
 import com.bingo.hotel.base.intl.cli.request.SupplierHotelInfoRequest;
 import com.bingo.hotel.base.intl.cli.response.GetCityInfoBySupplierHotelIdResponse;
@@ -61,6 +62,7 @@ public class HuiTravelProductConvertUtil {
     private InitTimeZoneMapper initTimeZoneMapper;
 
     public List<ProductRespDTO> convertRatePlanVO(AvailabilityResponse availabilityResponse) {
+//        System.out.println("汇智供应商侧查价返回："+JSON.toJSON(availabilityResponse.getResult().getPrices()));
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
         if (CollectionUtils.isEmpty(availabilityResponse.getResult().getPrices())) {
             return respDTOList;
