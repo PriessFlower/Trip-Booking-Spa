@@ -2,8 +2,6 @@ package com.bingo.hotel.spa.intl.core.api.service.impl;
 
 import com.bingo.hotel.spa.intl.cli.dto.CheckPriceRespDTO;
 import com.bingo.hotel.spa.intl.cli.seq.CheckPriceReq;
-import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.priceConfirm.PriceConfirmResponse;
-import com.bingo.hotel.spa.intl.core.api.didatravel.service.DidatravelHotelService;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.NightlyRate;
 import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.check.CheckResponse;
 import com.bingo.hotel.spa.intl.core.api.huitravel.service.HuiTravelService;
