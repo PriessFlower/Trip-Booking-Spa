@@ -69,7 +69,7 @@ public class DidaTravelProductConvertUtil {
     private InitTimeZoneMapper initTimeZoneMapper;
 
     public List<ProductRespDTO> convertRatePlanVO(DidaTravelResponse didaTravelResponse) {
-        log.info("道旅供应商侧查价返回：{}",JSON.toJSONString(didaTravelResponse));
+        log.info("道旅供应商侧查价、验价返回：{}",JSON.toJSONString(didaTravelResponse));
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
         for (DidaTravelResponse.HotelType hotelType : didaTravelResponse.getSuccess().getPriceDetails().getHotelList()) {
             SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(hotelType.getHotelID().toString(), SupplierSourceEnum.DIDATRAVEL.getCode());
@@ -87,13 +87,10 @@ public class DidaTravelProductConvertUtil {
                         .roomName(ratePlan.getRoomName())
                         .build();
                 //验价的取消规则单独映射
-                System.out.println("hotelType.getCancellationPolicyList():"+JSON.toJSONString(hotelType.getCancellationPolicyList()));
-                System.out.println("ratePlan.getRatePlanCancellationPolicyList()前:"+JSON.toJSONString(ratePlan.getRatePlanCancellationPolicyList()));
                 if(!CollectionUtils.isEmpty(hotelType.getCancellationPolicyList())
                         && CollectionUtils.isEmpty(ratePlan.getRatePlanCancellationPolicyList())){
                     ratePlan.setRatePlanCancellationPolicyList(hotelType.getCancellationPolicyList());
                 }
-                System.out.println("ratePlan.getRatePlanCancellationPolicyList()后:"+JSON.toJSONString(ratePlan.getRatePlanCancellationPolicyList()));
                 List<CancelPolicy> cancelPolicies
                         = convertCancelPolicy(ratePlan.getRatePlanCancellationPolicyList(),
                         didaTravelResponse.getSuccess().getPriceDetails().getCheckInDate(), ratePlan.getTotalPrice(), timeZone);
