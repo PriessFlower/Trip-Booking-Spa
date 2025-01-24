@@ -62,7 +62,7 @@ public class HuiTravelProductConvertUtil {
     private InitTimeZoneMapper initTimeZoneMapper;
 
     public List<ProductRespDTO> convertRatePlanVO(AvailabilityResponse availabilityResponse) {
-//        System.out.println("汇智供应商侧查价返回："+JSON.toJSON(availabilityResponse.getResult().getPrices()));
+        log.info("汇智供应商侧查价返回：{}",JSON.toJSON(availabilityResponse.getResult().getPrices()));
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
         if (CollectionUtils.isEmpty(availabilityResponse.getResult().getPrices())) {
             return respDTOList;

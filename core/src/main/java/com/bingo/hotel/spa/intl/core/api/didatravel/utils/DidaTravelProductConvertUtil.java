@@ -69,7 +69,7 @@ public class DidaTravelProductConvertUtil {
     private InitTimeZoneMapper initTimeZoneMapper;
 
     public List<ProductRespDTO> convertRatePlanVO(DidaTravelResponse didaTravelResponse) {
-//        System.out.println("道旅供应商侧查价返回："+JSON.toJSONString(didaTravelResponse));
+        log.info("道旅供应商侧查价返回：{}",JSON.toJSONString(didaTravelResponse));
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
         for (DidaTravelResponse.HotelType hotelType : didaTravelResponse.getSuccess().getPriceDetails().getHotelList()) {
             SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(hotelType.getHotelID().toString(), SupplierSourceEnum.DIDATRAVEL.getCode());
