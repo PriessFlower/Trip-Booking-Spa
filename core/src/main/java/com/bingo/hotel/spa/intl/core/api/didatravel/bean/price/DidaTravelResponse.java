@@ -1,6 +1,7 @@
 package com.bingo.hotel.spa.intl.core.api.didatravel.bean.price;
 
 import com.bingo.hotel.spa.intl.core.api.common.asynchttp.BaseResponse;
+import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.priceConfirm.PriceConfirmResponse;
 import lombok.Data;
 import org.joda.time.DateTime;
 
@@ -147,6 +148,9 @@ public class DidaTravelResponse implements BaseResponse {
         private List<HotelTypeRatePlan> RatePlanList;
 
         private HotelTypeLowestRateRatePlanInfo LowestRateRatePlanInfo;
+
+        private List<CancellationPolicyListTypeCancellationPolicy> CancellationPolicyList;
+
 
     }
 }

@@ -41,7 +41,7 @@ public class PriceConfirmResponse implements BaseResponse {
         private String HotelName;
         private HotelTypeDestination Destination;
         private BigDecimal TotalPrice;
-        ;
+
         private List<HotelTypeRatePlan> RatePlanList;
         private List<CancellationPolicyListTypeCancellationPolicy> CancellationPolicyList;
         private BigDecimal TotalSalesRate;
