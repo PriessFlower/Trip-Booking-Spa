@@ -86,8 +86,14 @@ public class DidaTravelProductConvertUtil {
                         .roomId(String.valueOf(ratePlan.getRoomTypeID()))
                         .roomName(ratePlan.getRoomName())
                         .build();
-
-
+                //验价的取消规则单独映射
+                System.out.println("hotelType.getCancellationPolicyList():"+JSON.toJSONString(hotelType.getCancellationPolicyList()));
+                System.out.println("ratePlan.getRatePlanCancellationPolicyList()前:"+JSON.toJSONString(ratePlan.getRatePlanCancellationPolicyList()));
+                if(!CollectionUtils.isEmpty(hotelType.getCancellationPolicyList())
+                        && CollectionUtils.isEmpty(ratePlan.getRatePlanCancellationPolicyList())){
+                    ratePlan.setRatePlanCancellationPolicyList(hotelType.getCancellationPolicyList());
+                }
+                System.out.println("ratePlan.getRatePlanCancellationPolicyList()后:"+JSON.toJSONString(ratePlan.getRatePlanCancellationPolicyList()));
                 List<CancelPolicy> cancelPolicies
                         = convertCancelPolicy(ratePlan.getRatePlanCancellationPolicyList(),
                         didaTravelResponse.getSuccess().getPriceDetails().getCheckInDate(), ratePlan.getTotalPrice(), timeZone);
