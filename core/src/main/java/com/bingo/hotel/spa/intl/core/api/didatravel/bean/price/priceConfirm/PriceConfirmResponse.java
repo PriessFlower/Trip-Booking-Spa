@@ -43,7 +43,7 @@ public class PriceConfirmResponse implements BaseResponse {
         private BigDecimal TotalPrice;
         ;
         private List<HotelTypeRatePlan> RatePlanList;
-        private List<CancellationPolicyListTypeCancellationPolicy> RatePlanCancellationPolicyList;
+        private List<CancellationPolicyListTypeCancellationPolicy> CancellationPolicyList;
         private BigDecimal TotalSalesRate;
         private List<FeeListTypeFeeInfo> IncludedFeeList;
         private List<FeeListTypeFeeInfo> ExcludedFeeList;

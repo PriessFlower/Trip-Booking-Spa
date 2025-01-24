@@ -47,7 +47,9 @@ public class DidaTravelProductSyncServiceImpl extends AbstractProductSyncSupport
 
     private DidaTravelResponse buildResponse(PriceConfirmResponse checkResponse) {
         String jsonString = JSON.toJSONString(checkResponse);
+        System.out.println("DidaTravelResponse buildResponse转换前:"+jsonString);
         DidaTravelResponse response = JSONObject.parseObject(jsonString, DidaTravelResponse.class);
+        System.out.println("DidaTravelResponse buildResponse转换后:"+JSON.toJSONString(response));
         return response;
     }
 
