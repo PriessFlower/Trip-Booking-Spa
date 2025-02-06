@@ -34,6 +34,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -346,6 +347,7 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
                     .timeZone(timeZoneConversion(cancelInfo.getEndDate(), cancelInfo.getEndDateLocal()))
                     .before(Math.max(25, getHours(checkInDate, cancelInfo.getEndDateLocal())))
                     .type(RefundType.DEDUCT_BY_AMOUNT)
+                    .value(null == cancelInfo.getPenalty() ? 0 : new BigDecimal(cancelInfo.getPenalty().toString()).divide(new BigDecimal("100")).doubleValue())
                     .build();
             cancelPolicies.add(cancelPolicy);
         });
