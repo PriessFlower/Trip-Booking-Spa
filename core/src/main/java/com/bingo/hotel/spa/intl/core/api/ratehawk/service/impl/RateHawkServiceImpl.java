@@ -114,7 +114,7 @@ public class RateHawkServiceImpl implements RateHawkService {
             try {
                 Files.deleteIfExists(Paths.get(fileName + "_" + chunkCount + ".jsonl"));
             } catch (IOException e) {
-                log.error("删除本地缓存文件失败：",e);
+                log.error("删除本地缓存文件失败：", e);
             }
             chunkCount++;
         }
