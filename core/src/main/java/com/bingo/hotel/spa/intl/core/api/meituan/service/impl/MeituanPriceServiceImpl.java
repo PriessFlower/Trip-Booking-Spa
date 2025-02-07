@@ -346,7 +346,8 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
                     .cancelType(1)
                     .timeZone(timeZoneConversion(cancelInfo.getEndDate(), cancelInfo.getEndDateLocal()))
                     .before(Math.max(25, getHours(checkInDate, cancelInfo.getEndDateLocal())))
-                    .type(RefundType.DEDUCT_BY_AMOUNT)
+                    .type((null == cancelInfo.getPenalty() || 0 == cancelInfo.getPenalty()) && 25 < getHours(checkInDate, cancelInfo.getEndDateLocal()) ?
+                            RefundType.NO_DEDUCTION : RefundType.DEDUCT_BY_AMOUNT)
                     .value(null == cancelInfo.getPenalty() ? 0 : new BigDecimal(cancelInfo.getPenalty().toString()).divide(new BigDecimal("100")).doubleValue())
                     .build();
             cancelPolicies.add(cancelPolicy);
