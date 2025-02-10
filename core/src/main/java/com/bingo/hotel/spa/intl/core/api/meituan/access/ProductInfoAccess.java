@@ -11,11 +11,13 @@ import com.bingo.hotel.spa.intl.core.api.common.exception.ParseException;
 import com.bingo.hotel.spa.intl.core.api.meituan.bean.request.MeituanRequest;
 import com.bingo.hotel.spa.intl.core.api.meituan.bean.request.ProductInfoReqBody;
 import com.bingo.hotel.spa.intl.core.api.meituan.bean.response.ProductInfoResponse;
+import com.bingo.hotel.spa.intl.core.exception.RedisLimitException;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RateIntervalUnit;
 
 /**
  * product Info接口
@@ -37,7 +39,7 @@ public class ProductInfoAccess extends BaseHttpAccess<ProductInfoReqBody, Produc
 
     private String path;
     private String version;
-    private static int QPS = 10;
+    private static int QPS = 50;
     private final DistributedRateLimiter redisRateLimiter;
 
     public ProductInfoAccess(String host, Integer partnerId, String publicKey, String secretKey,
@@ -77,10 +79,10 @@ public class ProductInfoAccess extends BaseHttpAccess<ProductInfoReqBody, Produc
 
     @Override
     protected void beforeAccess(ProductInfoReqBody request) {
-        /*if(!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS,3)){
+        if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 3)) {
             throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
                     + "request = " + JsonUtils.writeObject2Json(request));
-        }*/
+        }
     }
 
 
