@@ -10,6 +10,7 @@ import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierDataTypeEnum;
 import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.push.fliggy.bean.FliggyPushResponse;
 import com.bingo.hotel.spa.intl.core.push.fliggy.bean.hotel.PushHotelVo;
+import com.bingo.hotel.spa.intl.core.push.fliggy.utils.FliggyHelper;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.ImmutableBiMap;
@@ -2284,7 +2285,7 @@ public class PushHotelInfoAccess extends BaseHttpAccess<HotelBaseResponse, Fligg
 
         req.setName(request.getHotelNameCN());
         req.setOuterId(request.getHotelId());
-        req.setCity(cityCodeMap.get(request.getCityName()).stream().findFirst().orElse(null));
+        req.setCity(FliggyHelper.cityCodeMap.get(request.getCityName()));
 //        req.setCity(901892L);
         // optional
         req.setDomestic(1L); // 海外酒店
