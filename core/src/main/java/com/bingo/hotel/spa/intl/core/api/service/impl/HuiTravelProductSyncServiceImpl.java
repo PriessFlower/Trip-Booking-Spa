@@ -35,9 +35,13 @@ public class HuiTravelProductSyncServiceImpl extends AbstractProductSyncSupportS
     @Override
     public AvailabilityResponse querySupplierPrice(PriceReq priceReq, Supplier supplier) {
         redisRecordLogServiceImpl.recordHuiTravelQps();
+        //汇智查询时如果带儿童直接过滤掉，汇智不支持儿童政策。
+        if (priceReq.getChildNum() > 0 || priceReq.getChildAges().size() > 0) {
+            return null;
+        }
         if (StringUtils.isEmpty(supplier.getSProductId())) {
             //汇智不能超过30天的查询
-            if (!DateUtil.dateBefore(priceReq.getCheckIn(), DateUtil.addDay(new Date(), 20))) {
+            if (!DateUtil.dateBefore(priceReq.getCheckIn(), DateUtil.addDay(new Date(), 30))) {
                 AvailabilityResponse response = new AvailabilityResponse();
                 AvailabilityResult result = new AvailabilityResult();
                 response.setResult(result);
