@@ -5,11 +5,8 @@ import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
 import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaPriceService;
 import com.bingo.hotel.spa.intl.core.api.expedia.utils.ExpediaHelper;
-import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.AvailabilityResponse;
-import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.availability.AvailabilityResult;
 import com.bingo.hotel.spa.intl.core.api.service.AbstractProductSyncSupportService;
 import com.bingo.hotel.spa.intl.core.api.service.RecordLogService;
-import com.bingo.hotel.spa.intl.core.util.DateUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.lang3.StringUtils;
@@ -17,7 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.Date;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service("expediaProductSyncService")
@@ -35,6 +32,13 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
         redisRecordLogServiceImpl.recordExpediaQps();
         if (StringUtils.isNotBlank(supplier.getSProductId())) {
             return expediaPriceService.queryProductPrice(priceReq, supplier);
+        }
+        //泰国及韩国酒店当天入住的全关闭
+        if (ExpediaHelper.hotelIdList.contains(priceReq.getSuppliers().get(0).getSHotelId())
+                && LocalDate.parse(priceReq.getCheckIn()).equals(LocalDate.now()))
+        {
+            List<ProductRespDTO> response = Lists.newArrayList();
+            return response;
         }
         return expediaPriceService.queryPrices(priceReq, supplier);
     }
