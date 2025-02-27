@@ -241,6 +241,7 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
         return CheckPriceRespDTO.builder()
                 .checkStatus(true)
                 .salePrice(sumPrice)
+                .subPrice(sumPrice)
                 .totalPriceAfter(sumPrice)
                 .totalPriceBefore(sumPrice)
                 .build();
