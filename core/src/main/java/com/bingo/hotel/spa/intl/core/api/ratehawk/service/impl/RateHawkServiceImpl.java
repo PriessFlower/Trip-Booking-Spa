@@ -557,6 +557,7 @@ public class RateHawkServiceImpl implements RateHawkService {
                     return CheckPriceRespDTO.builder()
                             .checkStatus(true)
                             .prebookToken(rateCheckInfo.getBook_hash())
+                            .subPrice(new BigDecimal(checkPriceInfo.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
                             .salePrice(new BigDecimal(checkPriceInfo.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
                             .totalPriceAfter(new BigDecimal(checkPriceInfo.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
                             .totalPriceBefore(new BigDecimal(checkPriceInfo.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
