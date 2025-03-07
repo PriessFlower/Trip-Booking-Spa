@@ -241,7 +241,7 @@ public class AichotelsProductConvertUtil {
         if(StringUtils.isBlank(timeZone)){
             SupplierHotelInfoRequest supplierHotelRequest = new SupplierHotelInfoRequest(hotelId, supplierId);
             BaseResult<GetCityInfoBySupplierHotelIdResponse> result = hotelBaseIntlClient.getCityInfoBySupplierHotelId(supplierHotelRequest);
-            return didaTravelProductConvertUtil.getTimeZone(result.getData().getCityName(), result.getData().getCountryName());
+            return didaTravelProductConvertUtil.getTimeZoneNew(result.getData().getCityName(), result.getData().getCountryName());
         }
         String[] partRight = timeZone.split(" ");
         String[] zone = partRight[1].split(":");
