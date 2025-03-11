@@ -57,7 +57,7 @@ public class RateHawkCPSQueryPriceServiceImpl implements RateHawkCPSQueryPriceSe
     @Override
     public Boolean queryPriceQueueTask(int priority, int temporaryUpgrade, RateLimiter rateLimiter) {
 
-//        while (true) {
+        while (true) {
             try {
 
                 if (QueryPriceQueueReturn == 0){
@@ -112,8 +112,7 @@ public class RateHawkCPSQueryPriceServiceImpl implements RateHawkCPSQueryPriceSe
             } catch (Exception e) {
                 log.error("ratehawkQueryPriceTask循环中断，重新开始 error: ", e);
             }
-//        }
-        return true;
+        }
     }
 
     public static boolean isSameDay(Date updateTime, Date lastTime) {
