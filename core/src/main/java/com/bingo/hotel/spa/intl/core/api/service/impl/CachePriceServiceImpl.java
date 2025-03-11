@@ -1,0 +1,226 @@
+package com.bingo.hotel.spa.intl.core.api.service.impl;
+
+import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
+import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
+import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
+import com.bingo.hotel.spa.intl.cli.seq.Supplier;
+import com.bingo.hotel.spa.intl.core.api.dto.ProductRespCacheDTO;
+import com.bingo.hotel.spa.intl.core.api.service.CachePriceService;
+import com.bingo.hotel.spa.intl.core.redis.RedisUtils;
+import com.bingo.hotel.spa.intl.core.util.DateUtil;
+import com.bingo.hotel.spa.intl.core.util.JsonUtils;
+import com.bingo.hotel.spa.intl.core.util.RedisKeyUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+/**
+ * @description:查询价格缓存
+ * @author: dick_w
+ * @date: 2025/3/10 18:28
+ * @param:
+ * @return:
+ **/
+@Service
+@Slf4j
+public class CachePriceServiceImpl implements CachePriceService {
+
+    @Autowired
+    private RedisUtils redisUtils;
+
+    private static final long ONE_DAY = 86400L;
+
+    @Override
+    public List<ProductRespDTO> getPrice(PriceReq priceReq, Supplier supplier) {
+        return null;
+    }
+
+    @Override
+    public void productToCache(List<ProductRespDTO> list) {
+        try {
+            if (list == null || list.isEmpty()) {
+                return;
+            }
+
+            Set<String> changePricesSet = new HashSet<>(); // 存储价格发生变化的酒店id
+            Set<String> fullPricesSet = new HashSet<>(); // 满房变化的酒店id
+            Set<String> upSet = new HashSet<>(); // 存储上价酒店的酒店id
+            Set<String> downSet = new HashSet<>(); // 存储下架酒店的酒店id
+            Set<String> downHotelKeySet = new HashSet<>(); // TODO 疑问 这个set集合的作用看代码只是用来删除redis里面的数据的，具体为什么这么做、redis里的某些数据为什么要删除，有点疑问
+
+            // nowDateMap(key:priceKey,value(map):key:productId,value:price)，dataMap、nowDataMap、beforeDataMap这三个map里面的格式一样
+            Map<String, Map<String, String>> dataMap = new HashMap<>(); // 存储今天之后的酒店价格
+            Map<String, Map<String, String>> nowDataMap = new HashMap<>(); // 存储当天(今天)的酒店价格
+            Map<String, Map<String, String>> beforeDataMap = new HashMap<>(); // 存储今天之前的酒店价格
+            Map<String, ProductRespCacheDTO> productRespCacheDTOMap = new HashMap<>(); // key:product:hotelId:productId value:要缓存的数据
+            list.stream()
+                    .filter(product -> product.getPriceInfos() != null && !product.getPriceInfos().isEmpty())
+                    .forEach(l -> {
+                        String priceInfoKey = RedisKeyUtils.buildPriceInfoKey(l.getHotelId(), l.getProductId()); // product:hotelId:productId
+                        if (!redisUtils.exists(priceInfoKey)) {
+                            ProductRespCacheDTO dto = new ProductRespCacheDTO();
+                            BeanUtils.copyProperties(l, dto);
+                            productRespCacheDTOMap.put(priceInfoKey, dto);
+                        } else {
+                            String productInfoJson = redisUtils.get(priceInfoKey);
+                            // 这里处理早餐变更的数据
+                            if (StringUtils.isNotBlank(productInfoJson)) {
+                                ProductRespCacheDTO respCacheDTO = JsonUtils.decodeJson(productInfoJson, new TypeReference<>() {
+                                });
+                                // 如果早餐有变化，则把发生早餐变化的产品id放入changeBreakfastSet，更新缓存productRespCacheDTOMap
+                                if (respCacheDTO.getMeal() != null && !respCacheDTO.getMeal().count.equals(l.getMeal().getCount())) {
+                                    //产品变更早餐
+//                                changeBreakfastSet.add(l.getProductId());
+                                    ProductRespCacheDTO dto = new ProductRespCacheDTO();
+                                    BeanUtils.copyProperties(l, dto);
+                                    productRespCacheDTOMap.put(priceInfoKey, dto);
+                                }
+                            }
+                        }
+                        List<PriceInfo> infos = l.getPriceInfos();
+                        // 如果hotelId不再downHotelKeySet中，则放入downHotelKeySet，表示每次价格都要重新更新
+                        if (!downHotelKeySet.contains(l.getHotelId())) {
+                            deleteDownHotelKey(infos, l.getHotelId()); // 删除redis
+                            downHotelKeySet.add(l.getHotelId());
+                        }
+
+                        // 这个for用来处理变价的逻辑
+                        infos.forEach(i -> {
+                            String priceKey = RedisKeyUtils.buildPriceKey(l.getHotelId(), i.getDate()); // rediskey:price:hotelid:date
+                            upSet.add(priceKey + ":" + l.getProductId()); // price:hotelid:date:productId
+                            String price = redisUtils.hmGet(priceKey, l.getProductId()); //获取大key为price:hotelid:date，小key为productId的数据，从下面代码看出，value存储的为price
+                            if (StringUtils.isNotBlank(price)) {
+                                if (!price.equals(i.getPrice().toString())) {
+                                    // 如果缓存中的价格和新查出来的价格不一致，说明价格发生了变化，会把发生价格变化的酒店id放入changePricesSet集合中
+                                    changePricesSet.add(l.getHotelId());
+                                    if (i.getPrice() == 0) {
+                                        fullPricesSet.add(l.getHotelId());
+                                    }
+                                    ProductRespCacheDTO dto = new ProductRespCacheDTO();
+                                    BeanUtils.copyProperties(l, dto);
+                                    productRespCacheDTOMap.put(priceInfoKey, dto); // 把整体缓存更新一下，放入productRespCacheDTOMap中
+                                    log.info("产品:{}变价,原价格:{},现价格:{},info:{}",
+                                            l.getProductId(),
+                                            price,
+                                            i.getPrice(),
+                                            JsonUtils.writeObject2Json(dto));
+                                }
+                            } else {
+                                // 如果缓存中价格为null，说明之前没有缓存过价格，直接把酒店id放入changePricesSet集合中
+                                changePricesSet.add(l.getHotelId());
+                            }
+                            // 这批if else处理酒店价格，分别处理今天、今天之前、今天之后
+                            if (DateUtil.getTodayYMD().trim().equals(i.getDate())) { // 如果价格是今天的，则把数据放入nowDateMap(key:priceKey,value(map):key:productId,value:price)
+                                nowDataMap.computeIfAbsent(priceKey, k -> new HashMap<>())
+                                        .put(l.getProductId(), i.getPrice().toString());
+                            } else if (DateUtil.getYesterdayYMD().trim().equals(i.getDate())) {
+                                beforeDataMap.computeIfAbsent(priceKey, k -> new HashMap<>())
+                                        .put(l.getProductId(), i.getPrice().toString());
+                            } else {
+                                dataMap.computeIfAbsent(priceKey, k -> new HashMap<>()) // 如果价格日期不是今天的，也不是今天之前的，则放入dataMap中
+                                        .put(l.getProductId(), i.getPrice().toString());
+                            }
+                        });
+                    });
+
+            // 这里把上面代码处理完成的数据统一缓存到redis，这里采用批量缓存到redis，而不是一条一条缓存，减少和redis的IO次数
+            // 存储到Redis
+            if (dataMap.size() > 0) {
+                // 把所有价格数据存储到redis，设置过期时间为1天，redis数据结构为hash
+                redisUtils.batchHashMapSetWithExpire(dataMap, 1, TimeUnit.DAYS);
+            }
+            // 储存时效到第二天凌晨一点
+            long untilTomorrowOneAM = DateUtil.getSecondsUntilTomorrowOneAM();
+            if (nowDataMap.size() > 0) {
+                // 存储nowDateMap到redis，有效时间到第二天凌晨一点，redis数据结构为hash
+                redisUtils.batchHashMapSetWithExpire(nowDataMap, untilTomorrowOneAM, TimeUnit.SECONDS);
+            }
+            // 储存时效6个小时
+            if (beforeDataMap.size() > 0) {
+                // 存储nowDateMap到redis，有效时间为6个小时，redis数据结构为hash
+                redisUtils.batchHashMapSetWithExpire(beforeDataMap, 6, TimeUnit.HOURS);
+            }
+            //储存除价格其他信
+            // 遍历productRespCacheDTOMap，productRespCacheDTOMap里的数据存储到redis，redis数据类型为String，productRespCacheDTOMap存储的是整条产品的基本信息，有效时间为3天
+            if (productRespCacheDTOMap.size() > 0) {
+                productRespCacheDTOMap.forEach((key, value) -> {
+                    redisUtils.setex(key, JsonUtils.writeObject2Json(value), ONE_DAY * 3);
+                });
+            }
+
+            // 这个try里面处理下架
+            try {
+                for (ProductRespDTO respDTO : list){
+                    //下架酒店处理逻辑
+                    Set<String> dateSet = respDTO.getPriceInfos().stream().map(PriceInfo::getDate).collect(Collectors.toSet());
+
+                    dateSet.forEach(d -> {
+                        String priceKey = RedisKeyUtils.buildPriceKey(respDTO.getHotelId(), d); // price:hotelId:date
+                        Map<String, String> mapGet = redisUtils.hashMapGet(priceKey);
+                        mapGet.forEach((key, value) -> {
+                            // 当缓存有多余的产品的时候，判断产品价格为0时再推下线，否则代表已经推送过了
+                            if (!"0".equals(value)) {
+                                downSet.add(priceKey + ":" + key);
+                            }
+                        });
+                    });
+                    Set<String> differenceSet = downSet.stream()
+                            .filter(element -> !upSet.contains(element))
+                            .collect(Collectors.toSet());
+                    Map<String, Map<String, String>> downDataMap = differenceSet.stream()
+                            .map(difference -> difference.split(":"))
+//                        .peek(parts -> log.info("查询价格时下架酒店key:{}", String.join(":", parts)))
+                            .collect(Collectors.toMap(
+                                    parts -> RedisKeyUtils.buildPriceKey(parts[1], parts[2]),
+                                    parts -> {
+                                        changePricesSet.add(parts[1]);
+                                        fullPricesSet.add(parts[1]);
+                                        Map<String, String> priceMap = new HashMap<>();
+                                        priceMap.put(parts[3], "0");
+                                        return priceMap;
+                                    },
+                                    (existing, replacement) -> { // 如果有重复的key，合并它们的map
+                                        existing.putAll(replacement);
+                                        return existing;
+                                    }
+                            ));
+                    // 存储到Redis，将多余的产品价格置0
+                    if (!downDataMap.isEmpty()) {
+                        redisUtils.batchHashMapSetWithExpire(downDataMap, 1, TimeUnit.DAYS);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("查询价格下架产品逻辑异常:{}", e);
+            }
+
+        }catch (Exception e){
+            log.error("productToCache error:",e);
+        }
+    }
+
+    @Override
+    public void productToCacheNoDown(List<ProductRespDTO> respDTOS) {
+
+    }
+
+    private void deleteDownHotelKey(List<PriceInfo> infos, String hotelId) {
+        List<String> between = DateUtil.getDatesBetween(infos.get(0).getDate(), infos.get(infos.size() - 1).getDate());
+        between.forEach(b -> {
+            String downHotelKey = RedisKeyUtils.buildDownHotelKey(hotelId, b);// down:hotelID:date
+            redisUtils.remove(downHotelKey);
+        });
+    }
+
+
+}

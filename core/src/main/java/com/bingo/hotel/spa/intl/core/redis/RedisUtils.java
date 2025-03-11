@@ -2,13 +2,17 @@ package com.bingo.hotel.spa.intl.core.redis;
 
 import com.google.common.collect.HashMultimap;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.ListOperations;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -20,6 +24,7 @@ import javax.annotation.Resource;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -597,5 +602,167 @@ public class RedisUtils {
         });
     }
 
+    public void batchSet(Map<String, String> keyValuePairs) {
+        redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+            for (Map.Entry<String, String> entry : keyValuePairs.entrySet()) {
+                String key = entry.getKey();
+                String value = entry.getValue();
+                if(StringUtils.isNotEmpty(key) && StringUtils.isNotEmpty(value)) {
+                    connection.set(key.getBytes(), value.getBytes());
+                }
+            }
+            return null;
+        });
+    }
 
+    /**
+     * 只更新值，不修改有效期
+     * @param key
+     * @param newValue
+     */
+    public void updateValueWithoutChangingExpire(String key, String newValue) {
+        ValueOperations<String, String> operations = redisTemplate.opsForValue();
+
+        // 获取键的当前有效期
+        Long expire = redisTemplate.getExpire(key, TimeUnit.SECONDS);
+
+        // 设置值
+        operations.set(key, newValue);
+
+        // 如果键之前有有效期，则还保持之前的有效期
+        if (expire != null && expire > 0) {
+            redisTemplate.expire(key, expire, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * 列表-追加值，并设置有效期
+     *
+     * @param key       Redis键名
+     * @param value     列表值
+     * @param timeout   超时时间（单位：秒）
+     */
+    public void lPushWithExpire(String key, String value, long timeout) {
+        ListOperations<String, String> list = redisTemplate.opsForList();
+
+        // 向列表左侧追加值
+        list.leftPush(key, value);
+
+        // 设置过期时间
+        if (timeout > 0) {
+            redisTemplate.expire(key, timeout, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * 集合批量添加，并设置过期时间
+     * @param key
+     * @param values
+     * @param timeout
+     * @param timeUnit
+     */
+    public void sadd(String key, Set<String> values, long timeout, TimeUnit timeUnit) {
+        SetOperations<String, String> set = redisTemplate.opsForSet();
+        if (values != null && !values.isEmpty()) {
+            set.add(key, values.toArray(new String[values.size()]));
+            redisTemplate.expire(key, timeout, timeUnit);
+        }
+    }
+
+    /**
+     * 判断value是否在集合中
+     * @param key
+     * @param value
+     * @return
+     */
+    public Boolean ismerber(String key, String value) {
+        SetOperations<String, String> set = redisTemplate.opsForSet();
+        return set.isMember(key, value);
+    }
+
+    /**
+     * 分批模糊查询Redis键名
+     *
+     * @param pattern 键名包含字符串&#xff08;如&#xff1a;myKey*&#xff09;
+     * @return 集合
+     */
+    public Set<String> scanKeys(String pattern) {
+        Set<String> keys = new HashSet<>();
+        ScanOptions options = ScanOptions.scanOptions().match(pattern).count(1000).build();
+
+        try (Cursor<byte[]> cursor = redisTemplate.getConnectionFactory().getConnection().scan(options)) {
+            while (cursor.hasNext()) {
+                keys.add(new String(cursor.next()));
+            }
+        } catch (Exception e) {
+            // 记录异常日志
+            System.err.println("扫描 Redis 键时出现异常: " + e.getMessage());
+        }
+        return keys;
+    }
+
+    public boolean tryLock(String lockKey) {
+        ValueOperations<String, String> ops = redisTemplate.opsForValue();
+        Boolean isLockAcquired = ops.setIfAbsent(lockKey, "locked", 5, TimeUnit.SECONDS);
+        return Boolean.TRUE.equals(isLockAcquired);  // 返回是否获取到锁
+    }
+
+    public void releaseLock(String lockKey) {
+        redisTemplate.delete(lockKey); //删除锁
+    }
+
+    public void deleteKeysWithPrefix(String keyPrefix) {
+        ScanOptions options = ScanOptions.scanOptions().match(keyPrefix + "*").count(1000).build();
+        Cursor<byte[]> cursor = redisTemplate.getConnectionFactory().getConnection().scan(options);
+
+        while (cursor.hasNext()) {
+            Set<String> keys = new HashSet<>();
+            int count = 0;
+
+            // 批量收集最多1000个键
+            while (cursor.hasNext() && count < 1000) {
+                keys.add(new String(cursor.next()));
+                count++;
+            }
+
+            // 删除这批键
+            if (!keys.isEmpty()) {
+                redisTemplate.delete(keys);
+                log.info("Deleted keys: " + keys);
+            }
+        }
+    }
+
+
+    /**
+     * 列表-删除值
+     *
+     * @param key   Redis键名
+     */
+    public List<String> lPop(String key) {
+
+        ListOperations<String, String> list = redisTemplate.opsForList();
+        List<String> strs = list.range(key, 0, -1);
+        if (CollectionUtils.isNotEmpty(strs)){
+            list.trim(key,strs.size(),-1);
+        }
+        return strs;
+    }
+
+    /**
+     * 更新指定键的超时时间
+     *
+     * @param key        要更新的键
+     * @param timeout    超时时间
+     * @param timeUnit   时间单位
+     * @return           成功返回true，失败返回false
+     */
+    public boolean updateKeyExpiration(String key, long timeout, TimeUnit timeUnit) {
+        try {
+            return redisTemplate.expire(key, timeout, timeUnit);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
 }

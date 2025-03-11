@@ -12,6 +12,8 @@ public class RedisKeyUtils {
 
     public static final String PRODUCT = "product";
 
+    public static final String DOWN_HOTEL = "DOWN";
+
     public static String buildProductKey(String source, String product, String checkinDate, String checkoutDate) {
         return JOINER.join(PRODUCT_TYPE, product, source, checkinDate, checkoutDate);
     }
@@ -22,6 +24,10 @@ public class RedisKeyUtils {
 
     public static String buildPriceInfoKey(String hotelId,String productId){
         return JOINER.join(PRODUCT,hotelId,productId);
+    }
+
+    public static String buildDownHotelKey(String hotelId,String checkIn){
+        return JOINER.join(DOWN_HOTEL,hotelId,checkIn);
     }
 
 }

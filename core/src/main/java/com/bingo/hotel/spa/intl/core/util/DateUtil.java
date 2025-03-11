@@ -15,10 +15,14 @@ import javax.xml.datatype.XMLGregorianCalendar;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.Duration;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
+import java.util.List;
 import java.util.TimeZone;
 
 @Slf4j
@@ -654,6 +658,36 @@ public class DateUtil {
             e.printStackTrace();
         }
         return false;
+    }
+
+    public static List<String> getDatesBetween(String checkIn, String checkout) {
+        List<String> dates = new ArrayList<>();
+        java.time.LocalDate startDate = java.time.LocalDate.parse(checkIn);
+        java.time.LocalDate endDate = java.time.LocalDate.parse(checkout);
+
+        while (startDate.isBefore(endDate)) {
+            dates.add(startDate.format(DateTimeFormatter.ISO_LOCAL_DATE));
+            startDate = startDate.plusDays(1);
+        }
+
+        return dates;
+    }
+
+    public static long getSecondsUntilTomorrowOneAM() {
+        // 获取当前时间
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+
+        // 获取次日凌晨一点的时间
+        java.time.LocalDateTime tomorrowOneAM = now
+                .toLocalDate()                     // 转换为LocalDate
+                .plusDays(1)                       // 加一天得到次日
+                .atTime(LocalTime.of(1, 0));      // 在次日基础上设置时间为凌晨一点
+
+        // 计算两个时间点之间的duration
+        Duration duration = Duration.between(now, tomorrowOneAM);
+
+        // 返回两个时间点之间的秒数
+        return duration.getSeconds();
     }
 
 }

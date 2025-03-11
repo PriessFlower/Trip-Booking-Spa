@@ -69,7 +69,7 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
                 return null;
             }
         });
-        if (result.getData().isEmptyResult()) {
+        if (null != result.getData() && result.getData().isEmptyResult()) {
             Monitor.recordOne(buildMonitorKey(SupplierApiConstants.ACCESS_TAG) + "_empty",
                     System.currentTimeMillis() - start);
         }

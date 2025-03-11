@@ -7,10 +7,12 @@ import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaStaticInfoServic
 import com.bingo.hotel.spa.intl.core.api.fastpay.service.FastPayService;
 import com.bingo.hotel.spa.intl.core.api.huitravel.service.HuiTravelService;
 import com.bingo.hotel.spa.intl.core.api.meituan.service.MeituanStaticInfoService;
+import com.bingo.hotel.spa.intl.core.api.ratehawk.service.RateHawkCPSQueryPriceService;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.service.RateHawkService;
 import com.bingo.hotel.spa.intl.core.api.travelconnect.service.TravelconnectHotelService;
 import com.bingo.hotel.spa.intl.core.push.fliggy.service.FliggyPushService;
 import com.bingo.hotel.spa.intl.rest.common.HttpResponse;
+import com.google.common.util.concurrent.RateLimiter;
 import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +47,8 @@ public class BackDoorController {
     private RateHawkService rateHawkService;
     @Resource
     private MeituanStaticInfoService meituanStaticInfoService;
+    @Resource
+    private RateHawkCPSQueryPriceService rateHawkCPSQueryPriceService;
 
     @GetMapping("/push")
     @ApiOperation("HotelList查询")
@@ -184,6 +188,15 @@ public class BackDoorController {
                                          @RequestParam(value = "type", required = false) String type) {
 
         meituanStaticInfoService.saveOrUpdateHotelInfo(pageNumber, pageSize, type);
+        return HttpResponse.getSuccessInstance();
+    }
+
+    @GetMapping(value = "/rateHawk/priceCache")
+    @ApiOperation("rateHawk价格缓存")
+    public HttpResponse priceCache() {
+        //qps限流2.5
+        RateLimiter rateLimiter = RateLimiter.create(2.5);
+        rateHawkCPSQueryPriceService.queryPriceQueueTask(0,0,rateLimiter);
         return HttpResponse.getSuccessInstance();
     }
 }

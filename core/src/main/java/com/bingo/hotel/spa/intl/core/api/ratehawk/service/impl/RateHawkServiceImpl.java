@@ -35,6 +35,7 @@ import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.response.HotelFileRespons
 import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.response.HotelStaticInfo;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.bean.response.QueryProductResponse;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.service.RateHawkService;
+import com.bingo.hotel.spa.intl.core.api.service.CachePriceService;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.DateUtil;
 import com.bingo.hotel.spa.intl.core.util.FileDealUtils;
@@ -44,6 +45,7 @@ import com.google.common.util.concurrent.RateLimiter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -83,6 +85,8 @@ public class RateHawkServiceImpl implements RateHawkService {
     @Resource
     private DistributedRateLimiter redisRateLimiter;
     private static RateLimiter RATEHAWK_QUERY_HOTEL_LIMITER = RateLimiter.create(0.15);
+    @Autowired
+    private CachePriceService cachePriceService;
 
     @Override
     public void queryAndSaveStaticInfo(boolean downloadFlag) {
@@ -221,6 +225,7 @@ public class RateHawkServiceImpl implements RateHawkService {
     @Override
     public List<ProductRespDTO> queryPrices(PriceReq request, Supplier supplier) {
         ArrayList<ProductRespDTO> productRespList = new ArrayList<>();
+        ArrayList<ProductRespDTO> productRespListNew;
 
         List<QueryProductRequest.Guests> guestsList = new ArrayList<>();
         for (Integer integer = 0; integer < request.getRoomNum(); integer++) {
@@ -275,7 +280,10 @@ public class RateHawkServiceImpl implements RateHawkService {
             log.error("推送产品信息异常：request:{} ", JsonUtils.writeObject2Json(queryProductRequest), e);
         }
         if (CollectionUtils.isNotEmpty(productRespList)) {
-            return disProductInfo(productRespList);
+            productRespListNew = disProductInfo(productRespList);
+            productRespList.clear();
+            productRespList.addAll(productRespListNew);
+//            return disProductInfo(productRespList);
         }
         return productRespList;
     }
@@ -571,7 +579,75 @@ public class RateHawkServiceImpl implements RateHawkService {
         return null;
     }
 
-    public static List<ProductRespDTO> disProductInfo(List<ProductRespDTO> productRespDTOList) {
+    @Override
+    public List<ProductRespDTO> queryPricesCache(PriceReq request, Supplier supplier) {
+        ArrayList<ProductRespDTO> productRespList = new ArrayList<>();
+        ArrayList<ProductRespDTO> productRespListNew;
+
+        List<QueryProductRequest.Guests> guestsList = new ArrayList<>();
+        for (Integer integer = 0; integer < request.getRoomNum(); integer++) {
+            QueryProductRequest.Guests guests = QueryProductRequest.Guests.builder()
+                    .adults(request.getAdultNum())
+                    .children(0 == request.getChildNum() ? new ArrayList<>() :
+                            request.getChildAges().stream().map(a -> String.valueOf(a)).collect(Collectors.toList()))
+                    .build();
+            guestsList.add(guests);
+        }
+        QueryProductRequest queryProductRequest = QueryProductRequest.builder()
+                .hid(Integer.parseInt(supplier.getSHotelId()))
+                .checkin(request.getCheckIn())
+                .checkout(request.getCheckout())
+                .currency("USD")
+                .guests(guestsList)
+                .language("en")
+                .build();
+        try {
+            ResponseResult<QueryProductResponse> queryProductResult =
+                    new QueryProductAccess(url, generateBasicAuth(), redisRateLimiter).access(queryProductRequest);
+            if (null != queryProductResult.getData() && CollectionUtils.isNotEmpty(queryProductResult.getData().getHotels())) {
+                List<QueryProductResponse.Hotels> hotels = queryProductResult.getData().getHotels();
+                for (QueryProductResponse.Hotels hotel : hotels) {
+                    if (CollectionUtils.isEmpty(hotel.getRates())) {
+                        continue;
+                    }
+                    for (QueryProductResponse.Rates rate : hotel.getRates()) {
+                        QueryProductResponse.Payment_types paymentTypes = rate.getPayment_options().getPayment_types().get(0);
+                        ProductRespDTO productRespDTO = ProductRespDTO.builder()
+                                .hotelId(String.valueOf(hotel.getHid()))
+                                .productId(hotel.getHid() + "_" + rate.getRoom_name() + "_" + rate.getMeal() + "_" + (StringUtils.isNotBlank(paymentTypes.getCancellation_penalties().getFree_cancellation_before()) ? "1" : "0"))
+                                .room(Room.builder().roomId(hotel.getHid() + "_" + rate.getRoom_data_trans().getMain_name() + "_" + rate.getRg_ext().getBathroom() + "_" + rate.getRg_ext().getBedding() + "_" + rate.getRg_ext().getCapacity()).roomName(rate.getRoom_name()).build())
+                                .supplierId(SupplierSourceEnum.RATEHAWK.getCode())
+                                .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(rate.getRoom_name()).build())
+                                .currencyType(queryProductRequest.getCurrency())
+                                .totalPrice(new BigDecimal(paymentTypes.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
+                                .brokerage(new BigDecimal(paymentTypes.getCommission_info().getShow().getAmount_commission()).multiply(BigDecimal.valueOf(100)).intValue())
+                                .priceInfos(buildQueryPriceInfos(rate.getDaily_prices(), request.getCheckIn()))
+                                .meal(convertMeal(rate.getMeal(), request.getAdultNum()))
+                                .cancelPolicy(convertCancelPolicy(supplier.getSHotelId(), request.getCheckIn(), paymentTypes.getCancellation_penalties()))
+                                .maxOccupancy(request.getAdultNum())
+                                .build();
+                        productRespList.add(productRespDTO);
+                    }
+                }
+            } else {
+                log.info("请求ratehawk查询产品信息异常：request:{},response:{}", JsonUtils.writeObject2Json(queryProductRequest),
+                        JsonUtils.writeObject2Json(queryProductResult));
+            }
+        } catch (Exception e) {
+            log.error("推送产品信息异常：request:{} ", JsonUtils.writeObject2Json(queryProductRequest), e);
+        }
+        if (CollectionUtils.isNotEmpty(productRespList)) {
+            productRespListNew = disProductInfo(productRespList);
+            productRespList.clear();
+            productRespList.addAll(productRespListNew);
+//            return disProductInfo(productRespList);
+        }
+        //插入缓存
+        cachePriceService.productToCache(productRespList);
+        return productRespList;
+    }
+
+    public static ArrayList<ProductRespDTO> disProductInfo(List<ProductRespDTO> productRespDTOList) {
         // 使用Map来存储每个产品对应的最小金额报价
         Map<String, ProductRespDTO> orderMap = new HashMap<>();
 
@@ -595,9 +671,11 @@ public class RateHawkServiceImpl implements RateHawkService {
     }
 
     public static void main(String[] args) {
-        String fileUrl = "https://partner-feedora.s3.eu-central-1.amazonaws.com/feed/partner_feed_en_v3.jsonl.zst";
-        String localFilePath = "D:\\working\\file\\导出文件\\hotel_info/" + fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
-//        FileDealUtils.downloadFile(fileUrl, localFilePath);
+//        String fileUrl = "https://partner-feedora.s3.eu-central-1.amazonaws.com/feed/partner_feed_en_v3.jsonl.zst";
+        String fileUrl = "https://partner-feedora.s3.eu-central-1.amazonaws.com/feed/top_inventory_feed_en_v3.jsonl.zst";
+//        String localFilePath = "D:\\working\\file\\导出文件\\hotel_info/" + fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
+        String localFilePath = "/Users/wangtian/Downloads/"+ fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
+        FileDealUtils.downloadFile(fileUrl, localFilePath);
         FileDealUtils.zstdFiles(localFilePath, localFilePath.replace(".jsonl.zst", ""));
     }
 }
