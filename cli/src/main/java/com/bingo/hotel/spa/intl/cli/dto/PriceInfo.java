@@ -36,4 +36,8 @@ public class PriceInfo implements Serializable{
      */
     private Integer roomPrice;
 
+    public PriceInfo(String date, Integer price) {
+        this.date = date;
+        this.price = price;
+    }
 }

@@ -12,11 +12,13 @@ import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.bingo.hotel.spa.intl.core.util.RedisKeyUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -43,7 +45,42 @@ public class CachePriceServiceImpl implements CachePriceService {
 
     @Override
     public List<ProductRespDTO> getPrice(PriceReq priceReq, Supplier supplier) {
-        return null;
+        List<ProductRespDTO> respDTOList = new ArrayList<>();
+        List<String> checkList = DateUtil.getDatesBetween(priceReq.getCheckIn(), priceReq.getCheckout());
+        Map<String, List<PriceInfo>> productMap = new HashMap<>();
+
+        List<String> keyList = new ArrayList<>();
+        checkList.forEach(c -> {
+            //price:sHotelId:yyyy-MM-dd
+            String priceKey = RedisKeyUtils.buildPriceKey(supplier.getSHotelId(), c);
+            keyList.add(priceKey);
+        });
+        //productMap--sProductId,List<PriceInfo>
+        fetchAndProcessPriceInfo(productMap, supplier, keyList);
+
+        // 使用已经收集的价格信息构建响应对象
+        productMap.forEach((key, value) -> {
+            ProductRespDTO respDTO = new ProductRespDTO();
+            //计算报价总价 产品信息中totalprice可能是不正确的
+            int totalPrice = value.stream().mapToInt(PriceInfo::getPrice).sum();
+            //补充产品其他信息
+            //key是product:sHotelId:sProductId,value是ProductRespCacheDTO
+            String priceInfoKey = RedisKeyUtils.buildPriceInfoKey(supplier.getSHotelId(), key);
+            String priceInfoJson = redisUtils.get(priceInfoKey);
+            if (StringUtils.isNotBlank(priceInfoJson)) {
+                ProductRespCacheDTO productRespCacheDTO = JsonUtils.decodeJson(priceInfoJson, new TypeReference<>() {
+                });
+                BeanUtils.copyProperties(productRespCacheDTO, respDTO);
+                respDTO.setTotalPrice(totalPrice);
+            }
+            respDTO.setSupplierId(supplier.getSupplierId());
+            respDTO.setProductId(key);
+            respDTO.setHotelId(supplier.getSHotelId());
+            respDTO.setPriceInfos(value);
+            respDTOList.add(respDTO);
+        });
+
+        return respDTOList;
     }
 
     @Override
@@ -222,5 +259,46 @@ public class CachePriceServiceImpl implements CachePriceService {
         });
     }
 
+    /**
+     * @description:组装价格信息
+     * @author: dick_w
+     * @date: 2025/3/12 10:25
+     * @param: [productMap, supplier, keySet]
+     * @return: void
+     **/
+    private void fetchAndProcessPriceInfo(Map<String, List<PriceInfo>> productMap, Supplier supplier, List<String> keySet) {
+        if (StringUtils.isNotBlank(supplier.getSProductId())) {
+            //根据priceKey（price:sHotelId:yyyy-MM-dd）查询map（sProductId,price)
+            keySet.forEach(priceKey -> {
+                String price = redisUtils.hmGet(priceKey, supplier.getSProductId());
+                if (StringUtils.isNotBlank(price)) {
+                    String datePart = getDatePartFromPriceKey(priceKey);
+                    productMap.computeIfAbsent(supplier.getSProductId(), k -> new ArrayList<>())
+                            .add(new PriceInfo(datePart, Integer.parseInt(price)));
+                }
+            });
+        } else {
+            //根据priceKey（price:sHotelId:yyyy-MM-dd）查询map（sProductId,price）
+            Map<String, Map<String, String>> mapMap = redisUtils.hashMapListAndKey(keySet);
+            mapMap.forEach((mKey, mValue) -> {
+                //mKey--priceKey,mValue--map
+                String datePart = getDatePartFromPriceKey(mKey);
+                //key--sProductId,value--price
+                mValue.forEach((key, value) -> productMap.computeIfAbsent(key, k -> new ArrayList<>())
+                        .add(new PriceInfo(datePart, Integer.parseInt(value))));
+            });
+        }
+    }
+
+    /**
+     * @description:截取时间
+     * @author: dick_w
+     * @date: 2025/3/12 10:23
+     * @param: [priceKey]
+     * @return: java.lang.String
+     **/
+    private String getDatePartFromPriceKey(String priceKey) {
+        return priceKey.split(":")[2];
+    }
 
 }
