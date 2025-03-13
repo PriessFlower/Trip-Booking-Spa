@@ -19,6 +19,4 @@ public interface CachePriceService {
 
     void productToCache(List<ProductRespDTO> respDTOS);
 
-    void productToCacheNoDown(List<ProductRespDTO> respDTOS);
-
 }

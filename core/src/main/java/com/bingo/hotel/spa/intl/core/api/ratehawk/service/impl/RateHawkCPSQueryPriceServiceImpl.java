@@ -55,11 +55,10 @@ public class RateHawkCPSQueryPriceServiceImpl implements RateHawkCPSQueryPriceSe
     private Integer QueryPriceQueueReturn;
 
     @Override
-    public Boolean queryPriceQueueTask(int priority, int temporaryUpgrade, RateLimiter rateLimiter) {
+    public Boolean queryPriceQueueTask(int priority, int temporaryUpgrade,RateLimiter rateLimiter) {
 
         while (true) {
             try {
-
                 if (QueryPriceQueueReturn == 0){
                     return true;
                 }
@@ -75,7 +74,6 @@ public class RateHawkCPSQueryPriceServiceImpl implements RateHawkCPSQueryPriceSe
                     if (CollectionUtils.isEmpty(list)) {
                         break;
                     }
-//                  List<List<RateHawkQueryPriceTask>> groupList = groupRateHawkQueryPriceTask(list);
                     for (RateHawkQueryPriceTask rateHawkQueryPriceTask : list) {
 
                         if (!rateHawkQueryPriceTask.getUpgradeDeadline().after(new Date())) {
@@ -88,20 +86,27 @@ public class RateHawkCPSQueryPriceServiceImpl implements RateHawkCPSQueryPriceSe
                         //更新查询次数
                         rateHawkQueryPriceTaskMapper.updateAddCount(rateHawkQueryPriceTask);
 
-                        String checkIn = DateUtil.getDateStr(DateUtil.addDay(new Date(), rateHawkQueryPriceTask.getDelayCheckIn()));
-                        String checkOut = DateUtil.getDateStr(DateUtil.addDay(new Date(), rateHawkQueryPriceTask.getDelayCheckOut()));
                         try {
                             long start = System.currentTimeMillis();
-                            log.info("ratehawkQueryPriceTask hId: {},checkin:{}  ", rateHawkQueryPriceTask.getShId(), checkIn);
-                            rateLimiter.acquire();
-                            Monitor.recordOne("ratehawk_cps_query_price_qps_" + priority);
-                            if (QueryPriceQueueSwitch == 1) {
-                                PriceReq request = PriceReq.builder().adultNum(1)
-                                        .childNum(0).guestType(0).childAges(new ArrayList<>())
-                                        .checkIn(checkIn).checkout(checkOut).roomNum(1).build();
-                                Supplier supplier = Supplier.builder().sHotelId(rateHawkQueryPriceTask.getShId()).build();
-                                List<ProductRespDTO> productRespDTOList = rateHawkService.queryPricesCache(request, supplier);
-                                log.info("ratehawkQueryPriceTask productRespDTOList:{}", JSON.toJSONString(productRespDTOList));
+                            List<ProductRespDTO> productRespDTOList;
+                            PriceReq request;
+                            Supplier supplier;
+                            //checkin和checkin+1每组都进行查询价格 比如:2025-03-01到2025-03-30拆分成2025-03-01到2025-03-02、2025-03-02到2025-03-03等
+                            for(int i = 0; i<rateHawkQueryPriceTask.getDelayCheckOut()-rateHawkQueryPriceTask.getDelayCheckIn(); i++){
+                                LocalDate currentCheckin = LocalDate.now().plusDays(i);
+                                LocalDate currentCheckout = currentCheckin.plusDays(1);
+                                log.info("ratehawkQueryPriceTask hId: {},currentCheckin:{},currentCheckout:{}  ",
+                                        rateHawkQueryPriceTask.getShId(), currentCheckin.toString(),currentCheckout.toString());
+                                rateLimiter.acquire();
+                                Monitor.recordOne("ratehawk_cps_query_price_qps_" + priority);
+                                if (QueryPriceQueueSwitch == 1) {
+                                    request = PriceReq.builder().adultNum(1)
+                                            .childNum(0).guestType(0).childAges(new ArrayList<>())
+                                            .checkIn(currentCheckin.toString()).checkout(currentCheckout.toString()).roomNum(1).build();
+                                    supplier = Supplier.builder().sHotelId(rateHawkQueryPriceTask.getShId()).build();
+                                    productRespDTOList = rateHawkService.queryPricesCache(request, supplier);
+                                    log.info("ratehawkQueryPriceTask productRespDTOList:{}", JSON.toJSONString(productRespDTOList));
+                                }
                             }
                             log.info("ratehawkQueryPriceTask{} query time:{}", priority, System.currentTimeMillis() - start);
                         } catch (Exception e) {

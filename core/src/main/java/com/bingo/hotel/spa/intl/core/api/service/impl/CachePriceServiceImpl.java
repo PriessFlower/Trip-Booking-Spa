@@ -1,5 +1,6 @@
 package com.bingo.hotel.spa.intl.core.api.service.impl;
 
+import com.alibaba.fastjson.JSON;
 import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
@@ -61,8 +62,24 @@ public class CachePriceServiceImpl implements CachePriceService {
         // 使用已经收集的价格信息构建响应对象
         productMap.forEach((key, value) -> {
             ProductRespDTO respDTO = new ProductRespDTO();
+//            System.out.println("sProductId----"+key);
+//            System.out.println("List<PriceInfo>----"+ JSON.toJSON(value));
             //计算报价总价 产品信息中totalprice可能是不正确的
             int totalPrice = value.stream().mapToInt(PriceInfo::getPrice).sum();
+            //如果缓存的价格为0，则不返回这个产品价格信息
+            if(totalPrice == 0){
+                return;
+            }
+            //如果List<PriceInfo>的size不等于List<String> keyList的大小，就证明某一天没价格数据，则不返回该产品信息
+            if(keyList.size() != value.size()){
+                return;
+            }
+            //如果size相同，但某一天价格为0，则不返回该产品信息
+            if(keyList.size() == value.size()){
+                if(value.stream().anyMatch(priceInfo -> 0 == priceInfo.getPrice().intValue())){
+                    return;
+                }
+            }
             //补充产品其他信息
             //key是product:sHotelId:sProductId,value是ProductRespCacheDTO
             String priceInfoKey = RedisKeyUtils.buildPriceInfoKey(supplier.getSHotelId(), key);
@@ -87,6 +104,7 @@ public class CachePriceServiceImpl implements CachePriceService {
     public void productToCache(List<ProductRespDTO> list) {
         try {
             if (list == null || list.isEmpty()) {
+//                log.info("productToCache list is empty");
                 return;
             }
 
@@ -217,7 +235,6 @@ public class CachePriceServiceImpl implements CachePriceService {
                             .collect(Collectors.toSet());
                     Map<String, Map<String, String>> downDataMap = differenceSet.stream()
                             .map(difference -> difference.split(":"))
-//                        .peek(parts -> log.info("查询价格时下架酒店key:{}", String.join(":", parts)))
                             .collect(Collectors.toMap(
                                     parts -> RedisKeyUtils.buildPriceKey(parts[1], parts[2]),
                                     parts -> {
@@ -234,6 +251,7 @@ public class CachePriceServiceImpl implements CachePriceService {
                             ));
                     // 存储到Redis，将多余的产品价格置0
                     if (!downDataMap.isEmpty()) {
+//                        System.out.println("downDataMap----"+JSON.toJSONString(downDataMap));
                         redisUtils.batchHashMapSetWithExpire(downDataMap, 1, TimeUnit.DAYS);
                     }
                 }
@@ -244,11 +262,6 @@ public class CachePriceServiceImpl implements CachePriceService {
         }catch (Exception e){
             log.error("productToCache error:",e);
         }
-    }
-
-    @Override
-    public void productToCacheNoDown(List<ProductRespDTO> respDTOS) {
-
     }
 
     private void deleteDownHotelKey(List<PriceInfo> infos, String hotelId) {

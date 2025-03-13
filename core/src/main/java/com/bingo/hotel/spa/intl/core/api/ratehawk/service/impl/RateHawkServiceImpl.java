@@ -1,6 +1,7 @@
 package com.bingo.hotel.spa.intl.core.api.ratehawk.service.impl;
 
 
+import com.alibaba.fastjson.JSON;
 import com.bingo.hotel.info.intl.cli.client.HotelInfoIntlClient;
 import com.bingo.hotel.info.intl.cli.request.QueryHotelRequest;
 import com.bingo.hotel.info.intl.cli.request.SupplierHotelBaseRequest;
@@ -249,6 +250,7 @@ public class RateHawkServiceImpl implements RateHawkService {
                     new QueryProductAccess(url, generateBasicAuth(), redisRateLimiter).access(queryProductRequest);
             if (null != queryProductResult.getData() && CollectionUtils.isNotEmpty(queryProductResult.getData().getHotels())) {
                 List<QueryProductResponse.Hotels> hotels = queryProductResult.getData().getHotels();
+//                System.out.println("hotels--"+JSON.toJSONString(hotels));
                 for (QueryProductResponse.Hotels hotel : hotels) {
                     if (CollectionUtils.isEmpty(hotel.getRates())) {
                         continue;

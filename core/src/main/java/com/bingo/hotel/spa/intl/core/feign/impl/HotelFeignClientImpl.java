@@ -68,8 +68,9 @@ public class HotelFeignClientImpl implements SPAFeignClient {
         long startTime = System.currentTimeMillis();
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
         for (Supplier supplier : priceReq.getSuppliers()) {
-            //如果配置了供应商查询缓存，则走缓存
-            if(!CollectionUtils.isEmpty(queryCacheSupplier)
+            //如果没有传产品id并且配置了供应商查询缓存，则走缓存
+            if(StringUtils.isBlank(supplier.getSProductId())
+                    && !CollectionUtils.isEmpty(queryCacheSupplier)
                     && queryCacheSupplier.contains(supplier.getSupplierId().toString())){
                 List<ProductRespDTO> price = cachePriceService.getPrice(priceReq, supplier);
                 if (CollectionUtils.isNotEmpty(price)) {

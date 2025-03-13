@@ -16,6 +16,7 @@ import com.google.common.util.concurrent.RateLimiter;
 import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -49,6 +50,10 @@ public class BackDoorController {
     private MeituanStaticInfoService meituanStaticInfoService;
     @Resource
     private RateHawkCPSQueryPriceService rateHawkCPSQueryPriceService;
+
+//    //qps限流 生产环境2.5  测试环境约0.16（1分钟10次）
+//    @Value("${ratehawk.query.price.cache.qps}")
+//    private Double cacheQps;
 
     @GetMapping("/push")
     @ApiOperation("HotelList查询")
@@ -194,8 +199,8 @@ public class BackDoorController {
     @GetMapping(value = "/rateHawk/priceCache")
     @ApiOperation("rateHawk价格缓存")
     public HttpResponse priceCache() {
-        //qps限流2.5
-        RateLimiter rateLimiter = RateLimiter.create(2.5);
+        //qps限流
+        RateLimiter rateLimiter = RateLimiter.create(0.16);
         rateHawkCPSQueryPriceService.queryPriceQueueTask(0,0,rateLimiter);
         return HttpResponse.getSuccessInstance();
     }

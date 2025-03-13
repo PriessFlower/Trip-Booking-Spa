@@ -11,6 +11,6 @@ import com.google.common.util.concurrent.RateLimiter;
  **/
 public interface RateHawkCPSQueryPriceService {
 
-    Boolean queryPriceQueueTask(int priority, int temporaryUpgrade, RateLimiter rateLimiter);
+    Boolean queryPriceQueueTask(int priority, int temporaryUpgrade,RateLimiter rateLimiter);
 
 }

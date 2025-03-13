@@ -75,10 +75,10 @@ public class ProductRespCacheDTO {
      * 取消政策
      */
     public List<CancelPolicy> cancelPolicy;
-    /**
-     * 价格
-     */
-    public List<PriceInfo> priceInfos;
+//    /**
+//     * 价格
+//     */
+//    public List<PriceInfo> priceInfos;
     /**
      * 最大入住人数
      */
