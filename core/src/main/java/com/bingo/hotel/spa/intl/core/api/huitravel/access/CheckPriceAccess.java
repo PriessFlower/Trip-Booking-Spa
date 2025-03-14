@@ -14,9 +14,11 @@ import com.bingo.hotel.spa.intl.core.api.huitravel.bean.price.check.CheckRespons
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.bingo.hotel.spa.intl.core.util.Md5Utils;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 
+@Slf4j
 public class CheckPriceAccess extends BaseHttpAccess<CheckRequest, CheckResponse> {
     private String host;
 
@@ -41,6 +43,7 @@ public class CheckPriceAccess extends BaseHttpAccess<CheckRequest, CheckResponse
                 .data(request)
                 .build();
         ResponseResult<CheckResponse> result = HttpUtils.access(url, new HashMap<>(), JsonUtils.writeObject2Json(baseRequest), parser);
+        log.info("huizhi checkprice request:{} response: {}", JsonUtils.writeObject2Json(baseRequest), JsonUtils.writeObject2Json(result));
         return result;
     }
 

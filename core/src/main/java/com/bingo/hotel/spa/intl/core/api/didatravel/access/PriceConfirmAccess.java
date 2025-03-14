@@ -11,7 +11,10 @@ import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.priceConfirm.PriceConfirmRequest;
 import com.bingo.hotel.spa.intl.core.api.didatravel.bean.price.priceConfirm.PriceConfirmResponse;
 import com.bingo.hotel.spa.intl.core.util.HttpUtils;
+import com.bingo.hotel.spa.intl.core.util.JsonUtils;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class PriceConfirmAccess extends BaseHttpAccess<PriceConfirmRequest, PriceConfirmResponse> {
 
     private String host;
@@ -24,6 +27,7 @@ public class PriceConfirmAccess extends BaseHttpAccess<PriceConfirmRequest, Pric
     @Override
     protected ResponseResult<PriceConfirmResponse> request(String url, PriceConfirmRequest request, IParser<PriceConfirmResponse> parser) throws Exception {
         ResponseResult<PriceConfirmResponse> result = HttpUtils.access(url, null, JSON.toJSONString(request), parser);
+        log.info("daolv priceConfirm request:{} response: {}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
         return result;
     }
 
