@@ -215,7 +215,7 @@ public class HttpUtils {
         }
         long start = System.currentTimeMillis();
         HttpResponse response = httpClient.execute(httpGet);
-        log.info("doGet>>>request:{},response:{}", JsonUtils.writeObject2Json(httpGet), JsonUtils.writeObject2Json(response));
+//        log.info("doGet>>>request:{},response:{}", JsonUtils.writeObject2Json(httpGet), JsonUtils.writeObject2Json(response));
         HttpEntity entity = response.getEntity();
         if (entity == null && response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
             return "";

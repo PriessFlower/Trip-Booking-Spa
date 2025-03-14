@@ -452,6 +452,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         queryPriceRequest.setSales_environment(StringUtils.isBlank(request.getPriceFlag()) ? "hotel_package" : request.getPriceFlag());
         ResponseResult<QueryPriceResponse> result = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(),
                 expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+        log.info("打印验价返回信息:{}",JsonUtils.writeObject2Json(result));
         if (result != null && result.isSucc() && null != result.getData() && CollectionUtils.isNotEmpty(result.getData().getHotelPrices())) {
             QueryPriceResponse.HotelPrice hotelPrice = result.getData().getHotelPrices().get(0);
             for (QueryPriceResponse.Rooms room : hotelPrice.getRooms()) {
