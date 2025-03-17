@@ -3,6 +3,7 @@ package com.bingo.hotel.spa.intl.rest.controller;
 
 import com.bingo.hotel.spa.intl.core.api.aichotels.service.AichotelsHotelService;
 import com.bingo.hotel.spa.intl.core.api.didatravel.service.DidatravelHotelService;
+import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaCPSQueryPriceService;
 import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaStaticInfoService;
 import com.bingo.hotel.spa.intl.core.api.fastpay.service.FastPayService;
 import com.bingo.hotel.spa.intl.core.api.huitravel.service.HuiTravelService;
@@ -50,6 +51,8 @@ public class BackDoorController {
     private MeituanStaticInfoService meituanStaticInfoService;
     @Resource
     private RateHawkCPSQueryPriceService rateHawkCPSQueryPriceService;
+    @Resource
+    private ExpediaCPSQueryPriceService expediaCPSQueryPriceService;
 
 //    //qps限流 生产环境2.5  测试环境约0.16（1分钟10次）
 //    @Value("${ratehawk.query.price.cache.qps}")
@@ -202,6 +205,15 @@ public class BackDoorController {
         //qps限流
         RateLimiter rateLimiter = RateLimiter.create(0.16);
         rateHawkCPSQueryPriceService.queryPriceQueueTask(0,0,rateLimiter);
+        return HttpResponse.getSuccessInstance();
+    }
+
+    @GetMapping(value = "/expedia/priceCache")
+    @ApiOperation("expedia价格缓存")
+    public HttpResponse expediaPriceCache() {
+        //qps限流
+        RateLimiter rateLimiter = RateLimiter.create(10);
+        expediaCPSQueryPriceService.queryPriceQueueTask(0,0,rateLimiter);
         return HttpResponse.getSuccessInstance();
     }
 }
