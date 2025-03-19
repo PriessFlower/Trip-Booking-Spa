@@ -59,6 +59,7 @@ public class CheckPriceAccess extends BaseHttpAccess<CheckPriceRequest, CheckPri
         body.put("book_hash", request.getBook_hash());
         body.put("language", request.getLanguage());
         String result = HttpUtils.doPostObject(url, body, headers);
+        log.info("ratehawk checkprice request:{} response: {}", JsonUtils.writeObject2Json(request), result);
         BaseResult<CheckPriceResponse> checkPriceResponse = JsonUtils.decodeJson(result, new TypeReference<>() {
         });
         if (null == checkPriceResponse || null == checkPriceResponse.getData() || "error".equals(checkPriceResponse.getError())) {

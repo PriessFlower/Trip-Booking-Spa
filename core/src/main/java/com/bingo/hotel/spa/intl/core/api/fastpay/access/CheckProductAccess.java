@@ -53,6 +53,7 @@ public class CheckProductAccess extends BaseHttpAccess<CheckPriceRequest, CheckP
         body.put("productCode",request.getProductCode());
         body.put("quantity",request.getQuantity());
         String result = HttpUtils.doPostObject(url, body, headers);
+        log.info("fastpay checkproduct request:{} response: {}", JsonUtils.writeObject2Json(request), result);
         CheckPriceResponse searchResponse = JsonUtils.readValue(result, CheckPriceResponse.class);
         return new ResponseResult<>(searchResponse);
     }

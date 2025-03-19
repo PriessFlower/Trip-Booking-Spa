@@ -18,6 +18,7 @@ import com.bingo.hotel.spa.intl.core.api.common.enums.SupplierSourceEnum;
 import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaStaticInfoService;
 import com.bingo.hotel.spa.intl.core.api.ratehawk.service.RateHawkService;
 import com.bingo.hotel.spa.intl.core.api.service.BookingSyncService;
+import com.bingo.hotel.spa.intl.core.api.service.CachePriceService;
 import com.bingo.hotel.spa.intl.core.api.service.CancelSyncService;
 import com.bingo.hotel.spa.intl.core.api.service.CheckPriceSyncService;
 import com.bingo.hotel.spa.intl.core.api.service.OrderQuerySyncService;
@@ -25,9 +26,13 @@ import com.bingo.hotel.spa.intl.core.api.service.ProductSyncService;
 import com.bingo.hotel.spa.intl.core.monitor.Monitor;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
 import com.bingo.hotel.spa.intl.core.util.SpringAppContextUtil;
+import com.ctrip.framework.apollo.spring.annotation.ApolloJsonValue;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.compress.utils.Lists;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,6 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/client/spa")
@@ -50,6 +56,16 @@ public class HotelFeignClientImpl implements SPAFeignClient {
     @Resource
     private RateHawkService rateHawkService;
 
+    //走缓存的供应商配置
+    @ApolloJsonValue("${query.cache.supplier}")
+    private List<Integer> queryCacheSupplier;
+
+    //走缓存的供应商：酒店配置
+    @ApolloJsonValue("${supplier.hotel.cache.map}")
+    private Map<Integer, List<String>> supplierHotelCacheMap;
+
+    @Autowired
+    private CachePriceService cachePriceService;
 
     @Override
     @PostMapping(value = "/price")
@@ -57,15 +73,28 @@ public class HotelFeignClientImpl implements SPAFeignClient {
         long startTime = System.currentTimeMillis();
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
         for (Supplier supplier : priceReq.getSuppliers()) {
-            //实时查询
-            ProductSyncService hotelService = SpringAppContextUtil.AppContext.getBean(
-                    SupplierSourceEnum.getEnum(supplier.getSupplierId()).getDesc()
-                            + "ProductSyncService");
-            List<ProductRespDTO> list = hotelService.queryPrice(priceReq, supplier);
+            //如果没有传产品id并且配置了供应商查询缓存，则走缓存
+            List<String> hotelIdList = supplierHotelCacheMap.get(supplier.getSupplierId());
+            if(StringUtils.isBlank(supplier.getSProductId())
+                    && queryCacheSupplier.contains(supplier.getSupplierId())
+                    //查询供应商是全量走缓存还是部分酒店走缓存
+                    && (CollectionUtils.isEmpty(hotelIdList) || hotelIdList.contains(supplier.getSHotelId()))){
+                List<ProductRespDTO> price = cachePriceService.getPrice(priceReq, supplier);
+                if (CollectionUtils.isNotEmpty(price)) {
+                    respDTOList.addAll(price);
+                }
+            }else{
+                //实时查询
+                ProductSyncService hotelService = SpringAppContextUtil.AppContext.getBean(
+                        SupplierSourceEnum.getEnum(supplier.getSupplierId()).getDesc()
+                                + "ProductSyncService");
+                List<ProductRespDTO> list = hotelService.queryPrice(priceReq, supplier);
 
-            if (CollectionUtils.isNotEmpty(list)) {
-                respDTOList.addAll(list);
+                if (CollectionUtils.isNotEmpty(list)) {
+                    respDTOList.addAll(list);
+                }
             }
+
         }
 
         Monitor.recordTime("query_price_for_spa", System.currentTimeMillis() - startTime);

@@ -10,7 +10,9 @@ import org.springframework.scheduling.annotation.EnableAsync;
 
 @SpringBootApplication(scanBasePackages = {"com.bingo.hotel"})
 @EnableFeignClients(basePackages = "com.bingo.hotel")
-@MapperScan(basePackages = {"com.bingo.hotel.spa.intl.core.api.common.mapper"})
+@MapperScan(basePackages = {"com.bingo.hotel.spa.intl.core.api.common.mapper",
+        "com.bingo.hotel.spa.intl.core.api.ratehawk.mapper",
+        "com.bingo.hotel.spa.intl.core.api.expedia.mapper"})
 @ServletComponentScan
 @EnableAsync
 public class Bootstrap {

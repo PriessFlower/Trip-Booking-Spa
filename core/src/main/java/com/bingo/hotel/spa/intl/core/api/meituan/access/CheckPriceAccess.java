@@ -72,8 +72,9 @@ public class CheckPriceAccess extends BaseHttpAccess<CheckReqBody, CheckPriceRes
             log.error(this.getClass().getName() + " request is error");
             return null;
         }
-
-        return HttpUtils.access(url, Maps.newHashMap(), JsonUtils.writeObject2Json(request), parser);
+        ResponseResult<CheckPriceResponse> result = HttpUtils.access(url, Maps.newHashMap(), JsonUtils.writeObject2Json(request), parser);
+        log.info("meituan checkprice request:{} response: {}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
+        return result;
     }
 
     @Override

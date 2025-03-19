@@ -21,6 +21,7 @@ import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.CheckPriceRespons
 import com.bingo.hotel.spa.intl.core.api.expedia.bean.response.QueryPriceResponse;
 import com.bingo.hotel.spa.intl.core.api.expedia.service.ExpediaPriceService;
 import com.bingo.hotel.spa.intl.core.api.expedia.utils.ExpediaUtils;
+import com.bingo.hotel.spa.intl.core.api.service.CachePriceService;
 import com.bingo.hotel.spa.intl.core.monitor.Monitor;
 import com.bingo.hotel.spa.intl.core.redis.DistributedRateLimiter;
 import com.bingo.hotel.spa.intl.core.util.DateUtil;
@@ -29,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -70,6 +72,8 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     private DistributedRateLimiter rateLimiter;
     private final static String mealList = "1073742857,21022103,2104,2105,2205,1073742786,1073744734,1073744735,2106,2107,2193,2194,2203,2206,2207,1073744459";
 
+    @Autowired
+    private CachePriceService cachePriceService;
 
     @Override
     public List<ProductRespDTO> queryPrices(PriceReq request, Supplier supplier) {
@@ -559,6 +563,106 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             }
         }
         return null;
+    }
+
+    @Override
+    public List<ProductRespDTO> queryPricesCache(PriceReq request, Supplier supplier) {
+        List<ProductRespDTO> productRespDTOList = null;
+        ResponseResult<QueryPriceResponse> resultOnly = null;
+        ResponseResult<QueryPriceResponse> resultPackage = null;
+        QueryPriceResponse.HotelPrice hotelPriceOnly = null;
+        QueryPriceResponse.HotelPrice hotelPricePackage = null;
+
+        QueryPriceRequest queryPriceRequest = QueryPriceRequest.builder()
+                .property_id(supplier.getSHotelId())
+                .checkin(request.getCheckIn())
+                .checkout(request.getCheckout())
+                .currency("USD")
+                .sales_environment("hotel_only")
+                .billing_terms(billingTerms)
+                .payment_terms(paymentTerms)
+                .partner_point_of_sale(partnerPointOfSale)
+                .build();
+        List<String> occupancies = new ArrayList<>();
+        for (int i = 0; i < request.getRoomNum(); i++) {
+            String childrenList = "";
+            if (null != request.getChildNum() && 0 != request.getChildNum() && CollectionUtils.isNotEmpty(request.getChildAges())) {
+                for (Integer childAge : request.getChildAges()) {
+                    if (StringUtils.isBlank(childrenList)) {
+                        childrenList = "-" + childAge;
+                    } else {
+                        childrenList = childrenList + "," + childAge;
+                    }
+                }
+            }
+            occupancies.add(request.getAdultNum() + childrenList);
+        }
+        queryPriceRequest.setOccupancies(occupancies);
+        request.setOccupancies(occupancies);
+        if ("en-US".equals(request.getLanguage())) {
+            if ("hotel_only".equals(request.getPriceFlag())) {
+                //先查询零售价
+                queryPriceRequest.setSales_environment("hotel_only");
+                resultOnly = new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+            } else if ("hotel_package".equals(request.getPriceFlag())) {
+                //查询打包价
+                queryPriceRequest.setSales_environment("hotel_package");
+                resultPackage = new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+            } else {
+                //先查询零售价
+                queryPriceRequest.setSales_environment("hotel_only");
+                resultOnly = new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                //查询打包价
+                queryPriceRequest.setSales_environment("hotel_package");
+                resultPackage = new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+            }
+        } else {
+            if ("hotel_only".equals(request.getPriceFlag())) {
+                //先查询零售价
+                queryPriceRequest.setSales_environment("hotel_only");
+                resultOnly = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+            } else if ("hotel_package".equals(request.getPriceFlag())) {
+                //查询打包价
+                queryPriceRequest.setSales_environment("hotel_package");
+                resultPackage = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+            } else {
+                //先查询零售价
+                queryPriceRequest.setSales_environment("hotel_only");
+                resultOnly = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                //查询打包价
+                queryPriceRequest.setSales_environment("hotel_package");
+                resultPackage = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+            }
+        }
+        if (resultOnly != null && resultOnly.isSucc() && null != resultOnly.getData() && CollectionUtils.isNotEmpty(resultOnly.getData().getHotelPrices())) {
+            hotelPriceOnly = resultOnly.getData().getHotelPrices().get(0);
+        }
+        if (resultPackage != null && resultPackage.isSucc() && null != resultPackage.getData() && CollectionUtils.isNotEmpty(resultPackage.getData().getHotelPrices())) {
+            hotelPricePackage = resultPackage.getData().getHotelPrices().get(0);
+        }
+        Monitor.recordOne("expedia_all_query");
+        if (null == hotelPriceOnly && null == hotelPricePackage) {
+            log.info("expedia查询零售价和打包价全部失败,request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(resultOnly));
+            Monitor.recordOne("expedia_all_query_fail");
+//            return null;
+        } else if (null == hotelPriceOnly && null != hotelPricePackage) {
+            log.info("expedia查询零售价失败,request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(resultOnly));
+            Monitor.recordOne("expedia_all_query_hotel_only_fail");
+//            return convertPriceResp(hotelPricePackage, "hotel_package", request);
+            productRespDTOList = convertPriceResp(hotelPricePackage, "hotel_package", request);
+        } else if (null == hotelPricePackage && null != hotelPriceOnly) {
+            log.info("expedia查询打包价失败,request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(resultPackage));
+            Monitor.recordOne("expedia_all_query_hotel_package_fail");
+//            return convertPriceResp(hotelPriceOnly, "hotel_only", request);
+            productRespDTOList = convertPriceResp(hotelPriceOnly, "hotel_only", request);
+        } else {
+            Monitor.recordOne("expedia_all_query_all_success");
+//            return convertPriceComparisonsResp(hotelPriceOnly, hotelPricePackage, request);
+            productRespDTOList = convertPriceComparisonsResp(hotelPriceOnly, hotelPricePackage, request);
+        }
+        //插入缓存
+        cachePriceService.productToCache(productRespDTOList);
+        return productRespDTOList;
     }
 
     public List<PriceInfo> buildCheckPriceInfos(List<List<QueryPriceResponse.Nightly>> nightlyLists, String checkIn) {

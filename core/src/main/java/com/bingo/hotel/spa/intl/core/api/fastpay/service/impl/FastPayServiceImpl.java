@@ -449,6 +449,7 @@ public class FastPayServiceImpl implements FastPayService {
                     return CheckPriceRespDTO.builder()
                             .checkStatus(true)
                             .prebookToken(roomInfo.getReservationToken())
+                            .subPrice(totalPrice.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP).intValue())
                             .salePrice(totalPrice.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP).intValue())
                             .totalPriceAfter(totalPrice.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP).intValue())
                             .totalPriceBefore(totalPrice.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP).intValue())

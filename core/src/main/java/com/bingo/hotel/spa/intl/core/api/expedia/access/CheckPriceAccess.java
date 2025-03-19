@@ -57,6 +57,7 @@ public class CheckPriceAccess extends BaseHttpAccess<String, CheckPriceResponse>
         headers.put("Customer-Session-Id", customerSessionId);
         headers.put("Content-Type", "application/json");
         ResponseResult result = HttpUtils.accessGet(url + request, headers, null, parser);
+        log.info("expedia checkprice request:{} response: {}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
         return result;
     }
 

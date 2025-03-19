@@ -24,4 +24,6 @@ public interface ExpediaPriceService {
 
     CheckPriceRespDTO checkPrices(CheckPriceReq request);
 
+    List<ProductRespDTO> queryPricesCache(PriceReq request, Supplier supplier);
+
 }
