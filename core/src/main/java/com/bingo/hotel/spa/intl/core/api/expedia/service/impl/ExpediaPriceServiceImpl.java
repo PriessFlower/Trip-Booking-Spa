@@ -216,6 +216,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                 }
                 for (String rateId : rateIdList) {
                     if (rateOnlyMap.containsKey(rateId) && ratePackageMap.containsKey(rateId)) {
+                        //TODO 单纯比总价是不对的，需要把佣金刨除掉。
                         Integer onlyPrice = 0;
                         Integer packagePrice = 0;
                         QueryPriceResponse.Rates rateOnly = rateOnlyMap.get(rateId);
@@ -357,13 +358,15 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         request.setOccupancies(occupancies);
         //TODO:这里有逻辑bug，上游没有PriceFlag传递时默认使用hotel_package如果不是这个类型的话 验价就失败了
         queryPriceRequest.setSales_environment(StringUtils.isBlank(request.getPriceFlag()) ? "hotel_package" : request.getPriceFlag());
-        ResponseResult<QueryPriceResponse> result = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(),
+        ResponseResult<QueryPriceResponse> resultPackage = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(),
                 expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
-        if (result != null && result.isSucc() && null != result.getData() && CollectionUtils.isNotEmpty(result.getData().getHotelPrices())) {
-            QueryPriceResponse.HotelPrice hotelPrice = result.getData().getHotelPrices().get(0);
+        boolean isHave = true;
+        if (resultPackage != null && resultPackage.isSucc() && null != resultPackage.getData() && CollectionUtils.isNotEmpty(resultPackage.getData().getHotelPrices())) {
+            QueryPriceResponse.HotelPrice hotelPrice = resultPackage.getData().getHotelPrices().get(0);
             for (QueryPriceResponse.Rooms room : hotelPrice.getRooms()) {
                 for (QueryPriceResponse.Rates rate : room.getRates()) {
                     if (supplier.getSProductId().equals(rate.getId())) {
+                        isHave = false;
                         ArrayList<BedCheckInfo> bedCheckInfos = new ArrayList<>();
                         for (String bedId : rate.getBed_groups().keySet()) {
                             QueryPriceResponse.Bed_groups bedGroups = rate.getBed_groups().get(bedId);
@@ -418,7 +421,72 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                 }
             }
         }
-        log.info("expedia查询价格失败,request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(result));
+        if (isHave) {
+            queryPriceRequest.setSales_environment(StringUtils.isBlank(request.getPriceFlag()) ? "hotel_only" : request.getPriceFlag());
+            ResponseResult<QueryPriceResponse> onlyResult = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(),
+                    expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+            if (onlyResult != null && onlyResult.isSucc() && null != onlyResult.getData() && CollectionUtils.isNotEmpty(onlyResult.getData().getHotelPrices())) {
+                QueryPriceResponse.HotelPrice hotelPrice = onlyResult.getData().getHotelPrices().get(0);
+                for (QueryPriceResponse.Rooms room : hotelPrice.getRooms()) {
+                    for (QueryPriceResponse.Rates rate : room.getRates()) {
+                        if (supplier.getSProductId().equals(rate.getId())) {
+                            isHave = false;
+                            ArrayList<BedCheckInfo> bedCheckInfos = new ArrayList<>();
+                            for (String bedId : rate.getBed_groups().keySet()) {
+                                QueryPriceResponse.Bed_groups bedGroups = rate.getBed_groups().get(bedId);
+                                bedCheckInfos.add(BedCheckInfo.builder()
+                                        .bedId(bedGroups.getId())
+                                        .bedType(bedGroups.getDescription())
+                                        .checkHref(bedGroups.getLinks().getPrice_check().getHref())
+                                        .build());
+                            }
+                            ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" :
+                                    request.getLanguage(),
+                                    expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(bedCheckInfos.get(0).getCheckHref());
+                            if (!checkPriceResult.isSucc() || null == checkPriceResult.getData() || "sold_out".equals(checkPriceResult.getData().getStatus())) {
+                                log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(checkPriceResult));
+                                return null;
+                            }
+                            QueryPriceResponse.Occupancy_pricing occupancyPricing = checkPriceResult.getData().getOccupancy_pricing().get(request.getOccupancies().get(0));
+                            int sumCommission = new BigDecimal(occupancyPricing.getTotals().getGross_profit().getRequest_currency().getValue()).multiply(new BigDecimal(commissionRate))
+                                    .multiply(new BigDecimal("100")).setScale(0, BigDecimal.ROUND_DOWN).intValue();
+                            int totalPrice =
+                                    new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue();
+                            int roomTotalPrice =
+                                    new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue();
+                            List<QueryPriceResponse.CancelPolicy> cancelPolicies = rate.getCancel_penalties();
+                            ProductRespDTO productRespDTO = ProductRespDTO.builder()
+                                    .hotelId(hotelPrice.getProperty_id())
+                                    .productId(rate.getId())
+                                    .supplierId(SupplierSourceEnum.EXPEDIA.getCode())
+                                    .room(Room.builder().roomName(room.getRoom_name()).roomId(room.getId()).build())
+                                    .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(room.getRoom_name()).build())
+                                    .currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency())
+                                    .totalPrice(totalPrice - sumCommission)
+                                    .stayPrice(buildStayPrice(occupancyPricing.getStay()))
+                                    .storePayPrice(null == occupancyPricing.getTotals().getProperty_fees() ? 0 :
+                                            new BigDecimal(occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getValue()).multiply(new BigDecimal("100")).intValue())
+                                    .storePayCurrency(null == occupancyPricing.getTotals().getProperty_fees() ? request.getCurrency() :
+                                            occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getCurrency())
+                                    .roomTotalPrice(roomTotalPrice - sumCommission)
+                                    .brokerage(sumCommission)
+                                    .priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn(), sumCommission))
+                                    .meal(convertMeal(request.getAdultNum(), rate.getAmenities()))
+                                    .cancelPolicy(CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) :
+                                            convertCancelPolicy(request.getCheckIn(), cancelPolicies))
+                                    .maxOccupancy(request.getAdultNum())
+                                    .priceFlag(queryPriceRequest.getSales_environment())
+                                    .distribution(rate.getSale_scenario().getDistribution())
+                                    .bedCheckInfos(bedCheckInfos)
+                                    .build();
+                            productRespDTO.setTotalTaxes(productRespDTO.getTotalPrice() - productRespDTO.getRoomTotalPrice());
+                            return Arrays.asList(productRespDTO);
+                        }
+                    }
+                }
+            }
+        }
+        log.info("expedia查询价格失败,request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(resultPackage));
         return null;
     }
 
