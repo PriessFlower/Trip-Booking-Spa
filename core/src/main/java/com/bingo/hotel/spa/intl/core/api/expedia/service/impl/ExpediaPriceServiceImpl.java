@@ -524,11 +524,13 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         queryPriceRequest.setSales_environment(StringUtils.isBlank(request.getPriceFlag()) ? "hotel_package" : request.getPriceFlag());
         ResponseResult<QueryPriceResponse> result = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(),
                 expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+        boolean isHave = true;
         if (result != null && result.isSucc() && null != result.getData() && CollectionUtils.isNotEmpty(result.getData().getHotelPrices())) {
             QueryPriceResponse.HotelPrice hotelPrice = result.getData().getHotelPrices().get(0);
             for (QueryPriceResponse.Rooms room : hotelPrice.getRooms()) {
                 for (QueryPriceResponse.Rates rate : room.getRates()) {
                     if (request.getSProductId().equals(rate.getId())) {
+                        isHave = false;
                         QueryPriceResponse.Bed_groups bedGroups = null;
                         if (StringUtils.isBlank(request.getBedId())) {
                             for (String key : rate.getBed_groups().keySet()) {
@@ -558,6 +560,50 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                                 .brokerage(null == occupancyPricing.getTotals().getMarketing_fee() ? 0 :
                                         new BigDecimal(occupancyPricing.getTotals().getMarketing_fee().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
                                 .build();
+                    }
+                }
+            }
+        }
+        if (isHave) {
+            queryPriceRequest.setSales_environment(StringUtils.isBlank(request.getPriceFlag()) ? "hotel_only" : request.getPriceFlag());
+            ResponseResult<QueryPriceResponse> resultOnly = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(),
+                    expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+            if (resultOnly != null && resultOnly.isSucc() && null != resultOnly.getData() && CollectionUtils.isNotEmpty(resultOnly.getData().getHotelPrices())) {
+                QueryPriceResponse.HotelPrice hotelPrice = resultOnly.getData().getHotelPrices().get(0);
+                for (QueryPriceResponse.Rooms room : hotelPrice.getRooms()) {
+                    for (QueryPriceResponse.Rates rate : room.getRates()) {
+                        if (request.getSProductId().equals(rate.getId())) {
+                            isHave = false;
+                            QueryPriceResponse.Bed_groups bedGroups = null;
+                            if (StringUtils.isBlank(request.getBedId())) {
+                                for (String key : rate.getBed_groups().keySet()) {
+                                    bedGroups = rate.getBed_groups().get(key);
+                                }
+                            } else {
+                                bedGroups = rate.getBed_groups().get(request.getBedId());
+                            }
+                            if (null == bedGroups) {
+                                log.info("expedia查价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
+                                return null;
+                            }
+                            ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" :
+                                    request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(bedGroups.getLinks().getPrice_check().getHref());
+                            if (!checkPriceResult.isSucc() && null == checkPriceResult.getData()) {
+                                log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(checkPriceResult));
+                                return null;
+                            }
+                            checkPriceResult.getData().setAdultCount(request.getAdultCount());
+                            QueryPriceResponse.Occupancy_pricing occupancyPricing =
+                                    checkPriceResult.getData().getOccupancy_pricing().get(queryPriceRequest.getOccupancies().get(0));
+                            return CheckPriceRespDTO.builder()
+                                    .checkStatus(true)
+                                    .prebookToken(null == checkPriceResult.getData().getLinks().getBook() ? "" : checkPriceResult.getData().getLinks().getBook().getHref())
+                                    .salePrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
+                                    .subPrice(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
+                                    .brokerage(null == occupancyPricing.getTotals().getMarketing_fee() ? 0 :
+                                            new BigDecimal(occupancyPricing.getTotals().getMarketing_fee().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue())
+                                    .build();
+                        }
                     }
                 }
             }
