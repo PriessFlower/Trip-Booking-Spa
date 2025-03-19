@@ -212,7 +212,7 @@ public class BackDoorController {
     @ApiOperation("expedia价格缓存")
     public HttpResponse expediaPriceCache() {
         //qps限流
-        RateLimiter rateLimiter = RateLimiter.create(10);
+        RateLimiter rateLimiter = RateLimiter.create(1);
         expediaCPSQueryPriceService.queryPriceQueueTask(0,0,rateLimiter);
         return HttpResponse.getSuccessInstance();
     }

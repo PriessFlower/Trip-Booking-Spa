@@ -1,7 +1,7 @@
 package com.bingo.hotel.spa.intl.core.api.service.impl;
 
-import com.alibaba.fastjson.JSON;
 import com.bingo.hotel.spa.intl.cli.dto.PriceInfo;
+import com.bingo.hotel.spa.intl.cli.dto.PriceInfoCache;
 import com.bingo.hotel.spa.intl.cli.dto.ProductRespDTO;
 import com.bingo.hotel.spa.intl.cli.seq.PriceReq;
 import com.bingo.hotel.spa.intl.cli.seq.Supplier;
@@ -10,10 +10,12 @@ import com.bingo.hotel.spa.intl.core.api.service.CachePriceService;
 import com.bingo.hotel.spa.intl.core.redis.RedisUtils;
 import com.bingo.hotel.spa.intl.core.util.DateUtil;
 import com.bingo.hotel.spa.intl.core.util.JsonUtils;
+import com.bingo.hotel.spa.intl.core.util.ModelConverterUtils;
 import com.bingo.hotel.spa.intl.core.util.RedisKeyUtils;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +26,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -48,7 +52,7 @@ public class CachePriceServiceImpl implements CachePriceService {
     public List<ProductRespDTO> getPrice(PriceReq priceReq, Supplier supplier) {
         List<ProductRespDTO> respDTOList = new ArrayList<>();
         List<String> checkList = DateUtil.getDatesBetween(priceReq.getCheckIn(), priceReq.getCheckout());
-        Map<String, List<PriceInfo>> productMap = new HashMap<>();
+        Map<String, List<PriceInfoCache>> productMap = new HashMap<>();
 
         List<String> keyList = new ArrayList<>();
         checkList.forEach(c -> {
@@ -65,7 +69,17 @@ public class CachePriceServiceImpl implements CachePriceService {
 //            System.out.println("sProductId----"+key);
 //            System.out.println("List<PriceInfo>----"+ JSON.toJSON(value));
             //计算报价总价 产品信息中totalprice可能是不正确的
-            int totalPrice = value.stream().mapToInt(PriceInfo::getPrice).sum();
+            int totalPrice = value.stream().mapToInt(PriceInfoCache::getPrice).sum();
+            //计算taxex总价
+            Integer totalTaxes = value.stream().filter(a->!Objects.isNull(a.getTaxes())).mapToInt(PriceInfoCache::getTaxes).sum();
+            //计算roomPrice总价
+            Integer roomTotalPrice = value.stream().filter(a->!Objects.isNull(a.getRoomPrice())).mapToInt(PriceInfoCache::getRoomPrice).sum();
+            //计算酒店一次性收取费用总价
+            Integer stayPriceTotal = value.stream().filter(a->!Objects.isNull(a.getStayPrice())).mapToInt(PriceInfoCache::getStayPrice).sum();
+            //计算线下支付金额总价
+            Integer storePayPricePrice = value.stream().filter(a->!Objects.isNull(a.getStorePayPrice())).mapToInt(PriceInfoCache::getStorePayPrice).sum();
+            //计算佣金总价
+            Integer brokerage = value.stream().filter(a->!Objects.isNull(a.getBrokerage())).mapToInt(PriceInfoCache::getBrokerage).sum();
             //如果缓存的价格为0，则不返回这个产品价格信息
             if(totalPrice == 0){
                 return;
@@ -89,11 +103,17 @@ public class CachePriceServiceImpl implements CachePriceService {
                 });
                 BeanUtils.copyProperties(productRespCacheDTO, respDTO);
                 respDTO.setTotalPrice(totalPrice);
+                respDTO.setTotalTaxes(totalTaxes);
+                respDTO.setRoomTotalPrice(roomTotalPrice);
             }
             respDTO.setSupplierId(supplier.getSupplierId());
             respDTO.setProductId(key);
             respDTO.setHotelId(supplier.getSHotelId());
-            respDTO.setPriceInfos(value);
+            List<PriceInfo> priceInfos = ModelConverterUtils.convert(value,PriceInfo.class);
+            respDTO.setPriceInfos(priceInfos);
+            respDTO.setStayPrice(stayPriceTotal);
+            respDTO.setStorePayPrice(storePayPricePrice);
+            respDTO.setBrokerage(brokerage);
             respDTOList.add(respDTO);
         });
 
@@ -155,8 +175,16 @@ public class CachePriceServiceImpl implements CachePriceService {
                             String priceKey = RedisKeyUtils.buildPriceKey(l.getHotelId(), i.getDate()); // rediskey:price:hotelid:date
                             upSet.add(priceKey + ":" + l.getProductId()); // price:hotelid:date:productId
                             String price = redisUtils.hmGet(priceKey, l.getProductId()); //获取大key为price:hotelid:date，小key为productId的数据，从下面代码看出，value存储的为price
+                            //priceJson：{"brokerage":2317,"roomPrice":12728,"price":14658,"storePayPrice":null,"taxes":1930,"stayPrice":0}
                             if (StringUtils.isNotBlank(price)) {
-                                if (!price.equals(i.getPrice().toString())) {
+                                Map<String, Integer> priceMap = JsonUtils.decodeJson(price, new TypeReference<>() {
+                                });
+                                if (!(priceMap.get("price").equals(i.getPrice()))
+                                        || !(Optional.ofNullable(priceMap.get("taxes")).equals(Optional.ofNullable(i.getTaxes())))
+                                        || !(Optional.ofNullable(priceMap.get("roomPrice")).equals(Optional.ofNullable(i.getRoomPrice())))
+                                        || !(Optional.ofNullable(priceMap.get("stayPrice")).equals(Optional.ofNullable(l.getStayPrice())))
+                                        || !(Optional.ofNullable(priceMap.get("storePayPrice")).equals(Optional.ofNullable(l.getStorePayPrice())))
+                                        || !(Optional.ofNullable(priceMap.get("brokerage")).equals(Optional.ofNullable(l.getBrokerage())))) {
                                     // 如果缓存中的价格和新查出来的价格不一致，说明价格发生了变化，会把发生价格变化的酒店id放入changePricesSet集合中
                                     changePricesSet.add(l.getHotelId());
                                     if (i.getPrice() == 0) {
@@ -165,10 +193,26 @@ public class CachePriceServiceImpl implements CachePriceService {
                                     ProductRespCacheDTO dto = new ProductRespCacheDTO();
                                     BeanUtils.copyProperties(l, dto);
                                     productRespCacheDTOMap.put(priceInfoKey, dto); // 把整体缓存更新一下，放入productRespCacheDTOMap中
-                                    log.info("产品:{}变价,原价格:{},现价格:{},info:{}",
+                                    log.info("产品:{}变价,原价格:{},现价格:{}," +
+                                                    "原税额:{},现税额:{}," +
+                                                    "原房间价格:{},现房间价格:{}," +
+                                                    "原一次性支付费用:{},现一次性支付费用:{}," +
+                                                    "原线下支付费用:{},现线下支付费用:{}," +
+                                                    "原佣金:{},现佣金:{}," +
+                                                    "info:{}",
                                             l.getProductId(),
-                                            price,
+                                            priceMap.get("price"),
                                             i.getPrice(),
+                                            priceMap.get("taxes"),
+                                            i.getTaxes(),
+                                            priceMap.get("roomPrice"),
+                                            i.getRoomPrice(),
+                                            priceMap.get("stayPrice"),
+                                            l.getStayPrice(),
+                                            priceMap.get("storePayPrice"),
+                                            l.getStorePayPrice(),
+                                            priceMap.get("brokerage"),
+                                            l.getBrokerage(),
                                             JsonUtils.writeObject2Json(dto));
                                 }
                             } else {
@@ -178,13 +222,13 @@ public class CachePriceServiceImpl implements CachePriceService {
                             // 这批if else处理酒店价格，分别处理今天、今天之前、今天之后
                             if (DateUtil.getTodayYMD().trim().equals(i.getDate())) { // 如果价格是今天的，则把数据放入nowDateMap(key:priceKey,value(map):key:productId,value:price)
                                 nowDataMap.computeIfAbsent(priceKey, k -> new HashMap<>())
-                                        .put(l.getProductId(), i.getPrice().toString());
+                                        .put(l.getProductId(), convertPriceJsonStr(l,i));
                             } else if (DateUtil.getYesterdayYMD().trim().equals(i.getDate())) {
                                 beforeDataMap.computeIfAbsent(priceKey, k -> new HashMap<>())
-                                        .put(l.getProductId(), i.getPrice().toString());
+                                        .put(l.getProductId(), convertPriceJsonStr(l,i));
                             } else {
                                 dataMap.computeIfAbsent(priceKey, k -> new HashMap<>()) // 如果价格日期不是今天的，也不是今天之前的，则放入dataMap中
-                                        .put(l.getProductId(), i.getPrice().toString());
+                                        .put(l.getProductId(), convertPriceJsonStr(l,i));
                             }
                         });
                     });
@@ -225,7 +269,9 @@ public class CachePriceServiceImpl implements CachePriceService {
                         Map<String, String> mapGet = redisUtils.hashMapGet(priceKey);
                         mapGet.forEach((key, value) -> {
                             // 当缓存有多余的产品的时候，判断产品价格为0时再推下线，否则代表已经推送过了
-                            if (!"0".equals(value)) {
+                            Map<String, Object> priceMap = JsonUtils.decodeJson(value, new TypeReference<>() {
+                            });
+                            if (!"0".equals(priceMap.get("price").toString())) {
                                 downSet.add(priceKey + ":" + key);
                             }
                         });
@@ -241,7 +287,7 @@ public class CachePriceServiceImpl implements CachePriceService {
                                         changePricesSet.add(parts[1]);
                                         fullPricesSet.add(parts[1]);
                                         Map<String, String> priceMap = new HashMap<>();
-                                        priceMap.put(parts[3], "0");
+                                        priceMap.put(parts[3], convertPriceJsonStr(list.get(0),null));
                                         return priceMap;
                                     },
                                     (existing, replacement) -> { // 如果有重复的key，合并它们的map
@@ -279,15 +325,43 @@ public class CachePriceServiceImpl implements CachePriceService {
      * @param: [productMap, supplier, keySet]
      * @return: void
      **/
-    private void fetchAndProcessPriceInfo(Map<String, List<PriceInfo>> productMap, Supplier supplier, List<String> keySet) {
+    private void fetchAndProcessPriceInfo(Map<String, List<PriceInfoCache>> productMap, Supplier supplier, List<String> keySet) {
         if (StringUtils.isNotBlank(supplier.getSProductId())) {
             //根据priceKey（price:sHotelId:yyyy-MM-dd）查询map（sProductId,price)
             keySet.forEach(priceKey -> {
                 String price = redisUtils.hmGet(priceKey, supplier.getSProductId());
                 if (StringUtils.isNotBlank(price)) {
                     String datePart = getDatePartFromPriceKey(priceKey);
+                    // priceJson
+
+//                                jsonMap.put("price", null != priceInfo.getPrice()?priceInfo.getPrice():0);
+//                                jsonMap.put("taxes", null != priceInfo.getTaxes()?priceInfo.getTaxes():0);
+//                                jsonMap.put("roomPrice", null != priceInfo.getRoomPrice()?priceInfo.getRoomPrice():0);
+//                                jsonMap.put("stayPrice", productRespDTO.getStayPrice());
+//                                jsonMap.put("storePayPrice",productRespDTO.getStorePayPrice());
+//                                jsonMap.put("brokerage",productRespDTO.getBrokerage());
+                    Map<String, Integer> priceMap = JsonUtils.decodeJson(price, new TypeReference<>() {
+                    });
+//                    String totalPrice = priceMap.get("price").toString();
+//                    String taxes = Objects.isNull(priceMap.get("taxes"))?null:priceMap.get("taxes").toString();
+//                    String roomPrice = Objects.isNull(priceMap.get("roomPrice"))?null:priceMap.get("roomPrice").toString();
+//                    String stayPrice = Objects.isNull(priceMap.get("stayPrice"))?null:priceMap.get("stayPrice").toString();
+//                    String storePayPrice = Objects.isNull(priceMap.get("storePayPrice"))?null:priceMap.get("storePayPrice").toString();
+//                    String brokerage = Objects.isNull(priceMap.get("brokerage"))?null:priceMap.get("brokerage").toString();
+                    Integer totalPrice = priceMap.get("price");
+                    Integer taxes = Objects.isNull(priceMap.get("taxes"))?null:priceMap.get("taxes");
+                    Integer roomPrice = Objects.isNull(priceMap.get("roomPrice"))?null:priceMap.get("roomPrice");
+                    Integer stayPrice = Objects.isNull(priceMap.get("stayPrice"))?null:priceMap.get("stayPrice");
+                    Integer storePayPrice = Objects.isNull(priceMap.get("storePayPrice"))?null:priceMap.get("storePayPrice");
+                    Integer brokerage = Objects.isNull(priceMap.get("brokerage"))?null:priceMap.get("brokerage");
                     productMap.computeIfAbsent(supplier.getSProductId(), k -> new ArrayList<>())
-                            .add(new PriceInfo(datePart, Integer.parseInt(price)));
+                            .add(new PriceInfoCache(datePart,
+                                    totalPrice,
+                                    taxes,
+                                    roomPrice,
+                                    stayPrice,
+                                    storePayPrice,
+                                    brokerage));
                 }
             });
         } else {
@@ -296,9 +370,32 @@ public class CachePriceServiceImpl implements CachePriceService {
             mapMap.forEach((mKey, mValue) -> {
                 //mKey--priceKey,mValue--map
                 String datePart = getDatePartFromPriceKey(mKey);
-                //key--sProductId,value--price
-                mValue.forEach((key, value) -> productMap.computeIfAbsent(key, k -> new ArrayList<>())
-                        .add(new PriceInfo(datePart, Integer.parseInt(value))));
+                //key--sProductId,value--priceJson
+//                mValue.forEach((key, value) -> productMap.computeIfAbsent(key, k -> new ArrayList<>())
+//                        .add(new PriceInfoCache(datePart,
+//                                Integer.parseInt(value.split("_")[0]),
+//                                value.split("_")[1].equals("0")?null:Integer.parseInt(value.split("_")[1]),
+//                                value.split("_")[2].equals("0")?null:Integer.parseInt(value.split("_")[2]))));
+                for (Map.Entry<String, String> entry : mValue.entrySet()) {
+                    String key = entry.getKey(); // 获取键
+                    String value = entry.getValue(); // 获取值
+
+                    // 如果 productMap 中不存在该键，则插入一个新的 ArrayList
+                    if (!productMap.containsKey(key)) {
+                        productMap.put(key, new ArrayList<>());
+                    }
+                    Map<String, Integer> priceMap = JsonUtils.decodeJson(value, new TypeReference<>() {
+                    });
+                    // 解析 value 并创建 PriceInfoCache 对象
+                    Integer totalPrice = priceMap.get("price");
+                    Integer taxes = Objects.isNull(priceMap.get("taxes"))?null:priceMap.get("taxes");
+                    Integer roomPrice = Objects.isNull(priceMap.get("roomPrice"))?null:priceMap.get("roomPrice");
+                    Integer stayPrice = Objects.isNull(priceMap.get("stayPrice"))?null:priceMap.get("stayPrice");
+                    Integer storePayPrice = Objects.isNull(priceMap.get("storePayPrice"))?null:priceMap.get("storePayPrice");
+                    Integer brokerage = Objects.isNull(priceMap.get("brokerage"))?null:priceMap.get("brokerage");
+                    // 将 PriceInfoCache 对象添加到对应的 ArrayList 中
+                    productMap.get(key).add(new PriceInfoCache(datePart, totalPrice, taxes, roomPrice, stayPrice, storePayPrice, brokerage));
+                }
             });
         }
     }
@@ -312,6 +409,43 @@ public class CachePriceServiceImpl implements CachePriceService {
      **/
     private String getDatePartFromPriceKey(String priceKey) {
         return priceKey.split(":")[2];
+    }
+
+    /**
+     * @description:转换价格jsonstr
+     * @author: dick_w
+     * @date: 2025/3/18 16:45
+     * @param: [productRespDTO, priceInfo]
+     * @return: java.lang.String
+     **/
+    private String convertPriceJsonStr(ProductRespDTO productRespDTO,PriceInfo priceInfo) {
+
+        // 使用 Map 构建 JSON 数据
+        Map<String, Integer> jsonMap = new HashMap<>();
+        if(null == priceInfo){
+            jsonMap.put("price", 0);
+            jsonMap.put("taxes", null);
+            jsonMap.put("roomPrice", null);
+            jsonMap.put("stayPrice", null);
+            jsonMap.put("storePayPrice",null);
+            jsonMap.put("brokerage",0);
+        }else{
+            jsonMap.put("price", null != priceInfo.getPrice()?priceInfo.getPrice():0);
+            jsonMap.put("taxes", priceInfo.getTaxes());
+            jsonMap.put("roomPrice", priceInfo.getRoomPrice());
+            jsonMap.put("stayPrice", productRespDTO.getStayPrice());
+            jsonMap.put("storePayPrice",productRespDTO.getStorePayPrice());
+            jsonMap.put("brokerage",productRespDTO.getBrokerage());
+        }
+        // 使用 Jackson 将 Map 转换为 JSON 字符串
+        ObjectMapper objectMapper = new ObjectMapper();
+        String jsonString = null;
+        try {
+            jsonString = objectMapper.writeValueAsString(jsonMap);
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+        }
+        return jsonString;
     }
 
 }

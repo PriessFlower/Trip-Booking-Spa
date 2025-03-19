@@ -43,6 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/client/spa")
@@ -56,8 +57,12 @@ public class HotelFeignClientImpl implements SPAFeignClient {
     private RateHawkService rateHawkService;
 
     //走缓存的供应商配置
-    @ApolloJsonValue("${querty.cache.supplier}")
-    private List<String> queryCacheSupplier;
+    @ApolloJsonValue("${query.cache.supplier}")
+    private List<Integer> queryCacheSupplier;
+
+    //走缓存的供应商：酒店配置
+    @ApolloJsonValue("${supplier.hotel.cache.map}")
+    private Map<Integer, List<String>> supplierHotelCacheMap;
 
     @Autowired
     private CachePriceService cachePriceService;
@@ -69,9 +74,11 @@ public class HotelFeignClientImpl implements SPAFeignClient {
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
         for (Supplier supplier : priceReq.getSuppliers()) {
             //如果没有传产品id并且配置了供应商查询缓存，则走缓存
+            List<String> hotelIdList = supplierHotelCacheMap.get(supplier.getSupplierId());
             if(StringUtils.isBlank(supplier.getSProductId())
-                    && !CollectionUtils.isEmpty(queryCacheSupplier)
-                    && queryCacheSupplier.contains(supplier.getSupplierId().toString())){
+                    && queryCacheSupplier.contains(supplier.getSupplierId())
+                    //查询供应商是全量走缓存还是部分酒店走缓存
+                    && (CollectionUtils.isEmpty(hotelIdList) || hotelIdList.contains(supplier.getSHotelId()))){
                 List<ProductRespDTO> price = cachePriceService.getPrice(priceReq, supplier);
                 if (CollectionUtils.isNotEmpty(price)) {
                     respDTOList.addAll(price);

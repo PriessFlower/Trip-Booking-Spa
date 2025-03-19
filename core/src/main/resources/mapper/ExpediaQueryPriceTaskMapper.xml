@@ -24,7 +24,7 @@
     <select id="getQueryPriceTaskList" resultMap="BaseResultMap">
         SELECT
         <include refid="BASE_LIST"/>
-        FROM ratehawk_query_price_task
+        FROM expedia_query_price_task
         WHERE priority_level_number = #{priorityLevelNumber}
         <if test="1 == temporaryUpgrade">
             or temporary_upgrade = #{temporaryUpgrade}
