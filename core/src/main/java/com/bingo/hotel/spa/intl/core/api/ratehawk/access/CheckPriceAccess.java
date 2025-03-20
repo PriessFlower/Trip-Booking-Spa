@@ -39,9 +39,13 @@ public class CheckPriceAccess extends BaseHttpAccess<CheckPriceRequest, CheckPri
 
     private DistributedRateLimiter redisRateLimiter;
 
-    private final static String PATH = "/search/lookuprate/";
+    //查询率
+//    private final static String PATH = "/search/lookuprate/";
 
-    private static int QPS = 500;
+    //预订
+    private final static String PATH = "/hotel/prebook/";
+
+    private static int QPS = 2;
 
     public CheckPriceAccess(String host, String authorization, DistributedRateLimiter redisRateLimiter) {
         super(SupplierSourceEnum.RATEHAWK, SupplierDataTypeEnum.PRODUCT_PRICE, MonitorNameEnum.SPA_SUPPLIER_API_PRODUCT_PRICES, 0);
@@ -57,7 +61,8 @@ public class CheckPriceAccess extends BaseHttpAccess<CheckPriceRequest, CheckPri
         headers.put("Content-Type", "application/json");
         Map<String, Object> body = Maps.newHashMap();
         body.put("book_hash", request.getBook_hash());
-        body.put("language", request.getLanguage());
+        body.put("price_increase_percent", 0);
+//        body.put("language", request.getLanguage());
         String result = HttpUtils.doPostObject(url, body, headers);
         log.info("ratehawk checkprice request:{} response: {}", JsonUtils.writeObject2Json(request), result);
         BaseResult<CheckPriceResponse> checkPriceResponse = JsonUtils.decodeJson(result, new TypeReference<>() {
@@ -72,7 +77,7 @@ public class CheckPriceAccess extends BaseHttpAccess<CheckPriceRequest, CheckPri
     @Override
     protected void beforeAccess(CheckPriceRequest request) {
         if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
-            log.info("expedia接口请求超过限制，每秒请求超过{}次", QPS);
+            log.info("ratehawk接口请求超过限制，每秒请求超过{}次", QPS);
             throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
                     + "request = " + JsonUtils.writeObject2Json(request));
         }
