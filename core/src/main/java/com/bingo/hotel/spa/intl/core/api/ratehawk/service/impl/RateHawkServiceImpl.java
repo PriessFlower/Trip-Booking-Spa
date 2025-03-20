@@ -344,7 +344,7 @@ public class RateHawkServiceImpl implements RateHawkService {
             if (CollectionUtils.isNotEmpty(productRespList)) {
                 ProductRespDTO productInfo = disProductInfo(productRespList).get(0);
                 //有产品信息去做验价
-                CheckPriceRequest checkPriceRequest = CheckPriceRequest.builder().book_hash(productInfo.getPlanSession()).language("en").build();
+                CheckPriceRequest checkPriceRequest = CheckPriceRequest.builder().book_hash(productInfo.getPlanSession()).build();
                 ResponseResult<CheckPriceResponse> checkPriceResponse = new CheckPriceAccess(url, generateBasicAuth(), redisRateLimiter).access(checkPriceRequest);
                 if (null != checkPriceResponse.getData() && CollectionUtils.isNotEmpty(checkPriceResponse.getData().getHotels())) {
                     CheckPriceResponse.Hotels hotelCheckInfo = checkPriceResponse.getData().getHotels().get(0);
@@ -558,7 +558,7 @@ public class RateHawkServiceImpl implements RateHawkService {
             if (CollectionUtils.isNotEmpty(productRespList)) {
                 ProductRespDTO productInfo = disProductInfo(productRespList).get(0);
                 //有产品信息去做验价
-                CheckPriceRequest checkPriceRequest = CheckPriceRequest.builder().book_hash(productInfo.getPlanSession()).language("en").build();
+                CheckPriceRequest checkPriceRequest = CheckPriceRequest.builder().book_hash(productInfo.getPlanSession()).build();
                 ResponseResult<CheckPriceResponse> checkPriceResponse = new CheckPriceAccess(url, generateBasicAuth(), redisRateLimiter).access(checkPriceRequest);
                 if (null != checkPriceResponse.getData() && CollectionUtils.isNotEmpty(checkPriceResponse.getData().getHotels())) {
                     CheckPriceResponse.Hotels hotelCheckInfo = checkPriceResponse.getData().getHotels().get(0);

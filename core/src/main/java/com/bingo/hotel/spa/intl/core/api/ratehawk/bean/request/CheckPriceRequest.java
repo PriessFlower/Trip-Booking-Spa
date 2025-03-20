@@ -16,7 +16,8 @@ import java.io.Serializable;
 public class CheckPriceRequest implements Serializable {
 
     private String book_hash;
-    private String language;
+//    private String language;
+//    private Integer price_increase_percent;
 
     public void setBook_hash(String book_hash) {
         this.book_hash = book_hash;
@@ -26,11 +27,11 @@ public class CheckPriceRequest implements Serializable {
         return book_hash;
     }
 
-    public void setLanguage(String language) {
-        this.language = language;
-    }
-
-    public String getLanguage() {
-        return language;
-    }
+//    public void setLanguage(String language) {
+//        this.language = language;
+//    }
+//
+//    public String getLanguage() {
+//        return language;
+//    }
 }
