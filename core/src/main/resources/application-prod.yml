@@ -131,7 +131,7 @@ expedia:
 fliggy:
   distrib:
     url: http://gw.api.taobao.com/router/rest
-    sessionKey: 6100528c57015c382fc6cb6b4049d1d001b91c145dc5d792217553435874
+    sessionKey: 61014201c81f5665ca1b1c460e4514679524533b50180c82217553435874
     appKey: 34784001
     appSecret: c4b6ee3e5015cee006a75aa8acd66275
 fastPayHotels:
