@@ -5,6 +5,7 @@ import com.trip.booking.spa.core.api.aichotels.service.AichotelsHotelService;
 import com.trip.booking.spa.core.api.didatravel.service.DidatravelHotelService;
 import com.trip.booking.spa.core.api.expedia.service.ExpediaCPSQueryPriceService;
 import com.trip.booking.spa.core.api.expedia.service.ExpediaStaticInfoService;
+import com.trip.booking.spa.core.api.expedia.staticdata.service.ExpediaStaticDataIngestionService;
 import com.trip.booking.spa.core.api.fastpay.service.FastPayService;
 import com.trip.booking.spa.core.api.huitravel.service.HuiTravelService;
 import com.trip.booking.spa.core.api.meituan.service.MeituanStaticInfoService;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
+import java.util.Arrays;
 import java.util.List;
 
 
@@ -50,6 +52,17 @@ public class BackDoorController {
     private RateHawkCPSQueryPriceService rateHawkCPSQueryPriceService;
     @Resource
     private ExpediaCPSQueryPriceService expediaCPSQueryPriceService;
+    @Resource
+    private ExpediaStaticDataIngestionService expediaStaticDataIngestionService;
+
+    @GetMapping("/expedia/static/ingest")
+    @ApiOperation("Expedia静态数据摄取-按酒店ID逗号分隔")
+    public HttpResponse expediaStaticIngest(@RequestParam("propertyIds") String propertyIds,
+                                            @RequestParam(value = "language", required = false) String language) {
+        List<String> ids = Arrays.asList(propertyIds.split(","));
+        int count = expediaStaticDataIngestionService.ingestByPropertyIds(ids, language);
+        return HttpResponse.getSuccessInstance(count);
+    }
 
 //    //qps限流 生产环境2.5  测试环境约0.16（1分钟10次）
 //    @Value("${ratehawk.query.price.cache.qps}")

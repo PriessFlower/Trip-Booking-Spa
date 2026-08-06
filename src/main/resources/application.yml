@@ -17,6 +17,8 @@ mybatis:
 expedia:
   # Booking stays disabled until certification and explicit production authorization.
   booking-enabled: false
+  # Rapid 测试环境沙箱场景头（standard 等）；生产必须为空
+  test-scenario: ${EXPEDIA_TEST_SCENARIO:}
   production-endpoint-enabled: false
   user-agent: trip-booking-spa/0.0.1
   static-data:
