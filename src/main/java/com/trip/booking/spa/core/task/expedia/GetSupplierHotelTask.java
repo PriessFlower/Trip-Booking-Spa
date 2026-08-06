@@ -1,4 +1,4 @@
-package com.trip.booking.spa.core.task;
+package com.trip.booking.spa.core.task.expedia;
 
 import com.trip.booking.spa.core.api.expedia.service.ExpediaStaticInfoService;
 import lombok.extern.slf4j.Slf4j;

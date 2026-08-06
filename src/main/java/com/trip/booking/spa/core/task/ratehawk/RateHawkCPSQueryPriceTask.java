@@ -1,4 +1,4 @@
-package com.trip.booking.spa.core.task;
+package com.trip.booking.spa.core.task.ratehawk;
 
 import com.google.common.util.concurrent.RateLimiter;
 import com.trip.booking.spa.core.api.ratehawk.service.RateHawkCPSQueryPriceService;
