@@ -1,13 +1,8 @@
 server:
   port: 8089
-feign:
-  httpclient.enabled: true
-  client:
-    config:
-      default:
-        connect-timeout: 300000
-        readTimeout: 300000
 spring:
+  config:
+    import: optional:nacos:trip-booking-spa.yaml
   datasource:
     host: 8.146.211.133
     port: 3306
@@ -28,22 +23,19 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: mse-00eb2a72-p.nacos-ans.mse.aliyuncs.com # Nacos 服务发现地址
-        access-key: LTAI5tGbuCAyu93gUo9abSDG
-        secret-key: cYPSEwvEB3jFhrEs5TikxOGc0NSldp
+        server-addr: 127.0.0.1:8848
 #        group: DEV      # 配置分组
       config:
-        server-addr: mse-00eb2a72-p.nacos-ans.mse.aliyuncs.com  # Nacos服务器地址
+        server-addr: 127.0.0.1:8848
         file-extension: yaml         # 配置文件格式
-        namespace: dev               # 命名空间ID，通常用于隔离不同的环境配置
-        prefix: bingo-hotel-spa-intl      # 配置前缀，通常是应用名
+        prefix: trip-booking-spa      # 配置前缀，通常是应用名
     inetutils:
       preferred-networks: 192.168.111.198
 
   schedulerx2:
     endpoint: acm.aliyun.com
     namespace: 5da3a313-f372-45f4-af32-e5474a74a218
-    groupId: bingo-hotel-spa-intl
+    groupId: trip-booking-spa
     appKey: H77sXtmIszlXo4Z28cO8Iw
 
 management:
@@ -51,28 +43,6 @@ management:
     web:
       exposure:
         include: prometheus
-
-#apollo相关配置 开始#
-app:
-  # 与Apollo Portal上面创建的app id保持一致
-  id: bingo-hotel-spa-intl
-# 项目启动时需要添加启动参数 -Denv=DEV 来指定 apollo环境
-apollo:
-  # 就是apollo config server的地址
-  meta: 8.146.211.133:8080
-  bootstrap:
-    # 是否开启 Apollo
-    enabled: true
-    eagerLoad:
-      # 将 Apollo 加载提到初始化日志系统之前，如果设置为false，则配置中心中修改日志信息不会生效
-      enabled: true
-    namespaces: application
-  cacheDir: ./config
-  # 刷新时间,单位：分钟，默认5
-  refreshInterval: 5
-#对应apollo配置中心环境
-env: dev
-#apollo相关配置 结束#
 
 rocketmq:
   name-server: 8.146.211.133:9876

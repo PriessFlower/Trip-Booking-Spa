@@ -3,13 +3,13 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
-        <artifactId>supplier-product-adapter-intl</artifactId>
-        <groupId>com.bingo.hotel.spa.intl</groupId>
+        <artifactId>trip-booking-spa-parent</artifactId>
+        <groupId>com.trip.booking.spa</groupId>
         <version>0.0.1</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>core</artifactId>
+    <artifactId>trip-booking-spa-core</artifactId>
 
     <dependencies>
         <dependency>
@@ -59,14 +59,14 @@
         </dependency>
 
         <dependency>
-            <groupId>com.ctrip.framework.apollo</groupId>
-            <artifactId>apollo-client</artifactId>
-            <version>2.1.0</version>
-        </dependency>
-        <dependency>
             <groupId>org.mybatis.spring.boot</groupId>
             <artifactId>mybatis-spring-boot-starter</artifactId>
             <version>${mybatis-spring-boot.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-boot-starter</artifactId>
+            <version>3.5.3.1</version>
         </dependency>
 
         <dependency>
@@ -118,27 +118,11 @@
         </dependency>
 
         <dependency>
-            <groupId>com.ctrip.framework.apollo</groupId>
-            <artifactId>apollo-client</artifactId>
-            <version>2.1.0</version>
-        </dependency>
-
-        <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
             <version>2.10.0</version>
         </dependency>
 
-        <dependency>
-            <groupId>com.bingo.hotel.info.intl</groupId>
-            <artifactId>cli</artifactId>
-            <version>0.1.3</version>
-        </dependency>
-        <dependency>
-            <groupId>com.bingo.hotel.base.intl</groupId>
-            <artifactId>cli</artifactId>
-            <version>0.0.18</version>
-        </dependency>
         <dependency>
             <groupId>joda-time</groupId>
             <artifactId>joda-time</artifactId>
@@ -146,26 +130,14 @@
         </dependency>
 
         <dependency>
-            <groupId>taobao.sdk</groupId>
-            <artifactId>cps</artifactId>
-            <version>1.0.0</version>
-        </dependency>
-
-
-        <dependency>
-            <groupId>taobao.sdk</groupId>
-            <artifactId>push</artifactId>
-            <version>1.0.0</version>
-        </dependency>
-        <dependency>
             <groupId>org.redisson</groupId>
             <artifactId>redisson-spring-boot-starter</artifactId>
             <version>3.18.0</version>
         </dependency>
 
         <dependency>
-            <groupId>com.bingo.hotel.spa.intel</groupId>
-            <artifactId>cli</artifactId>
+            <groupId>com.trip.booking.spa</groupId>
+            <artifactId>trip-booking-spa-client</artifactId>
             <version>0.0.7</version>
         </dependency>
 
@@ -200,12 +172,6 @@
             <version>1.15.3</version>
         </dependency>
         <dependency>
-            <groupId>intl.fliggy.hotel</groupId>
-            <artifactId>intl</artifactId>
-            <version>1.0.0</version>
-        </dependency>
-
-        <dependency>
             <groupId>com.github.luben</groupId>
             <artifactId>zstd-jni</artifactId>
             <version>1.4.9-4</version>
@@ -214,8 +180,7 @@
     </dependencies>
 
     <properties>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
+        <maven.compiler.release>${java.version}</maven.compiler.release>
     </properties>
 
 </project>

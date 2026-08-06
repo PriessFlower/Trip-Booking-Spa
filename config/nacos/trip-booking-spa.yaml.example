@@ -1,0 +1,41 @@
+# Nacos Data ID: trip-booking-spa.yaml
+# Group: DEFAULT_GROUP
+# Keep structured runtime values as JSON strings so they remain compatible with
+# the values previously stored in Apollo.
+
+query:
+  cache:
+    supplier: '[10005]'
+
+supplier:
+  hotel:
+    cache:
+      map: '{"10005":["16024166"]}'
+  query:
+    timezone: '["10005"]'
+
+didatravel:
+  query:
+    cache: true
+
+ratehawk:
+  query:
+    price:
+      cache:
+        qps: 0.16
+      queue:
+        task:
+          switch: 1
+          return: 1
+
+expedia:
+  query:
+    price:
+      cache:
+        qps: 10
+      queue:
+        task:
+          switch: 1
+          return: 1
+  commission:
+    rate: 0.525

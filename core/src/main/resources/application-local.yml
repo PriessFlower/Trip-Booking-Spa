@@ -1,0 +1,66 @@
+# Local infrastructure overrides. Start together with the dev and mapper profiles:
+#   --spring.profiles.active=dev,mapper,local
+spring:
+  autoconfigure:
+    exclude:
+      - com.alibaba.schedulerx.SchedulerxAutoConfigure
+  cloud:
+    nacos:
+      discovery:
+        # Keep Nacos Config enabled, but do not register a loopback local instance.
+        register-enabled: false
+  datasource:
+    host: 127.0.0.1
+    port: 3307
+    name: test_tg
+    username: tg_local
+    password: tg_local_pw
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&serverTimezone=UTC
+  redis:
+    host: 127.0.0.1
+    port: 6380
+    password: local_redis_pw
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 1
+
+# Local fallback for the runtime keys that should normally come from Nacos.
+query:
+  cache:
+    supplier: '[10005]'
+
+supplier:
+  hotel:
+    cache:
+      map: '{"10005":["16024166"]}'
+  query:
+    timezone: '["10005"]'
+
+didatravel:
+  query:
+    cache: true
+
+ratehawk:
+  query:
+    price:
+      cache:
+        qps: 0.16
+      queue:
+        task:
+          switch: 1
+          return: 1
+
+expedia:
+  query:
+    price:
+      cache:
+        qps: 10
+      queue:
+        task:
+          switch: 1
+          return: 1
+  commission:
+    rate: 0.525

@@ -10,22 +10,23 @@
 		<version>2.7.16</version>
 		<relativePath/> <!-- lookup psarent from repository -->
 	</parent>
-	<groupId>com.bingo.hotel.spa.intl</groupId>
-	<artifactId>supplier-product-adapter-intl</artifactId>
+	<groupId>com.trip.booking.spa</groupId>
+	<artifactId>trip-booking-spa-parent</artifactId>
 	<version>0.0.1</version>
-	<name>spa</name>
-	<description>spa</description>
+	<name>trip-booking-spa</name>
+	<description>Trip Booking supplier product adapter</description>
 
 	<properties>
+		<java.version>21</java.version>
 		<commons-lang3.version>3.9</commons-lang3.version>
-		<lombok.version>1.18.22</lombok.version>
+		<lombok.version>1.18.36</lombok.version>
 		<commons-collections4.version>4.1</commons-collections4.version>
 		<mybatis-spring-boot.version>2.2.0</mybatis-spring-boot.version>
 		<junit-jupiter.version>5.8.2</junit-jupiter.version>
 		<jmh.version>1.13</jmh.version>
 		<com.fasterxml.jackson.version>2.13.1</com.fasterxml.jackson.version>
 		<spring-cloud.version>2021.0.5</spring-cloud.version>
-		<spring.cloud.alibaba.version>2.2.1.RELEASE</spring.cloud.alibaba.version>
+		<spring.cloud.alibaba.version>2021.0.5.0</spring.cloud.alibaba.version>
 
 	</properties>
 	<!--modules-->
@@ -166,9 +167,7 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
-					<source>11</source>
-					<target>11</target>
-					<compilerVersion>11</compilerVersion>
+					<release>${java.version}</release>
 					<meminitial>128m</meminitial>
 					<maxmem>256m</maxmem>
 				</configuration>

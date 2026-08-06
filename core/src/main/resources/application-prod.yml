@@ -2,6 +2,8 @@ server:
   port: 8080
 
 spring:
+  config:
+    import: optional:nacos:trip-booking-spa.yaml
   datasource:
     host: pc-2ze0t0vwxj392d111.mysql.polardb.rds.aliyuncs.com
     port: 3306
@@ -33,30 +35,30 @@ spring:
         username: nacos-prod
         # Nacos 认证密码
         password: zaq1xsw2
-        config:
-          # 是否开启配置中心 默认true
-          enabled: true
-          # 指定Nacos配置中心的地址
-          server-addr: 10.18.0.8:8848
-          # 区分环境：开发环境、测试环境、预发布环境、⽣产环境
-          namespace: prod
-          # 区分不同应⽤：同⼀个环境内，不同应⽤的配置，通过group来区分。
-          group: DEFAULT_GROUP
-          #指定yaml格式的配置 默认properties
-          file-extension: yaml
-          # 自动刷新配置文件,默认true
-          refresh-enabled: true
-          # Nacos 认证用户
-          username: nacos-prod
-          # Nacos 认证密码
-          password: zaq1xsw2
-          # 配置文件prefix
-          prefix: ${spring.application.name}
+      config:
+        # 是否开启配置中心 默认true
+        enabled: true
+        # 指定Nacos配置中心的地址
+        server-addr: 10.18.0.8:8848
+        # 区分环境：开发环境、测试环境、预发布环境、⽣产环境
+        namespace: prod
+        # 区分不同应⽤：同⼀个环境内，不同应⽤的配置，通过group来区分。
+        group: DEFAULT_GROUP
+        #指定yaml格式的配置 默认properties
+        file-extension: yaml
+        # 自动刷新配置文件,默认true
+        refresh-enabled: true
+        # Nacos 认证用户
+        username: nacos-prod
+        # Nacos 认证密码
+        password: zaq1xsw2
+        # 配置文件prefix
+        prefix: ${spring.application.name}
 
   schedulerx2:
     endpoint: addr-bj-internal.edas.aliyun.com
     namespace: bcf3aaf8-8eca-459d-971e-ab8a3884eba0
-    groupId: bingo-hotel-spa-intl
+    groupId: trip-booking-spa
     appKey: YkeT7pKCVanNmiay6AGmrxg
 
 management:
@@ -65,28 +67,6 @@ management:
       exposure:
         include: prometheus
 
-#apollo相关配置 开始#
-app:
-  # 与Apollo Portal上面创建的app id保持一致
-  id: bingo-hotel-spa-intl
-# 项目启动时需要添加启动参数 -Denv=DEV 来指定 apollo环境
-apollo:
-  # 就是apollo config server的地址
-  meta: http://10.18.1.51:8080
-  bootstrap:
-    # 是否开启 Apollo
-    enabled: true
-    eagerLoad:
-      # 将 Apollo 加载提到初始化日志系统之前，如果设置为false，则配置中心中修改日志信息不会生效
-      enabled: true
-    namespaces: application
-  cacheDir: ./config
-  # 刷新时间,单位：分钟，默认5
-  refreshInterval: 5
-  config-service: http://10.18.1.51:8080
-#对应apollo配置中心环境
-env: prod
-#apollo相关配置 结束#
 travelconnect:
   url:
     search: https://b2c-nanhwa.travelconnect.co//api/hotel/2c/search/zh-cn

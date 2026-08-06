@@ -1,2 +1,21 @@
-# hotel-spa-intl
- https://codeup.aliyun.com/650a91fe4bb5eb36db2f39c0/bingo/hotel-spa-intl.git
+# trip-booking-spa
+
+## Local development
+
+The project builds and runs on Java 21. The local profile uses the existing
+`tg-local-mysql` (`127.0.0.1:3307`) and `tg-local-redis`
+(`127.0.0.1:6380`) Docker containers, plus the local `trip-booking-spa-nacos`
+(`127.0.0.1:8848`) container.
+
+```bash
+docker start tg-local-mysql tg-local-redis trip-booking-spa-nacos
+mvn -DskipTests package
+java -jar web/target/trip-booking-spa-0.0.1.jar \
+  --spring.profiles.active=dev,mapper,local \
+  --server.port=18089
+```
+
+Runtime switches belong in Nacos Data ID `trip-booking-spa.yaml`, group
+`DEFAULT_GROUP`. See `config/nacos/trip-booking-spa.yaml.example` for the
+expected structure. The local profile contains equivalent fallback values so
+the service can start before the dev Data ID is populated.

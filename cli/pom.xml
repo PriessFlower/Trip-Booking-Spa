@@ -3,19 +3,19 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
-        <groupId>com.bingo.hotel.spa.intl</groupId>
-        <artifactId>supplier-product-adapter-intl</artifactId>
+        <groupId>com.trip.booking.spa</groupId>
+        <artifactId>trip-booking-spa-parent</artifactId>
         <version>0.0.1</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
 
-    <groupId>com.bingo.hotel.spa.intel</groupId>
-    <artifactId>cli</artifactId>
+    <groupId>com.trip.booking.spa</groupId>
+    <artifactId>trip-booking-spa-client</artifactId>
     <version>0.0.7</version>
-    <name>cli</name>
+    <name>trip-booking-spa-client</name>
     <packaging>jar</packaging>
-    <description>cli</description>
+    <description>Trip Booking SPA client API</description>
 
     <dependencies>
         <dependency>
@@ -55,11 +55,6 @@
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
         </dependency>
-        <!--服务调用-->
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-openfeign</artifactId>
-        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -68,13 +63,16 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+        </dependency>
 
     </dependencies>
 
 
     <properties>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
+        <maven.compiler.release>${java.version}</maven.compiler.release>
     </properties>
 
 </project>
