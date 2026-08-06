@@ -1,5 +1,10 @@
 # trip-booking-spa
 
+## Project structure
+
+This is a single-module Spring Boot application. Java sources, resources, and
+tests live in the standard `src/main` and `src/test` directories.
+
 ## Local development
 
 The project builds and runs on Java 21. The local profile uses the existing
@@ -10,8 +15,8 @@ The project builds and runs on Java 21. The local profile uses the existing
 ```bash
 docker start tg-local-mysql tg-local-redis trip-booking-spa-nacos
 mvn -DskipTests package
-java -jar web/target/trip-booking-spa-0.0.1.jar \
-  --spring.profiles.active=dev,mapper,local \
+java -jar target/trip-booking-spa-0.0.1.jar \
+  --spring.profiles.active=dev,local \
   --server.port=18089
 ```
 
