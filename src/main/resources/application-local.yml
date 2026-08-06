@@ -1,9 +1,6 @@
 # Local infrastructure overrides. Start together with the dev profile:
 #   --spring.profiles.active=dev,local
 spring:
-  autoconfigure:
-    exclude:
-      - com.alibaba.schedulerx.SchedulerxAutoConfigure
   cloud:
     nacos:
       discovery:
@@ -38,20 +35,6 @@ supplier:
       map: '{"10005":["16024166"]}'
   query:
     timezone: '["10005"]'
-
-didatravel:
-  query:
-    cache: true
-
-ratehawk:
-  query:
-    price:
-      cache:
-        qps: 0.16
-      queue:
-        task:
-          switch: 1
-          return: 1
 
 expedia:
   query:

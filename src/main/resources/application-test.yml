@@ -52,11 +52,6 @@ spring:
         # 配置文件prefix
         prefix: ${spring.application.name}
 
-  schedulerx2:
-    endpoint: acm.aliyun.com
-    namespace: 5da3a313-f372-45f4-af32-e5474a74a218
-    groupId: trip-booking-spa
-    appKey: daeI3PeZuBC6sPjh+IhuVg==
 
 management:
   endpoints:
@@ -112,75 +107,3 @@ rocketmq:
     enabledIsolation: true
     # 隔离环境名称，拼接到topic后，topic_dev，默认空字符串
     environment: dev
-
-meituan:
-  host:
-    v1: https://fenxiao.meituan.com/opdtor/api
-    v2: https://fenxiao.meituan.com/opdtor/api/v2
-  method:
-    list:
-      path: hotel.poi.list
-      qps: 10
-      maxId: 0
-      pageSize: 10
-      version: 1.0
-    detail:
-      path: hotel.content
-      qps: 20
-      version: 2.0
-    avail:
-      path: hotel.shopping.avail
-      qps: 10
-      version: 2.0
-    multi:
-      path: hotel.shopping.multi
-      qps: 20
-      version: 2.0
-    check:
-      path: hotel.order.check
-      qps: 7
-      version: 1.0
-    booking:
-      path: hotel.order.booking
-      qps: 30
-      version: 1.0
-    room:
-      path: hotel.realroom.content
-      qps: 20
-      version: 2.0
-    order:
-      path: hotel.order.query
-      qps: 30
-      version: 1.0
-    cancel:
-      path: hotel.order.cancel
-      qps: 20
-      version: 1.0
-
-  partner-id: 18437
-
-  change-queue:
-    page-size: 20
-
-  key:
-    public: 3c8862bc4cae512fbc8dc48e231a612b
-    secret: b2e021aba7127c1763ede65019688d4d
-
-  test: test
-  language-chinese: zh_CN
-
-fliggy:
-  cps:
-    url: http://gw.api.taobao.com/router/rest
-    partnerId: 01
-    appKey: 34470354
-    appSecret: 712037dd3e6c86a9513e944eaff9963f
-    activityId: sht_hotel_bgkj
-    positionId: 100000000008
-    fliggyAppKey: 10000008
-    userId: 179884109
-  distrib:
-    url: http://gw.api.taobao.com/router/rest
-    appKey: 34575916
-    appSecret: 5d0246c08dc97ea70e9c7713d88c6ccd
-    sessionKey: 610192381968790b2c79f0d13a258921b2686ff860e37bd2216491776181

@@ -3,7 +3,7 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.trip.booking.spa.core.dao.mapper.UpHotelMapper">
 
-    <resultMap id="BaseResultMap" type="com.trip.booking.spa.core.push.model.UpHotel">
+    <resultMap id="BaseResultMap" type="com.trip.booking.spa.core.dao.entity.UpHotel">
         <result column="id" property="id"/>
         <result column="distribute_id" property="distributeId"/>
         <result column="supplier_id" property="supplierId"/>
@@ -26,7 +26,7 @@
         group by hotel_id
     </select>
 
-    <select id="getSellerHotel" resultType="com.trip.booking.spa.core.push.model.UpHotel">
+    <select id="getSellerHotel" resultType="com.trip.booking.spa.core.dao.entity.UpHotel">
         select
         <include refid="Base_Column_List"/>
         from db_up_hotel
@@ -43,13 +43,13 @@
         </foreach> and supplier_id = #{sId} and hotel_id = #{hId}
     </select>
 
-    <select id="getAll" resultType="com.trip.booking.spa.core.push.model.UpHotel">
+    <select id="getAll" resultType="com.trip.booking.spa.core.dao.entity.UpHotel">
         select id
         from db_up_hotel
         where distribute_id = #{dId}
           and supplier_id = #{sId}
     </select>
-    <select id="getUpHotelsWithLimit" resultType="com.trip.booking.spa.core.push.model.UpHotel">
+    <select id="getUpHotelsWithLimit" resultType="com.trip.booking.spa.core.dao.entity.UpHotel">
         SELECT
         <include refid="Base_Column_List"/>
         FROM db_up_hotel
@@ -57,7 +57,7 @@
         ORDER BY id ASC
         LIMIT #{pageSize}
     </select>
-    <select id="delMeituanHotel" resultType="com.trip.booking.spa.core.push.model.UpHotel">
+    <select id="delMeituanHotel" resultType="com.trip.booking.spa.core.dao.entity.UpHotel">
         DELETE
         FROM db_up_hotel
         where distribute_id = 20002
@@ -65,7 +65,7 @@
           and hotel_id = #{hId}
     </select>
 
-    <select id="delElongHotel" resultType="com.trip.booking.spa.core.push.model.UpHotel">
+    <select id="delElongHotel" resultType="com.trip.booking.spa.core.dao.entity.UpHotel">
         DELETE
         FROM db_up_hotel
         where distribute_id = 20007

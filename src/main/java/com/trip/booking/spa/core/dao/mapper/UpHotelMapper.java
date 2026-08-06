@@ -1,6 +1,6 @@
 package com.trip.booking.spa.core.dao.mapper;
 
-import com.trip.booking.spa.core.push.model.UpHotel;
+import com.trip.booking.spa.core.dao.entity.UpHotel;
 import org.apache.ibatis.annotations.Param;
 import org.springframework.stereotype.Repository;
 

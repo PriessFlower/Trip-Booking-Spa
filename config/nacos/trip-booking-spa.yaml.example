@@ -14,20 +14,6 @@ supplier:
   query:
     timezone: '["10005"]'
 
-didatravel:
-  query:
-    cache: true
-
-ratehawk:
-  query:
-    price:
-      cache:
-        qps: 0.16
-      queue:
-        task:
-          switch: 1
-          return: 1
-
 expedia:
   query:
     price:
@@ -39,3 +25,20 @@ expedia:
           return: 1
   commission:
     rate: 0.525
+
+# 定时任务开关与调度（enabled 为运行时动态读取，改配置即生效；cron 仅启动时读取，改后需重启）
+task:
+  expedia-hotel-sync:
+    enabled: false
+    cron: '0 0 2 * * ?'
+    update-days: 1
+  expedia-remove-hotel:
+    enabled: false
+    cron: '0 0 4 * * ?'
+    delete-date: ''
+  expedia-cps:
+    enabled: false
+    cron: '0 0/30 * * * ?'
+  ratehawk-cps:
+    enabled: false
+    cron: '0 15/30 * * * ?'

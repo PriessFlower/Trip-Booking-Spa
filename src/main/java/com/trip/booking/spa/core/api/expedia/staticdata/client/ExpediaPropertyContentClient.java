@@ -45,6 +45,9 @@ public class ExpediaPropertyContentClient {
     }
 
     public ExpediaPropertyContentPage fetch(ExpediaPropertyContentRequest request) {
+        if (!properties.getStaticData().isEnabled()) {
+            throw new IllegalStateException("Expedia static data ingestion is disabled");
+        }
         properties.requireCredentials();
         URI uri = buildUri(request);
         HttpHeaders headers = new HttpHeaders();

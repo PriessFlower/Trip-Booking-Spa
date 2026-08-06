@@ -55,11 +55,6 @@ spring:
         # 配置文件prefix
         prefix: ${spring.application.name}
 
-  schedulerx2:
-    endpoint: addr-bj-internal.edas.aliyun.com
-    namespace: bcf3aaf8-8eca-459d-971e-ab8a3884eba0
-    groupId: trip-booking-spa
-    appKey: YkeT7pKCVanNmiay6AGmrxg
 
 management:
   endpoints:
@@ -67,98 +62,17 @@ management:
       exposure:
         include: prometheus
 
-travelconnect:
-  url:
-    search: https://b2c-nanhwa.travelconnect.co//api/hotel/2c/search/zh-cn
-    hotel: https://b2c-nanhwa.travelconnect.co//api/hotel/2c/hotel/detail
-    prebook: https://b2c-nanhwa.travelconnect.co//api/hotel/2c/order/prebook/zh-cn
-  companyId: TC0143
-  signKey: 02706c54a917a6940cdf3f283a860e58
-aichotels:
-  url:
-    host: https://api.aichotels.net.cn
-    hotelList: /content/public/hotelinfo_list
-    singleHotel: /content/public/single_hotel
-    cityList: /content/public/city_list
-    rooms: /content/public/hotel_rooms
-    availability: /rate/public/search/room_availability
-    prebook: /rate/public/booking/prebook
-  apiClientKey: BeijingBaosheng
-  secret: SRLxRgRXjjaPCWUbcWcwriusUNtpYe3VxRg9
-didatravel:
-  licenseKey: BSYX_key0509
-  clientId: BSYX
-  localFilePath: /home/webrun/logs/file
-huitravel:
-  url:
-    hotellist: http://hapi.huizhi-intl.com/hotelsell/cithotelsell/yoppay/static/hotellist
-    hoteldetails: http://hapi.huizhi-intl.com/hotelsell/cithotelsell/yoppay/static/hoteldetails
-    getPrice: http://hapi.huizhi-intl.com/hotelsell/cithotelsell/yoppay/getrateplanprice
-    checkavailability: http://hapi.huizhi-intl.com/hotelsell/cithotelsell/yoppay/checkavailability
-  appkey: bsgl
-  secretKey: C340EB9BF816799573229D66B6F11555
 expedia:
-  apiKey: 6urn54ijk30uttcqm64c3it6gf
-  sharedSecret: 708a6tdaqvm7
-  session: binggoOnline
-  ownIp: 123.57.61.171
+  apiKey: ${EXPEDIA_API_KEY:}
+  sharedSecret: ${EXPEDIA_SHARED_SECRET:}
+  session: ${EXPEDIA_CUSTOMER_SESSION_ID:trip-booking-spa-prod}
+  ownIp: ${EXPEDIA_CUSTOMER_IP:127.0.0.1}
   localFilePath: /home/webrun/logs/file
   partner_point_of_sale: B2B_SA_PKG_MOD_VCC
   payment_terms: 1
   billing_terms: VCC
   url:
-    host: https://api.ean.com
-fliggy:
-  distrib:
-    url: http://gw.api.taobao.com/router/rest
-    sessionKey: 61014201c81f5665ca1b1c460e4514679524533b50180c82217553435874
-    appKey: 34784001
-    appSecret: c4b6ee3e5015cee006a75aa8acd66275
-fastPayHotels:
-  username: APIBaosheng
-  password: A~FjN68p
-  client_id: Baosheng.fph.com
-  client_secret: NRF5yadWnV9gX1qs9uIWdn/d4qf1qQieixKTcjuCDck=
-  url:
-    catalogue: https://catalogue.fastpayhotels.net/api/v2
-    availability: https://avail-baosheng.fastpayhotels.net/api/v2
-    booking: https://booking.fastpayhotels.net/api/v2
-ratehawk:
-  key_id: 10501
-  api_key: 1c79daa2-1262-4cf2-8547-3595628de48c
-  url: https://api.worldota.net/api/b2b/v3
+    # Deliberately defaults to the test endpoint. Production requires an explicit override.
+    host: ${EXPEDIA_API_HOST:https://test.ean.com}
 system:
   localFilePath: /home/webrun/logs/file/
-meituan:
-  url: https://fenxiao.meituan.com/opdtor/api
-  method:
-    list:
-      path: hotel.oversea.poi.list
-      qps: 10
-      maxId: 0
-      pageSize: 10
-      version: 1.0
-    detail:
-      path: hotel.oversea.detail
-      qps: 16
-      version: 1.0
-    check:
-      path: hotel.oversea.order.check
-      qps: 7
-      version: 1.0
-    room:
-      path: hotel.oversea.realroom.info
-      qps: 16
-      version: 1.0
-    goods:
-      path: hotel.oversea.batch.goods.rp
-      qps: 10
-      version: 1.0
-  partner-id: 35047
-  change-queue:
-    page-size: 20
-  key:
-    public: a7131040c5a63dde708af1b5946ff81f
-    secret: eb36fa7f3da27f4bd731fe22f75d5aaa
-  test:
-  language: zh_CN

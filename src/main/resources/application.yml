@@ -14,6 +14,121 @@ mybatis:
   mapperLocations: classpath*:mapper/*.xml
   config-location: classpath:/mybatis-config.xml
 
+expedia:
+  # Booking stays disabled until certification and explicit production authorization.
+  booking-enabled: false
+  production-endpoint-enabled: false
+  user-agent: trip-booking-spa/0.0.1
+  static-data:
+    enabled: ${EXPEDIA_STATIC_DATA_ENABLED:false}
+    batch-size: 250
+    language: en-US
+    supply-source: expedia
+    mapping-version: expedia-content-v1
+
+# Legacy supplier beans are still present in the codebase. Keep them wired to a
+# non-routable mock endpoint until those integrations are removed. A real local
+# mock server can be supplied with MOCK_SUPPLIER_BASE_URL.
+travelconnect:
+  url:
+    search: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/travelconnect/search
+    hotel: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/travelconnect/hotel
+    prebook: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/travelconnect/prebook
+  companyId: mock
+  signKey: mock
+
+aichotels:
+  url:
+    host: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/aichotels
+    cityList: /city-list
+    hotelList: /hotel-list
+    singleHotel: /hotel
+    rooms: /rooms
+    availability: /availability
+    prebook: /prebook
+  apiClientKey: mock
+  secret: mock
+
+didatravel:
+  licenseKey: mock
+  clientId: mock
+  localFilePath: /tmp/trip-booking-spa/mock/didatravel
+  query:
+    cache: false
+
+huitravel:
+  url:
+    hotellist: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/huitravel/hotel-list
+    hoteldetails: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/huitravel/hotel-details
+    getPrice: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/huitravel/price
+    checkavailability: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/huitravel/check
+  appkey: mock
+  secretKey: mock
+
+fliggy:
+  distrib:
+    url: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/fliggy
+    sessionKey: mock
+    appKey: mock
+    appSecret: mock
+
+fastPayHotels:
+  username: mock
+  password: mock
+  client_id: mock
+  client_secret: mock
+  url:
+    catalogue: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/fastpay/catalogue
+    availability: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/fastpay/availability
+    booking: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/fastpay/booking
+
+ratehawk:
+  key_id: mock
+  api_key: mock
+  url: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/ratehawk
+  query:
+    price:
+      cache:
+        qps: 0.16
+      queue:
+        task:
+          switch: 0
+          return: 0
+
+meituan:
+  url: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/meituan
+  partner-id: 0
+  change-queue:
+    page-size: 20
+  key:
+    public: mock
+    secret: mock
+  test: mock
+  language: zh_CN
+  method:
+    list:
+      path: hotel.list
+      qps: 1
+      maxId: 0
+      pageSize: 10
+      version: 1.0
+    detail:
+      path: hotel.detail
+      qps: 1
+      version: 1.0
+    check:
+      path: hotel.check
+      qps: 1
+      version: 1.0
+    room:
+      path: hotel.room
+      qps: 1
+      version: 1.0
+    goods:
+      path: hotel.goods
+      qps: 1
+      version: 1.0
+
 logging:
   config: classpath:log4j2.xml
   level:

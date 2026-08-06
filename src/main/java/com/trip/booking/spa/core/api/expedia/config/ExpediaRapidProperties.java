@@ -1,12 +1,15 @@
 package com.trip.booking.spa.core.api.expedia.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.net.URI;
+
 @Component
 @ConfigurationProperties(prefix = "expedia")
-public class ExpediaRapidProperties {
+public class ExpediaRapidProperties implements InitializingBean {
 
     private String apiKey;
     private String sharedSecret;
@@ -14,6 +17,7 @@ public class ExpediaRapidProperties {
     private String ownIp = "127.0.0.1";
     private String userAgent = "trip-booking-spa/0.0.1";
     private boolean bookingEnabled;
+    private boolean productionEndpointEnabled;
     private Url url = new Url();
     private StaticData staticData = new StaticData();
 
@@ -21,6 +25,21 @@ public class ExpediaRapidProperties {
         if (!StringUtils.hasText(apiKey) || !StringUtils.hasText(sharedSecret)) {
             throw new IllegalStateException(
                     "Expedia Rapid credentials are missing; set EXPEDIA_API_KEY and EXPEDIA_SHARED_SECRET");
+        }
+    }
+
+    @Override
+    public void afterPropertiesSet() {
+        if (bookingEnabled) {
+            throw new IllegalStateException("Expedia booking is disabled until certification and explicit authorization");
+        }
+        URI endpoint = URI.create(url.getHost());
+        if ("api.ean.com".equalsIgnoreCase(endpoint.getHost()) && !productionEndpointEnabled) {
+            throw new IllegalStateException(
+                    "Expedia production endpoint is blocked; explicit production authorization is required");
+        }
+        if (staticData.isEnabled()) {
+            requireCredentials();
         }
     }
 
@@ -72,6 +91,14 @@ public class ExpediaRapidProperties {
         this.bookingEnabled = bookingEnabled;
     }
 
+    public boolean isProductionEndpointEnabled() {
+        return productionEndpointEnabled;
+    }
+
+    public void setProductionEndpointEnabled(boolean productionEndpointEnabled) {
+        this.productionEndpointEnabled = productionEndpointEnabled;
+    }
+
     public Url getUrl() {
         return url;
     }
@@ -101,10 +128,19 @@ public class ExpediaRapidProperties {
     }
 
     public static class StaticData {
+        private boolean enabled;
         private int batchSize = 250;
         private String language = "en-US";
         private String supplySource = "expedia";
         private String mappingVersion = "expedia-content-v1";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
 
         public int getBatchSize() {
             return batchSize;

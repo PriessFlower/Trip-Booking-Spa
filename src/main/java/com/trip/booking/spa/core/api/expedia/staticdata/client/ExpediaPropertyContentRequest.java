@@ -38,6 +38,17 @@ public record ExpediaPropertyContentRequest(
                 propertyIds, List.of(), language, null, null, start, end, null);
     }
 
+    public static ExpediaPropertyContentRequest addedBetween(
+            List<String> countryCodes, LocalDate start, LocalDate end, String language) {
+        return new ExpediaPropertyContentRequest(
+                List.of(), countryCodes, language, start, end, null, null, null);
+    }
+
+    public static ExpediaPropertyContentRequest nextPage(String token) {
+        return new ExpediaPropertyContentRequest(
+                List.of(), List.of(), null, null, null, null, null, token);
+    }
+
     private static void requirePair(LocalDate start, LocalDate end, String name) {
         if ((start == null) != (end == null)) {
             throw new IllegalArgumentException(name + " start and end must be supplied together");
