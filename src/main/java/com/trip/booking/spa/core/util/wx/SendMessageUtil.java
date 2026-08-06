@@ -1,7 +1,7 @@
 package com.trip.booking.spa.core.util.wx;
 
 import com.alibaba.fastjson.JSONObject;
-import com.alibaba.schedulerx.common.util.JsonUtil;
+import com.trip.booking.spa.core.util.JsonUtils;
 import com.trip.booking.spa.core.util.wx.vo.Articles;
 import com.trip.booking.spa.core.util.wx.vo.HttpMethod;
 import com.trip.booking.spa.core.util.wx.vo.News;
@@ -52,7 +52,7 @@ public class SendMessageUtil {
         news.setArticles(als);
         msg.setNews(news);
 
-        return JsonUtil.toJson(msg);
+        return JsonUtils.writeObject2Json(msg);
 
     }
 }

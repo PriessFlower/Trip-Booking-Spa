@@ -1,15 +1,13 @@
 package com.trip.booking.spa.core.task;
 
-import com.alibaba.schedulerx.worker.domain.JobContext;
-import com.alibaba.schedulerx.worker.processor.JavaProcessor;
-import com.alibaba.schedulerx.worker.processor.ProcessResult;
-import com.trip.booking.spa.core.util.JsonUtils;
 import com.trip.booking.spa.core.api.expedia.service.ExpediaStaticInfoService;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import java.util.HashMap;
 
 /**
  * 获取供应商酒店任务.
@@ -20,40 +18,45 @@ import java.util.HashMap;
  **/
 @Slf4j
 @Component
-public class GetSupplierHotelTask extends JavaProcessor {
+public class GetSupplierHotelTask {
 
     @Autowired
     private ExpediaStaticInfoService expediaStaticInfoService;
 
-    @Override
-    public ProcessResult process(JobContext context) {
+    @Autowired
+    private RedissonClient redissonClient;
 
-        log.info("GetSupplierHotelTask is start!");
+    @Autowired
+    private Environment environment;
 
+    @Scheduled(cron = "${task.supplier-hotel-sync.cron:0 0 2 * * ?}")
+    public void run() {
+        if (!environment.getProperty("task.supplier-hotel-sync.enabled", Boolean.class, false)) {
+            return;
+        }
+        RLock lock = redissonClient.getLock("task:lock:supplierHotelSync");
+        if (!lock.tryLock()) {
+            log.info("GetSupplierHotelTask 未抢到锁，本实例跳过");
+            return;
+        }
         try {
-            HashMap<String, String> parametersMap = JsonUtils.readValue(context.getJobParameters(), HashMap.class);
-            if (null == parametersMap.get("supplierId")) {
-                log.info("GetSupplierHotelTask ,supplierId non-null");
-                return new ProcessResult(true);
-            }
-            //供应商id
-            Integer supplierId = Integer.parseInt(parametersMap.get("supplierId").toString());
-//            //重跑频率 单位 天 默认一天
-//            Integer frequency = null == parametersMap.get("frequency") ? 1 : Integer.parseInt(parametersMap.get("orderStatus").toString());
+            log.info("GetSupplierHotelTask is start!");
+            Integer supplierId = environment.getProperty("task.supplier-hotel-sync.supplier-id", Integer.class, 10005);
+            int updateDays = environment.getProperty("task.supplier-hotel-sync.update-days", Integer.class, 1);
             switch (supplierId) {
                 case 10005:
-                    int updateDays = null == parametersMap.get("updateDays") ? 1 : Integer.parseInt(parametersMap.get("updateDays").toString());
                     expediaStaticInfoService.saveOrUpdateHotelInfo(true, false, updateDays, null, 0);
                     break;
                 default:
                     log.info("GetSupplierHotelTask ,supplierId:{} no method", supplierId);
             }
+            log.info("GetSupplierHotelTask is end!");
         } catch (Exception e) {
             log.error("GetSupplierHotelTask ,error:", e);
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
         }
-
-        log.info("GetSupplierHotelTask is end!");
-
-        return new ProcessResult(true);
     }
 }
