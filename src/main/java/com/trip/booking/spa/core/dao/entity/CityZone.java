@@ -1,4 +1,4 @@
-package com.trip.booking.spa.core.api.common.bean;
+package com.trip.booking.spa.core.dao.entity;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

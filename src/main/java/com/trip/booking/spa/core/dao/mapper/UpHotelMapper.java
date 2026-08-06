@@ -1,4 +1,4 @@
-package com.trip.booking.spa.core.api.common.mapper;
+package com.trip.booking.spa.core.dao.mapper;
 
 import com.trip.booking.spa.core.push.model.UpHotel;
 import org.apache.ibatis.annotations.Param;

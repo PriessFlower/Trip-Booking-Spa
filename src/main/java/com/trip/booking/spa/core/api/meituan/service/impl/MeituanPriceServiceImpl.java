@@ -15,7 +15,7 @@ import com.trip.booking.spa.core.api.request.PriceReq;
 import com.trip.booking.spa.core.api.request.Supplier;
 import com.trip.booking.spa.core.api.common.asynchttp.ResponseResult;
 import com.trip.booking.spa.core.api.common.enums.SupplierSourceEnum;
-import com.trip.booking.spa.core.api.common.mapper.SupplierHotelIdListMapper;
+import com.trip.booking.spa.core.dao.mapper.SupplierHotelIdListMapper;
 import com.trip.booking.spa.core.api.meituan.access.CheckPriceAccess;
 import com.trip.booking.spa.core.api.meituan.access.ProductInfoAccess;
 import com.trip.booking.spa.core.api.meituan.bean.request.CheckReqBody;

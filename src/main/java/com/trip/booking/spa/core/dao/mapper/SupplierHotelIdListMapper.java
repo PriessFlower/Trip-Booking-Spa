@@ -1,8 +1,8 @@
-package com.trip.booking.spa.core.api.common.mapper;
+package com.trip.booking.spa.core.dao.mapper;
 
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.trip.booking.spa.core.api.common.bean.SupplierHotelIdList;
+import com.trip.booking.spa.core.dao.entity.SupplierHotelIdList;
 
 /**
  * <p>

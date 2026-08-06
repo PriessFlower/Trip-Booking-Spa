@@ -1,7 +1,7 @@
 package com.trip.booking.spa.core.push.service.impl;
 
 
-import com.trip.booking.spa.core.api.common.mapper.UpHotelMapper;
+import com.trip.booking.spa.core.dao.mapper.UpHotelMapper;
 import com.trip.booking.spa.core.push.model.UpHotel;
 import com.trip.booking.spa.core.push.service.UpHotelService;
 import lombok.extern.slf4j.Slf4j;

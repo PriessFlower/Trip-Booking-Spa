@@ -15,10 +15,10 @@ import com.trip.booking.spa.core.api.dto.ProductRespDTO;
 import com.trip.booking.spa.core.api.dto.Room;
 import com.trip.booking.spa.core.api.common.enums.RefundType;
 import com.trip.booking.spa.core.api.common.enums.SupplierSourceEnum;
-import com.trip.booking.spa.core.api.common.mapper.InitTimeZoneMapper;
+import com.trip.booking.spa.core.dao.mapper.InitTimeZoneMapper;
 import com.trip.booking.spa.core.api.didatravel.bean.price.DidaTravelResponse;
-import com.trip.booking.spa.core.api.model.DataRecord;
-import com.trip.booking.spa.core.api.model.GeonamesCityInfo;
+import com.trip.booking.spa.core.api.common.bean.DataRecord;
+import com.trip.booking.spa.core.api.common.bean.GeonamesCityInfo;
 import com.trip.booking.spa.core.api.service.impl.InitTimeZoneServiceImpl;
 import com.trip.booking.spa.core.redis.RedisUtils;
 import com.trip.booking.spa.core.util.DateFormatUtils;
@@ -399,7 +399,7 @@ public class DidaTravelProductConvertUtil {
      * @author: dick_w
      * @date: 2025/1/15 10:52
      * @param: [cityName, countryName]
-     * @return: com.trip.booking.spa.core.api.model.GeonamesCityInfo
+     * @return: com.trip.booking.spa.core.api.common.bean.GeonamesCityInfo
      **/
     public GeonamesCityInfo getCityInfoByGeonames(String cityName, String countryName) {
 //        countryName = sloveCountryName(countryName);
@@ -429,7 +429,7 @@ public class DidaTravelProductConvertUtil {
      * @author: dick_w
      * @date: 2025/1/15 10:50
      * @param: [input]
-     * @return: java.util.List<com.trip.booking.spa.core.api.model.GeonamesCityInfo>
+     * @return: java.util.List<com.trip.booking.spa.core.api.common.bean.GeonamesCityInfo>
      **/
     public List<GeonamesCityInfo> parseDataByGeonames(String input) {
 //        System.out.println("input---"+input);

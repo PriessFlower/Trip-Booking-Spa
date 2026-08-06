@@ -1,8 +1,8 @@
-package com.trip.booking.spa.core.api.common.mapper;
+package com.trip.booking.spa.core.dao.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.trip.booking.spa.core.api.common.bean.CityZone;
-import com.trip.booking.spa.core.api.common.bean.SupplierHotelIdList;
+import com.trip.booking.spa.core.dao.entity.CityZone;
+import com.trip.booking.spa.core.dao.entity.SupplierHotelIdList;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.springframework.stereotype.Repository;

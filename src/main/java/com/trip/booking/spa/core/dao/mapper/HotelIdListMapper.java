@@ -1,6 +1,6 @@
-package com.trip.booking.spa.core.api.common.mapper;
+package com.trip.booking.spa.core.dao.mapper;
 
-import com.trip.booking.spa.core.api.common.bean.HotelIdList;
+import com.trip.booking.spa.core.dao.entity.HotelIdList;
 import org.apache.ibatis.annotations.Param;
 import org.springframework.stereotype.Repository;
 

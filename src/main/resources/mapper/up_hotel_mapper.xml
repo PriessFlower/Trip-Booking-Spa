@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.trip.booking.spa.core.api.common.mapper.UpHotelMapper">
+<mapper namespace="com.trip.booking.spa.core.dao.mapper.UpHotelMapper">
 
     <resultMap id="BaseResultMap" type="com.trip.booking.spa.core.push.model.UpHotel">
         <result column="id" property="id"/>

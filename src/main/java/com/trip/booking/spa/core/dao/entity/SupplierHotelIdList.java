@@ -1,4 +1,4 @@
-package com.trip.booking.spa.core.api.common.bean;
+package com.trip.booking.spa.core.dao.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;

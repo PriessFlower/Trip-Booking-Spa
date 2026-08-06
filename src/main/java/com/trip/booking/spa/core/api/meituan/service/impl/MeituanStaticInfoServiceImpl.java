@@ -7,10 +7,10 @@ import com.trip.booking.spa.core.placeholder.hotelinfo.request.SupplierHotelBase
 import com.trip.booking.spa.core.placeholder.hotelinfo.request.SupplierProductBaseRequest;
 import com.trip.booking.spa.core.placeholder.hotelinfo.request.SupplierRoomBaseRequest;
 import com.trip.booking.spa.core.api.common.asynchttp.ResponseResult;
-import com.trip.booking.spa.core.api.common.bean.SupplierHotelIdList;
+import com.trip.booking.spa.core.dao.entity.SupplierHotelIdList;
 import com.trip.booking.spa.core.api.common.constant.Constants;
 import com.trip.booking.spa.core.api.common.enums.SupplierSourceEnum;
-import com.trip.booking.spa.core.api.common.mapper.SupplierHotelIdListMapper;
+import com.trip.booking.spa.core.dao.mapper.SupplierHotelIdListMapper;
 import com.trip.booking.spa.core.api.meituan.access.HotelInfoAccess;
 import com.trip.booking.spa.core.api.meituan.access.HotelListAccess;
 import com.trip.booking.spa.core.api.meituan.access.ProductInfoAccess;

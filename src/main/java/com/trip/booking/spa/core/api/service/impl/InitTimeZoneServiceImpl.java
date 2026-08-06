@@ -6,12 +6,12 @@ import com.trip.booking.spa.core.placeholder.HotelBasePlaceholderClient;
 import com.trip.booking.spa.core.placeholder.hotelbase.request.SupplierHotelInfoRequest;
 import com.trip.booking.spa.core.placeholder.hotelbase.response.GetCityInfoBySupplierHotelIdResponse;
 import com.trip.booking.spa.core.placeholder.hotelbase.result.BaseResult;
-import com.trip.booking.spa.core.api.common.bean.CityZone;
-import com.trip.booking.spa.core.api.common.mapper.InitTimeZoneMapper;
-import com.trip.booking.spa.core.api.common.mapper.UpHotelMapper;
+import com.trip.booking.spa.core.dao.entity.CityZone;
+import com.trip.booking.spa.core.dao.mapper.InitTimeZoneMapper;
+import com.trip.booking.spa.core.dao.mapper.UpHotelMapper;
 import com.trip.booking.spa.core.api.didatravel.utils.DidaTravelProductConvertUtil;
-import com.trip.booking.spa.core.api.model.DataRecord;
-import com.trip.booking.spa.core.api.model.GeonamesCityInfo;
+import com.trip.booking.spa.core.api.common.bean.DataRecord;
+import com.trip.booking.spa.core.api.common.bean.GeonamesCityInfo;
 import com.trip.booking.spa.core.api.service.InitTimeZoneService;
 import com.trip.booking.spa.core.config.NacosRuntimeConfig;
 import com.trip.booking.spa.core.redis.RedisUtils;
@@ -234,7 +234,7 @@ public class InitTimeZoneServiceImpl implements InitTimeZoneService {
      * @author: dick_w 
      * @date: 2025/1/14 16:08
      * @param: [cityZoneList]
-     * @return: java.util.List<com.trip.booking.spa.core.api.common.bean.CityZone>
+     * @return: java.util.List<com.trip.booking.spa.core.dao.entity.CityZone>
      **/
     private List<CityZone> excludeData(List<CityZone> cityZoneList) {
         // 先查询，根据cityZoneList里面的cityName

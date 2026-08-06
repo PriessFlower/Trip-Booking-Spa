@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 
 @SpringBootApplication
 @MapperScan(basePackages = {
-        "com.trip.booking.spa.core.api.common.mapper",
+        "com.trip.booking.spa.core.dao.mapper",
         "com.trip.booking.spa.core.api.ratehawk.mapper",
         "com.trip.booking.spa.core.api.expedia.mapper"
 })

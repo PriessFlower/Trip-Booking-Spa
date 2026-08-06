@@ -1,4 +1,4 @@
-package com.trip.booking.spa.core.api.model;
+package com.trip.booking.spa.core.api.common.bean;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

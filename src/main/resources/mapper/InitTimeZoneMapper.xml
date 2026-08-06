@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.trip.booking.spa.core.api.common.mapper.InitTimeZoneMapper">
+<mapper namespace="com.trip.booking.spa.core.dao.mapper.InitTimeZoneMapper">
 
-    <select id="getCityZoneListByCityNames" resultType="com.trip.booking.spa.core.api.common.bean.CityZone">
+    <select id="getCityZoneListByCityNames" resultType="com.trip.booking.spa.core.dao.entity.CityZone">
         select * from city_zone where city_name in
         <foreach collection="list" item="item" open="(" separator="," close=")">
             #{item.cityName}
@@ -33,7 +33,7 @@
         </foreach>
     </delete>
 
-    <select id="getCityZoneNoneList" resultType="com.trip.booking.spa.core.api.common.bean.CityZone">
+    <select id="getCityZoneNoneList" resultType="com.trip.booking.spa.core.dao.entity.CityZone">
         select * from city_zone where  timezone = '' or timezone is null
     </select>
 
