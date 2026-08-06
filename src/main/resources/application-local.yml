@@ -45,5 +45,3 @@ expedia:
         task:
           switch: 1
           return: 1
-  commission:
-    rate: 0.525

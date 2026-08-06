@@ -16,7 +16,6 @@ import com.trip.booking.spa.core.util.JsonUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.redisson.api.RateIntervalUnit;
 
 import java.util.List;
@@ -39,10 +38,6 @@ public class CheckPriceAccess extends BaseHttpAccess<String, CheckPriceResponse>
 
     private static int QPS = 50;
 
-    /**
-     * Rapid 测试环境的沙箱场景头（Test: standard 等）；为空则不发送，生产不受影响
-     */
-    private String testScenario;
 
     public CheckPriceAccess(String host, String language, String authorization, String customerIp, String customerSessionId, DistributedRateLimiter redisRateLimiter) {
         super(SupplierSourceEnum.EXPEDIA, SupplierDataTypeEnum.CHECK_PRICE, MonitorNameEnum.SPA_SUPPLIER_API_ORDER_PRICE, 0);
@@ -54,10 +49,6 @@ public class CheckPriceAccess extends BaseHttpAccess<String, CheckPriceResponse>
         this.redisRateLimiter = redisRateLimiter;
     }
 
-    public CheckPriceAccess(String host, String language, String authorization, String customerIp, String customerSessionId, DistributedRateLimiter redisRateLimiter, String testScenario) {
-        this(host, language, authorization, customerIp, customerSessionId, redisRateLimiter);
-        this.testScenario = testScenario;
-    }
 
     @Override
     protected ResponseResult<CheckPriceResponse> request(String url, String request, IParser<CheckPriceResponse> parser) throws Exception {
@@ -66,9 +57,6 @@ public class CheckPriceAccess extends BaseHttpAccess<String, CheckPriceResponse>
         headers.put("Customer-Ip", customerIp);
         headers.put("Customer-Session-Id", customerSessionId);
         headers.put("Content-Type", "application/json");
-        if (StringUtils.isNotBlank(testScenario)) {
-            headers.put("Test", testScenario);
-        }
         ResponseResult result = HttpUtils.accessGet(url + request, headers, null, parser);
         log.info("expedia checkprice request:{} response: {}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(result));
         return result;

@@ -23,8 +23,6 @@ expedia:
         task:
           switch: 1
           return: 1
-  commission:
-    rate: 0.525
 
 # 定时任务开关与调度（enabled 为运行时动态读取，改配置即生效；cron 仅启动时读取，改后需重启）
 task:

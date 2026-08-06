@@ -43,10 +43,6 @@ public class QueryProductAccess extends BaseHttpAccess<QueryPriceRequest, QueryP
 
     private static int QPS = 500;
 
-    /**
-     * Rapid 测试环境的沙箱场景头（Test: standard 等）；为空则不发送，生产不受影响
-     */
-    private String testScenario;
 
     public QueryProductAccess(String host, String language, String authorization, String customerIp, String customerSessionId, DistributedRateLimiter redisRateLimiter) {
         super(SupplierSourceEnum.EXPEDIA, SupplierDataTypeEnum.PRODUCT_PRICE, MonitorNameEnum.SPA_SUPPLIER_API_PRODUCT_PRICES, 0);
@@ -58,10 +54,6 @@ public class QueryProductAccess extends BaseHttpAccess<QueryPriceRequest, QueryP
         this.redisRateLimiter = redisRateLimiter;
     }
 
-    public QueryProductAccess(String host, String language, String authorization, String customerIp, String customerSessionId, DistributedRateLimiter redisRateLimiter, String testScenario) {
-        this(host, language, authorization, customerIp, customerSessionId, redisRateLimiter);
-        this.testScenario = testScenario;
-    }
 
     @Override
     protected ResponseResult<QueryPriceResponse> request(String url, QueryPriceRequest request, IParser<QueryPriceResponse> parser) throws Exception {
@@ -70,9 +62,6 @@ public class QueryProductAccess extends BaseHttpAccess<QueryPriceRequest, QueryP
         headers.put("Customer-Ip", customerIp);
         headers.put("Customer-Session-Id", customerSessionId);
         headers.put("Content-Type", "application/json");
-        if (StringUtils.isNotBlank(testScenario)) {
-            headers.put("Test", testScenario);
-        }
         Map<String, String> body = Maps.newHashMap();
         body.put("property_id", request.getProperty_id());
         body.put("language", language);

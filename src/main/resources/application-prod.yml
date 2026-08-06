@@ -68,9 +68,10 @@ expedia:
   session: ${EXPEDIA_CUSTOMER_SESSION_ID:trip-booking-spa-prod}
   ownIp: ${EXPEDIA_CUSTOMER_IP:127.0.0.1}
   localFilePath: /home/webrun/logs/file
-  partner_point_of_sale: B2B_SA_PKG_MOD_VCC
-  payment_terms: 1
-  billing_terms: VCC
+  # Tripbooking AI 新合同 B2B profile（2026-08 technical workshop P5/P83）
+  partner_point_of_sale: ${EXPEDIA_PARTNER_POS:B2B_SA_PKG_MOD_AGENT}
+  payment_terms: ${EXPEDIA_PAYMENT_TERMS:2}
+  billing_terms: ${EXPEDIA_BILLING_TERMS:EAC}
   url:
     # Deliberately defaults to the test endpoint. Production requires an explicit override.
     host: ${EXPEDIA_API_HOST:https://test.ean.com}
