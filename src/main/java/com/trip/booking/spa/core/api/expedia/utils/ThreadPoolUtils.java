@@ -1,8 +1,8 @@
 package com.trip.booking.spa.core.api.expedia.utils;
 
 
-import com.trip.booking.spa.core.poll.CustomRejectedExecutionHandler;
-import com.trip.booking.spa.core.poll.CustomThreadFactory;
+import com.trip.booking.spa.core.util.CustomRejectedExecutionHandler;
+import com.trip.booking.spa.core.util.CustomThreadFactory;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.extern.log4j.Log4j2;
 

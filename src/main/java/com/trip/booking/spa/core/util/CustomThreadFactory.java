@@ -1,4 +1,4 @@
-package com.trip.booking.spa.core.poll;
+package com.trip.booking.spa.core.util;
 
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;

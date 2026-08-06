@@ -1,7 +1,7 @@
-package com.trip.booking.spa.core.push.service;
+package com.trip.booking.spa.core.api.service;
 
 
-import com.trip.booking.spa.core.push.model.UpHotel;
+import com.trip.booking.spa.core.dao.entity.UpHotel;
 
 import java.util.List;
 

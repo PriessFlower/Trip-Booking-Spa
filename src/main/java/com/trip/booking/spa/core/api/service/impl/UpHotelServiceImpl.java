@@ -1,9 +1,9 @@
-package com.trip.booking.spa.core.push.service.impl;
+package com.trip.booking.spa.core.api.service.impl;
 
 
 import com.trip.booking.spa.core.dao.mapper.UpHotelMapper;
-import com.trip.booking.spa.core.push.model.UpHotel;
-import com.trip.booking.spa.core.push.service.UpHotelService;
+import com.trip.booking.spa.core.dao.entity.UpHotel;
+import com.trip.booking.spa.core.api.service.UpHotelService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;

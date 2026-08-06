@@ -1,4 +1,4 @@
-package com.trip.booking.spa.core.push.model;
+package com.trip.booking.spa.core.dao.entity;
 
 import lombok.Builder;
 import lombok.Getter;
