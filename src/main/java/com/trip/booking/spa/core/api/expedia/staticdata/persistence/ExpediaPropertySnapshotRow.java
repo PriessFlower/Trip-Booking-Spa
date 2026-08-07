@@ -6,6 +6,7 @@ import java.sql.Timestamp;
 public class ExpediaPropertySnapshotRow {
 
     private final String propertyId;
+    private final String language;
     private final boolean active;
     private final String name;
     private final String countryCode;
@@ -24,6 +25,7 @@ public class ExpediaPropertySnapshotRow {
 
     public ExpediaPropertySnapshotRow(
             String propertyId,
+            String language,
             boolean active,
             String name,
             String countryCode,
@@ -40,6 +42,7 @@ public class ExpediaPropertySnapshotRow {
             String normalizedJson,
             String evidenceJson) {
         this.propertyId = propertyId;
+        this.language = language;
         this.active = active;
         this.name = name;
         this.countryCode = countryCode;
@@ -58,6 +61,8 @@ public class ExpediaPropertySnapshotRow {
     }
 
     public String getPropertyId() { return propertyId; }
+
+    public String getLanguage() { return language; }
     public boolean isActive() { return active; }
     public String getName() { return name; }
     public String getCountryCode() { return countryCode; }

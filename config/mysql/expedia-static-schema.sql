@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS expedia_property_content (
     property_id VARCHAR(32) NOT NULL,
+    language VARCHAR(8) NOT NULL DEFAULT 'en-US',
     active TINYINT(1) NOT NULL DEFAULT 1,
     name VARCHAR(512) NULL,
     country_code CHAR(2) NULL,
@@ -17,7 +18,7 @@ CREATE TABLE IF NOT EXISTS expedia_property_content (
     evidence_json JSON NOT NULL,
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (property_id),
+    PRIMARY KEY (property_id, language),
     KEY idx_expedia_property_country_city (country_code, city),
     KEY idx_expedia_property_source_updated (source_updated_at),
     KEY idx_expedia_property_active (active)

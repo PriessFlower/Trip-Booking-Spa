@@ -57,6 +57,14 @@ public class ExpediaStaticDataIngestionService {
         }
 
         int saved = 0;
+        for (String lang : resolveLanguages(language)) {
+            saved += ingestBatches(uniqueIds, lang);
+        }
+        return saved;
+    }
+
+    private int ingestBatches(List<String> uniqueIds, String language) {
+        int saved = 0;
         int batchSize = properties.getStaticData().getBatchSize();
         for (int start = 0; start < uniqueIds.size(); start += batchSize) {
             List<String> batch = uniqueIds.subList(start, Math.min(start + batchSize, uniqueIds.size()));
@@ -66,17 +74,34 @@ public class ExpediaStaticDataIngestionService {
     }
 
     /**
+     * 指定语言则只拉该语言；未指定则按配置的 languages 列表逐语言拉取
+     */
+    private List<String> resolveLanguages(String language) {
+        if (StringUtils.hasText(language)) {
+            return List.of(language);
+        }
+        List<String> configured = properties.getStaticData().getLanguages();
+        if (configured == null || configured.isEmpty()) {
+            return List.of(properties.getStaticData().getLanguage());
+        }
+        return configured;
+    }
+
+    /**
      * Ingests the first request and every token page returned by Rapid. This also
      * supports date-added/date-updated searches built with ExpediaPropertyContentRequest.
      */
     @Transactional
     public int ingest(ExpediaPropertyContentRequest initialRequest) {
+        String language = StringUtils.hasText(initialRequest.language())
+                ? initialRequest.language()
+                : properties.getStaticData().getLanguage();
         ExpediaPropertyContentRequest request = initialRequest;
         Set<String> seenTokens = new HashSet<>();
         int saved = 0;
         while (request != null) {
             ExpediaPropertyContentPage page = client.fetch(request);
-            saved += persist(page);
+            saved += persist(page, language);
             String token = nextToken(page);
             if (!StringUtils.hasText(token)) {
                 request = null;
@@ -102,10 +127,11 @@ public class ExpediaStaticDataIngestionService {
     }
 
     private ExpediaPropertySnapshotRow toRow(
-            ExpediaRawProperty raw, ExpediaPropertyDocument document) {
+            ExpediaRawProperty raw, ExpediaPropertyDocument document, String language) {
         try {
             return new ExpediaPropertySnapshotRow(
                     document.supplierPropertyId(),
+                    language,
                     document.active(),
                     document.name(),
                     document.address() == null ? null : document.address().countryCode(),
@@ -126,11 +152,11 @@ public class ExpediaStaticDataIngestionService {
         }
     }
 
-    private int persist(ExpediaPropertyContentPage page) {
+    private int persist(ExpediaPropertyContentPage page, String language) {
         int saved = 0;
         for (ExpediaRawProperty raw : page.properties()) {
             ExpediaPropertyDocument document = contentMapper.map(raw);
-            saved += databaseMapper.upsert(toRow(raw, document));
+            saved += databaseMapper.upsert(toRow(raw, document, language));
         }
         return saved;
     }

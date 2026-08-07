@@ -131,6 +131,10 @@ public class ExpediaRapidProperties implements InitializingBean {
         private boolean enabled;
         private int batchSize = 250;
         private String language = "en-US";
+        /**
+         * 摄取的语言列表；不指定语言时按此列表逐语言拉取
+         */
+        private java.util.List<String> languages = new java.util.ArrayList<>(java.util.List.of("en-US", "zh-CN"));
         private String supplySource = "expedia";
         private String mappingVersion = "expedia-content-v1";
 
@@ -160,6 +164,10 @@ public class ExpediaRapidProperties implements InitializingBean {
         public void setLanguage(String language) {
             this.language = language;
         }
+
+        public java.util.List<String> getLanguages() { return languages; }
+
+        public void setLanguages(java.util.List<String> languages) { this.languages = languages; }
 
         public String getSupplySource() {
             return supplySource;

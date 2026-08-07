@@ -6,11 +6,11 @@
     <insert id="upsert"
             parameterType="com.trip.booking.spa.core.api.expedia.staticdata.persistence.ExpediaPropertySnapshotRow">
         INSERT INTO expedia_property_content (
-            property_id, active, name, country_code, city, latitude, longitude, star_rating,
+            property_id, language, active, name, country_code, city, latitude, longitude, star_rating,
             source_added_at, source_updated_at, fetched_at, raw_sha256, mapping_version,
             raw_json, normalized_json, evidence_json
         ) VALUES (
-            #{propertyId}, #{active}, #{name}, #{countryCode}, #{city}, #{latitude}, #{longitude}, #{starRating},
+            #{propertyId}, #{language}, #{active}, #{name}, #{countryCode}, #{city}, #{latitude}, #{longitude}, #{starRating},
             #{sourceAddedAt}, #{sourceUpdatedAt}, #{fetchedAt}, #{rawSha256}, #{mappingVersion},
             CAST(#{rawJson} AS JSON), CAST(#{normalizedJson} AS JSON), CAST(#{evidenceJson} AS JSON)
         )
