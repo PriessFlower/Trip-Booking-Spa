@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trip.booking.spa.core.api.expedia.mapper.ExpediaGeoMapper">
+
+    <insert id="upsertCountryInfo" parameterType="java.util.HashMap">
+        INSERT INTO country_info (
+            country_id, country_code, country_name, country_name_cn,
+            continent, continent_cn, longitude, latitude, note
+        ) VALUES (
+            #{countryId}, #{countryCode}, #{countryName}, #{countryNameCn},
+            #{continent}, #{continentCn}, #{longitude}, #{latitude}, #{note}
+        )
+        ON DUPLICATE KEY UPDATE
+            country_code = VALUES(country_code),
+            country_name = VALUES(country_name),
+            country_name_cn = VALUES(country_name_cn),
+            continent = VALUES(continent),
+            continent_cn = VALUES(continent_cn),
+            longitude = VALUES(longitude),
+            latitude = VALUES(latitude),
+            note = VALUES(note)
+    </insert>
+
+    <insert id="upsertCityInfo" parameterType="java.util.HashMap">
+        INSERT INTO city_info (
+            city_id, city_name, city_name_cn, state_id, state_name, state_name_cn,
+            country_id, longitude, latitude, note
+        ) VALUES (
+            #{cityId}, #{cityName}, #{cityNameCn}, #{stateId}, #{stateName}, #{stateNameCn},
+            #{countryId}, #{longitude}, #{latitude}, #{note}
+        )
+        ON DUPLICATE KEY UPDATE
+            city_name = VALUES(city_name),
+            city_name_cn = VALUES(city_name_cn),
+            state_id = VALUES(state_id),
+            state_name = VALUES(state_name),
+            state_name_cn = VALUES(state_name_cn),
+            country_id = VALUES(country_id),
+            longitude = VALUES(longitude),
+            latitude = VALUES(latitude),
+            note = VALUES(note)
+    </insert>
+</mapper>

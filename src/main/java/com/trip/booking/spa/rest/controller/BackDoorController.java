@@ -54,6 +54,12 @@ public class BackDoorController {
     private ExpediaCPSQueryPriceService expediaCPSQueryPriceService;
     @Resource
     private ExpediaStaticDataIngestionService expediaStaticDataIngestionService;
+    @Resource
+    private com.trip.booking.spa.core.api.expedia.staticdata.catalog.ExpediaCatalogTransformService expediaCatalogTransformService;
+    @Resource
+    private com.trip.booking.spa.core.api.expedia.staticdata.service.ExpediaCatalogSeedService expediaCatalogSeedService;
+    @Resource
+    private com.trip.booking.spa.core.api.expedia.staticdata.service.ExpediaGeographyIngestionService expediaGeographyIngestionService;
 
     @GetMapping("/expedia/static/ingest")
     @ApiOperation("Expedia静态数据摄取-按酒店ID逗号分隔")
@@ -62,6 +68,48 @@ public class BackDoorController {
         List<String> ids = Arrays.asList(propertyIds.split(","));
         int count = expediaStaticDataIngestionService.ingestByPropertyIds(ids, language);
         return HttpResponse.getSuccessInstance(count);
+    }
+
+    @GetMapping("/expedia/catalog/transform")
+    @ApiOperation("Expedia快照加工进打底目录-按酒店ID逗号分隔")
+    public HttpResponse expediaCatalogTransform(@RequestParam("propertyIds") String propertyIds) {
+        List<String> ids = Arrays.asList(propertyIds.split(","));
+        int count = expediaCatalogTransformService.transformByPropertyIds(ids);
+        return HttpResponse.getSuccessInstance(count);
+    }
+
+    @GetMapping("/expedia/catalog/seed")
+    @ApiOperation("Expedia播种：catalog清单→(可选)摄取→(可选)加工；download/updateDays/startLine 对齐旧链路运维语义")
+    public HttpResponse expediaCatalogSeed(@RequestParam(value = "countryCodes", required = false) String countryCodes,
+                                           @RequestParam(value = "limit", defaultValue = "0") int limit,
+                                           @RequestParam(value = "ingest", defaultValue = "false") boolean ingest,
+                                           @RequestParam(value = "transform", defaultValue = "false") boolean transform,
+                                           @RequestParam(value = "download", defaultValue = "true") boolean download,
+                                           @RequestParam(value = "updateDays", required = false) Integer updateDays,
+                                           @RequestParam(value = "startLine", defaultValue = "0") int startLine) {
+        java.util.Set<String> countries = org.apache.commons.lang3.StringUtils.isBlank(countryCodes)
+                ? java.util.Set.of()
+                : java.util.Set.copyOf(Arrays.asList(countryCodes.toUpperCase().split(",")));
+        return HttpResponse.getSuccessInstance(expediaCatalogSeedService.seed(
+                countries, limit, ingest, transform, download, updateDays, startLine));
+    }
+
+    @GetMapping("/expedia/geo/countries")
+    @ApiOperation("Expedia国家建档（原saveCountryInfo）；continents可选，如 ASIA,ANTARCTICA")
+    public HttpResponse expediaGeoCountries(@RequestParam(value = "continents", required = false) String continents) {
+        java.util.Set<String> filter = org.apache.commons.lang3.StringUtils.isBlank(continents)
+                ? java.util.Set.of()
+                : java.util.Set.copyOf(Arrays.asList(continents.toUpperCase().split(",")));
+        return HttpResponse.getSuccessInstance(expediaGeographyIngestionService.syncCountries(filter));
+    }
+
+    @GetMapping("/expedia/geo/cities")
+    @ApiOperation("Expedia城市建档（原saveCityInfo）；countryIds可选(region id逗号分隔)，空=全球（慎用）")
+    public HttpResponse expediaGeoCities(@RequestParam(value = "countryIds", required = false) String countryIds) {
+        List<String> ids = org.apache.commons.lang3.StringUtils.isBlank(countryIds)
+                ? List.of()
+                : Arrays.asList(countryIds.split(","));
+        return HttpResponse.getSuccessInstance(expediaGeographyIngestionService.syncCities(ids));
     }
 
 //    //qps限流 生产环境2.5  测试环境约0.16（1分钟10次）
