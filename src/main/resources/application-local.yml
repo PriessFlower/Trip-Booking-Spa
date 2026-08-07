@@ -9,7 +9,7 @@ spring:
   datasource:
     host: 127.0.0.1
     port: 3307
-    name: test_tg
+    name: tg_trip_spa
     username: tg_local
     password: tg_local_pw
     driver-class-name: com.mysql.cj.jdbc.Driver

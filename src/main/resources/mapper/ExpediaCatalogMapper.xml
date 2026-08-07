@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trip.booking.spa.core.api.expedia.mapper.ExpediaCatalogMapper">
+
+    <select id="selectSnapshots" resultType="java.util.HashMap">
+        SELECT language, active, CAST(normalized_json AS CHAR) AS normalizedJson
+        FROM expedia_property_content
+        WHERE property_id = #{propertyId}
+    </select>
+
+    <select id="selectAllPropertyIds" resultType="java.lang.String">
+        SELECT DISTINCT property_id FROM expedia_property_content WHERE active = 1
+    </select>
+
+    <!-- ========== 目录域 ========== -->
+
+    <insert id="upsertHotelDetails" parameterType="java.util.HashMap">
+        INSERT INTO hotel_details (
+            hotel_id, hotel_name, hotel_name_cn, telephone, address, address_cn, post_code,
+            city_name, city_name_cn, state_name, country_code,
+            star, score, longitude, latitude, hotel_group, brand, status, operator
+        ) VALUES (
+            #{hotelId}, #{hotelName}, #{hotelNameCn}, #{telephone}, #{address}, #{addressCn}, #{postCode},
+            #{cityName}, #{cityNameCn}, #{stateName}, #{countryCode},
+            #{star}, #{score}, #{longitude}, #{latitude}, #{hotelGroup}, #{brand}, #{status}, 'expedia-transform'
+        )
+        ON DUPLICATE KEY UPDATE
+            hotel_name = VALUES(hotel_name), hotel_name_cn = VALUES(hotel_name_cn),
+            telephone = VALUES(telephone), address = VALUES(address), address_cn = VALUES(address_cn),
+            post_code = VALUES(post_code), city_name = VALUES(city_name), city_name_cn = VALUES(city_name_cn),
+            state_name = VALUES(state_name), country_code = VALUES(country_code),
+            star = VALUES(star), score = VALUES(score),
+            longitude = VALUES(longitude), latitude = VALUES(latitude),
+            hotel_group = VALUES(hotel_group), brand = VALUES(brand),
+            status = VALUES(status), del = 0
+    </insert>
+
+    <insert id="upsertRoomBase" parameterType="java.util.HashMap">
+        INSERT INTO room_base (
+            room_id, hotel_id, room_name, room_name_cn, area,
+            bed_name, bed_name_cn, bed_type, bed_desc, bed_number, capacity, status, operator
+        ) VALUES (
+            #{roomId}, #{hotelId}, #{roomName}, #{roomNameCn}, #{area},
+            #{bedName}, #{bedNameCn}, #{bedType}, #{bedDesc}, #{bedNumber}, #{capacity}, 1, 'expedia-transform'
+        )
+        ON DUPLICATE KEY UPDATE
+            hotel_id = VALUES(hotel_id), room_name = VALUES(room_name), room_name_cn = VALUES(room_name_cn),
+            area = VALUES(area), bed_name = VALUES(bed_name), bed_name_cn = VALUES(bed_name_cn),
+            bed_type = VALUES(bed_type), bed_desc = VALUES(bed_desc), bed_number = VALUES(bed_number),
+            capacity = VALUES(capacity), status = 1, del = 0
+    </insert>
+
+    <delete id="deleteHotelPictures">
+        DELETE FROM hotel_picture WHERE hotel_id = #{hotelId}
+    </delete>
+
+    <insert id="insertHotelPicture" parameterType="java.util.HashMap">
+        INSERT INTO hotel_picture (hotel_id, room_id, type, name, sort, url)
+        VALUES (#{hotelId}, #{roomId}, #{type}, #{name}, #{sort}, #{url})
+    </insert>
+
+    <insert id="upsertHotelExtend" parameterType="java.util.HashMap">
+        INSERT INTO hotel_extend (
+            hotel_id, room_id, language, check_in, check_out, instructions, fees, policies, descriptions
+        ) VALUES (
+            #{hotelId}, '', #{language}, #{checkIn}, #{checkOut}, #{instructions}, #{fees}, #{policies}, #{descriptions}
+        )
+        ON DUPLICATE KEY UPDATE
+            check_in = VALUES(check_in), check_out = VALUES(check_out),
+            instructions = VALUES(instructions), fees = VALUES(fees),
+            policies = VALUES(policies), descriptions = VALUES(descriptions), del = 0
+    </insert>
+
+    <!-- ========== 档案域 ========== -->
+
+    <insert id="upsertSupplierHotelBase" parameterType="java.util.HashMap">
+        INSERT INTO supplier_hotel_base (
+            supplier_id, supplier_hotel_id, hotel_id, merger,
+            supplier_hotel_name, supplier_hotel_name_cn, telephone, postcode,
+            address, address_cn, country_code, country_name, country_name_cn,
+            city_name, city_name_cn, state_name, state_name_cn,
+            longitude, latitude, hotel_type,
+            brand_id, brand_name, group_id, group_name,
+            score, book_able, status, descriptions, operator
+        ) VALUES (
+            #{supplierId}, #{supplierHotelId}, #{hotelId}, 1,
+            #{supplierHotelName}, #{supplierHotelNameCn}, #{telephone}, #{postcode},
+            #{address}, #{addressCn}, #{countryCode}, #{countryName}, #{countryNameCn},
+            #{cityName}, #{cityNameCn}, #{stateName}, #{stateNameCn},
+            #{longitude}, #{latitude}, #{hotelType},
+            #{brandId}, #{brandName}, #{groupId}, #{groupName},
+            #{score}, #{bookAble}, #{status}, #{descriptions}, 'expedia-transform'
+        )
+        ON DUPLICATE KEY UPDATE
+            hotel_id = VALUES(hotel_id), merger = 1,
+            supplier_hotel_name = VALUES(supplier_hotel_name),
+            supplier_hotel_name_cn = VALUES(supplier_hotel_name_cn),
+            telephone = VALUES(telephone), postcode = VALUES(postcode),
+            address = VALUES(address), address_cn = VALUES(address_cn),
+            country_code = VALUES(country_code), country_name = VALUES(country_name),
+            country_name_cn = VALUES(country_name_cn),
+            city_name = VALUES(city_name), city_name_cn = VALUES(city_name_cn),
+            state_name = VALUES(state_name), state_name_cn = VALUES(state_name_cn),
+            longitude = VALUES(longitude), latitude = VALUES(latitude),
+            hotel_type = VALUES(hotel_type),
+            brand_id = VALUES(brand_id), brand_name = VALUES(brand_name),
+            group_id = VALUES(group_id), group_name = VALUES(group_name),
+            score = VALUES(score), book_able = VALUES(book_able),
+            status = VALUES(status), descriptions = VALUES(descriptions), del = 0
+    </insert>
+
+    <insert id="upsertSupplierRoomBase" parameterType="java.util.HashMap">
+        INSERT INTO supplier_room_base (
+            supplier_id, supplier_room_id, supplier_hotel_id, room_id,
+            supplier_room_name, supplier_room_name_cn, description, area,
+            bed_info_list, capacity, is_smoking, merger, status, operator
+        ) VALUES (
+            #{supplierId}, #{supplierRoomId}, #{supplierHotelId}, #{roomId},
+            #{supplierRoomName}, #{supplierRoomNameCn}, #{description}, #{area},
+            #{bedInfoList}, #{capacity}, #{isSmoking}, 1, 1, 'expedia-transform'
+        )
+        ON DUPLICATE KEY UPDATE
+            supplier_hotel_id = VALUES(supplier_hotel_id), room_id = VALUES(room_id),
+            supplier_room_name = VALUES(supplier_room_name),
+            supplier_room_name_cn = VALUES(supplier_room_name_cn),
+            description = VALUES(description), area = VALUES(area),
+            bed_info_list = VALUES(bed_info_list), capacity = VALUES(capacity),
+            is_smoking = VALUES(is_smoking), merger = 1, status = 1
+    </insert>
+</mapper>
