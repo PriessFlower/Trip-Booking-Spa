@@ -5,6 +5,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.trip.booking.spa.core.api.expedia.config.ExpediaRapidProperties;
 import com.trip.booking.spa.core.api.expedia.mapper.ExpediaPropertySnapshotMapper;
 import com.trip.booking.spa.core.api.expedia.staticdata.client.ExpediaPropertyContentClient;
+import com.trip.booking.spa.core.api.expedia.staticdata.client.ExpediaInactivePropertiesClient;
 import com.trip.booking.spa.core.api.expedia.staticdata.client.ExpediaPropertyContentPage;
 import com.trip.booking.spa.core.api.expedia.staticdata.client.ExpediaPropertyContentRequest;
 import com.trip.booking.spa.core.api.expedia.staticdata.mapping.ExpediaPropertyContentMapper;
@@ -28,10 +29,11 @@ class ExpediaStaticDataIngestionServiceTest {
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
         ExpediaRapidProperties properties = new ExpediaRapidProperties();
         ExpediaPropertyContentClient client = mock(ExpediaPropertyContentClient.class);
+        ExpediaInactivePropertiesClient inactiveClient = mock(ExpediaInactivePropertiesClient.class);
         ExpediaPropertySnapshotMapper databaseMapper = mock(ExpediaPropertySnapshotMapper.class);
         ExpediaPropertyContentMapper contentMapper = new ExpediaPropertyContentMapper(objectMapper, properties);
         ExpediaStaticDataIngestionService service = new ExpediaStaticDataIngestionService(
-                properties, client, contentMapper, databaseMapper, objectMapper);
+                properties, client, inactiveClient, contentMapper, databaseMapper, objectMapper);
 
         Instant fetchedAt = Instant.parse("2026-08-06T00:00:00Z");
         ExpediaPropertyContentPage first = new ExpediaPropertyContentPage(

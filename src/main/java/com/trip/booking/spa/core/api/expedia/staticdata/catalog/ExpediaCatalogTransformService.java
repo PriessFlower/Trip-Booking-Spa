@@ -41,6 +41,14 @@ public class ExpediaCatalogTransformService {
         this.objectMapper = objectMapper;
     }
 
+    /** 目录层下线（承接旧 deleteHotelInfo 的删除语义：hotel_details 置 del） */
+    public int deactivateHotels(List<String> hotelIds) {
+        if (hotelIds == null || hotelIds.isEmpty()) {
+            return 0;
+        }
+        return catalogMapper.markHotelDetailsInactive(hotelIds);
+    }
+
     public int transformAll() {
         return transformByPropertyIds(catalogMapper.selectAllPropertyIds());
     }
@@ -154,8 +162,15 @@ public class ExpediaCatalogTransformService {
     // ---------- 目录域 ----------
 
     private void upsertHotelDetails(ExpediaPropertyDocument en, ExpediaPropertyDocument zh) {
+        String countryCode = en.address() == null ? null : en.address().countryCode();
+        String cityName = en.address() == null ? null : en.address().city();
         HashMap<String, Object> p = new HashMap<>();
         p.put("hotelId", en.supplierPropertyId());
+        // 地理外键：关联 Geography 档案（country_info/city_info）；档案未覆盖时为 null，
+        // upsert 用 COALESCE 保留旧值，建档后重跑 transform 即回填
+        p.put("countryId", StringUtils.isBlank(countryCode) ? null : catalogMapper.selectCountryIdByCode(countryCode));
+        p.put("cityId", StringUtils.isBlank(countryCode) || StringUtils.isBlank(cityName)
+                ? null : catalogMapper.selectCityIdByName(countryCode, cityName));
         p.put("hotelName", en.name());
         p.put("hotelNameCn", zh == null ? null : zh.name());
         p.put("telephone", en.phone());

@@ -1,7 +1,7 @@
 /*
  * Decompiled with CFR 0.152.
  */
-package com.trip.booking.spa.core.placeholder.hotelbase.enums;
+package com.trip.booking.spa.core.api.expedia.enums;
 
 public enum ExpediaContinentEnum {
     ANTARCTICA("11700", "Antarctica", "\u5357\u6781\u6d32"),

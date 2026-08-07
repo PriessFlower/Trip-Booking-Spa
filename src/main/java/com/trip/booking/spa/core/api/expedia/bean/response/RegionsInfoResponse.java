@@ -166,6 +166,20 @@ public class RegionsInfoResponse implements BaseResponse {
         private List<String> country;
         private List<String> province_state;
         private List<String> city;
+        /**
+         * 旧链路缺失的两种地区类型：multi_city_vicinity（都会区，如"曼谷及周边"）、
+         * high_level_region（大区）。不解析它们会漏掉曼谷等都会区城市（旧系统缺陷，迁移时补齐）。
+         */
+        private List<String> multi_city_vicinity;
+        private List<String> high_level_region;
+
+        public List<String> getMulti_city_vicinity() { return multi_city_vicinity; }
+
+        public void setMulti_city_vicinity(List<String> multi_city_vicinity) { this.multi_city_vicinity = multi_city_vicinity; }
+
+        public List<String> getHigh_level_region() { return high_level_region; }
+
+        public void setHigh_level_region(List<String> high_level_region) { this.high_level_region = high_level_region; }
 
         public List<String> getCountry() {
             return country;

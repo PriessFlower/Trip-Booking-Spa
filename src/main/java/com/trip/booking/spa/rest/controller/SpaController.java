@@ -14,7 +14,7 @@ import com.trip.booking.spa.core.api.request.PriceReq;
 import com.trip.booking.spa.core.api.request.PushProductsReq;
 import com.trip.booking.spa.core.api.request.Supplier;
 import com.trip.booking.spa.core.api.common.enums.SupplierSourceEnum;
-import com.trip.booking.spa.core.api.expedia.service.ExpediaStaticInfoService;
+import com.trip.booking.spa.core.api.expedia.staticdata.service.ExpediaGeographyIngestionService;
 import com.trip.booking.spa.core.api.service.BookingSyncService;
 import com.trip.booking.spa.core.api.service.CachePriceService;
 import com.trip.booking.spa.core.api.service.CancelSyncService;
@@ -50,7 +50,7 @@ import java.util.Map;
 public class SpaController {
 
     @Resource
-    private ExpediaStaticInfoService expediaStaticInfoService;
+    private ExpediaGeographyIngestionService expediaGeographyIngestionService;
 
     @Resource
     private NacosRuntimeConfig nacosRuntimeConfig;
@@ -203,7 +203,7 @@ public class SpaController {
      */
     @GetMapping(value = "/query/expediaHotelIdByCity")
     public ResponseDTO<List<String>> queryExpediaHotelIdByCity(@RequestParam("cityId") String cityId) {
-        return ResponseDTO.success(expediaStaticInfoService.queryHotelIdByCity(cityId));
+        return ResponseDTO.success(expediaGeographyIngestionService.queryHotelIdsByRegion(cityId));
     }
 
     private <T> T findSupplierService(Integer supplierId, String serviceSuffix, Class<T> serviceType) {

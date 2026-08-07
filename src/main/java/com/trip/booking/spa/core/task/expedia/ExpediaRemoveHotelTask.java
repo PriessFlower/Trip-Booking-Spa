@@ -1,6 +1,9 @@
 package com.trip.booking.spa.core.task.expedia;
 
-import com.trip.booking.spa.core.api.expedia.service.ExpediaStaticInfoService;
+import com.trip.booking.spa.core.api.expedia.staticdata.catalog.ExpediaCatalogTransformService;
+import com.trip.booking.spa.core.api.expedia.staticdata.service.ExpediaStaticDataIngestionService;
+
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
@@ -21,7 +24,10 @@ import org.springframework.stereotype.Component;
 public class ExpediaRemoveHotelTask {
 
     @Autowired
-    private ExpediaStaticInfoService expediaStaticInfoService;
+    private ExpediaStaticDataIngestionService ingestionService;
+
+    @Autowired
+    private ExpediaCatalogTransformService transformService;
 
     @Autowired
     private RedissonClient redissonClient;
@@ -42,7 +48,10 @@ public class ExpediaRemoveHotelTask {
         try {
             log.info("ExpediaRemoveHotelTask is start!");
             String deleteDate = environment.getProperty("task.expedia-remove-hotel.delete-date", "");
-            expediaStaticInfoService.deleteHotelInfo(deleteDate);
+            // Inactive API 拉下线名单 → 快照置 inactive → 目录置 del（承接旧 deleteHotelInfo 语义）
+            List<String> inactiveIds = ingestionService.fetchAndMarkInactive(deleteDate);
+            int deactivated = transformService.deactivateHotels(inactiveIds);
+            log.info("ExpediaRemoveHotelTask 下线酒店 {} 家，目录置 del {} 行", inactiveIds.size(), deactivated);
             log.info("ExpediaRemoveHotelTask is end!");
         } catch (Exception e) {
             log.error("ExpediaRemoveHotelTask ,error:", e);

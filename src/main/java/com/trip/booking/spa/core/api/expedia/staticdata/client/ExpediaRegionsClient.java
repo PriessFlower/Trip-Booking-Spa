@@ -48,12 +48,17 @@ public class ExpediaRegionsClient {
      * @return 该地区详情（含 descendants），请求失败/解析失败返回 null（对齐旧链路"单点失败不断流程"的语义）
      */
     public RegionsInfoResponse fetchRegion(String regionId, String language) {
+        return fetchRegion(regionId, language, "details");
+    }
+
+    /** include 可选 details / property_ids（旧 queryHotelIdByCity 语义） */
+    public RegionsInfoResponse fetchRegion(String regionId, String language, String include) {
         try {
             URI uri = UriComponentsBuilder
                     .fromHttpUrl(properties.getUrl().getHost())
                     .path(REGIONS_PATH + regionId)
                     .queryParam("language", language)
-                    .queryParam("include", "details")
+                    .queryParam("include", include)
                     .build().encode().toUri();
             HttpHeaders headers = new HttpHeaders();
             headers.setAccept(List.of(MediaType.APPLICATION_JSON));

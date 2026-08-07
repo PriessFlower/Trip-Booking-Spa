@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trip.booking.spa.core.api.expedia.config.ExpediaRapidProperties;
 import com.trip.booking.spa.core.api.expedia.mapper.ExpediaPropertySnapshotMapper;
+import com.trip.booking.spa.core.api.expedia.staticdata.client.ExpediaInactivePropertiesClient;
 import com.trip.booking.spa.core.api.expedia.staticdata.client.ExpediaPropertyContentClient;
 import com.trip.booking.spa.core.api.expedia.staticdata.client.ExpediaPropertyContentPage;
 import com.trip.booking.spa.core.api.expedia.staticdata.client.ExpediaPropertyContentRequest;
@@ -29,6 +30,7 @@ public class ExpediaStaticDataIngestionService {
 
     private final ExpediaRapidProperties properties;
     private final ExpediaPropertyContentClient client;
+    private final ExpediaInactivePropertiesClient inactiveClient;
     private final ExpediaPropertyContentMapper contentMapper;
     private final ExpediaPropertySnapshotMapper databaseMapper;
     private final ObjectMapper objectMapper;
@@ -36,11 +38,13 @@ public class ExpediaStaticDataIngestionService {
     public ExpediaStaticDataIngestionService(
             ExpediaRapidProperties properties,
             ExpediaPropertyContentClient client,
+            ExpediaInactivePropertiesClient inactiveClient,
             ExpediaPropertyContentMapper contentMapper,
             ExpediaPropertySnapshotMapper databaseMapper,
             ObjectMapper objectMapper) {
         this.properties = properties;
         this.client = client;
+        this.inactiveClient = inactiveClient;
         this.contentMapper = contentMapper;
         this.databaseMapper = databaseMapper;
         this.objectMapper = objectMapper;
@@ -112,6 +116,24 @@ public class ExpediaStaticDataIngestionService {
             }
         }
         return saved;
+    }
+
+    /**
+     * 承接旧 deleteHotelInfo：拉取自 since 起下线的酒店并将快照置为 inactive
+     *
+     * @param since yyyy-MM-dd；空=7 天前（旧默认）
+     * @return 已置 inactive 的 property_id 列表
+     */
+    public List<String> fetchAndMarkInactive(String since) {
+        if (!StringUtils.hasText(since)) {
+            since = java.time.LocalDate.now().minusDays(7).toString();
+        }
+        List<String> ids = inactiveClient.fetchInactivePropertyIds(since);
+        if (ids.isEmpty()) {
+            return ids;
+        }
+        markInactive(ids, Instant.now());
+        return ids;
     }
 
     @Transactional

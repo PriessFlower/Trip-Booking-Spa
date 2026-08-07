@@ -1,6 +1,8 @@
 package com.trip.booking.spa.core.task.expedia;
 
-import com.trip.booking.spa.core.api.expedia.service.ExpediaStaticInfoService;
+import com.trip.booking.spa.core.api.expedia.staticdata.service.ExpediaCatalogSeedService;
+
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
@@ -17,7 +19,7 @@ import org.springframework.stereotype.Component;
 public class ExpediaHotelSyncTask {
 
     @Autowired
-    private ExpediaStaticInfoService expediaStaticInfoService;
+    private ExpediaCatalogSeedService catalogSeedService;
 
     @Autowired
     private RedissonClient redissonClient;
@@ -38,7 +40,9 @@ public class ExpediaHotelSyncTask {
         try {
             log.info("ExpediaHotelSyncTask is start!");
             int updateDays = environment.getProperty("task.expedia-hotel-sync.update-days", Integer.class, 1);
-            expediaStaticInfoService.saveOrUpdateHotelInfo(true, false, updateDays, null, 0);
+            // 新链路：catalog 增量清单（最近 updateDays 天）→ 双语摄取 → 加工进目录（承接旧 saveOrUpdateHotelInfo 语义）
+            Object result = catalogSeedService.seed(Set.of(), 0, true, true, true, updateDays, 0);
+            log.info("ExpediaHotelSyncTask seed result: {}", result);
             log.info("ExpediaHotelSyncTask is end!");
         } catch (Exception e) {
             log.error("ExpediaHotelSyncTask ,error:", e);

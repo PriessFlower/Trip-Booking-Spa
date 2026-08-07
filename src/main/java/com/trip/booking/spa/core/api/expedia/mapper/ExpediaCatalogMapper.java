@@ -19,6 +19,10 @@ public interface ExpediaCatalogMapper {
 
     List<String> selectAllPropertyIds();
 
+    String selectCountryIdByCode(@Param("countryCode") String countryCode);
+
+    String selectCityIdByName(@Param("countryCode") String countryCode, @Param("cityName") String cityName);
+
     int upsertHotelDetails(HashMap<String, Object> params);
 
     int upsertRoomBase(HashMap<String, Object> params);
@@ -32,4 +36,14 @@ public interface ExpediaCatalogMapper {
     int upsertSupplierHotelBase(HashMap<String, Object> params);
 
     int upsertSupplierRoomBase(HashMap<String, Object> params);
+
+    List<String> selectSupplierHotelIds(@Param("supplierId") int supplierId,
+                                        @Param("offset") int offset,
+                                        @Param("limit") int limit);
+
+    int upsertGlobalProductSupplier(HashMap<String, Object> params);
+
+    int upsertSupplierProductBase(HashMap<String, Object> params);
+
+    int markHotelDetailsInactive(@Param("hotelIds") List<String> hotelIds);
 }

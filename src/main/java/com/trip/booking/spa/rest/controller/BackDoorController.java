@@ -4,7 +4,6 @@ package com.trip.booking.spa.rest.controller;
 import com.trip.booking.spa.core.api.aichotels.service.AichotelsHotelService;
 import com.trip.booking.spa.core.api.didatravel.service.DidatravelHotelService;
 import com.trip.booking.spa.core.api.expedia.service.ExpediaCPSQueryPriceService;
-import com.trip.booking.spa.core.api.expedia.service.ExpediaStaticInfoService;
 import com.trip.booking.spa.core.api.expedia.staticdata.service.ExpediaStaticDataIngestionService;
 import com.trip.booking.spa.core.api.fastpay.service.FastPayService;
 import com.trip.booking.spa.core.api.huitravel.service.HuiTravelService;
@@ -40,8 +39,6 @@ public class BackDoorController {
     private DidatravelHotelService didatravelHotelService;
     @Autowired
     private HuiTravelService huiTravelService;
-    @Autowired
-    private ExpediaStaticInfoService expediaStaticInfoService;
     @Resource
     private FastPayService fastPayStaticInfoService;
     @Resource
@@ -60,6 +57,8 @@ public class BackDoorController {
     private com.trip.booking.spa.core.api.expedia.staticdata.service.ExpediaCatalogSeedService expediaCatalogSeedService;
     @Resource
     private com.trip.booking.spa.core.api.expedia.staticdata.service.ExpediaGeographyIngestionService expediaGeographyIngestionService;
+    @Resource
+    private com.trip.booking.spa.core.api.expedia.staticdata.service.ExpediaProductMappingService expediaProductMappingService;
 
     @GetMapping("/expedia/static/ingest")
     @ApiOperation("Expedia静态数据摄取-按酒店ID逗号分隔")
@@ -92,6 +91,26 @@ public class BackDoorController {
                 : java.util.Set.copyOf(Arrays.asList(countryCodes.toUpperCase().split(",")));
         return HttpResponse.getSuccessInstance(expediaCatalogSeedService.seed(
                 countries, limit, ingest, transform, download, updateDays, startLine));
+    }
+
+    @GetMapping("/expedia/catalog/products")
+    @ApiOperation("Expedia产品映射建档（原saveOrUpdateProductInfo）；propertyIds空=分页全量")
+    public HttpResponse expediaCatalogProducts(@RequestParam(value = "propertyIds", required = false) String propertyIds,
+                                               @RequestParam(value = "checkIn", required = false) String checkIn,
+                                               @RequestParam(value = "checkOut", required = false) String checkOut,
+                                               @RequestParam(value = "startNum", required = false) Integer startNum) {
+        List<String> ids = org.apache.commons.lang3.StringUtils.isBlank(propertyIds)
+                ? List.of()
+                : Arrays.asList(propertyIds.split(","));
+        return HttpResponse.getSuccessInstance(expediaProductMappingService.syncProducts(checkIn, checkOut, ids, startNum));
+    }
+
+    @GetMapping("/expedia/catalog/deactivate")
+    @ApiOperation("Expedia下线酒店清理（原/delete/expedia/hotel）；since空=7天前")
+    public HttpResponse expediaCatalogDeactivate(@RequestParam(value = "since", required = false) String since) {
+        List<String> ids = expediaStaticDataIngestionService.fetchAndMarkInactive(since);
+        int deactivated = expediaCatalogTransformService.deactivateHotels(ids);
+        return HttpResponse.getSuccessInstance(ids.size() + "/" + deactivated);
     }
 
     @GetMapping("/expedia/geo/countries")
@@ -152,49 +171,6 @@ public class BackDoorController {
     public HttpResponse huiTravelHotelList(@RequestParam("countryCode") String countryCode, @RequestParam("cityId") String cityId) {
         System.out.println("push");
         huiTravelService.getHotelCodeListByCity(countryCode, cityId);
-        return HttpResponse.getSuccessInstance();
-    }
-
-    @GetMapping("/save/expedia/country")
-    @ApiOperation("国家静态数据查询-expedia")
-    public HttpResponse expediaSaveCountryInfo() {
-        expediaStaticInfoService.saveCountryInfo();
-        return HttpResponse.getSuccessInstance();
-    }
-
-    @GetMapping("/save/expedia/city")
-    @ApiOperation("城市静态数据查询-expedia")
-    public HttpResponse expediaSaveCityInfo(@RequestParam(value = "countryIds", required = false) List<String> countryIds) {
-        expediaStaticInfoService.saveCityInfo(countryIds);
-        return HttpResponse.getSuccessInstance();
-    }
-
-    @GetMapping("/save/expedia/hotel")
-    @ApiOperation("酒店静态数据保存-expedia")
-    public HttpResponse expediaSaveHotelInfo(@RequestParam("downloadFlag") boolean downloadFlag,
-                                             @RequestParam("allPushFlag") boolean allPushFlag,
-                                             @RequestParam("updateDays") Integer updateDays,
-                                             @RequestParam(value = "supplierHotelIds", required = false) List<String> supplierHotelIds,
-                                             @RequestParam(value = "startLine", required = false) Integer startLine
-    ) {
-        expediaStaticInfoService.saveOrUpdateHotelInfo(downloadFlag, allPushFlag, updateDays, supplierHotelIds, startLine);
-        return HttpResponse.getSuccessInstance();
-    }
-
-    @GetMapping("/delete/expedia/hotel")
-    @ApiOperation("下架酒店删除-expedia")
-    public HttpResponse expediaDeleteHotelInfo(@RequestParam("deleteDate") String deleteDate) {
-        expediaStaticInfoService.deleteHotelInfo(deleteDate);
-        return HttpResponse.getSuccessInstance();
-    }
-
-    @GetMapping("/save/expedia/product")
-    @ApiOperation("产品静态数据保存-expedia")
-    public HttpResponse expediaSaveProductInfo(@RequestParam("checkInDate") String checkInDate,
-                                               @RequestParam("checkOutDate") String checkOutDate,
-                                               @RequestParam(value = "supplierHotelIds", required = false) List<String> supplierHotelIds,
-                                               @RequestParam(value = "startNum", required = false) Integer startNum) {
-        expediaStaticInfoService.saveOrUpdateProductInfo(checkInDate, checkOutDate, supplierHotelIds, startNum);
         return HttpResponse.getSuccessInstance();
     }
 

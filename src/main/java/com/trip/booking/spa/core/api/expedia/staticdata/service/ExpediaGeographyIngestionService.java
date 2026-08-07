@@ -5,7 +5,7 @@ import com.trip.booking.spa.core.api.expedia.mapper.ExpediaGeoMapper;
 import com.trip.booking.spa.core.api.expedia.staticdata.client.ExpediaRegionsClient;
 import com.trip.booking.spa.core.api.common.enums.SupplierSourceEnum;
 import com.trip.booking.spa.core.api.expedia.utils.ThreadPoolUtils;
-import com.trip.booking.spa.core.placeholder.hotelbase.enums.ExpediaContinentEnum;
+import com.trip.booking.spa.core.api.expedia.enums.ExpediaContinentEnum;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 流程照抄旧链路 ExpediaStaticInfoServiceImpl.saveCountryInfo / saveCityInfo：
  * 洲际枚举遍历 → Regions 递归 descendants → en+zh 各请求一遍 → 省级 ThreadPoolUtils 并发 + 自旋等待。
  * 适配点仅：推中台改为写本地还原表；新增洲际过滤参数（测试/分批用）。
- * 注：ExpediaContinentEnum 暂住 placeholder 包，旧链路退役时随迁。
  */
 @Slf4j
 @Service
@@ -132,6 +131,15 @@ public class ExpediaGeographyIngestionService {
             if (en != null && en.getDescendants() != null) {
                 RegionsInfoResponse.Descendants descendants = en.getDescendants();
                 String finalNameCn = nameCn;
+                // 补齐旧链路缺失的类型：都会区（曼谷等在此）优先，其次大区
+                for (String vicinity : safe(descendants.getMulti_city_vicinity())) {
+                    ThreadPoolUtils.execute(() ->
+                            queryCityInfo(vicinity, countryId, en.getName(), finalNameCn, countryId));
+                }
+                for (String region : safe(descendants.getHigh_level_region())) {
+                    ThreadPoolUtils.execute(() ->
+                            queryCityInfo(region, countryId, en.getName(), finalNameCn, countryId));
+                }
                 if (CollectionUtils.isNotEmpty(descendants.getProvince_state())) {
                     for (String provinceState : descendants.getProvince_state()) {
                         ThreadPoolUtils.execute(() -> {
@@ -198,6 +206,12 @@ public class ExpediaGeographyIngestionService {
 
             if (en != null && en.getDescendants() != null) {
                 RegionsInfoResponse.Descendants descendants = en.getDescendants();
+                for (String vicinity : safe(descendants.getMulti_city_vicinity())) {
+                    queryCityInfo(vicinity, cityId, en.getName(), nameCn, countryId);
+                }
+                for (String region : safe(descendants.getHigh_level_region())) {
+                    queryCityInfo(region, cityId, en.getName(), nameCn, countryId);
+                }
                 if (CollectionUtils.isNotEmpty(descendants.getProvince_state())) {
                     for (String provinceState : descendants.getProvince_state()) {
                         queryCityInfo(provinceState, cityId, en.getName(), nameCn, countryId);
@@ -212,6 +226,19 @@ public class ExpediaGeographyIngestionService {
         } catch (Exception e) {
             log.error("保存城市信息异常 cityId={}", cityId, e);
         }
+    }
+
+    /** 承接旧 ExpediaStaticInfoService.queryHotelIdByCity：按地区查其下全部酒店ID（include=property_ids） */
+    public List<String> queryHotelIdsByRegion(String regionId) {
+        RegionsInfoResponse region = regionsClient.fetchRegion(regionId, LANG_EN, "property_ids");
+        if (region == null || CollectionUtils.isEmpty(region.getProperty_ids())) {
+            return List.of();
+        }
+        return region.getProperty_ids();
+    }
+
+    private List<String> safe(List<String> list) {
+        return list == null ? List.of() : list;
     }
 
     /** 照抄旧坐标处理：setScale(10, HALF_EVEN)，空值记 0 */

@@ -13,23 +13,39 @@
         SELECT DISTINCT property_id FROM expedia_property_content WHERE active = 1
     </select>
 
+    <select id="selectCountryIdByCode" resultType="java.lang.String">
+        SELECT country_id FROM country_info WHERE country_code = #{countryCode} LIMIT 1
+    </select>
+
+    <select id="selectCityIdByName" resultType="java.lang.String">
+        SELECT ci.city_id
+        FROM city_info ci
+        JOIN country_info co ON ci.country_id = co.country_id
+        WHERE co.country_code = #{countryCode} AND ci.city_name = #{cityName}
+        LIMIT 1
+    </select>
+
     <!-- ========== 目录域 ========== -->
 
     <insert id="upsertHotelDetails" parameterType="java.util.HashMap">
         INSERT INTO hotel_details (
             hotel_id, hotel_name, hotel_name_cn, telephone, address, address_cn, post_code,
-            city_name, city_name_cn, state_name, country_code,
+            city_id, city_name, city_name_cn, state_name, country_id, country_code,
             star, score, longitude, latitude, hotel_group, brand, status, operator
         ) VALUES (
             #{hotelId}, #{hotelName}, #{hotelNameCn}, #{telephone}, #{address}, #{addressCn}, #{postCode},
-            #{cityName}, #{cityNameCn}, #{stateName}, #{countryCode},
+            #{cityId}, #{cityName}, #{cityNameCn}, #{stateName}, #{countryId}, #{countryCode},
             #{star}, #{score}, #{longitude}, #{latitude}, #{hotelGroup}, #{brand}, #{status}, 'expedia-transform'
         )
         ON DUPLICATE KEY UPDATE
             hotel_name = VALUES(hotel_name), hotel_name_cn = VALUES(hotel_name_cn),
             telephone = VALUES(telephone), address = VALUES(address), address_cn = VALUES(address_cn),
-            post_code = VALUES(post_code), city_name = VALUES(city_name), city_name_cn = VALUES(city_name_cn),
-            state_name = VALUES(state_name), country_code = VALUES(country_code),
+            post_code = VALUES(post_code),
+            city_id = COALESCE(VALUES(city_id), city_id),
+            city_name = VALUES(city_name), city_name_cn = VALUES(city_name_cn),
+            state_name = VALUES(state_name),
+            country_id = COALESCE(VALUES(country_id), country_id),
+            country_code = VALUES(country_code),
             star = VALUES(star), score = VALUES(score),
             longitude = VALUES(longitude), latitude = VALUES(latitude),
             hotel_group = VALUES(hotel_group), brand = VALUES(brand),
@@ -71,6 +87,50 @@
             instructions = VALUES(instructions), fees = VALUES(fees),
             policies = VALUES(policies), descriptions = VALUES(descriptions), del = 0
     </insert>
+
+    <select id="selectSupplierHotelIds" resultType="java.lang.String">
+        SELECT supplier_hotel_id FROM supplier_hotel_base
+        WHERE supplier_id = #{supplierId} AND del = 0
+        ORDER BY id LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <insert id="upsertGlobalProductSupplier" parameterType="java.util.HashMap">
+        INSERT INTO global_product_supplier (
+            product_id, room_id, hotel_id, supplier_id, supplier_hotel_id, supplier_room_id,
+            supplier_product_id, supplier_product_name, has_window, breakfast, cancel_type, operator
+        ) VALUES (
+            #{productId}, #{roomId}, #{hotelId}, #{supplierId}, #{supplierHotelId}, #{supplierRoomId},
+            #{supplierProductId}, #{supplierProductName}, #{hasWindow}, #{breakfast}, #{cancelType}, 'expedia-transform'
+        )
+        ON DUPLICATE KEY UPDATE
+            product_id = VALUES(product_id), room_id = VALUES(room_id), hotel_id = VALUES(hotel_id),
+            supplier_room_id = VALUES(supplier_room_id),
+            supplier_product_name = VALUES(supplier_product_name),
+            has_window = VALUES(has_window), breakfast = VALUES(breakfast),
+            cancel_type = VALUES(cancel_type), del = 0
+    </insert>
+
+    <insert id="upsertSupplierProductBase" parameterType="java.util.HashMap">
+        INSERT INTO supplier_product_base (
+            product_id, room_id, supplier_id, supplier_hotel_id, supplier_room_id,
+            supplier_product_id, supplier_product_name, has_window, breakfast, cancel_type, operator
+        ) VALUES (
+            #{productId}, #{roomId}, #{supplierId}, #{supplierHotelId}, #{supplierRoomId},
+            #{supplierProductId}, #{supplierProductName}, #{hasWindow}, #{breakfast}, #{cancelType}, 'expedia-transform'
+        )
+        ON DUPLICATE KEY UPDATE
+            product_id = VALUES(product_id), room_id = VALUES(room_id),
+            supplier_hotel_id = VALUES(supplier_hotel_id), supplier_room_id = VALUES(supplier_room_id),
+            supplier_product_name = VALUES(supplier_product_name),
+            has_window = VALUES(has_window), breakfast = VALUES(breakfast),
+            cancel_type = VALUES(cancel_type), del = 0
+    </insert>
+
+    <update id="markHotelDetailsInactive">
+        UPDATE hotel_details SET del = 1, status = 0
+        WHERE hotel_id IN
+        <foreach collection="hotelIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
 
     <!-- ========== 档案域 ========== -->
 
