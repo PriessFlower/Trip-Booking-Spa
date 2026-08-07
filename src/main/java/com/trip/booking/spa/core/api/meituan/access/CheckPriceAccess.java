@@ -10,13 +10,11 @@ import com.trip.booking.spa.core.api.common.exception.ParseException;
 import com.trip.booking.spa.core.api.meituan.bean.request.CheckReqBody;
 import com.trip.booking.spa.core.api.meituan.bean.request.MeituanRequest;
 import com.trip.booking.spa.core.api.meituan.bean.response.CheckPriceResponse;
-import com.trip.booking.spa.core.exception.RedisLimitException;
 import com.trip.booking.spa.core.redis.DistributedRateLimiter;
 import com.trip.booking.spa.core.util.HttpUtils;
 import com.trip.booking.spa.core.util.JsonUtils;
 import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
-import org.redisson.api.RateIntervalUnit;
 
 /**
  * 验价接口
@@ -79,10 +77,7 @@ public class CheckPriceAccess extends BaseHttpAccess<CheckReqBody, CheckPriceRes
 
     @Override
     protected void beforeAccess(CheckReqBody request) {
-        if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 3)) {
-            throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
-                    + "request = " + JsonUtils.writeObject2Json(request));
-        }
+        // 限流已统一上移至 BaseHttpAccess.access()（RateLimitManager），此处仅保留业务前置钩子
     }
 
     @Override

@@ -11,7 +11,6 @@ import com.trip.booking.spa.core.api.common.exception.ParseException;
 import com.trip.booking.spa.core.api.expedia.bean.request.QueryPriceRequest;
 import com.trip.booking.spa.core.api.expedia.bean.response.HotelStaticInfo;
 import com.trip.booking.spa.core.api.expedia.bean.response.QueryPriceResponse;
-import com.trip.booking.spa.core.exception.RedisLimitException;
 import com.trip.booking.spa.core.monitor.Monitor;
 import com.trip.booking.spa.core.redis.DistributedRateLimiter;
 import com.trip.booking.spa.core.util.HttpUtils;
@@ -20,7 +19,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.redisson.api.RateIntervalUnit;
 
 import java.util.List;
 import java.util.Map;
@@ -96,11 +94,7 @@ public class QueryProductAccess extends BaseHttpAccess<QueryPriceRequest, QueryP
 
     @Override
     protected void beforeAccess(QueryPriceRequest request) {
-//        if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
-//            log.info("expedia接口请求超过限制，每秒请求超过{}次", QPS);
-//            throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
-//                    + "request = " + JsonUtils.writeObject2Json(request));
-//        }
+        // 限流已统一上移至 BaseHttpAccess.access()（RateLimitManager），此处仅保留业务前置钩子
     }
 
     @Override

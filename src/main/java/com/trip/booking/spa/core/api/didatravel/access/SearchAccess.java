@@ -13,7 +13,6 @@ import com.trip.booking.spa.core.redis.DistributedRateLimiter;
 import com.trip.booking.spa.core.util.HttpUtils;
 import com.trip.booking.spa.core.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.redisson.api.RateIntervalUnit;
 
 import java.util.Map;
 
@@ -54,13 +53,7 @@ public class SearchAccess extends BaseHttpAccess<Map<String, Object>, CheckPrice
 
     @Override
     protected void beforeAccess(Map<String, Object> request) {
-        if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
-            log.info("每秒请求超过{}次", QPS);
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-            }
-        }
+        // 限流已统一上移至 BaseHttpAccess.access()（RateLimitManager），此处仅保留业务前置钩子
     }
 
     @Override
