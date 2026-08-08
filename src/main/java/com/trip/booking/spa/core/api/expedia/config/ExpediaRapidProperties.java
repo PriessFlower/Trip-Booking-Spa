@@ -128,6 +128,11 @@ public class ExpediaRapidProperties implements InitializingBean {
     }
 
     public static class StaticData {
+        /**
+         * 是否允许调用 Expedia 静态数据接口。权威取值由 Nacos 的
+         * expedia.static-data.enabled 下发；此处默认 false 为安全侧兜底（PROJECT.md §2.3.3）。
+         * 本类为 @ConfigurationProperties 且未加 @RefreshScope，改 Nacos 后需重启容器方生效。
+         */
         private boolean enabled;
         private int batchSize = 250;
         private String language = "en-US";

@@ -23,7 +23,8 @@ expedia:
   production-endpoint-enabled: false
   user-agent: trip-booking-spa/0.0.1
   static-data:
-    enabled: ${EXPEDIA_STATIC_DATA_ENABLED:false}
+    # enabled 为运维可调开关，权威取值在 Nacos（PROJECT.md §2.2.2）。
+    # 此处不配置：代码字段默认 false，即安全侧兜底（§2.3.3）。
     batch-size: 250
     language: en-US
     languages: ${EXPEDIA_STATIC_DATA_LANGUAGES:en-US,zh-CN}
