@@ -12,7 +12,8 @@ permissions:
   contents: read
 
 env:
-  IMAGE_NAME: ghcr.io/priessflower/trip-booking-spa
+  TCR_REGISTRY: ccr.ccs.tencentyun.com
+  IMAGE_NAME: ccr.ccs.tencentyun.com/priessflower/trip-booking-spa
 
 concurrency:
   group: ci-cd-${{ github.ref }}
@@ -46,7 +47,6 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-      packages: write
 
     steps:
       - name: Check out repository
@@ -55,12 +55,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GHCR
+      - name: Log in to TCR
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ${{ env.TCR_REGISTRY }}
+          username: ${{ secrets.TCR_USERNAME }}
+          password: ${{ secrets.TCR_PASSWORD }}
 
       - name: Build and publish image
         uses: docker/build-push-action@v6
@@ -81,7 +81,6 @@ jobs:
     environment: production
     permissions:
       contents: read
-      packages: read
 
     steps:
       - name: Configure SSH
@@ -173,12 +172,13 @@ jobs:
           } | ssh production \
             'set -Eeuo pipefail; app_dir=/opt/trip-booking-spa; install -d -m 700 "$app_dir"; umask 077; cat > "$app_dir/app.env.next"'
 
-      - name: Log in to GHCR on server
+      - name: Log in to TCR on server
         env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
+          TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
         run: |
-          printf '%s' "$GHCR_TOKEN" | ssh production \
-            "docker login ghcr.io --username '${{ github.actor }}' --password-stdin"
+          printf '%s' "$TCR_PASSWORD" | ssh production \
+            "docker login '${{ env.TCR_REGISTRY }}' --username '$TCR_USERNAME' --password-stdin"
 
       - name: Deploy container
         env:
@@ -309,7 +309,7 @@ jobs:
           echo "Deployment succeeded: $image"
           REMOTE
 
-      - name: Log out from GHCR on server
+      - name: Log out from TCR on server
         if: always()
         run: |
-          ssh production 'docker logout ghcr.io >/dev/null 2>&1 || true'
+          ssh production "docker logout '${{ env.TCR_REGISTRY }}' >/dev/null 2>&1 || true"
