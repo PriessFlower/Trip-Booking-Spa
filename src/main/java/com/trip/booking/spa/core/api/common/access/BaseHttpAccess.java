@@ -13,6 +13,7 @@ import com.trip.booking.spa.core.monitor.Monitor;
 import com.trip.booking.spa.core.ratelimit.RateLimitHolder;
 import com.trip.booking.spa.core.util.JsonUtils;
 import com.google.common.base.Joiner;
+import org.apache.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,6 +78,14 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
                 return null;
             }
         });
+        // query() 在全部重试均抛异常时返回 null（读超时、连接重置、SSL 失败等）。此处兜底为失败态，
+        // 而非让调用方在 result.getData() 上空指针——网络超时是常态，不应表现为 NPE。
+        // 返回值 httpStatus != 200 且 data == null，isSucc() 为 false，与既有守卫写法一致。
+        if (null == result) {
+            Monitor.recordOne(buildMonitorKey(SupplierApiConstants.ACCESS_TAG, SupplierApiConstants.ERROR_TAG));
+            logger.error("access fail, 重试已耗尽, supplier:[{}], interface:[{}], url:[{}]", supplier, monitorKey, url);
+            return new ResponseResult<>(HttpStatus.SC_GATEWAY_TIMEOUT, null);
+        }
         if (null != result.getData() && result.getData().isEmptyResult()) {
             Monitor.recordOne(buildMonitorKey(SupplierApiConstants.ACCESS_TAG) + "_empty",
                     System.currentTimeMillis() - start);
