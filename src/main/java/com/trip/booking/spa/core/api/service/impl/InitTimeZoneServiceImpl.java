@@ -69,7 +69,7 @@ public class InitTimeZoneServiceImpl implements InitTimeZoneService {
 //            }
 //        }).start();
         BaseResult<List<GetCityInfoBySupplierHotelIdResponse>> allCityInfoBySupplierId = hotelBasePlaceholderClient.getAllCityInfoBySupplierId(
-                nacosRuntimeConfig.getSupplierQueryTimezones());
+                nacosRuntimeConfig.getTimezoneInitSuppliers());
         List<GetCityInfoBySupplierHotelIdResponse> data = allCityInfoBySupplierId.getData();
         List<CityZone> cityZoneList = new ArrayList<>();
 //        for (int i = 0; i < 10; i++) {

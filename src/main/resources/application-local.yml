@@ -24,24 +24,6 @@ spring:
         max-idle: 8
         min-idle: 1
 
-# Local fallback for the runtime keys that should normally come from Nacos.
-query:
-  cache:
-    supplier: '[10005]'
-
-supplier:
-  hotel:
-    cache:
-      map: '{"10005":["16024166"]}'
-  query:
-    timezone: '["10005"]'
-
-expedia:
-  query:
-    price:
-      cache:
-        qps: 10
-      queue:
-        task:
-          switch: 1
-          return: 1
+# 本剖面只承载基础设施差异（见 PROJECT.md §2.4.1）。
+# 运维配置（缓存名单、白名单、时区、刷价开关与 QPS）一律由 Nacos 下发，
+# 兜底默认值写在代码 @Value 中；此处不得再放同名键，否则会覆盖 Nacos。
