@@ -77,7 +77,7 @@ jobs:
     name: Deploy production
     needs: publish
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     environment: production
     permissions:
       contents: read
@@ -88,17 +88,32 @@ jobs:
         env:
           DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
+          set -Eeuo pipefail
+          : "${DEPLOY_HOST:?Missing DEPLOY_HOST}"
+          : "${DEPLOY_USER:?Missing DEPLOY_USER}"
           install -m 700 -d ~/.ssh
           printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host production
+            HostName $DEPLOY_HOST
+            User $DEPLOY_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+            ServerAliveInterval 30
+            ServerAliveCountMax 20
+            TCPKeepAlive yes
+          EOF
+          chmod 600 ~/.ssh/config
 
       - name: Stage production runtime configuration
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DB_HOST: ${{ vars.PROD_DB_HOST }}
           DB_PORT: ${{ vars.PROD_DB_PORT }}
           DB_NAME: ${{ vars.PROD_DB_NAME }}
@@ -155,26 +170,38 @@ jobs:
             printf 'EXPEDIA_API_KEY=%s\n' "$EXPEDIA_API_KEY"
             printf 'EXPEDIA_SHARED_SECRET=%s\n' "$EXPEDIA_SHARED_SECRET"
             printf 'EXPEDIA_API_HOST=%s\n' "$EXPEDIA_API_HOST"
-          } | ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+          } | ssh production \
             'set -Eeuo pipefail; app_dir=/opt/trip-booking-spa; install -d -m 700 "$app_dir"; umask 077; cat > "$app_dir/app.env.next"'
 
-      - name: Log in to GHCR on server
+      - name: Log in to GHCR on runner
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Transfer image directly to server
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ env.IMAGE_NAME }}:${{ github.sha }}
         run: |
-          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/deploy_key \
-            "$DEPLOY_USER@$DEPLOY_HOST" \
-            "docker login ghcr.io --username '${{ github.actor }}' --password-stdin"
+          set -Eeuo pipefail
+
+          docker pull "$IMAGE"
+
+          started_at="$(date +%s)"
+          docker save "$IMAGE" \
+            | gzip -1 \
+            | dd bs=1M status=progress \
+            | ssh production 'bash -o pipefail -c "gzip -dc | docker load"'
+          finished_at="$(date +%s)"
+
+          echo "Direct image transfer completed in $((finished_at - started_at)) seconds."
 
       - name: Deploy container
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           IMAGE: ${{ env.IMAGE_NAME }}:${{ github.sha }}
         run: |
-          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+          ssh production \
             bash -s -- "$IMAGE" <<'REMOTE'
           set -Eeuo pipefail
 
@@ -270,8 +297,7 @@ jobs:
           check_tcp "$db_host" "$db_port"
           check_tcp "$redis_host" "$redis_port"
           check_tcp "$nacos_host" "$nacos_port"
-
-          docker pull "$image"
+          docker image inspect "$image" >/dev/null
 
           if docker inspect "$app_name" >/dev/null 2>&1; then
             had_previous_container=true
@@ -299,12 +325,3 @@ jobs:
           rm -f "$previous_env_file"
           echo "Deployment succeeded: $image"
           REMOTE
-
-      - name: Log out from GHCR on server
-        if: always()
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-        run: |
-          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
-            'docker logout ghcr.io >/dev/null 2>&1 || true'
