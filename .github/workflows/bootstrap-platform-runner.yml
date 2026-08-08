@@ -1,4 +1,4 @@
-name: Bootstrap trip-prod-platform-01 self-hosted runner
+name: Bootstrap trip-prod-platform self-hosted runner
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   bootstrap:
-    name: Install GitHub Actions runner on trip-prod-platform-01
+    name: Install GitHub Actions runner on trip-prod-platform
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: production
@@ -78,8 +78,8 @@ jobs:
 
           runner_token="$1"
           runner_user="github-runner"
-          runner_name="trip-prod-platform-01"
-          host_name="trip-prod-platform-01"
+          runner_name="trip-prod-platform"
+          host_name="trip-prod-platform"
           runner_dir="/opt/actions-runner"
           repository_url="https://github.com/PriessFlower/Trip-Booking-Spa"
 
