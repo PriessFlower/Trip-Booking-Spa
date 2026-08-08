@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trip.booking.spa.core.api.expedia.config.ExpediaRapidProperties;
 import com.trip.booking.spa.core.api.expedia.staticdata.model.ExpediaRawProperty;
 import com.trip.booking.spa.core.api.expedia.utils.ExpediaUtils;
+import com.trip.booking.spa.core.ratelimit.RateLimitHolder;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -27,6 +28,9 @@ import java.util.Map;
 public class ExpediaPropertyContentClient {
 
     private static final String CONTENT_PATH = "/v3/properties/content";
+
+    /** 限流 key，格式对齐 access 层 GLOBAL_LIMIT:供应商:接口 */
+    private static final String RATE_LIMIT_KEY = "GLOBAL_LIMIT:EXPEDIA:STATIC_CONTENT";
 
     private final ExpediaRapidProperties properties;
     private final ExpediaUtils signer;
@@ -58,6 +62,8 @@ public class ExpediaPropertyContentClient {
         headers.set("Customer-Session-Id", properties.getSession());
         headers.set(HttpHeaders.USER_AGENT, properties.getUserAgent());
 
+        // 统一限流（阻塞式，批量摄取平滑放行）：全量/增量拉取的闸门，QPS 配在 Nacos ratelimit.qps
+        RateLimitHolder.get().acquire(RATE_LIMIT_KEY);
         ResponseEntity<String> response = restTemplate.exchange(
                 uri, HttpMethod.GET, new HttpEntity<>(headers), String.class);
         return parse(response);

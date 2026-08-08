@@ -55,16 +55,19 @@
     <insert id="upsertRoomBase" parameterType="java.util.HashMap">
         INSERT INTO room_base (
             room_id, hotel_id, room_name, room_name_cn, area,
-            bed_name, bed_name_cn, bed_type, bed_desc, bed_number, capacity, status, operator
+            bed_name, bed_name_cn, bed_type, bed_desc, bed_number, capacity,
+            broadnet, has_bathroom, has_windows, is_smoking, status, operator
         ) VALUES (
             #{roomId}, #{hotelId}, #{roomName}, #{roomNameCn}, #{area},
-            #{bedName}, #{bedNameCn}, #{bedType}, #{bedDesc}, #{bedNumber}, #{capacity}, 1, 'expedia-transform'
+            #{bedName}, #{bedNameCn}, #{bedType}, #{bedDesc}, #{bedNumber}, #{capacity},
+            #{broadnet}, #{hasBathroom}, #{hasWindows}, #{isSmoking}, 1, 'expedia-transform'
         )
         ON DUPLICATE KEY UPDATE
             hotel_id = VALUES(hotel_id), room_name = VALUES(room_name), room_name_cn = VALUES(room_name_cn),
             area = VALUES(area), bed_name = VALUES(bed_name), bed_name_cn = VALUES(bed_name_cn),
             bed_type = VALUES(bed_type), bed_desc = VALUES(bed_desc), bed_number = VALUES(bed_number),
-            capacity = VALUES(capacity), status = 1, del = 0
+            capacity = VALUES(capacity), broadnet = VALUES(broadnet), has_bathroom = VALUES(has_bathroom),
+            has_windows = VALUES(has_windows), is_smoking = VALUES(is_smoking), status = 1, del = 0
     </insert>
 
     <delete id="deleteHotelPictures">
@@ -174,11 +177,11 @@
         INSERT INTO supplier_room_base (
             supplier_id, supplier_room_id, supplier_hotel_id, room_id,
             supplier_room_name, supplier_room_name_cn, description, area,
-            bed_info_list, capacity, is_smoking, merger, status, operator
+            bed_info_list, capacity, broad_net, has_bathroom, has_windows, is_smoking, merger, status, operator
         ) VALUES (
             #{supplierId}, #{supplierRoomId}, #{supplierHotelId}, #{roomId},
             #{supplierRoomName}, #{supplierRoomNameCn}, #{description}, #{area},
-            #{bedInfoList}, #{capacity}, #{isSmoking}, 1, 1, 'expedia-transform'
+            #{bedInfoList}, #{capacity}, #{broadNet}, #{hasBathroom}, #{hasWindows}, #{isSmoking}, 1, 1, 'expedia-transform'
         )
         ON DUPLICATE KEY UPDATE
             supplier_hotel_id = VALUES(supplier_hotel_id), room_id = VALUES(room_id),
@@ -186,6 +189,7 @@
             supplier_room_name_cn = VALUES(supplier_room_name_cn),
             description = VALUES(description), area = VALUES(area),
             bed_info_list = VALUES(bed_info_list), capacity = VALUES(capacity),
-            is_smoking = VALUES(is_smoking), merger = 1, status = 1
+            broad_net = VALUES(broad_net), has_bathroom = VALUES(has_bathroom),
+            has_windows = VALUES(has_windows), is_smoking = VALUES(is_smoking), merger = 1, status = 1
     </insert>
 </mapper>

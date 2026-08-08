@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -154,7 +155,11 @@ public class ExpediaCatalogTransformService {
             p.put("area", area(roomEn));
             p.put("bedInfoList", bedInfoListJson(roomEn));
             p.put("capacity", roomEn.occupancy() == null ? null : roomEn.occupancy().total());
-            p.put("isSmoking", null);
+            List<String> amenities = amenityNames(roomEn);
+            p.put("broadNet", containsAny(amenities, "wifi", "internet"));
+            p.put("hasBathroom", containsAny(amenities, "private bathroom"));
+            p.put("hasWindows", hasViews(roomEn));
+            p.put("isSmoking", isSmoking(amenities));
             catalogMapper.upsertSupplierRoomBase(p);
         }
     }
@@ -212,6 +217,13 @@ public class ExpediaCatalogTransformService {
             p.put("bedDesc", bedInfoListJson(roomEn));
             p.put("bedNumber", String.valueOf(totalBeds(roomEn)));
             p.put("capacity", roomEn.occupancy() == null ? null : roomEn.occupancy().total());
+            // 旧链路这四个字段写死 0；现从 amenities/views 推真值，推不出=默认 0（无）。
+            // has_windows：有景观(views)即认定有窗；无 views 只代表未知，落默认
+            List<String> amenities = amenityNames(roomEn);
+            p.put("broadnet", containsAny(amenities, "wifi", "internet"));
+            p.put("hasBathroom", containsAny(amenities, "private bathroom"));
+            p.put("hasWindows", hasViews(roomEn));
+            p.put("isSmoking", isSmoking(amenities));
             catalogMapper.upsertRoomBase(p);
         }
     }
@@ -335,6 +347,43 @@ public class ExpediaCatalogTransformService {
                 .filter(Objects::nonNull)
                 .mapToInt(Integer::intValue)
                 .sum();
+    }
+
+    /** 房间设施名（小写）；amenities 缺失时为空表，推导字段全部落默认 0（无） */
+    private List<String> amenityNames(ExpediaPropertyDocument.Room room) {
+        if (room.amenities() == null) {
+            return List.of();
+        }
+        return room.amenities().stream()
+                .map(ExpediaPropertyDocument.Amenity::name)
+                .filter(StringUtils::isNotBlank)
+                .map(name -> name.toLowerCase(Locale.ROOT))
+                .toList();
+    }
+
+    private int containsAny(List<String> amenities, String... keywords) {
+        for (String amenity : amenities) {
+            for (String keyword : keywords) {
+                if (amenity.contains(keyword)) {
+                    return 1;
+                }
+            }
+        }
+        return 0;
+    }
+
+    private int hasViews(ExpediaPropertyDocument.Room room) {
+        return room.views() == null || room.views().isEmpty() ? 0 : 1;
+    }
+
+    /** "non-smoking" 也含 "smoking" 子串，先排除再判定可吸烟 */
+    private int isSmoking(List<String> amenities) {
+        for (String amenity : amenities) {
+            if (amenity.contains("smoking") && !amenity.contains("non-smoking") && !amenity.contains("non smoking")) {
+                return 1;
+            }
+        }
+        return 0;
     }
 
     private String area(ExpediaPropertyDocument.Room room) {

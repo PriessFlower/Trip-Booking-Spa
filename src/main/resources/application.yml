@@ -14,6 +14,14 @@ mybatis:
   mapperLocations: classpath*:mapper/*.xml
   config-location: classpath:/mybatis-config.xml
 
+# 统一限流：唯一配置入口（core/ratelimit/RateLimitManager）。key = GLOBAL_LIMIT:供应商:接口。
+# mode=local 单机 Guava；distributed 走 Redisson 跨实例。改 qps 热生效（@RefreshScope）。
+ratelimit:
+  mode: ${RATELIMIT_MODE:local}
+  default-qps: ${RATELIMIT_DEFAULT_QPS:20}
+  acquire-timeout-ms: ${RATELIMIT_ACQUIRE_TIMEOUT_MS:5000}
+  qps: ${RATELIMIT_QPS:{"GLOBAL_LIMIT:EXPEDIA:STATIC_CONTENT":15,"GLOBAL_LIMIT:EXPEDIA:STATIC_REGIONS":10,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_ORDER_PRICE":50}}
+
 expedia:
   # Booking stays disabled until certification and explicit production authorization.
   booking-enabled: false
@@ -25,7 +33,7 @@ expedia:
     language: en-US
     languages: ${EXPEDIA_STATIC_DATA_LANGUAGES:en-US,zh-CN}
     supply-source: expedia
-    mapping-version: expedia-content-v1
+    mapping-version: expedia-content-v2
 
 # Legacy supplier beans are still present in the codebase. Keep them wired to a
 # non-routable mock endpoint until those integrations are removed. A real local

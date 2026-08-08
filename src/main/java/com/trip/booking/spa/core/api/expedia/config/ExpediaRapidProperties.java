@@ -136,7 +136,7 @@ public class ExpediaRapidProperties implements InitializingBean {
          */
         private java.util.List<String> languages = new java.util.ArrayList<>(java.util.List.of("en-US", "zh-CN"));
         private String supplySource = "expedia";
-        private String mappingVersion = "expedia-content-v1";
+        private String mappingVersion = "expedia-content-v2";
 
         public boolean isEnabled() {
             return enabled;
