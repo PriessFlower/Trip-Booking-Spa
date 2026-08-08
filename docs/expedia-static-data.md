@@ -8,7 +8,7 @@
 - API credentials are read from `EXPEDIA_API_KEY` and `EXPEDIA_SHARED_SECRET`.
 - Portal credentials do not belong in this repository or application configuration.
 - Raw API bodies and authorization headers must not be logged.
-- Static ingestion is opt-in through `EXPEDIA_STATIC_DATA_ENABLED=true`; enabling it without credentials fails startup.
+- Static ingestion is opt-in through the Nacos key `supplier.expedia.static-data-enabled` (default `false`); enabling it without credentials fails startup. The value is bound at startup only, so a container restart is required after changing it.
 
 ## Ingestion flow
 

@@ -51,14 +51,14 @@ public class ExpediaPropertyContentClient {
     }
 
     /**
-     * 闸口 expedia.static-data.enabled：是否允许调用 Expedia 静态内容接口。
+     * 闸口 supplier.expedia.static-data-enabled：是否允许调用 Expedia 静态内容接口。
      * 误开风险=误在开发或测试环境消耗 Expedia 静态接口配额；
      * 误关风险=酒店与房型目录无法摄取或更新，播种与每日增量同步全部失败；
      * 执行面：全部节点的静态摄取路径（BackDoor 手动摄取与 ExpediaHotelSyncTask 定时同步）。
      */
     public ExpediaPropertyContentPage fetch(ExpediaPropertyContentRequest request) {
-        if (!properties.getStaticData().isEnabled()) {
-            log.warn("[gate] expedia.static-data.enabled=false，拒绝静态内容摄取: propertyIds={}, language={}",
+        if (!properties.isStaticDataEnabled()) {
+            log.warn("[gate] supplier.expedia.static-data-enabled=false，拒绝静态内容摄取: propertyIds={}, language={}",
                     request.propertyIds(), request.language());
             throw new IllegalStateException("Expedia static data ingestion is disabled");
         }

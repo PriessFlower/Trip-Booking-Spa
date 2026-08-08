@@ -26,7 +26,7 @@ class ExpediaRapidPropertiesTest {
     @Test
     void requiresCredentialsWhenStaticIngestionIsEnabled() {
         ExpediaRapidProperties properties = new ExpediaRapidProperties();
-        properties.getStaticData().setEnabled(true);
+        properties.setStaticDataEnabled(true);
 
         assertThrows(IllegalStateException.class, properties::afterPropertiesSet);
     }

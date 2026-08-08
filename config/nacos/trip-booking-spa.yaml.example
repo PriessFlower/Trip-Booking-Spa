@@ -47,14 +47,6 @@ ratelimit:
   qps: '{"GLOBAL_LIMIT:EXPEDIA:STATIC_CONTENT":15,"GLOBAL_LIMIT:EXPEDIA:STATIC_REGIONS":10,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_ORDER_PRICE":50}'
 
 # ── supplier / expedia：静态数据摄取总开关 ──────────────────
-# 关闭时目录清单与内容摄取接口一律拒绝调用（播种、每日增量同步均失效）。
-# 该项由 @ConfigurationProperties 绑定且未加 @RefreshScope，改后需重启容器方生效。
-# 注意：与 expedia.booking-enabled / expedia.production-endpoint-enabled 不同，
-# 后两者为安全护栏，固定在 application.yml，禁止移入本文件（PROJECT.md §2.2.3）。
-expedia:
-  static-data:
-    enabled: true
-
 # ── cache：我方自建缓存 ────────────────────────────────────
 cache:
   price:
@@ -65,3 +57,10 @@ cache:
 supplier:
   didatravel:
     real-time-price: false    # true=要求道旅返回实时价；false=接受其缓存价
+
+  expedia:
+    # 静态数据摄取总开关。关闭时目录清单与内容摄取接口一律拒绝调用
+    # （播种、ExpediaHotelSyncTask 每日增量同步均失效）。改后需重启容器方生效。
+    # 注意：expedia.booking-enabled 与 expedia.production-endpoint-enabled 为安全护栏，
+    # 固定在 application.yml，禁止移入本文件（PROJECT.md §2.2.3）。
+    static-data-enabled: true
