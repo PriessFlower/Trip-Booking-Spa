@@ -14,13 +14,8 @@ mybatis:
   mapperLocations: classpath*:mapper/*.xml
   config-location: classpath:/mybatis-config.xml
 
-# 统一限流：唯一配置入口（core/ratelimit/RateLimitManager）。key = GLOBAL_LIMIT:供应商:接口。
-# mode=local 单机 Guava；distributed 走 Redisson 跨实例。改 qps 热生效（@RefreshScope）。
-ratelimit:
-  mode: ${RATELIMIT_MODE:local}
-  default-qps: ${RATELIMIT_DEFAULT_QPS:20}
-  acquire-timeout-ms: ${RATELIMIT_ACQUIRE_TIMEOUT_MS:5000}
-  qps: ${RATELIMIT_QPS:{"GLOBAL_LIMIT:EXPEDIA:STATIC_CONTENT":15,"GLOBAL_LIMIT:EXPEDIA:STATIC_REGIONS":10,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_ORDER_PRICE":50}}
+# 统一限流（core/ratelimit/RateLimitManager）为运维可调配置，一律由 Nacos 下发，
+# 兜底默认值见 RateLimitProperties 的 @Value（见 PROJECT.md §2.3）。此处不得配置。
 
 expedia:
   # Booking stays disabled until certification and explicit production authorization.
@@ -62,8 +57,6 @@ didatravel:
   licenseKey: mock
   clientId: mock
   localFilePath: /tmp/trip-booking-spa/mock/didatravel
-  query:
-    cache: false
 
 huitravel:
   url:
@@ -95,20 +88,10 @@ ratehawk:
   key_id: mock
   api_key: mock
   url: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/ratehawk
-  query:
-    price:
-      cache:
-        qps: 0.16
-      queue:
-        task:
-          switch: 0
-          return: 0
 
 meituan:
   url: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/meituan
   partner-id: 0
-  change-queue:
-    page-size: 20
   key:
     public: mock
     secret: mock
@@ -117,25 +100,18 @@ meituan:
   method:
     list:
       path: hotel.list
-      qps: 1
-      maxId: 0
-      pageSize: 10
       version: 1.0
     detail:
       path: hotel.detail
-      qps: 1
       version: 1.0
     check:
       path: hotel.check
-      qps: 1
       version: 1.0
     room:
       path: hotel.room
-      qps: 1
       version: 1.0
     goods:
       path: hotel.goods
-      qps: 1
       version: 1.0
 
 logging:
