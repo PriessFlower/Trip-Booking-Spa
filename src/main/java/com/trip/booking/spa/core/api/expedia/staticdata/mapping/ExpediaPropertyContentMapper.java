@@ -142,6 +142,7 @@ public class ExpediaPropertyContentMapper {
                             integer(maximum, "children")),
                     bedGroups(room.path("bed_groups")),
                     amenities(room.path("amenities"), "ROOM", roomId),
+                    amenities(room.path("views"), "ROOM_VIEW", roomId),
                     images(room.path("images"))));
         });
         return List.copyOf(result);

@@ -1,0 +1,310 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: ghcr.io/priessflower/trip-booking-spa
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Build and test (Java 21)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build and test
+        run: ./mvnw --batch-mode --activate-profiles test verify
+
+  publish:
+    name: Build and publish image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy production
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Stage production runtime configuration
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DB_HOST: ${{ vars.PROD_DB_HOST }}
+          DB_PORT: ${{ vars.PROD_DB_PORT }}
+          DB_NAME: ${{ vars.PROD_DB_NAME }}
+          DB_USERNAME: ${{ secrets.PROD_DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          REDIS_HOST: ${{ vars.PROD_REDIS_HOST }}
+          REDIS_PORT: ${{ vars.PROD_REDIS_PORT }}
+          REDIS_PASSWORD: ${{ secrets.PROD_REDIS_PASSWORD }}
+          NACOS_SERVER_ADDR: ${{ vars.PROD_NACOS_SERVER_ADDR }}
+          NACOS_NAMESPACE: ${{ vars.PROD_NACOS_NAMESPACE }}
+          NACOS_USERNAME: ${{ secrets.PROD_NACOS_USERNAME }}
+          NACOS_PASSWORD: ${{ secrets.PROD_NACOS_PASSWORD }}
+          SERVER_ADDRESS: ${{ vars.PROD_SERVER_ADDRESS }}
+          EXPEDIA_API_KEY: ${{ secrets.PROD_EXPEDIA_API_KEY }}
+          EXPEDIA_SHARED_SECRET: ${{ secrets.PROD_EXPEDIA_SHARED_SECRET }}
+          EXPEDIA_API_HOST: ${{ vars.PROD_EXPEDIA_API_HOST }}
+        run: |
+          set -Eeuo pipefail
+
+          required_values=(
+            DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD
+            REDIS_HOST REDIS_PORT
+            NACOS_SERVER_ADDR NACOS_NAMESPACE NACOS_USERNAME NACOS_PASSWORD
+            SERVER_ADDRESS EXPEDIA_API_HOST
+          )
+
+          for name in "${required_values[@]}"; do
+            value="${!name}"
+            if [ -z "$value" ]; then
+              echo "Missing production configuration: $name" >&2
+              exit 1
+            fi
+            if [[ "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
+              echo "Production configuration contains a newline: $name" >&2
+              exit 1
+            fi
+          done
+
+          {
+            printf 'SPRING_PROFILES_ACTIVE=prod\n'
+            printf 'DB_HOST=%s\n' "$DB_HOST"
+            printf 'DB_PORT=%s\n' "$DB_PORT"
+            printf 'DB_NAME=%s\n' "$DB_NAME"
+            printf 'DB_USERNAME=%s\n' "$DB_USERNAME"
+            printf 'DB_PASSWORD=%s\n' "$DB_PASSWORD"
+            printf 'REDIS_HOST=%s\n' "$REDIS_HOST"
+            printf 'REDIS_PORT=%s\n' "$REDIS_PORT"
+            printf 'REDIS_PASSWORD=%s\n' "$REDIS_PASSWORD"
+            printf 'NACOS_SERVER_ADDR=%s\n' "$NACOS_SERVER_ADDR"
+            printf 'NACOS_NAMESPACE=%s\n' "$NACOS_NAMESPACE"
+            printf 'NACOS_USERNAME=%s\n' "$NACOS_USERNAME"
+            printf 'NACOS_PASSWORD=%s\n' "$NACOS_PASSWORD"
+            printf 'SERVER_ADDRESS=%s\n' "$SERVER_ADDRESS"
+            printf 'EXPEDIA_API_KEY=%s\n' "$EXPEDIA_API_KEY"
+            printf 'EXPEDIA_SHARED_SECRET=%s\n' "$EXPEDIA_SHARED_SECRET"
+            printf 'EXPEDIA_API_HOST=%s\n' "$EXPEDIA_API_HOST"
+          } | ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+            'set -Eeuo pipefail; app_dir=/opt/trip-booking-spa; install -d -m 700 "$app_dir"; umask 077; cat > "$app_dir/app.env.next"'
+
+      - name: Log in to GHCR on server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/deploy_key \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "docker login ghcr.io --username '${{ github.actor }}' --password-stdin"
+
+      - name: Deploy container
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          IMAGE: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+            bash -s -- "$IMAGE" <<'REMOTE'
+          set -Eeuo pipefail
+
+          image="$1"
+          app_name="trip-booking-spa"
+          app_dir="/opt/trip-booking-spa"
+          env_file="$app_dir/app.env"
+          next_env_file="$app_dir/app.env.next"
+          previous_env_file="$app_dir/app.env.previous"
+          previous_image=""
+          had_previous_container=false
+          had_previous_env=false
+          config_activated=false
+          container_replaced=false
+
+          test -s "$next_env_file"
+
+          env_value() {
+            sed -n "s/^$1=//p" "$next_env_file" | tail -n 1
+          }
+
+          check_tcp() {
+            local host="$1"
+            local port="$2"
+            timeout 5 bash -c "</dev/tcp/$host/$port"
+          }
+
+          start_container() {
+            docker run -d \
+              --name "$app_name" \
+              --restart unless-stopped \
+              --network host \
+              --env-file "$env_file" \
+              --volume "$app_name-logs:/home/webrun/logs/file" \
+              --volume "$app_name-spa-logs:/home/webrun/spa/logs/file" \
+              "$1"
+          }
+
+          wait_for_health() {
+            local response
+            for attempt in $(seq 1 30); do
+              response="$(curl --fail --silent --max-time 3 \
+                http://127.0.0.1:8080/actuator/health 2>/dev/null || true)"
+              if printf '%s' "$response" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"'; then
+                return 0
+              fi
+              sleep 5
+            done
+            return 1
+          }
+
+          rollback() {
+            local failure_status="$?"
+            trap - ERR
+            echo "Deployment failed; restoring the previous release." >&2
+
+            if [ "$container_replaced" = true ]; then
+              docker logs --tail 200 "$app_name" >&2 2>/dev/null || true
+              docker rm -f "$app_name" >/dev/null 2>&1 || true
+            fi
+
+            if [ "$config_activated" = true ]; then
+              if [ "$had_previous_env" = true ]; then
+                mv -f "$previous_env_file" "$env_file"
+              else
+                rm -f "$env_file"
+              fi
+            fi
+
+            if [ "$had_previous_container" = true ] && [ -n "$previous_image" ]; then
+              start_container "$previous_image" >/dev/null
+              if wait_for_health; then
+                echo "Rollback succeeded: $previous_image"
+              else
+                echo "Rollback container failed its health check." >&2
+              fi
+            fi
+
+            rm -f "$next_env_file"
+            exit "$failure_status"
+          }
+
+          trap rollback ERR
+
+          db_host="$(env_value DB_HOST)"
+          db_port="$(env_value DB_PORT)"
+          redis_host="$(env_value REDIS_HOST)"
+          redis_port="$(env_value REDIS_PORT)"
+          nacos_address="$(env_value NACOS_SERVER_ADDR)"
+          nacos_host="${nacos_address%:*}"
+          nacos_port="${nacos_address##*:}"
+
+          check_tcp "$db_host" "$db_port"
+          check_tcp "$redis_host" "$redis_port"
+          check_tcp "$nacos_host" "$nacos_port"
+
+          docker pull "$image"
+
+          if docker inspect "$app_name" >/dev/null 2>&1; then
+            had_previous_container=true
+            previous_image="$(docker inspect --format '{{.Config.Image}}' "$app_name")"
+          fi
+
+          rm -f "$previous_env_file"
+          if [ -s "$env_file" ]; then
+            cp -p "$env_file" "$previous_env_file"
+            had_previous_env=true
+          fi
+
+          mv -f "$next_env_file" "$env_file"
+          chmod 600 "$env_file"
+          config_activated=true
+
+          docker rm -f "$app_name" >/dev/null 2>&1 || true
+          container_replaced=true
+
+          start_container "$image"
+
+          wait_for_health
+
+          trap - ERR
+          rm -f "$previous_env_file"
+          echo "Deployment succeeded: $image"
+          REMOTE
+
+      - name: Log out from GHCR on server
+        if: always()
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+            'docker logout ghcr.io >/dev/null 2>&1 || true'

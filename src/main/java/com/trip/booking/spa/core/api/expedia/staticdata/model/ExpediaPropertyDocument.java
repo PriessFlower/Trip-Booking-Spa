@@ -83,6 +83,7 @@ public record ExpediaPropertyDocument(
             Occupancy occupancy,
             List<BedGroup> bedGroups,
             List<Amenity> amenities,
+            List<Amenity> views,
             List<Image> images) {
     }
 

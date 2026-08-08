@@ -8,7 +8,9 @@ import com.trip.booking.spa.core.api.common.enums.MonitorNameEnum;
 import com.trip.booking.spa.core.api.common.enums.SupplierDataTypeEnum;
 import com.trip.booking.spa.core.api.common.enums.SupplierSourceEnum;
 import com.trip.booking.spa.core.api.common.exception.ParseException;
+import com.trip.booking.spa.core.exception.RedisLimitException;
 import com.trip.booking.spa.core.monitor.Monitor;
+import com.trip.booking.spa.core.ratelimit.RateLimitHolder;
 import com.trip.booking.spa.core.util.JsonUtils;
 import com.google.common.base.Joiner;
 import org.slf4j.Logger;
@@ -52,6 +54,12 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
 
     public ResponseResult<T> access(U request) {
         long start = System.currentTimeMillis();
+        // 统一限流：所有供应商 HTTP 调用的唯一闸门。QPS 配在 Nacos，key = 供应商_接口。
+        String limitKey = buildGlobalLimitKey();
+        if (!RateLimitHolder.get().tryAcquire(limitKey)) {
+            Monitor.recordOne(buildMonitorKey(SupplierApiConstants.ACCESS_TAG, "limited"));
+            throw new RedisLimitException("Request exceeds rate limit, key = " + limitKey);
+        }
         beforeAccess(request);
         String url = buildRequestUrl();
         ResponseResult<T> result = this.query(url, request, new IParser<T>() {

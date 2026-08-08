@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trip.booking.spa.core.api.expedia.bean.response.RegionsInfoResponse;
 import com.trip.booking.spa.core.api.expedia.config.ExpediaRapidProperties;
 import com.trip.booking.spa.core.api.expedia.utils.ExpediaUtils;
+import com.trip.booking.spa.core.ratelimit.RateLimitHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
@@ -27,6 +28,9 @@ import java.util.List;
 public class ExpediaRegionsClient {
 
     private static final String REGIONS_PATH = "/v3/regions/";
+
+    /** 限流 key，格式对齐 access 层 GLOBAL_LIMIT:供应商:接口 */
+    private static final String RATE_LIMIT_KEY = "GLOBAL_LIMIT:EXPEDIA:STATIC_REGIONS";
 
     private final ExpediaRapidProperties properties;
     private final ExpediaUtils signer;
@@ -68,6 +72,8 @@ public class ExpediaRegionsClient {
             headers.set("Customer-Session-Id", properties.getSession());
             headers.set(HttpHeaders.USER_AGENT, properties.getUserAgent());
 
+            // 统一限流（阻塞式）：地理递归建档会大量调 regions，QPS 配在 Nacos ratelimit.qps
+            RateLimitHolder.get().acquire(RATE_LIMIT_KEY);
             ResponseEntity<String> response = restTemplate.exchange(
                     uri, HttpMethod.GET, new HttpEntity<>(headers), String.class);
             return objectMapper.readValue(response.getBody(), RegionsInfoResponse.class);

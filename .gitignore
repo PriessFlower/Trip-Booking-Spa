@@ -26,3 +26,6 @@
 /dist/
 /nbdist/
 /.nb-gradle/
+
+# 交接文档：含 dev 测试凭证明文，不入库
+HANDOFF.md

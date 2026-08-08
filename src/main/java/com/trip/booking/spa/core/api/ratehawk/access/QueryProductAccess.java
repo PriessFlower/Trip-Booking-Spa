@@ -11,14 +11,12 @@ import com.trip.booking.spa.core.api.common.exception.ParseException;
 import com.trip.booking.spa.core.api.ratehawk.bean.request.QueryProductRequest;
 import com.trip.booking.spa.core.api.ratehawk.bean.response.BaseResult;
 import com.trip.booking.spa.core.api.ratehawk.bean.response.QueryProductResponse;
-import com.trip.booking.spa.core.exception.RedisLimitException;
 import com.trip.booking.spa.core.redis.DistributedRateLimiter;
 import com.trip.booking.spa.core.util.HttpUtils;
 import com.trip.booking.spa.core.util.JsonUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
-import org.redisson.api.RateIntervalUnit;
 
 import java.util.Map;
 
@@ -73,11 +71,7 @@ public class QueryProductAccess extends BaseHttpAccess<QueryProductRequest, Quer
 
     @Override
     protected void beforeAccess(QueryProductRequest request) {
-        if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
-            log.info("ratehawk接口请求超过限制，每秒请求超过{}次", QPS);
-            throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
-                    + "request = " + JsonUtils.writeObject2Json(request));
-        }
+        // 限流已统一上移至 BaseHttpAccess.access()（RateLimitManager），此处仅保留业务前置钩子
     }
 
     @Override

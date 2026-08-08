@@ -5,17 +5,17 @@ spring:
   config:
     import: optional:nacos:trip-booking-spa.yaml
   datasource:
-    host: pc-2ze0t0vwxj392d111.mysql.polardb.rds.aliyuncs.com
-    port: 3306
-    name: intl_bg_admin
-    username: dbadmin
-    password: VvTUbbEp$D6uGiLDb
+    host: ${DB_HOST}
+    port: ${DB_PORT:3306}
+    name: ${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&serverTimezone=GMT%2B8
   redis:
-    host: r-2ze1teeyudubm0dw8u.redis.rds.aliyuncs.com
-    port: 6379
-    password:
+    host: ${REDIS_HOST}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
     lettuce:
       pool:
         max-active: 8
@@ -25,23 +25,23 @@ spring:
     nacos:
       discovery:
         # Nacos服务注册中心地址
-        server-addr: 10.18.0.8:8848
+        server-addr: ${NACOS_SERVER_ADDR}
         # 分组，不同分组之间不能调用，用于微服务之间的隔离
         group: DEFAULT_GROUP
         # 生产环境
-        namespace: prod
+        namespace: ${NACOS_NAMESPACE:prod}
 
         # Nacos 认证用户
-        username: nacos-prod
+        username: ${NACOS_USERNAME}
         # Nacos 认证密码
-        password: zaq1xsw2
+        password: ${NACOS_PASSWORD}
       config:
         # 是否开启配置中心 默认true
         enabled: true
         # 指定Nacos配置中心的地址
-        server-addr: 10.18.0.8:8848
+        server-addr: ${NACOS_SERVER_ADDR}
         # 区分环境：开发环境、测试环境、预发布环境、⽣产环境
-        namespace: prod
+        namespace: ${NACOS_NAMESPACE:prod}
         # 区分不同应⽤：同⼀个环境内，不同应⽤的配置，通过group来区分。
         group: DEFAULT_GROUP
         #指定yaml格式的配置 默认properties
@@ -49,18 +49,21 @@ spring:
         # 自动刷新配置文件,默认true
         refresh-enabled: true
         # Nacos 认证用户
-        username: nacos-prod
+        username: ${NACOS_USERNAME}
         # Nacos 认证密码
-        password: zaq1xsw2
+        password: ${NACOS_PASSWORD}
         # 配置文件prefix
         prefix: ${spring.application.name}
 
 
 management:
+  endpoint:
+    health:
+      show-details: never
   endpoints:
     web:
       exposure:
-        include: prometheus
+        include: health,prometheus
 
 expedia:
   apiKey: ${EXPEDIA_API_KEY:}

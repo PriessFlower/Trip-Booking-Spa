@@ -9,13 +9,11 @@ import com.trip.booking.spa.core.api.common.enums.MonitorNameEnum;
 import com.trip.booking.spa.core.api.common.enums.SupplierDataTypeEnum;
 import com.trip.booking.spa.core.api.common.enums.SupplierSourceEnum;
 import com.trip.booking.spa.core.api.common.exception.ParseException;
-import com.trip.booking.spa.core.exception.RedisLimitException;
 import com.trip.booking.spa.core.redis.DistributedRateLimiter;
 import com.trip.booking.spa.core.util.HttpUtils;
 import com.trip.booking.spa.core.util.JsonUtils;
 import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
-import org.redisson.api.RateIntervalUnit;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -66,10 +64,7 @@ public class AvailabilityAccess extends BaseHttpAccess<AvailabilityRequest, Avai
 
     @Override
     protected void beforeAccess(AvailabilityRequest request) {
-        if (!redisRateLimiter.tryAcquire(buildGlobalLimitKey(), QPS, RateIntervalUnit.SECONDS, WINDOW_IN_SECONDS, 5)) {
-            throw new RedisLimitException("Request exceeds limit key = " + buildGlobalLimitKey()
-                    + "request = " + JsonUtils.writeObject2Json(request));
-        }
+        // 限流已统一上移至 BaseHttpAccess.access()（RateLimitManager），此处仅保留业务前置钩子
     }
 
     @Override
