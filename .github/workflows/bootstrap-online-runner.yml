@@ -16,6 +16,7 @@ jobs:
     name: Install GitHub Actions runner on trip-prod-platform-01
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    environment: production
 
     steps:
       - name: Configure SSH
@@ -49,7 +50,7 @@ jobs:
           EOF
           chmod 600 ~/.ssh/config
 
-      - name: Inspect online server
+      - name: Inspect platform server
         run: |
           ssh production 'set -Eeuo pipefail
             printf "architecture=%s\n" "$(uname -m)"
@@ -147,7 +148,7 @@ jobs:
               --url "$repository_url" \
               --token "$runner_token" \
               --name "$runner_name" \
-              --labels online,tencent-cloud,production,platform \
+              --labels tencent-cloud,production,platform \
               --work _work \
               --replace
           fi
