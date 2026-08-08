@@ -383,6 +383,7 @@ jobs:
           EXPEDIA_API_KEY: ${{ secrets.PROD_EXPEDIA_API_KEY }}
           EXPEDIA_SHARED_SECRET: ${{ secrets.PROD_EXPEDIA_SHARED_SECRET }}
           EXPEDIA_API_HOST: ${{ vars.PROD_EXPEDIA_API_HOST }}
+          EXPEDIA_STATIC_DATA_ENABLED: ${{ vars.PROD_EXPEDIA_STATIC_DATA_ENABLED || 'true' }}
         run: |
           set -Eeuo pipefail
 
@@ -433,6 +434,7 @@ jobs:
             printf 'EXPEDIA_API_KEY=%s\n' "$EXPEDIA_API_KEY"
             printf 'EXPEDIA_SHARED_SECRET=%s\n' "$EXPEDIA_SHARED_SECRET"
             printf 'EXPEDIA_API_HOST=%s\n' "$EXPEDIA_API_HOST"
+            printf 'EXPEDIA_STATIC_DATA_ENABLED=%s\n' "$EXPEDIA_STATIC_DATA_ENABLED"
           } | ssh -F "$RUNNER_TEMP/trip-booking-spa-deploy-ssh/config" production \
             'set -Eeuo pipefail; app_dir=/opt/trip-booking-spa; install -d -m 700 "$app_dir"; umask 077; cat > "$app_dir/app.env.next"'
 
