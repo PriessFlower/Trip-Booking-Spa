@@ -45,8 +45,8 @@ jobs:
     needs: test
     runs-on:
       - self-hosted
-      - linux
-      - x64
+      - Linux
+      - X64
       - tencent-cloud
       - production
       - platform
@@ -311,8 +311,8 @@ jobs:
     needs: publish
     runs-on:
       - self-hosted
-      - linux
-      - x64
+      - Linux
+      - X64
       - tencent-cloud
       - production
       - platform
@@ -320,9 +320,6 @@ jobs:
     environment: production
     permissions:
       contents: read
-    env:
-      NACOS_SERVER_ADDR: 172.21.32.14:8848
-
     steps:
       - name: Configure SSH
         env:
@@ -378,6 +375,7 @@ jobs:
           REDIS_HOST: ${{ vars.PROD_REDIS_HOST }}
           REDIS_PORT: ${{ vars.PROD_REDIS_PORT }}
           REDIS_PASSWORD: ${{ secrets.PROD_REDIS_PASSWORD }}
+          NACOS_SERVER_ADDR: ${{ vars.PROD_NACOS_SERVER_ADDR }}
           NACOS_NAMESPACE: ${{ vars.PROD_NACOS_NAMESPACE }}
           NACOS_USERNAME: ${{ secrets.PROD_NACOS_USERNAME }}
           NACOS_PASSWORD: ${{ secrets.PROD_NACOS_PASSWORD }}
@@ -392,7 +390,7 @@ jobs:
             DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD
             REDIS_HOST REDIS_PORT
             NACOS_SERVER_ADDR NACOS_NAMESPACE NACOS_USERNAME NACOS_PASSWORD
-            SERVER_ADDRESS EXPEDIA_API_HOST
+            SERVER_ADDRESS EXPEDIA_API_KEY EXPEDIA_SHARED_SECRET EXPEDIA_API_HOST
           )
 
           for name in "${required_values[@]}"; do
@@ -406,6 +404,11 @@ jobs:
               exit 1
             fi
           done
+
+          if [ "$DB_NAME" != tg_trip_spa ]; then
+            echo "DB_NAME must point to the production tg_trip_spa database." >&2
+            exit 1
+          fi
 
           if [ "$NACOS_SERVER_ADDR" != 172.21.32.14:8848 ]; then
             echo "NACOS_SERVER_ADDR must point to platform Nacos at 172.21.32.14:8848." >&2

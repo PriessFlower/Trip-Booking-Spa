@@ -514,7 +514,7 @@ public class DidatravelHotelServiceImpl implements DidatravelHotelService {
 
     @Override
     public DidaTravelResponse getHotelService(PriceReq priceReq, String sHotelId) {
-        boolean queryCache = nacosRuntimeConfig.isDidatravelQueryCache();
+        boolean queryCache = nacosRuntimeConfig.isDidatravelRealTimePrice();
         DidaTravelRequest.HeaderType headerType = new DidaTravelRequest.HeaderType();
         headerType.setLicenseKey(LicenseKey);
         headerType.setClientID(ClientID);

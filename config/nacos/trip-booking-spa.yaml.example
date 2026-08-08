@@ -1,42 +1,58 @@
 # Nacos Data ID: trip-booking-spa.yaml
 # Group: DEFAULT_GROUP
-# Keep structured runtime values as JSON strings so they remain compatible with
-# the values previously stored in Apollo.
+#
+# 键名规则见 PROJECT.md §2.7：<域>.<对象>.<属性>，域为封闭枚举 task / ratelimit / cache / supplier。
+# 集合类取值以 JSON 字符串表示（沿用 Apollo 时期格式）。
+# 代码中的兜底默认值一律为安全侧取值，与本文件取值不同；部署前须确认目标环境已包含本文件全部键。
 
-query:
-  cache:
-    supplier: '[10005]'
-
-supplier:
-  hotel:
-    cache:
-      map: '{"10005":["16024166"]}'
-  query:
-    timezone: '["10005"]'
-
-expedia:
-  query:
-    price:
-      cache:
-        qps: 10
-      queue:
-        task:
-          switch: 1
-          return: 1
-
-# 定时任务开关与调度（enabled 为运行时动态读取，改配置即生效；cron 仅启动时读取，改后需重启）
+# ── task：定时任务及其运行行为 ──────────────────────────────
+# enabled 运行时动态读取，改配置即生效；cron 仅启动时读取，改后需重启。
 task:
-  expedia-hotel-sync:
-    enabled: false
-    cron: '0 0 2 * * ?'
-    update-days: 1
-  expedia-remove-hotel:
-    enabled: false
-    cron: '0 0 4 * * ?'
-    delete-date: ''
+  # Expedia 刷价：把价格刷进我方 Redis 缓存。一次调度消费一轮任务表，刷完即结束。
   expedia-cps:
-    enabled: false
-    cron: '0 0/30 * * * ?'
+    enabled: false            # 唯一闸口：是否按 cron 自动刷价
+    cron: '0 0/30 * * * ?'    # 每 30 分钟
+    qps: 10                   # 调用方配额层：刷价时的查价速率，须小于 ratelimit.qps 对应项
+
+  # RateHawk 刷价：结构同上
   ratehawk-cps:
     enabled: false
-    cron: '0 15/30 * * * ?'
+    cron: '0 15/30 * * * ?'   # 每 30 分钟，与 Expedia 错开 15 分钟
+    qps: 0.16
+
+  # Expedia 静态酒店同步
+  expedia-hotel-sync:
+    enabled: false
+    cron: '0 0 2 * * ?'       # 每日 02:00
+    update-days: 1            # 增量天数
+
+  # Expedia 下线酒店清理
+  expedia-remove-hotel:
+    enabled: false
+    cron: '0 0 4 * * ?'       # 每日 04:00
+    delete-date: ''           # 指定日期；空=默认取 7 天前
+
+  # 时区建档：拉取城市信息构建 city_zone
+  # 注意：该链路依赖 hotelBasePlaceholderClient，当前为熔断状态，调用即抛异常
+  timezone-init:
+    suppliers: '["10005"]'    # 参与建档的供应商
+
+# ── ratelimit：调用外部接口的限流 ───────────────────────────
+# key = GLOBAL_LIMIT:供应商:接口（BaseHttpAccess.buildGlobalLimitKey 产出）。
+# 未在 qps 表中列出的 key 使用 default-qps。改 qps 热生效（@RefreshScope）。
+ratelimit:
+  mode: local                 # local=单机 Guava；distributed=Redisson 跨实例
+  default-qps: 20
+  acquire-timeout-ms: 5000
+  qps: '{"GLOBAL_LIMIT:EXPEDIA:STATIC_CONTENT":15,"GLOBAL_LIMIT:EXPEDIA:STATIC_REGIONS":10,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_ORDER_PRICE":50}'
+
+# ── cache：我方自建缓存 ────────────────────────────────────
+cache:
+  price:
+    suppliers: '[10005]'                      # 查价走我方缓存的供应商
+    hotels: '{"10005":["16024166"]}'          # 走缓存的酒店白名单；某供应商对应空列表=其全部酒店走缓存
+
+# ── supplier：与特定供应商交互的行为 ────────────────────────
+supplier:
+  didatravel:
+    real-time-price: false    # true=要求道旅返回实时价；false=接受其缓存价

@@ -29,3 +29,6 @@
 
 # 交接文档：含 dev 测试凭证明文，不入库
 HANDOFF.md
+
+# Nacos 客户端启动时自动落盘的本地配置快照（断网兜底用），运行时产物不入库
+/config/trip-booking-spa/

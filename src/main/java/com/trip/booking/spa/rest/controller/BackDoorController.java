@@ -131,10 +131,6 @@ public class BackDoorController {
         return HttpResponse.getSuccessInstance(expediaGeographyIngestionService.syncCities(ids));
     }
 
-//    //qps限流 生产环境2.5  测试环境约0.16（1分钟10次）
-//    @Value("${ratehawk.query.price.cache.qps}")
-//    private Double cacheQps;
-
     @GetMapping("/push")
     @ApiOperation("HotelList查询")
     public HttpResponse meituanHotelList(@RequestParam("cityId") String cityId,

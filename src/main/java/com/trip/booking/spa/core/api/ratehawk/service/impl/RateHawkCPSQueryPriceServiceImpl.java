@@ -14,7 +14,6 @@ import com.google.common.util.concurrent.RateLimiter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -48,79 +47,60 @@ public class RateHawkCPSQueryPriceServiceImpl implements RateHawkCPSQueryPriceSe
     @Autowired
     private RateHawkService rateHawkService;
 
-    @Value("${ratehawk.query.price.queue.task.switch:0}")
-    private Integer QueryPriceQueueSwitch;
-
-    @Value("${ratehawk.query.price.queue.task.return:0}")
-    private Integer QueryPriceQueueReturn;
-
+    /**
+     * 单次调用只消费一轮：取一批（SQL 按 update_time 升序、limit 1000）、逐行刷完即返回。
+     * 结构与退出条件的说明同 {@code ExpediaCPSQueryPriceServiceImpl#queryPriceQueueTask}（PROJECT.md §2.8.2、§2.8.3）。
+     */
     @Override
     public Boolean queryPriceQueueTask(int priority, int temporaryUpgrade,RateLimiter rateLimiter) {
-
-        while (true) {
+        List<RateHawkQueryPriceTask> list = rateHawkQueryPriceTaskMapper.getQueryPriceTaskList(priority, temporaryUpgrade);
+        log.info("ratehawkQueryPriceTask 本轮取到 {} 行, priority={}", list.size(), priority);
+        if (CollectionUtils.isEmpty(list)) {
+            return true;
+        }
+        for (RateHawkQueryPriceTask rateHawkQueryPriceTask : list) {
+            // 单行处理整体入 try：坏数据只跳过本行，不影响同批其余行
             try {
-                if (QueryPriceQueueReturn == 0){
-                    return true;
+                //升级期限为空视为已过期
+                Date upgradeDeadline = rateHawkQueryPriceTask.getUpgradeDeadline();
+                if (null == upgradeDeadline || !upgradeDeadline.after(new Date())) {
+                    rateHawkQueryPriceTask.setTemporaryUpgrade(0);
                 }
-                while (true) {
-                    if (QueryPriceQueueReturn == 0) {
-                        return true;
-                    }
-                    // 按照更新时间早的取
-                    List<RateHawkQueryPriceTask> list = rateHawkQueryPriceTaskMapper.getQueryPriceTaskList(priority, temporaryUpgrade);
-
-                    log.info("ratehawkQueryPriceTask list: " + list.size());
-
-                    if (CollectionUtils.isEmpty(list)) {
-                        break;
-                    }
-                    for (RateHawkQueryPriceTask rateHawkQueryPriceTask : list) {
-
-                        if (!rateHawkQueryPriceTask.getUpgradeDeadline().after(new Date())) {
-                            rateHawkQueryPriceTask.setTemporaryUpgrade(0);
-
-                        }
-                        if (!isSameDay(rateHawkQueryPriceTask.getUpdateTime(), rateHawkQueryPriceTask.getLastTime())) {
-                            rateHawkQueryPriceTask.setQueryCount(1);
-                        }
-                        //更新查询次数
-                        rateHawkQueryPriceTaskMapper.updateAddCount(rateHawkQueryPriceTask);
-
-                        try {
-                            long start = System.currentTimeMillis();
-                            List<ProductRespDTO> productRespDTOList;
-                            PriceReq request;
-                            Supplier supplier;
-                            //checkin和checkin+1每组都进行查询价格 比如:2025-03-01到2025-03-30拆分成2025-03-01到2025-03-02、2025-03-02到2025-03-03等
-                            for(int i = 0; i<rateHawkQueryPriceTask.getDelayCheckOut()-rateHawkQueryPriceTask.getDelayCheckIn(); i++){
-                                LocalDate currentCheckin = LocalDate.now().plusDays(i);
-                                LocalDate currentCheckout = currentCheckin.plusDays(1);
-                                log.info("ratehawkQueryPriceTask hId: {},currentCheckin:{},currentCheckout:{}  ",
-                                        rateHawkQueryPriceTask.getShId(), currentCheckin.toString(),currentCheckout.toString());
-                                rateLimiter.acquire();
-                                Monitor.recordOne("ratehawk_cps_query_price_qps_" + priority);
-                                if (QueryPriceQueueSwitch == 1) {
-                                    request = PriceReq.builder().adultNum(1)
-                                            .childNum(0).guestType(0).childAges(new ArrayList<>())
-                                            .checkIn(currentCheckin.toString()).checkout(currentCheckout.toString()).roomNum(1).build();
-                                    supplier = Supplier.builder().sHotelId(rateHawkQueryPriceTask.getShId()).build();
-                                    productRespDTOList = rateHawkService.queryPricesCache(request, supplier);
-                                    log.info("ratehawkQueryPriceTask productRespDTOList:{}", JSON.toJSONString(productRespDTOList));
-                                }
-                            }
-                            log.info("ratehawkQueryPriceTask{} query time:{}", priority, System.currentTimeMillis() - start);
-                        } catch (Exception e) {
-                            log.error("ratehawkQueryPriceTask queryPricesCache error:", e);
-                        }
-                    }
+                if (!isSameDay(rateHawkQueryPriceTask.getUpdateTime(), rateHawkQueryPriceTask.getLastTime())) {
+                    rateHawkQueryPriceTask.setQueryCount(1);
                 }
+                //更新查询次数
+                rateHawkQueryPriceTaskMapper.updateAddCount(rateHawkQueryPriceTask);
+
+                long start = System.currentTimeMillis();
+                //checkin和checkin+1每组都进行查询价格 比如:2025-03-01到2025-03-30拆分成2025-03-01到2025-03-02、2025-03-02到2025-03-03等
+                for(int i = 0; i<rateHawkQueryPriceTask.getDelayCheckOut()-rateHawkQueryPriceTask.getDelayCheckIn(); i++){
+                    LocalDate currentCheckin = LocalDate.now().plusDays(i);
+                    LocalDate currentCheckout = currentCheckin.plusDays(1);
+                    log.info("ratehawkQueryPriceTask hId: {},currentCheckin:{},currentCheckout:{}  ",
+                            rateHawkQueryPriceTask.getShId(), currentCheckin.toString(),currentCheckout.toString());
+                    rateLimiter.acquire();
+                    Monitor.recordOne("ratehawk_cps_query_price_qps_" + priority);
+                    PriceReq request = PriceReq.builder().adultNum(1)
+                            .childNum(0).guestType(0).childAges(new ArrayList<>())
+                            .checkIn(currentCheckin.toString()).checkout(currentCheckout.toString()).roomNum(1).build();
+                    Supplier supplier = Supplier.builder().sHotelId(rateHawkQueryPriceTask.getShId()).build();
+                    List<ProductRespDTO> productRespDTOList = rateHawkService.queryPricesCache(request, supplier);
+                    log.info("ratehawkQueryPriceTask productRespDTOList:{}", JSON.toJSONString(productRespDTOList));
+                }
+                log.info("ratehawkQueryPriceTask{} query time:{}", priority, System.currentTimeMillis() - start);
             } catch (Exception e) {
-                log.error("ratehawkQueryPriceTask循环中断，重新开始 error: ", e);
+                log.error("ratehawkQueryPriceTask queryPricesCache error, hId={}:", rateHawkQueryPriceTask.getShId(), e);
             }
         }
+        return true;
     }
 
     public static boolean isSameDay(Date updateTime, Date lastTime) {
+        // 新任务行 last_time 为空(从未刷过价)，视为非同一天，走首次/新一天的计数重置
+        if (null == updateTime || null == lastTime) {
+            return false;
+        }
         // 将 Date 转换为 LocalDate
         LocalDate updateLocalDate = updateTime.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
         LocalDate lastLocalDate = lastTime.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();

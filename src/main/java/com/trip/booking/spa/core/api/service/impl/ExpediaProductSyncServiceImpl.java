@@ -33,12 +33,16 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
         if (StringUtils.isNotBlank(supplier.getSProductId())) {
             return expediaPriceService.queryProductPrice(priceReq, supplier);
         }
-        //泰国及韩国酒店当天入住的全关闭
+        // 闸口：泰国及韩国部分酒店当天入住不报价（名单来自打包进制品的 expediaHotelList.json）。
+        // 误开风险=这些酒店当天入住报价后大概率验价失败；误关风险=当天入住直接无价，用户侧表现为查无报价。
+        // 执行面：所有节点的在线查价路径。
+        // 待办：名单为硬编码，违反 PROJECT.md §2.8.6，需迁至 Nacos。
         if (ExpediaHelper.hotelIdList.contains(priceReq.getSuppliers().get(0).getSHotelId())
                 && LocalDate.parse(priceReq.getCheckIn()).equals(LocalDate.now()))
         {
-            List<ProductRespDTO> response = Lists.newArrayList();
-            return response;
+            log.info("[gate] expedia.same-day-blocked-hotels 拦截: hotelId={}, checkIn={}",
+                    supplier.getSHotelId(), priceReq.getCheckIn());
+            return Lists.newArrayList();
         }
         return expediaPriceService.queryPrices(priceReq, supplier);
     }

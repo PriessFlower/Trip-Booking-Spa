@@ -65,14 +65,14 @@ public class SpaController {
     public ResponseDTO<List<ProductRespDTO>> queryPrice(@RequestBody @Validated PriceReq priceReq) {
         long startTime = System.currentTimeMillis();
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
-        List<Integer> queryCacheSupplier = nacosRuntimeConfig.getQueryCacheSuppliers();
-        Map<Integer, List<String>> supplierHotelCacheMap = nacosRuntimeConfig.getSupplierHotelCacheMap();
+        List<Integer> cachePriceSuppliers = nacosRuntimeConfig.getCachePriceSuppliers();
+        Map<Integer, List<String>> cachePriceHotels = nacosRuntimeConfig.getCachePriceHotels();
         for (Supplier supplier : priceReq.getSuppliers()) {
             //如果没有传产品id并且配置了供应商查询缓存，则走缓存
-            List<String> hotelIdList = supplierHotelCacheMap.getOrDefault(
+            List<String> hotelIdList = cachePriceHotels.getOrDefault(
                     supplier.getSupplierId(), Collections.emptyList());
             if (StringUtils.isBlank(supplier.getSProductId())
-                    && queryCacheSupplier.contains(supplier.getSupplierId())
+                    && cachePriceSuppliers.contains(supplier.getSupplierId())
                     //查询供应商是全量走缓存还是部分酒店走缓存
                     && (CollectionUtils.isEmpty(hotelIdList) || hotelIdList.contains(supplier.getSHotelId()))) {
                 List<ProductRespDTO> price = cachePriceService.getPrice(priceReq, supplier);
