@@ -69,17 +69,19 @@ public class ExpediaCPSQueryPriceServiceImpl implements ExpediaCPSQueryPriceServ
                     }
                     for (ExpediaQueryPriceTask expediaQueryPriceTask : list) {
 
-                        if (!expediaQueryPriceTask.getUpgradeDeadline().after(new Date())) {
-                            expediaQueryPriceTask.setTemporaryUpgrade(0);
-
-                        }
-                        if (!isSameDay(expediaQueryPriceTask.getUpdateTime(), expediaQueryPriceTask.getLastTime())) {
-                            expediaQueryPriceTask.setQueryCount(1);
-                        }
-                        //更新查询次数
-                        expediaQueryPriceTaskMapper.updateAddCount(expediaQueryPriceTask);
-
+                        // 单行处理整体入 try：坏数据只跳过本行，不再抛到外层 while 触发全量重跑空转
                         try {
+                            //升级期限为空视为已过期
+                            Date upgradeDeadline = expediaQueryPriceTask.getUpgradeDeadline();
+                            if (null == upgradeDeadline || !upgradeDeadline.after(new Date())) {
+                                expediaQueryPriceTask.setTemporaryUpgrade(0);
+                            }
+                            if (!isSameDay(expediaQueryPriceTask.getUpdateTime(), expediaQueryPriceTask.getLastTime())) {
+                                expediaQueryPriceTask.setQueryCount(1);
+                            }
+                            //更新查询次数
+                            expediaQueryPriceTaskMapper.updateAddCount(expediaQueryPriceTask);
+
                             long start = System.currentTimeMillis();
                             List<ProductRespDTO> productRespDTOList;
                             PriceReq request;
@@ -110,6 +112,10 @@ public class ExpediaCPSQueryPriceServiceImpl implements ExpediaCPSQueryPriceServ
     }
 
     public static boolean isSameDay(Date updateTime, Date lastTime) {
+        // 新任务行 last_time 为空(从未刷过价)，视为非同一天，走首次/新一天的计数重置
+        if (null == updateTime || null == lastTime) {
+            return false;
+        }
         // 将 Date 转换为 LocalDate
         LocalDate updateLocalDate = updateTime.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
         LocalDate lastLocalDate = lastTime.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();

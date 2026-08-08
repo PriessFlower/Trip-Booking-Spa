@@ -441,12 +441,6 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
 
     @Override
     public List<ProductRespDTO> queryPricesCache(PriceReq request, Supplier supplier) {
-        List<ProductRespDTO> productRespDTOList = null;
-        ResponseResult<QueryPriceResponse> resultOnly = null;
-        ResponseResult<QueryPriceResponse> resultPackage = null;
-        QueryPriceResponse.HotelPrice hotelPriceOnly = null;
-        QueryPriceResponse.HotelPrice hotelPricePackage = null;
-
         QueryPriceRequest queryPriceRequest = QueryPriceRequest.builder().property_id(supplier.getSHotelId()).checkin(request.getCheckIn()).checkout(request.getCheckout()).currency(StringUtils.isBlank(request.getCurrency()) ? DEFAULT_QUOTE_CURRENCY : request.getCurrency()).sales_environment("hotel_only").billing_terms(billingTerms).payment_terms(paymentTerms).partner_point_of_sale(partnerPointOfSale).build();
         List<String> occupancies = new ArrayList<>();
         for (int i = 0; i < request.getRoomNum(); i++) {
@@ -465,26 +459,19 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         queryPriceRequest.setOccupancies(occupancies);
         request.setOccupancies(occupancies);
 
-        //先查询零售价
+        // 缓存只刷零售价：当前渠道以 standalone 售卖为主；且缓存结构(price:hotelId:date 的 field=productId)
+        // 无售卖类型维度，同一 rateId 的打包价会覆盖零售价。待渠道开卖打包价时，
+        // 需先给缓存键补类型维度，再在此处放开 hotel_package 查询。
         queryPriceRequest.setSales_environment("hotel_only");
-        resultOnly = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
-        //查询打包价
-        queryPriceRequest.setSales_environment("hotel_package");
-        resultPackage = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
-
-        if (resultOnly != null && resultOnly.isSucc() && null != resultOnly.getData() && CollectionUtils.isNotEmpty(resultOnly.getData().getHotelPrices())) {
-            hotelPriceOnly = resultOnly.getData().getHotelPrices().get(0);
-        }
-        if (resultPackage != null && resultPackage.isSucc() && null != resultPackage.getData() && CollectionUtils.isNotEmpty(resultPackage.getData().getHotelPrices())) {
-            hotelPricePackage = resultPackage.getData().getHotelPrices().get(0);
-        }
+        ResponseResult<QueryPriceResponse> resultOnly = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
         Monitor.recordOne("expedia_all_query");
 
-        if (null == hotelPriceOnly && null == hotelPricePackage) {
-            log.info("expedia缓存查询零售价和打包价全部失败,request:{}", JsonUtils.writeObject2Json(queryPriceRequest));
+        if (null == resultOnly || !resultOnly.isSucc() || null == resultOnly.getData()
+                || CollectionUtils.isEmpty(resultOnly.getData().getHotelPrices())) {
+            log.info("expedia缓存查询零售价失败,request:{}", JsonUtils.writeObject2Json(queryPriceRequest));
             return null;
         }
-        productRespDTOList = convertSeparated(hotelPriceOnly, hotelPricePackage, request);
+        List<ProductRespDTO> productRespDTOList = convertPriceResp(resultOnly.getData().getHotelPrices().get(0), "hotel_only", request);
 
         //插入缓存
         cachePriceService.productToCache(productRespDTOList, request);
