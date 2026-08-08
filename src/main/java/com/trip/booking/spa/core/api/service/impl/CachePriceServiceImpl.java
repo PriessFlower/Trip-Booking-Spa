@@ -177,7 +177,9 @@ public class CachePriceServiceImpl implements CachePriceService {
                         ProductRespCacheDTO respCacheDTO = JsonUtils.decodeJson(productInfoJson, new TypeReference<>() {
                         });
                         // 如果早餐有变化，则把发生早餐变化的产品id放入changeBreakfastSet，更新缓存productRespCacheDTOMap
-                        if (respCacheDTO.getMeal() != null && !respCacheDTO.getMeal().count.equals(productRespDTO.getMeal().getCount())) {
+                        // 用 Objects.equals 而非 count.equals：缓存中可能存在 count 为空的历史数据
+                        if (respCacheDTO.getMeal() != null && productRespDTO.getMeal() != null
+                                && !Objects.equals(respCacheDTO.getMeal().count, productRespDTO.getMeal().getCount())) {
                             //产品变更早餐
                             ProductRespCacheDTO dto = new ProductRespCacheDTO();
                             BeanUtils.copyProperties(productRespDTO, dto);

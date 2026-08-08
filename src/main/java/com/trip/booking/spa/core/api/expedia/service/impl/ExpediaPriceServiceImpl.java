@@ -492,6 +492,12 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     }
 
     public Meal convertMeal(Integer adultNum, Map<String, QueryPriceResponse.Amenity> amenities) {
+        // 部分 rate 不下发 amenities（实测 2342 行刷价中 30 次），视为无餐食。
+        // 取值必须与下方 default 分支一致：count 为 0 而非 null，否则缓存复用时
+        // CachePriceServiceImpl 的 meal.count.equals(...) 比较会空指针。
+        if (null == amenities) {
+            return Meal.builder().count(0).lunchCount(0).dinnerCount(0).mealDesc("").build();
+        }
         String[] meals = mealList.split(",");
         String mealId = "";
         for (String meal : meals) {
