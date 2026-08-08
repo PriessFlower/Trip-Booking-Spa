@@ -43,45 +43,283 @@ jobs:
     name: Build and publish image
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: test
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - tencent-cloud
+      - production
+      - platform
+    timeout-minutes: 45
+    environment: production
     permissions:
       contents: read
+    env:
+      JAVA_HOME: /usr/lib/jvm/java-21
+      RUNTIME_BASE_IMAGE: ccr.ccs.tencentyun.com/priessflower/trip-booking-spa:runtime-base-jre21
+      RUNTIME_BASE_SOURCE_IMAGE: ccr.ccs.tencentyun.com/priessflower/trip-booking-spa:472c10892171a7157895de2549a527c60ca8d668
+      RUNTIME_BASE_SOURCE_REPO_DIGEST: ccr.ccs.tencentyun.com/priessflower/trip-booking-spa@sha256:f1647263955accb7b08a027ecf75c930b79a6c14e936359b31d943b4b3bf231f
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Verify platform build tools
+        run: |
+          set -Eeuo pipefail
+          export PATH="$JAVA_HOME/bin:$PATH"
 
-      - name: Log in to TCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.TCR_REGISTRY }}
-          username: ${{ secrets.TCR_USERNAME }}
-          password: ${{ secrets.TCR_PASSWORD }}
+          test "$(hostname)" = trip-prod-platform
+          test -x "$JAVA_HOME/bin/java"
+          test -x "$JAVA_HOME/bin/javac"
+          command -v mvn >/dev/null
+          command -v docker >/dev/null
+          command -v flock >/dev/null
 
-      - name: Build and publish image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.IMAGE_NAME }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          java_version="$(java -version 2>&1)"
+          maven_version="$(mvn --version)"
+          grep -Eq 'version "21[.]' <<< "$java_version"
+          grep -Eq '^Java version: 21[.]' <<< "$maven_version"
+          docker version --format 'docker_server={{.Server.Version}}'
+
+      - name: Build application JAR on platform
+        run: |
+          set -Eeuo pipefail
+          : "${RUNNER_TEMP:?Missing RUNNER_TEMP}"
+          export PATH="$JAVA_HOME/bin:$PATH"
+
+          maven_settings="$RUNNER_TEMP/tencent-cloud-maven-settings.xml"
+          cleanup_maven_settings() {
+            rm -f -- "$maven_settings"
+          }
+          trap cleanup_maven_settings EXIT
+
+          umask 077
+          cat > "$maven_settings" <<'SETTINGS'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+            <mirrors>
+              <mirror>
+                <id>tencent-cloud</id>
+                <name>Tencent Cloud Maven mirror</name>
+                <url>https://mirrors.cloud.tencent.com/nexus/repository/maven-public/</url>
+                <mirrorOf>*</mirrorOf>
+              </mirror>
+            </mirrors>
+          </settings>
+          SETTINGS
+
+          mvn \
+            --settings "$maven_settings" \
+            --batch-mode \
+            --no-transfer-progress \
+            --activate-profiles prod \
+            -DskipTests \
+            clean package
+
+          test -s target/trip-booking-spa-0.0.1.jar
+
+      - name: Log in to TCR with isolated credentials
+        env:
+          TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
+          TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
+        run: |
+          set -Eeuo pipefail
+          : "${RUNNER_TEMP:?Missing RUNNER_TEMP}"
+          : "${TCR_USERNAME:?Missing TCR_USERNAME}"
+          : "${TCR_PASSWORD:?Missing TCR_PASSWORD}"
+
+          docker_config="$RUNNER_TEMP/trip-booking-spa-docker"
+          install -d -m 700 "$docker_config"
+          export DOCKER_CONFIG="$docker_config"
+          printf 'DOCKER_CONFIG=%s\n' "$docker_config" >> "$GITHUB_ENV"
+          printf '%s' "$TCR_PASSWORD" | docker login \
+            "$TCR_REGISTRY" \
+            --username "$TCR_USERNAME" \
+            --password-stdin
+
+      - name: Ensure TCR runtime base exists
+        run: |
+          set -Eeuo pipefail
+          : "${GITHUB_RUN_ID:?Missing GITHUB_RUN_ID}"
+          : "${RUNNER_TEMP:?Missing RUNNER_TEMP}"
+
+          lock_dir="$(dirname "$RUNNER_TEMP")/.trip-booking-spa-locks"
+          install -d -m 700 "$lock_dir"
+          exec 9>"$lock_dir/runtime-base-jre21.lock"
+          flock --exclusive 9
+
+          pull_runtime_base() {
+            local output status
+            if output="$(docker pull "$RUNTIME_BASE_IMAGE" 2>&1)"; then
+              printf '%s\n' "$output"
+              return 0
+            else
+              status="$?"
+            fi
+
+            printf '%s\n' "$output" >&2
+            if grep -Eqi '(manifest.*unknown|manifest.*not found|not found.*manifest)' \
+              <<< "$output"; then
+              return 10
+            fi
+
+            echo "TCR lookup failed for a reason other than a missing manifest; refusing to bootstrap." >&2
+            return "$status"
+          }
+
+          verify_runtime_base() {
+            local image_env
+            test "$(docker image inspect --format '{{.Os}}' "$RUNTIME_BASE_IMAGE")" = linux
+            test "$(docker image inspect --format '{{.Architecture}}' "$RUNTIME_BASE_IMAGE")" = amd64
+            test "$(docker image inspect --format '{{.Config.User}}' "$RUNTIME_BASE_IMAGE")" = app
+            test "$(docker image inspect --format '{{.Config.WorkingDir}}' "$RUNTIME_BASE_IMAGE")" = /app
+            test "$(docker image inspect --format '{{json .Config.Entrypoint}}' "$RUNTIME_BASE_IMAGE")" = \
+              '["java","-jar","/app/app.jar"]'
+            image_env="$(docker image inspect \
+              --format '{{range .Config.Env}}{{println .}}{{end}}' "$RUNTIME_BASE_IMAGE")"
+            grep -Fx 'JAVA_HOME=/opt/java/openjdk' <<< "$image_env"
+            docker run --rm --network none --entrypoint /bin/sh "$RUNTIME_BASE_IMAGE" \
+              -c 'set -eu; test ! -e /app/app.jar; test "$(id -un)" = app; java -version'
+          }
+
+          if pull_runtime_base; then
+            verify_runtime_base
+            echo "Using existing runtime base: $RUNTIME_BASE_IMAGE"
+            exit 0
+          else
+            pull_status="$?"
+            if [ "$pull_status" -ne 10 ]; then
+              exit "$pull_status"
+            fi
+          fi
+
+          echo "Runtime base is absent; deriving it once from pinned source $RUNTIME_BASE_SOURCE_IMAGE"
+          docker pull "$RUNTIME_BASE_SOURCE_IMAGE"
+
+          # A second lookup makes creation idempotent if another builder won a race.
+          if pull_runtime_base; then
+            verify_runtime_base
+            echo "Runtime base was published by another builder."
+            exit 0
+          else
+            pull_status="$?"
+            if [ "$pull_status" -ne 10 ]; then
+              exit "$pull_status"
+            fi
+          fi
+
+          test "$(docker image inspect --format '{{.Os}}' "$RUNTIME_BASE_SOURCE_IMAGE")" = linux
+          test "$(docker image inspect --format '{{.Architecture}}' "$RUNTIME_BASE_SOURCE_IMAGE")" = amd64
+          test "$(docker image inspect --format '{{.Config.User}}' "$RUNTIME_BASE_SOURCE_IMAGE")" = app
+          test "$(docker image inspect --format '{{.Config.WorkingDir}}' "$RUNTIME_BASE_SOURCE_IMAGE")" = /app
+          expected_entrypoint='["java","-jar","/app/app.jar"]'
+          actual_entrypoint="$(docker image inspect \
+            --format '{{json .Config.Entrypoint}}' "$RUNTIME_BASE_SOURCE_IMAGE")"
+          if [ "$actual_entrypoint" != "$expected_entrypoint" ]; then
+            echo "Refusing to derive runtime base from an unexpected source image." >&2
+            exit 1
+          fi
+          source_env="$(docker image inspect \
+            --format '{{range .Config.Env}}{{println .}}{{end}}' "$RUNTIME_BASE_SOURCE_IMAGE")"
+          grep -Fx 'JAVA_HOME=/opt/java/openjdk' <<< "$source_env"
+          source_repo_digests="$(docker image inspect \
+            --format '{{range .RepoDigests}}{{println .}}{{end}}' "$RUNTIME_BASE_SOURCE_IMAGE")"
+          grep -Fx "$RUNTIME_BASE_SOURCE_REPO_DIGEST" <<< "$source_repo_digests"
+          docker run --rm --network none --entrypoint /bin/sh "$RUNTIME_BASE_SOURCE_IMAGE" \
+            -c 'set -eu; test -s /app/app.jar; test "$(id -un)" = app; java -version'
+
+          seed_container="trip-runtime-seed-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT:-1}"
+          cleanup_seed_container() {
+            docker rm -f -- "$seed_container" >/dev/null 2>&1 || true
+          }
+          trap cleanup_seed_container EXIT
+          cleanup_seed_container
+
+          docker create \
+            --name "$seed_container" \
+            --entrypoint /bin/sh \
+            "$RUNTIME_BASE_SOURCE_IMAGE" \
+            -c 'set -eu; test -f /app/app.jar; rm -f /app/app.jar; test ! -e /app/app.jar' \
+            >/dev/null
+          docker start --attach "$seed_container"
+
+          docker export "$seed_container" | docker import \
+            --change 'ENV PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' \
+            --change 'ENV JAVA_HOME=/opt/java/openjdk' \
+            --change 'ENV LANG=en_US.UTF-8' \
+            --change 'ENV LANGUAGE=en_US:en' \
+            --change 'ENV LC_ALL=en_US.UTF-8' \
+            --change 'ENV SPRING_PROFILES_ACTIVE=prod' \
+            --change 'WORKDIR /app' \
+            --change 'USER app' \
+            --change 'EXPOSE 8080' \
+            --change 'ENTRYPOINT ["java","-jar","/app/app.jar"]' \
+            - "$RUNTIME_BASE_IMAGE"
+
+          verify_runtime_base
+          docker push "$RUNTIME_BASE_IMAGE"
+
+      - name: Build and publish image without public registries
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+
+          test -s target/trip-booking-spa-0.0.1.jar
+          docker image inspect "$RUNTIME_BASE_IMAGE" >/dev/null
+
+          docker build \
+            --pull=false \
+            --network=none \
+            --build-arg "RUNTIME_IMAGE=$RUNTIME_BASE_IMAGE" \
+            --tag "$IMAGE" \
+            --tag "$IMAGE_NAME:latest" \
+            .
+
+          test "$(docker image inspect --format '{{.Os}}' "$IMAGE")" = linux
+          test "$(docker image inspect --format '{{.Architecture}}' "$IMAGE")" = amd64
+          test "$(docker image inspect --format '{{.Config.User}}' "$IMAGE")" = app
+          test "$(docker image inspect --format '{{.Config.WorkingDir}}' "$IMAGE")" = /app
+          test "$(docker image inspect --format '{{json .Config.Entrypoint}}' "$IMAGE")" = \
+            '["java","-jar","/app/app.jar"]'
+          image_env="$(docker image inspect \
+            --format '{{range .Config.Env}}{{println .}}{{end}}' "$IMAGE")"
+          grep -Fx 'JAVA_HOME=/opt/java/openjdk' <<< "$image_env"
+          docker run --rm --network none --entrypoint /bin/sh "$IMAGE" \
+            -c 'set -eu; test -s /app/app.jar; test "$(id -un)" = app; java -version'
+
+          docker push "$IMAGE"
+          docker push "$IMAGE_NAME:latest"
+
+      - name: Remove platform TCR credentials
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          : "${RUNNER_TEMP:?Missing RUNNER_TEMP}"
+
+          docker_config="$RUNNER_TEMP/trip-booking-spa-docker"
+          export DOCKER_CONFIG="$docker_config"
+          docker logout "$TCR_REGISTRY" >/dev/null 2>&1 || true
+          rm -f -- "$docker_config/config.json"
+          rmdir -- "$docker_config" 2>/dev/null || true
 
   deploy:
     name: Deploy production
     needs: publish
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - tencent-cloud
+      - production
+      - platform
     timeout-minutes: 30
     environment: production
     permissions:
       contents: read
-
     steps:
       - name: Configure SSH
         env:
@@ -91,25 +329,41 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
           set -Eeuo pipefail
+          : "${DEPLOY_KEY:?Missing DEPLOY_SSH_KEY}"
+          : "${KNOWN_HOSTS:?Missing DEPLOY_KNOWN_HOSTS}"
           : "${DEPLOY_HOST:?Missing DEPLOY_HOST}"
           : "${DEPLOY_USER:?Missing DEPLOY_USER}"
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-          cat > ~/.ssh/config <<EOF
+          : "${RUNNER_TEMP:?Missing RUNNER_TEMP}"
+
+          ssh_dir="$RUNNER_TEMP/trip-booking-spa-deploy-ssh"
+          install -m 700 -d "$ssh_dir"
+          printf '%s\n' "$DEPLOY_KEY" > "$ssh_dir/deploy_key"
+          chmod 600 "$ssh_dir/deploy_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+          chmod 600 "$ssh_dir/known_hosts"
+          cat > "$ssh_dir/config" <<EOF
           Host production
             HostName $DEPLOY_HOST
             User $DEPLOY_USER
-            IdentityFile ~/.ssh/deploy_key
+            IdentityFile $ssh_dir/deploy_key
             IdentitiesOnly yes
-            UserKnownHostsFile ~/.ssh/known_hosts
+            UserKnownHostsFile $ssh_dir/known_hosts
             ServerAliveInterval 30
             ServerAliveCountMax 20
             TCPKeepAlive yes
           EOF
-          chmod 600 ~/.ssh/config
+          chmod 600 "$ssh_dir/config"
+
+      - name: Verify deployment target
+        run: |
+          set -Eeuo pipefail
+          ssh -F "$RUNNER_TEMP/trip-booking-spa-deploy-ssh/config" production \
+            'set -Eeuo pipefail
+             actual_hostname="$(hostname)"
+             if [ "$actual_hostname" != trip-offline ]; then
+               echo "Refusing to deploy: expected trip-offline, got $actual_hostname" >&2
+               exit 1
+             fi'
 
       - name: Stage production runtime configuration
         env:
@@ -136,7 +390,7 @@ jobs:
             DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD
             REDIS_HOST REDIS_PORT
             NACOS_SERVER_ADDR NACOS_NAMESPACE NACOS_USERNAME NACOS_PASSWORD
-            SERVER_ADDRESS EXPEDIA_API_HOST
+            SERVER_ADDRESS EXPEDIA_API_KEY EXPEDIA_SHARED_SECRET EXPEDIA_API_HOST
           )
 
           for name in "${required_values[@]}"; do
@@ -150,6 +404,16 @@ jobs:
               exit 1
             fi
           done
+
+          if [ "$DB_NAME" != tg_trip_spa ]; then
+            echo "DB_NAME must point to the production tg_trip_spa database." >&2
+            exit 1
+          fi
+
+          if [ "$NACOS_SERVER_ADDR" != 172.21.32.14:8848 ]; then
+            echo "NACOS_SERVER_ADDR must point to platform Nacos at 172.21.32.14:8848." >&2
+            exit 1
+          fi
 
           {
             printf 'SPRING_PROFILES_ACTIVE=prod\n'
@@ -169,22 +433,24 @@ jobs:
             printf 'EXPEDIA_API_KEY=%s\n' "$EXPEDIA_API_KEY"
             printf 'EXPEDIA_SHARED_SECRET=%s\n' "$EXPEDIA_SHARED_SECRET"
             printf 'EXPEDIA_API_HOST=%s\n' "$EXPEDIA_API_HOST"
-          } | ssh production \
+          } | ssh -F "$RUNNER_TEMP/trip-booking-spa-deploy-ssh/config" production \
             'set -Eeuo pipefail; app_dir=/opt/trip-booking-spa; install -d -m 700 "$app_dir"; umask 077; cat > "$app_dir/app.env.next"'
 
-      - name: Log in to TCR on server
+      - name: Log in to TCR on deployment server
         env:
           TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
           TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
         run: |
-          printf '%s' "$TCR_PASSWORD" | ssh production \
+          set -Eeuo pipefail
+          printf '%s' "$TCR_PASSWORD" | \
+            ssh -F "$RUNNER_TEMP/trip-booking-spa-deploy-ssh/config" production \
             "docker login '${{ env.TCR_REGISTRY }}' --username '$TCR_USERNAME' --password-stdin"
 
       - name: Deploy container
         env:
           IMAGE: ${{ env.IMAGE_NAME }}:${{ github.sha }}
         run: |
-          ssh production \
+          ssh -F "$RUNNER_TEMP/trip-booking-spa-deploy-ssh/config" production \
             bash -s -- "$IMAGE" <<'REMOTE'
           set -Eeuo pipefail
 
@@ -225,7 +491,7 @@ jobs:
 
           wait_for_health() {
             local response
-            for attempt in $(seq 1 30); do
+            for _ in $(seq 1 30); do
               response="$(curl --fail --silent --max-time 3 \
                 http://127.0.0.1:8080/actuator/health 2>/dev/null || true)"
               if printf '%s' "$response" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"'; then
@@ -277,9 +543,27 @@ jobs:
           nacos_host="${nacos_address%:*}"
           nacos_port="${nacos_address##*:}"
 
+          if [ -z "$nacos_host" ] || [ "$nacos_host" = "$nacos_address" ]; then
+            echo "NACOS_SERVER_ADDR must use host:port format." >&2
+            false
+          fi
+          case "$nacos_port" in
+            ''|*[!0-9]*)
+              echo "Nacos port must be numeric: $nacos_port" >&2
+              false
+              ;;
+          esac
+          if [ "${#nacos_port}" -gt 5 ] || \
+             (( 10#$nacos_port < 1 || 10#$nacos_port > 64535 )); then
+            echo "Nacos port must be between 1 and 64535: $nacos_port" >&2
+            false
+          fi
+          nacos_grpc_port=$((10#$nacos_port + 1000))
+
           check_tcp "$db_host" "$db_port"
           check_tcp "$redis_host" "$redis_port"
           check_tcp "$nacos_host" "$nacos_port"
+          check_tcp "$nacos_host" "$nacos_grpc_port"
           docker pull "$image"
 
           if docker inspect "$app_name" >/dev/null 2>&1; then
@@ -309,7 +593,19 @@ jobs:
           echo "Deployment succeeded: $image"
           REMOTE
 
-      - name: Log out from TCR on server
+      - name: Log out from TCR on deployment server
         if: always()
         run: |
-          ssh production "docker logout '${{ env.TCR_REGISTRY }}' >/dev/null 2>&1 || true"
+          ssh -F "$RUNNER_TEMP/trip-booking-spa-deploy-ssh/config" production \
+            "docker logout '${{ env.TCR_REGISTRY }}' >/dev/null 2>&1 || true" || true
+
+      - name: Remove deployment SSH material
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          ssh_dir="$RUNNER_TEMP/trip-booking-spa-deploy-ssh"
+          rm -f -- \
+            "$ssh_dir/deploy_key" \
+            "$ssh_dir/known_hosts" \
+            "$ssh_dir/config"
+          rmdir -- "$ssh_dir" 2>/dev/null || true
