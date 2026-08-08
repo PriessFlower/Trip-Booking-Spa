@@ -1,0 +1,165 @@
+name: Bootstrap trip-prod-platform self-hosted runner
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/bootstrap-platform-runner.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    name: Install GitHub Actions runner on trip-prod-platform
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: production
+
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -Eeuo pipefail
+          : "${DEPLOY_KEY:?Missing DEPLOY_SSH_KEY}"
+          : "${KNOWN_HOSTS:?Missing DEPLOY_KNOWN_HOSTS}"
+          : "${DEPLOY_HOST:?Missing DEPLOY_HOST}"
+          : "${DEPLOY_USER:?Missing DEPLOY_USER}"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host production
+            HostName $DEPLOY_HOST
+            User $DEPLOY_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+            ServerAliveInterval 30
+            ServerAliveCountMax 20
+            TCPKeepAlive yes
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Inspect platform server
+        run: |
+          ssh production 'set -Eeuo pipefail
+            printf "architecture=%s\n" "$(uname -m)"
+            printf "kernel=%s\n" "$(uname -sr)"
+            printf "cpu_count=%s\n" "$(getconf _NPROCESSORS_ONLN)"
+            awk "/MemTotal/ { printf \"memory_mib=%.0f\\n\", \$2 / 1024 }" /proc/meminfo
+            df -Pm / | awk "NR == 2 { printf \"root_free_mib=%s\\n\", \$4 }"
+            docker version --format "docker_server={{.Server.Version}}"
+            if [ "$(id -u)" -eq 0 ] || sudo -n true 2>/dev/null; then
+              echo "passwordless_admin=yes"
+            else
+              echo "passwordless_admin=no" >&2
+              exit 1
+            fi'
+
+      - name: Install and register runner
+        env:
+          RUNNER_TOKEN: ${{ secrets.RUNNER_REGISTRATION_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          : "${RUNNER_TOKEN:?Missing RUNNER_REGISTRATION_TOKEN}"
+
+          ssh production bash -s -- "$RUNNER_TOKEN" <<'REMOTE'
+          set -Eeuo pipefail
+
+          runner_token="$1"
+          runner_user="github-runner"
+          runner_name="trip-prod-platform"
+          host_name="trip-prod-platform"
+          runner_dir="/opt/actions-runner"
+          repository_url="https://github.com/PriessFlower/Trip-Booking-Spa"
+
+          as_root() {
+            if [ "$(id -u)" -eq 0 ]; then
+              "$@"
+            else
+              sudo -n "$@"
+            fi
+          }
+
+          as_runner() {
+            if [ "$(id -u)" -eq 0 ]; then
+              runuser -u "$runner_user" -- "$@"
+            else
+              sudo -n -u "$runner_user" -H "$@"
+            fi
+          }
+
+          case "$(uname -m)" in
+            x86_64)
+              runner_arch="x64"
+              runner_sha="04cf0be1aff4c3ec3554466c39124ca250e3effd8873bb7e8d68535aa9505d5d"
+              ;;
+            aarch64|arm64)
+              runner_arch="arm64"
+              runner_sha="58b758e420b87093fbd4bfddd368074960053e2f1388f01848c82624b90f27d1"
+              ;;
+            *)
+              echo "Unsupported runner architecture: $(uname -m)" >&2
+              exit 1
+              ;;
+          esac
+
+          runner_version="2.336.0"
+          archive="actions-runner-linux-${runner_arch}-${runner_version}.tar.gz"
+          download_url="https://github.com/actions/runner/releases/download/v${runner_version}/${archive}"
+
+          if ! id "$runner_user" >/dev/null 2>&1; then
+            as_root useradd --create-home --shell /bin/bash "$runner_user"
+          fi
+
+          as_root hostnamectl set-hostname "$host_name"
+          getent group docker >/dev/null
+          as_root usermod --append --groups docker "$runner_user"
+          as_root install -d -m 755 -o "$runner_user" -g "$runner_user" "$runner_dir"
+          as_root install -d -m 700 -o "$runner_user" -g "$runner_user" /opt/trip-booking-spa
+
+          cd "$runner_dir"
+          if [ ! -f "$archive" ] || ! printf '%s  %s\n' "$runner_sha" "$archive" | sha256sum --check --status; then
+            as_root rm -f "$archive"
+            as_root curl --fail --location --retry 10 --retry-all-errors \
+              --connect-timeout 20 --output "$archive" "$download_url"
+          fi
+          printf '%s  %s\n' "$runner_sha" "$archive" | sha256sum --check
+
+          if [ ! -x ./config.sh ]; then
+            as_root tar xzf "$archive" --no-same-owner
+            as_root chown -R "$runner_user:$runner_user" "$runner_dir"
+          fi
+
+          if [ ! -f .runner ]; then
+            as_root ./bin/installdependencies.sh
+            as_runner ./config.sh \
+              --unattended \
+              --url "$repository_url" \
+              --token "$runner_token" \
+              --name "$runner_name" \
+              --labels tencent-cloud,production,platform \
+              --work _work \
+              --replace
+          fi
+
+          runner_token=""
+
+          if ! compgen -G '/etc/systemd/system/actions.runner.PriessFlower-Trip-Booking-Spa.*.service' >/dev/null; then
+            as_root ./svc.sh install "$runner_user"
+          fi
+          as_root ./svc.sh start
+          as_root ./svc.sh status
+
+          as_runner docker version --format 'runner_docker_server={{.Server.Version}}'
+          REMOTE
