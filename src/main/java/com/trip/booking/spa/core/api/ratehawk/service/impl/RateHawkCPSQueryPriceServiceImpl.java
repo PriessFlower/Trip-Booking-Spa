@@ -48,10 +48,10 @@ public class RateHawkCPSQueryPriceServiceImpl implements RateHawkCPSQueryPriceSe
     @Autowired
     private RateHawkService rateHawkService;
 
-    @Value("${ratehawk.query.price.queue.task.switch}")
+    @Value("${ratehawk.query.price.queue.task.switch:0}")
     private Integer QueryPriceQueueSwitch;
 
-    @Value("${ratehawk.query.price.queue.task.return}")
+    @Value("${ratehawk.query.price.queue.task.return:0}")
     private Integer QueryPriceQueueReturn;
 
     @Override

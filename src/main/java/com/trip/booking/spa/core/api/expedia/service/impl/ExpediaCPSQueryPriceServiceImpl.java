@@ -41,10 +41,10 @@ public class ExpediaCPSQueryPriceServiceImpl implements ExpediaCPSQueryPriceServ
     @Autowired
     private ExpediaPriceService expediaPriceService;
 
-    @Value("${expedia.query.price.queue.task.switch}")
+    @Value("${expedia.query.price.queue.task.switch:0}")
     private Integer QueryPriceQueueSwitch;
 
-    @Value("${expedia.query.price.queue.task.return}")
+    @Value("${expedia.query.price.queue.task.return:0}")
     private Integer QueryPriceQueueReturn;
 
     @Override
