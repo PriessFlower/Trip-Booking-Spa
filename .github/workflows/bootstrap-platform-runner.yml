@@ -3,9 +3,9 @@ name: Bootstrap trip-prod-platform-01 self-hosted runner
 on:
   push:
     branches:
-      - chore/online-self-hosted-runner
+      - master
     paths:
-      - .github/workflows/bootstrap-online-runner.yml
+      - .github/workflows/bootstrap-platform-runner.yml
   workflow_dispatch:
 
 permissions:
