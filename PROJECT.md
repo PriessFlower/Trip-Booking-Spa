@@ -141,8 +141,23 @@ chore: remove unused RateLimiterUtils
 |---|---|---|
 | `application*.yml` | 数据源、Redis / Nacos 连接、各供应商接口地址、框架与技术参数 | **启动必需**——缺失则无法启动或无法连接 Nacos |
 | Nacos<br>（Data ID `trip-booking-spa.yaml`，Group `DEFAULT_GROUP`） | 开关、名单、阈值、限流 QPS、佣金率 | **运维可调**——运行期需要调整且不应重启 |
+| `application*.yml`（安全护栏） | 见 §2.2.3 | **误开后果不可逆**——变更必须经发版与评审 |
 
 **2.2.2**　运维可调的配置项，其权威取值必须在 Nacos，且**只能**在 Nacos。
+
+**2.2.3 安全护栏**　同时满足下列两条的开关归为安全护栏，**必须固定在 `application*.yml`，禁止移入 Nacos**：
+
+1. 误开将造成资损、越权或其他不可逆后果；
+2. 在启动阶段校验，取值不合法时拒绝启动（而非在业务路径上判定）。
+
+设此类别的目的是让其变更必须经过发版与代码评审，不能由任何人在配置台单方面打开。现有成员：
+
+| 开关 | 误开后果 |
+|---|---|
+| `expedia.booking-enabled` | 未经认证即向 Expedia 提交真实订单，产生真实费用 |
+| `expedia.production-endpoint-enabled` | 连接 Expedia 生产端点，消耗真实配额并可能产生真实交易 |
+
+**2.2.4**　运维开关与安全护栏易被混淆，归类时以 §2.2.3 的两条为准。**在业务路径上按次判定、且存在正当运维停用场景的，一律属运维可调**，例如 `expedia.static-data.enabled`（每次调用时判定，运维需要时应能停摄取而不发版）。
 
 ### 2.3 兜底默认值
 

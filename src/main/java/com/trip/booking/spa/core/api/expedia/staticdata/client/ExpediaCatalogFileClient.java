@@ -86,8 +86,15 @@ public class ExpediaCatalogFileClient {
         return target.toFile();
     }
 
+    /**
+     * 闸口 supplier.expedia.static-data-enabled：是否允许调用 Expedia 目录清单接口。
+     * 误开风险=误在开发或测试环境下载全量目录文件（约 100MB）并消耗接口配额；
+     * 误关风险=无法获取目录清单，播种与每日增量同步取不到酒店名单；
+     * 执行面：全部节点的静态摄取路径（BackDoor 播种与 ExpediaHotelSyncTask 定时同步）。
+     */
     public String fetchCatalogHref(String language) {
-        if (!properties.getStaticData().isEnabled()) {
+        if (!properties.isStaticDataEnabled()) {
+            log.warn("[gate] supplier.expedia.static-data-enabled=false，拒绝获取目录清单: language={}", language);
             throw new IllegalStateException("Expedia static data ingestion is disabled");
         }
         properties.requireCredentials();

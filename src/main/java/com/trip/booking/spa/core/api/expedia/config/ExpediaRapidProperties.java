@@ -1,5 +1,6 @@
 package com.trip.booking.spa.core.api.expedia.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Component;
@@ -10,6 +11,15 @@ import java.net.URI;
 @Component
 @ConfigurationProperties(prefix = "expedia")
 public class ExpediaRapidProperties implements InitializingBean {
+
+    /**
+     * 静态数据摄取总开关，运维可调，权威取值由 Nacos 下发（PROJECT.md §2.2.2）。
+     * 键名归入 supplier 域而非本类的 expedia 前缀，故用 @Value 单独绑定——
+     * 域为封闭枚举，不得为单个供应商新增顶层域（§2.7.2）。
+     * 默认 false 为安全侧兜底（§2.3.3）；本类未加 @RefreshScope，改后需重启容器方生效。
+     */
+    @Value("${supplier.expedia.static-data-enabled:false}")
+    private boolean staticDataEnabled;
 
     private String apiKey;
     private String sharedSecret;
@@ -38,9 +48,19 @@ public class ExpediaRapidProperties implements InitializingBean {
             throw new IllegalStateException(
                     "Expedia production endpoint is blocked; explicit production authorization is required");
         }
-        if (staticData.isEnabled()) {
+        if (staticDataEnabled) {
             requireCredentials();
         }
+    }
+
+    /** 静态数据摄取是否启用；唯一读取入口，取值见 {@link #staticDataEnabled} */
+    public boolean isStaticDataEnabled() {
+        return staticDataEnabled;
+    }
+
+    /** 仅供测试构造场景使用；运行期取值由 @Value 从 Nacos 绑定 */
+    public void setStaticDataEnabled(boolean staticDataEnabled) {
+        this.staticDataEnabled = staticDataEnabled;
     }
 
     public String getApiKey() {
@@ -128,7 +148,6 @@ public class ExpediaRapidProperties implements InitializingBean {
     }
 
     public static class StaticData {
-        private boolean enabled;
         private int batchSize = 250;
         private String language = "en-US";
         /**
@@ -138,13 +157,6 @@ public class ExpediaRapidProperties implements InitializingBean {
         private String supplySource = "expedia";
         private String mappingVersion = "expedia-content-v2";
 
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
 
         public int getBatchSize() {
             return batchSize;
