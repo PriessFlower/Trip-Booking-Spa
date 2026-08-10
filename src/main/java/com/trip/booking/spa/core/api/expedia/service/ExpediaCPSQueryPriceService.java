@@ -1,6 +1,5 @@
 package com.trip.booking.spa.core.api.expedia.service;
 
-import com.google.common.util.concurrent.RateLimiter;
 
 /**
  * @description:expedia查价缓存service
@@ -11,6 +10,11 @@ import com.google.common.util.concurrent.RateLimiter;
  **/
 public interface ExpediaCPSQueryPriceService {
 
-    Boolean queryPriceQueueTask(int priority, int temporaryUpgrade,RateLimiter rateLimiter);
+    /**
+     * 消费一轮刷价任务。速率、批量与互斥锁均在实现内解析，调用方只需说明触发来源。
+     *
+     * @param trigger 触发来源，写入日志用于区分定时调度与人工触发，取值 scheduled / manual
+     */
+    Boolean queryPriceQueueTask(int priority, int temporaryUpgrade, String trigger);
 
 }

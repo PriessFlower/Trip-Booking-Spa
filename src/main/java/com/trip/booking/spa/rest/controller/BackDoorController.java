@@ -215,21 +215,28 @@ public class BackDoorController {
         return HttpResponse.getSuccessInstance();
     }
 
+    /**
+     * 手动触发一轮 RateHawk 刷价。速率、批量与互斥锁由 Service 统一解析，与定时调度一致。
+     *
+     * <p>本入口不受 task.ratehawk-cps.enabled 约束：定时关闭期间手动补刷是正当运维场景。
+     * 该绕过以 warn 日志留痕（PROJECT.md §3.8.4）。
+     */
     @GetMapping(value = "/rateHawk/priceCache")
-    @ApiOperation("rateHawk价格缓存")
+    @ApiOperation("rateHawk价格缓存-手动触发一轮")
     public HttpResponse priceCache() {
-        //qps限流
-        RateLimiter rateLimiter = RateLimiter.create(0.16);
-        rateHawkCPSQueryPriceService.queryPriceQueueTask(0,0,rateLimiter);
+        log.warn("[gate] 绕过 task.ratehawk-cps.enabled：BackDoor 手动触发一轮刷价");
+        rateHawkCPSQueryPriceService.queryPriceQueueTask(0, 0, "manual");
         return HttpResponse.getSuccessInstance();
     }
 
+    /**
+     * 手动触发一轮 Expedia 刷价，语义同 {@link #priceCache()}。
+     */
     @GetMapping(value = "/expedia/priceCache")
-    @ApiOperation("expedia价格缓存")
+    @ApiOperation("expedia价格缓存-手动触发一轮")
     public HttpResponse expediaPriceCache() {
-        //qps限流
-        RateLimiter rateLimiter = RateLimiter.create(1);
-        expediaCPSQueryPriceService.queryPriceQueueTask(0,0,rateLimiter);
+        log.warn("[gate] 绕过 task.expedia-cps.enabled：BackDoor 手动触发一轮刷价");
+        expediaCPSQueryPriceService.queryPriceQueueTask(0, 0, "manual");
         return HttpResponse.getSuccessInstance();
     }
 }

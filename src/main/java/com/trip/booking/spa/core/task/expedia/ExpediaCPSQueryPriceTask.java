@@ -1,10 +1,7 @@
 package com.trip.booking.spa.core.task.expedia;
 
-import com.google.common.util.concurrent.RateLimiter;
 import com.trip.booking.spa.core.api.expedia.service.ExpediaCPSQueryPriceService;
 import lombok.extern.slf4j.Slf4j;
-import org.redisson.api.RLock;
-import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -23,9 +20,6 @@ public class ExpediaCPSQueryPriceTask {
     private ExpediaCPSQueryPriceService expediaCPSQueryPriceService;
 
     @Autowired
-    private RedissonClient redissonClient;
-
-    @Autowired
     private Environment environment;
 
     /**
@@ -39,22 +33,10 @@ public class ExpediaCPSQueryPriceTask {
             log.info("[gate] task.expedia-cps.enabled=false，跳过本次调度");
             return;
         }
-        RLock lock = redissonClient.getLock("task:lock:expediaCpsQueryPrice");
-        if (!lock.tryLock()) {
-            log.info("[gate] task:lock:expediaCpsQueryPrice 已被其他实例持有，本实例跳过本次调度");
-            return;
-        }
         try {
-            log.info("ExpediaCPSQueryPriceTask start");
-            Double cacheQps = environment.getProperty("task.expedia-cps.qps", Double.class, 0.5);
-            RateLimiter rateLimiter = RateLimiter.create(cacheQps);
-            expediaCPSQueryPriceService.queryPriceQueueTask(0, 0, rateLimiter);
+            expediaCPSQueryPriceService.queryPriceQueueTask(0, 0, "scheduled");
         } catch (Exception e) {
             log.error("ExpediaCPSQueryPriceTask ,error:", e);
-        } finally {
-            if (lock.isHeldByCurrentThread()) {
-                lock.unlock();
-            }
         }
     }
 }

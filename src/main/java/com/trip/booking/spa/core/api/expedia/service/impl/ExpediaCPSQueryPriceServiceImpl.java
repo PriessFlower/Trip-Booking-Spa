@@ -13,6 +13,8 @@ import com.trip.booking.spa.core.monitor.Monitor;
 import com.google.common.util.concurrent.RateLimiter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
@@ -35,13 +37,19 @@ import java.util.List;
 @Service
 public class ExpediaCPSQueryPriceServiceImpl implements ExpediaCPSQueryPriceService {
 
+    /** 刷价互斥锁：定时调度与 BackDoor 手动触发共用，保证同一时刻仅一个执行者 */
+    private static final String LOCK_KEY = "task:lock:expediaCpsQueryPrice";
+
     /**
-     * 单轮取任务的上限。运维可调，权威取值由 Nacos 的 task.expedia-cps.batch-size 下发；
-     * 默认 200 为安全侧从严取值（PROJECT.md §3.3.3），缺配置时刷价变慢但不会突发大量请求。
-     * 经 Environment 实时读取，改 Nacos 下一轮调度即生效。
+     * 运维配置的读取入口。task.expedia-cps.{qps,batch-size} 权威取值由 Nacos 下发；
+     * 代码默认值取安全侧（PROJECT.md §3.3.3）——qps 0.5、batch-size 200，
+     * 缺配置时刷价变慢但不会突发大量请求。经 Environment 实时读取，改 Nacos 下一轮即生效。
      */
     @Autowired
     private Environment environment;
+
+    @Autowired
+    private RedissonClient redissonClient;
 
     @Autowired
     private ExpediaQueryPriceTaskMapper expediaQueryPriceTaskMapper;
@@ -58,13 +66,39 @@ public class ExpediaCPSQueryPriceServiceImpl implements ExpediaCPSQueryPriceServ
      * task.expedia-cps.enabled 关闸最迟在一个调度周期内真正停止做功（PROJECT.md §3.8.2、§3.8.3）。
      */
     @Override
-    public Boolean queryPriceQueueTask(int priority, int temporaryUpgrade, RateLimiter rateLimiter) {
+    public Boolean queryPriceQueueTask(int priority, int temporaryUpgrade, String trigger) {
+        // 锁在此处而非调用方：定时调度与 BackDoor 手动触发共用同一把锁，
+        // 使两者互斥，避免并发消费同一批任务、重复消耗供应商配额（§3.8.2 一事一闸）
+        RLock lock = redissonClient.getLock(LOCK_KEY);
+        if (!lock.tryLock()) {
+            log.info("[gate] {} 已被其他执行者持有，本次跳过, trigger={}", LOCK_KEY, trigger);
+            return false;
+        }
+        try {
+            return runOneRound(priority, temporaryUpgrade, trigger);
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    private Boolean runOneRound(int priority, int temporaryUpgrade, String trigger) {
+        long roundStart = System.currentTimeMillis();
+        // 速率同样在此处解析：两个入口取同一配置，不再各自写死（原 BackDoor 写死 1 QPS）
+        double qps = environment.getProperty("task.expedia-cps.qps", Double.class, 0.5);
+        RateLimiter rateLimiter = RateLimiter.create(qps);
         int batchSize = environment.getProperty("task.expedia-cps.batch-size", Integer.class, 200);
         List<ExpediaQueryPriceTask> list = expediaQueryPriceTaskMapper.getQueryPriceTaskList(priority, temporaryUpgrade, batchSize);
-        log.info("expediaQueryPriceTask 本轮取到 {} 行, priority={}, batchSize={}", list.size(), priority, batchSize);
+        log.info("expediaQueryPriceTask 本轮开始, trigger={}, priority={}, 取到 {} 行, batchSize={}, qps={}",
+                trigger, priority, list.size(), batchSize, qps);
         if (CollectionUtils.isEmpty(list)) {
+            log.info("expediaQueryPriceTask 本轮结束, trigger={}, 无待刷任务, 耗时 {} ms",
+                    trigger, System.currentTimeMillis() - roundStart);
             return true;
         }
+        int succeeded = 0;
+        int failed = 0;
         for (ExpediaQueryPriceTask expediaQueryPriceTask : list) {
             // 单行处理整体入 try：坏数据只跳过本行，不影响同批其余行
             try {
@@ -91,10 +125,15 @@ public class ExpediaCPSQueryPriceServiceImpl implements ExpediaCPSQueryPriceServ
                 List<ProductRespDTO> productRespDTOList = expediaPriceService.queryPricesCache(request, supplier);
                 log.info("expediaQueryPriceTask productRespDTOList:{}", JSON.toJSONString(productRespDTOList));
                 log.info("expediaQueryPriceTask{} query time:{}", priority, System.currentTimeMillis() - start);
+                succeeded++;
             } catch (Exception e) {
+                failed++;
                 log.error("expediaQueryPriceTask queryPricesCache error, hId={}:", expediaQueryPriceTask.getShId(), e);
             }
         }
+        // 结束日志：无此行则日志上无法区分「本轮正常跑完」与「中途进程被杀」
+        log.info("expediaQueryPriceTask 本轮结束, trigger={}, 成功 {} 行, 失败 {} 行, 共 {} 行, 耗时 {} ms",
+                trigger, succeeded, failed, list.size(), System.currentTimeMillis() - roundStart);
         return true;
     }
 
