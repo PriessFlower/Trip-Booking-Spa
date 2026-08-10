@@ -21,6 +21,9 @@ public class ExpediaRapidProperties implements InitializingBean {
     @Value("${supplier.expedia.static-data-enabled:false}")
     private boolean staticDataEnabled;
 
+    /** Expedia Rapid 生产端点主机名；下单与真实费用仅可能产生于此 */
+    private static final String PRODUCTION_HOST = "api.ean.com";
+
     private String apiKey;
     private String sharedSecret;
     private String session = "trip-booking-spa";
@@ -40,15 +43,25 @@ public class ExpediaRapidProperties implements InitializingBean {
 
     @Override
     public void afterPropertiesSet() {
-        if (bookingEnabled) {
-            throw new IllegalStateException("Expedia booking is disabled until certification and explicit authorization");
-        }
         URI endpoint = URI.create(url.getHost());
-        if ("api.ean.com".equalsIgnoreCase(endpoint.getHost()) && !productionEndpointEnabled) {
+        boolean productionEndpoint = PRODUCTION_HOST.equalsIgnoreCase(endpoint.getHost());
+
+        if (productionEndpoint && !productionEndpointEnabled) {
             throw new IllegalStateException(
                     "Expedia production endpoint is blocked; explicit production authorization is required");
         }
-        if (staticDataEnabled) {
+        // 下单护栏按端点区分：真实订单与真实费用只可能产生于生产端点，测试端点下单为沙箱行为
+        // （不产生费用、不生成真实预订），需要放开以便验证下单链路。
+        //
+        // 生产端点下单在此硬拦，且有意不提供"生产下单授权"开关：按 §3.2.3，安全护栏的变更本就
+        // 必须经发版与评审，"改代码才能开"即是最强形式；凭空增设一个当前无法启用的开关属过度设计。
+        // Expedia 认证通过后，此处应作为一次独立的、经评审的改动放开。
+        if (bookingEnabled && productionEndpoint) {
+            throw new IllegalStateException(
+                    "Expedia booking against the production endpoint is blocked until certification; "
+                            + "booking is permitted only against the test endpoint");
+        }
+        if (bookingEnabled || staticDataEnabled) {
             requireCredentials();
         }
     }
