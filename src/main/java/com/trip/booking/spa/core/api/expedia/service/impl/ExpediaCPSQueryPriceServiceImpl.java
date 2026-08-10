@@ -37,7 +37,7 @@ public class ExpediaCPSQueryPriceServiceImpl implements ExpediaCPSQueryPriceServ
 
     /**
      * 单轮取任务的上限。运维可调，权威取值由 Nacos 的 task.expedia-cps.batch-size 下发；
-     * 默认 200 为安全侧从严取值（PROJECT.md §2.3.3），缺配置时刷价变慢但不会突发大量请求。
+     * 默认 200 为安全侧从严取值（PROJECT.md §3.3.3），缺配置时刷价变慢但不会突发大量请求。
      * 经 Environment 实时读取，改 Nacos 下一轮调度即生效。
      */
     @Autowired
