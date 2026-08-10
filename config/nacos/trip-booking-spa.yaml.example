@@ -13,12 +13,14 @@ task:
     enabled: false            # 唯一闸口：是否按 cron 自动刷价
     cron: '0 0/30 * * * ?'    # 每 30 分钟
     qps: 10                   # 调用方配额层：刷价时的查价速率，须小于 ratelimit.qps 对应项
+    batch-size: 1000          # 单轮取任务上限。清单总行数 / 本值 = 刷完一遍所需轮数
 
   # RateHawk 刷价：结构同上
   ratehawk-cps:
     enabled: false
     cron: '0 15/30 * * * ?'   # 每 30 分钟，与 Expedia 错开 15 分钟
     qps: 0.16
+    batch-size: 1000
 
   # Expedia 静态酒店同步
   expedia-hotel-sync:

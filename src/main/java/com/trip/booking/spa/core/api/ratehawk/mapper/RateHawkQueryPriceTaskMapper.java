@@ -1,6 +1,7 @@
 package com.trip.booking.spa.core.api.ratehawk.mapper;
 
 import com.trip.booking.spa.core.api.ratehawk.model.RateHawkQueryPriceTask;
+import org.apache.ibatis.annotations.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -23,7 +24,9 @@ public interface RateHawkQueryPriceTaskMapper {
      * @param: [priorityLevelNumber, temporaryUpgrade]
      * @return: java.util.List<com.trip.booking.spa.core.api.ratehawk.model.RateHawkQueryPriceTask>
      **/
-    List<RateHawkQueryPriceTask> getQueryPriceTaskList(int priorityLevelNumber, int temporaryUpgrade);
+    List<RateHawkQueryPriceTask> getQueryPriceTaskList(@Param("priorityLevelNumber") int priorityLevelNumber,
+                                            @Param("temporaryUpgrade") int temporaryUpgrade,
+                                            @Param("batchSize") int batchSize);
 
     /**
      * @description:更新查询次数
