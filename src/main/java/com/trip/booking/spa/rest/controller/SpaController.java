@@ -1,5 +1,6 @@
 package com.trip.booking.spa.rest.controller;
 
+import com.trip.booking.spa.core.api.common.enums.BookingOutcome;
 import com.trip.booking.spa.core.api.dto.BookingRespDTO;
 import com.trip.booking.spa.core.api.dto.CancelRespDTO;
 import com.trip.booking.spa.core.api.dto.CheckPriceRespDTO;
@@ -126,7 +127,12 @@ public class SpaController {
     }
 
     /**
-     * 下单
+     * 下单。
+     *
+     * <p>无论供应商侧成功、失败还是结果不确定，本接口一律返回业务成功（success），
+     * 由响应体的 {@code outcome} 三态承载真实结果。<b>禁止把「结果不确定」表达为接口错误</b>——
+     * 调用方通常把接口错误等同于下单失败并据此退款，而不确定时供应商可能已真实成单。
+     * 仅当请求本身不可受理（如供应商不支持下单）时才返回接口错误。
      */
     @PostMapping(value = "/booking")
     public ResponseDTO<BookingRespDTO> booking(@RequestBody @Validated BookingReq bookingReq) {
@@ -140,7 +146,13 @@ public class SpaController {
         BookingRespDTO bookingRespDTO = bookingSyncService.booking(bookingReq);
 
         if (bookingRespDTO == null) {
-            return ResponseDTO.error("result is null");
+            // 兜底：模板已保证非空，此处仅防实现绕过模板。同样不可表达为失败
+            log.error("booking 返回空，按结果不确定回报, orderId={}", bookingReq.getOrderId());
+            bookingRespDTO = BookingRespDTO.builder()
+                    .outcome(BookingOutcome.UNKNOWN)
+                    .orderId(bookingReq.getOrderId())
+                    .orderDesc("下单结果不确定，请查单确证")
+                    .build();
         }
 
         return ResponseDTO.success(bookingRespDTO);
