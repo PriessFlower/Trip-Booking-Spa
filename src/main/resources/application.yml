@@ -15,7 +15,7 @@ mybatis:
   config-location: classpath:/mybatis-config.xml
 
 # 统一限流（core/ratelimit/RateLimitManager）为运维可调配置，一律由 Nacos 下发，
-# 兜底默认值见 RateLimitProperties 的 @Value（见 PROJECT.md §2.3）。此处不得配置。
+# 兜底默认值见 RateLimitProperties 的 @Value（见 PROJECT.md §3.3）。此处不得配置。
 
 expedia:
   # Booking stays disabled until certification and explicit production authorization.
@@ -24,7 +24,7 @@ expedia:
   user-agent: trip-booking-spa/0.0.1
   static-data:
     # 摄取总开关不在此处：它是运维可调开关，键为 Nacos 的
-    # supplier.expedia.static-data-enabled，兜底默认值见 ExpediaRapidProperties（PROJECT.md §2.2.2、§2.3.3）。
+    # supplier.expedia.static-data-enabled，兜底默认值见 ExpediaRapidProperties（PROJECT.md §3.2.2、§3.3.3）。
     batch-size: 250
     language: en-US
     languages: ${EXPEDIA_STATIC_DATA_LANGUAGES:en-US,zh-CN}

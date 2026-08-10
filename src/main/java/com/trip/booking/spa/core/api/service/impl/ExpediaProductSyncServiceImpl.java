@@ -36,7 +36,7 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
         // 闸口：泰国及韩国部分酒店当天入住不报价（名单来自打包进制品的 expediaHotelList.json）。
         // 误开风险=这些酒店当天入住报价后大概率验价失败；误关风险=当天入住直接无价，用户侧表现为查无报价。
         // 执行面：所有节点的在线查价路径。
-        // 待办：名单为硬编码，违反 PROJECT.md §2.8.6，需迁至 Nacos。
+        // 待办：名单为硬编码，违反 PROJECT.md §3.8.6，需迁至 Nacos。
         if (ExpediaHelper.hotelIdList.contains(priceReq.getSuppliers().get(0).getSHotelId())
                 && LocalDate.parse(priceReq.getCheckIn()).equals(LocalDate.now()))
         {

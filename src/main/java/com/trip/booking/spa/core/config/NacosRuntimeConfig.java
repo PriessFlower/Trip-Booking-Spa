@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Nacos 下发的运维配置（键名规则见 PROJECT.md §2.7）。
+ * Nacos 下发的运维配置（键名规则见 PROJECT.md §3.7）。
  *
  * <p>集合类取值沿用 Apollo 时期的 JSON 字符串表示，迁移到 Nacos 时内容无需改动。</p>
  */
