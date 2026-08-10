@@ -14,6 +14,7 @@ import com.google.common.util.concurrent.RateLimiter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -34,6 +35,14 @@ import java.util.List;
 @Service
 public class ExpediaCPSQueryPriceServiceImpl implements ExpediaCPSQueryPriceService {
 
+    /**
+     * 单轮取任务的上限。运维可调，权威取值由 Nacos 的 task.expedia-cps.batch-size 下发；
+     * 默认 200 为安全侧从严取值（PROJECT.md §3.3.3），缺配置时刷价变慢但不会突发大量请求。
+     * 经 Environment 实时读取，改 Nacos 下一轮调度即生效。
+     */
+    @Autowired
+    private Environment environment;
+
     @Autowired
     private ExpediaQueryPriceTaskMapper expediaQueryPriceTaskMapper;
 
@@ -41,17 +50,18 @@ public class ExpediaCPSQueryPriceServiceImpl implements ExpediaCPSQueryPriceServ
     private ExpediaPriceService expediaPriceService;
 
     /**
-     * 单次调用只消费一轮：取一批（SQL 按 update_time 升序、limit 1000）、逐行刷完即返回。
+     * 单次调用只消费一轮：取一批（SQL 按 update_time 升序，条数为 batch-size）、逐行刷完即返回。
      *
      * <p>不再无限循环。原实现的内层 while 永不退出——取任务 SQL 按 update_time 排序，而处理时会
      * 更新该字段，只要表里有行 list 就不会为空，于是循环长期占锁运行，唯一刹车是启动期绑定的
      * loop-enabled（改 Nacos 对运行中实例无效）。改为一轮一返回后：刷完由 cron 再次触发，
-     * task.expedia-cps.enabled 关闸最迟在一个调度周期内真正停止做功（PROJECT.md §2.8.2、§2.8.3）。
+     * task.expedia-cps.enabled 关闸最迟在一个调度周期内真正停止做功（PROJECT.md §3.8.2、§3.8.3）。
      */
     @Override
     public Boolean queryPriceQueueTask(int priority, int temporaryUpgrade, RateLimiter rateLimiter) {
-        List<ExpediaQueryPriceTask> list = expediaQueryPriceTaskMapper.getQueryPriceTaskList(priority, temporaryUpgrade);
-        log.info("expediaQueryPriceTask 本轮取到 {} 行, priority={}", list.size(), priority);
+        int batchSize = environment.getProperty("task.expedia-cps.batch-size", Integer.class, 200);
+        List<ExpediaQueryPriceTask> list = expediaQueryPriceTaskMapper.getQueryPriceTaskList(priority, temporaryUpgrade, batchSize);
+        log.info("expediaQueryPriceTask 本轮取到 {} 行, priority={}, batchSize={}", list.size(), priority, batchSize);
         if (CollectionUtils.isEmpty(list)) {
             return true;
         }

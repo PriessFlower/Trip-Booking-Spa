@@ -14,6 +14,7 @@ import com.google.common.util.concurrent.RateLimiter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -41,6 +42,14 @@ import java.util.stream.Collectors;
 @Service
 public class RateHawkCPSQueryPriceServiceImpl implements RateHawkCPSQueryPriceService {
 
+    /**
+     * 单轮取任务的上限。运维可调，权威取值由 Nacos 的 task.ratehawk-cps.batch-size 下发；
+     * 默认 200 为安全侧从严取值（PROJECT.md §3.3.3），缺配置时刷价变慢但不会突发大量请求。
+     * 经 Environment 实时读取，改 Nacos 下一轮调度即生效。
+     */
+    @Autowired
+    private Environment environment;
+
     @Autowired
     private RateHawkQueryPriceTaskMapper rateHawkQueryPriceTaskMapper;
 
@@ -48,13 +57,14 @@ public class RateHawkCPSQueryPriceServiceImpl implements RateHawkCPSQueryPriceSe
     private RateHawkService rateHawkService;
 
     /**
-     * 单次调用只消费一轮：取一批（SQL 按 update_time 升序、limit 1000）、逐行刷完即返回。
-     * 结构与退出条件的说明同 {@code ExpediaCPSQueryPriceServiceImpl#queryPriceQueueTask}（PROJECT.md §2.8.2、§2.8.3）。
+     * 单次调用只消费一轮：取一批（SQL 按 update_time 升序，条数为 batch-size）、逐行刷完即返回。
+     * 结构与退出条件的说明同 {@code ExpediaCPSQueryPriceServiceImpl#queryPriceQueueTask}（PROJECT.md §3.8.2、§3.8.3）。
      */
     @Override
     public Boolean queryPriceQueueTask(int priority, int temporaryUpgrade,RateLimiter rateLimiter) {
-        List<RateHawkQueryPriceTask> list = rateHawkQueryPriceTaskMapper.getQueryPriceTaskList(priority, temporaryUpgrade);
-        log.info("ratehawkQueryPriceTask 本轮取到 {} 行, priority={}", list.size(), priority);
+        int batchSize = environment.getProperty("task.ratehawk-cps.batch-size", Integer.class, 200);
+        List<RateHawkQueryPriceTask> list = rateHawkQueryPriceTaskMapper.getQueryPriceTaskList(priority, temporaryUpgrade, batchSize);
+        log.info("ratehawkQueryPriceTask 本轮取到 {} 行, priority={}, batchSize={}", list.size(), priority, batchSize);
         if (CollectionUtils.isEmpty(list)) {
             return true;
         }

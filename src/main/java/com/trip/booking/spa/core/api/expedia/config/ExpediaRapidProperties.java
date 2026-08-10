@@ -13,10 +13,10 @@ import java.net.URI;
 public class ExpediaRapidProperties implements InitializingBean {
 
     /**
-     * 静态数据摄取总开关，运维可调，权威取值由 Nacos 下发（PROJECT.md §2.2.2）。
+     * 静态数据摄取总开关，运维可调，权威取值由 Nacos 下发（PROJECT.md §3.2.2）。
      * 键名归入 supplier 域而非本类的 expedia 前缀，故用 @Value 单独绑定——
-     * 域为封闭枚举，不得为单个供应商新增顶层域（§2.7.2）。
-     * 默认 false 为安全侧兜底（§2.3.3）；本类未加 @RefreshScope，改后需重启容器方生效。
+     * 域为封闭枚举，不得为单个供应商新增顶层域（§3.7.2）。
+     * 默认 false 为安全侧兜底（§3.3.3）；本类未加 @RefreshScope，改后需重启容器方生效。
      */
     @Value("${supplier.expedia.static-data-enabled:false}")
     private boolean staticDataEnabled;

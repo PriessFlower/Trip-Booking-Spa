@@ -32,7 +32,7 @@
         <if test="0 == temporaryUpgrade">
             and temporary_upgrade = #{temporaryUpgrade}
         </if>
-        order by update_time limit 1000
+        order by update_time limit #{batchSize}
     </select>
 
     <update id="updateAddCount"
