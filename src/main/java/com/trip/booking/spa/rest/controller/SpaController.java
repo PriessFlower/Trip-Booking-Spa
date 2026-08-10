@@ -1,6 +1,7 @@
 package com.trip.booking.spa.rest.controller;
 
 import com.trip.booking.spa.core.api.common.enums.BookingOutcome;
+import com.trip.booking.spa.core.api.common.enums.OrderPresence;
 import com.trip.booking.spa.core.api.dto.BookingRespDTO;
 import com.trip.booking.spa.core.api.dto.CancelRespDTO;
 import com.trip.booking.spa.core.api.dto.CheckPriceRespDTO;
@@ -194,7 +195,13 @@ public class SpaController {
         OrderRespDTO orderRespDTO = orderQuerySyncService.orderQuery(orderQueryReq);
 
         if (orderRespDTO == null) {
-            return ResponseDTO.error("result is null");
+            // 兜底：模板已保证非空，此处仅防实现绕过模板。不可表达为「订单不存在」，
+            // 否则上游会据此重新下单
+            log.error("orderQuery 返回空，按未能确证回报, orderId={}", orderQueryReq.getOrderId());
+            orderRespDTO = OrderRespDTO.builder()
+                    .presence(OrderPresence.INDETERMINATE)
+                    .message("查单未能确证订单是否存在，请稍后重试查单")
+                    .build();
         }
 
         return ResponseDTO.success(orderRespDTO);
