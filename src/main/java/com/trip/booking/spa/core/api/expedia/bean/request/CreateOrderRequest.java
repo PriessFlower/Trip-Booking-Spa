@@ -94,5 +94,41 @@ public class CreateOrderRequest {
     public static class Payment {
         /** 固定 affiliate_collect，见 {@link Payment} 类注释 */
         private String type;
+
+        /**
+         * 账单联系人。<b>即使在 affiliate_collect 下也是必填</b>——实测不传时 Expedia 返回
+         * {@code 400 payments.billing_contact.required}。
+         *
+         * <p>此处填我方（affiliate）信息而非旅客信息：钱由我方向旅客收取，
+         * 对 Expedia 而言我方才是账单主体。
+         */
+        private BillingContact billing_contact;
+    }
+
+    /**
+     * 账单联系人。只含姓名与地址，<b>不含任何卡片字段</b>——见 {@link Payment} 类注释。
+     */
+    @Getter
+    @Setter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class BillingContact {
+        private String given_name;
+        private String family_name;
+        private Address address;
+    }
+
+    @Getter
+    @Setter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Address {
+        private String line_1;
+        private String city;
+        private String state_province_code;
+        private String postal_code;
+        private String country_code;
     }
 }

@@ -91,6 +91,23 @@ EPS 明确规定的处置流程，与本服务的三态契约一致（`BookingOu
 
 对应实现：可判 `FAILED`（业务性拒绝），但幂等号必须复用。
 
+**⚠️ 例外：`duplicate_itinerary` 必须判为成功，不可判失败。**
+
+实测（2026-08-10，沙箱）：用同一 `affiliate_reference_id` 重复下单，返回
+
+```
+HTTP 400
+{"type":"invalid_input","errors":[{"type":"duplicate_itinerary",
+  "message":"An itinerary already exists with this affiliate reference id."}]}
+```
+
+该错误的真实含义是**订单已存在**（首次已成功），而非业务性拒绝。若按「其他 4XX
+即失败」处理，上游会退款并释放库存，而 Expedia 侧订单仍在——正是要防的两头空。
+
+正确处置：识别 `duplicate_itinerary` 后转为反查，取回既有 `itinerary_id` 并判
+`SUCCESS`。这也说明 **Expedia 侧的幂等确实生效**：重复提交不会产生第二笔订单，
+故本服务的本地幂等是为了少打一次无用请求，而非防重复下单的唯一手段。
+
 ### 6.4 201 Created
 
 即下单成功。
@@ -116,6 +133,30 @@ GET /v3/itineraries/{itinerary_id}?token=...        ← EPS 明确「不推荐�
 无需持有 Expedia 订单号——这正是下单超时后唯一可用的路径。
 
 `include=history_v2` 可取回行程变更历史（created／modified／canceled）。
+
+### 7.1 反查响应实测含有的字段（2026-08-10 沙箱）
+
+反查回来的信息比下单响应丰富，下述字段均已实见，可直接用于对外回报与后续操作：
+
+| 字段 | 实测值示例 | 用途 |
+|---|---|---|
+| `itinerary_id` | `7717630846973` | Expedia 订单号 |
+| `rooms[].confirmation_id.expedia` | `879600704286433` | **酒店确认号**，旅客到店核对 |
+| `rooms[].status` | `booked` | 房间状态 |
+| `rooms[].links.cancel.href` | `/v3/itineraries/{id}/rooms/{uuid}?token=...` | **取消该房间**，逐房调用 |
+| `rooms[].rate.cancel_refund` | `-65.98 CNY` | 取消可退金额 |
+| `rooms[].rate.cancel_penalties` | 带起止时间的罚金区间 | 取消政策 |
+| `rooms[].rate.pricing.totals.inclusive` | `1926.31 CNY` | 含税总价 |
+| `rooms[].rate.pricing.totals.marketing_fee` | `4.00 USD` | 佣金 |
+| `rooms[].rate.merchant_of_record` | `expedia` | 记录商 |
+| `trader_information` | Travelscape LLC + 条款链接 | 合规展示 |
+
+两点值得注意：
+
+- **酒店确认号只在反查响应里，下单响应中没有**。旧 soa 实现的
+  `hotel_confirmation_number` 长期为空，根因即在此——它只读下单响应。
+  要拿确认号必须在下单成功后再反查一次。
+- 取消链接同样只在反查响应里，故取消流程必然是「先反查取链接 → 再逐房 DELETE」。
 
 ## 8. 测试下单（p105、p113）
 

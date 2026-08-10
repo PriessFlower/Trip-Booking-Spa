@@ -37,4 +37,26 @@ public class BookingReq {
     @NonNull
     private Integer settlePrice;//结算价
 
+    /**
+     * 验价时返回的预订令牌，即 {@code CheckPriceRespDTO.prebookToken}，原样回传。
+     *
+     * <p>Expedia 场景下这是下单的必要输入：令牌自带本次报价的全部上下文，下单即向该地址提交。
+     * 设计上由调用方持有并回传，而不由本服务重新验价获取——重新验价会得到新的报价，
+     * 可能与调用方已向旅客展示的价格不一致。
+     *
+     * <p>令牌有时效，过期后下单会被拒；此时调用方应重新验价再下单。
+     */
+    private String prebookToken;
+
+    /**
+     * 入住人名（英文或拼音），可选；缺省时从 {@link #personName} 拆分。
+     *
+     * <p>Expedia 用旅客姓名对照 UN／UK／EU 制裁名单筛查，属强制合规项，
+     * 故须提交真实姓名，禁止填占位值。
+     */
+    private String givenName;
+
+    /** 入住人姓（英文或拼音），可选；缺省时从 {@link #personName} 拆分 */
+    private String familyName;
+
 }

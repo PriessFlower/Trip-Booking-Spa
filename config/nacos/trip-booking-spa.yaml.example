@@ -66,3 +66,13 @@ supplier:
     # 注意：expedia.booking-enabled 与 expedia.production-endpoint-enabled 为安全护栏，
     # 固定在 application.yml，禁止移入本文件（PROJECT.md §3.2.3）。
     static-data-enabled: true
+
+    # 下单时提交给 Expedia 的固定联系与账单信息，均为我方（affiliate）信息而非旅客信息。
+    #
+    # ⚠️ booking-email 改动前须知：反查订单必须使用与下单时完全一致的邮箱
+    # （GET /v3/itineraries?affiliate_reference_id=..&email=..）。改此值后，
+    # 改动之前创建的订单将无法再用新邮箱反查——而反查是下单结果不确定时的唯一确证手段。
+    # 故此值应长期稳定；确需更换时，须保留旧值以便反查历史订单。
+    #
+    # 该邮箱同时接收 Expedia 的订单确认与取消通知，应指向运营团队可长期查收的信箱。
+    booking-contact: '{"email":"2837198145@qq.com","phoneCountryCode":"86","phoneNumber":"2837198145","givenName":"Tripbooking","familyName":"AI","addressLine1":"Kejiyuan Road 1","city":"Shenzhen","stateProvinceCode":"GD","postalCode":"518000","countryCode":"CN"}'
