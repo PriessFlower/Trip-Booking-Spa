@@ -19,8 +19,9 @@ import javax.annotation.PostConstruct;
  * 供应商或酒店可直接联系旅客，使取消、改单绕开我方平台发生，我方将失去订单控制权。
  * 同一策略在 tg-trip-cursor 生产代码中亦有实施（{@code SupplierContactObfuscator}）。
  *
- * <p>注意边界：<b>旅客姓名必须如实提交</b>，因 Expedia 用它对照 UN／UK／EU 制裁名单
- * 筛查，属合规义务；脱敏只针对邮箱与电话。姓名由 {@code BookingReq} 传入，不经本类。
+ * <p>范围：<b>姓名、邮箱、电话一律使用本类的固定值，不提交任何旅客真实信息</b>。
+ * 该安排已与 Expedia 商定。故 {@code givenName}/{@code familyName} 既用于账单联系人，
+ * 也用于 {@code rooms[]} 的入住人，不再从请求中取旅客姓名。
  *
  * <p><b>邮箱为何是配置而非每单传入</b>：反查订单要求邮箱与下单时完全一致
  * （{@code GET /v3/itineraries?affiliate_reference_id=..&email=..}）。若每单邮箱不同，

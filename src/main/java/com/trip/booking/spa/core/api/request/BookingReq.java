@@ -53,15 +53,4 @@ public class BookingReq {
      */
     private String prebookToken;
 
-    /**
-     * 入住人名（英文或拼音），可选；缺省时从 {@link #personName} 拆分。
-     *
-     * <p>Expedia 用旅客姓名对照 UN／UK／EU 制裁名单筛查，属强制合规项，
-     * 故须提交真实姓名，禁止填占位值。
-     */
-    private String givenName;
-
-    /** 入住人姓（英文或拼音），可选；缺省时从 {@link #personName} 拆分 */
-    private String familyName;
-
 }

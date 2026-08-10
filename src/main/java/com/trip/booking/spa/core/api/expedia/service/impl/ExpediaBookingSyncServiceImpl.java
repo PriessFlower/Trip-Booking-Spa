@@ -164,12 +164,12 @@ public class ExpediaBookingSyncServiceImpl
 
     private CreateOrderRequest buildRequest(BookingReq req, ExpediaBookingContact.Contact contact) {
         List<CreateOrderRequest.Room> rooms = new ArrayList<>();
-        String[] name = splitName(req);
-        // 一间房一个条目；当前每间房登记同一入住人，多客人分房需上游按房传姓名后再扩展
+        // 一间房一个条目。姓名与联系方式一律用我方固定值，不提交旅客真实信息——
+        // 已与 Expedia 商定，理由与边界见 ExpediaBookingContact 类注释
         for (int i = 0; i < req.getRoomNum(); i++) {
             rooms.add(CreateOrderRequest.Room.builder()
-                    .given_name(name[0])
-                    .family_name(name[1])
+                    .given_name(contact.getGivenName())
+                    .family_name(contact.getFamilyName())
                     .build());
         }
         return CreateOrderRequest.builder()
@@ -198,22 +198,6 @@ public class ExpediaBookingSyncServiceImpl
                 .build();
     }
 
-    /**
-     * 取旅客姓名。优先用上游显式给出的名/姓；否则从 personName 拆——
-     * 按空格取首段为名、余下为姓，拆不出则名姓同值。
-     * 制裁名单筛查依赖真实姓名，故此处不做任何占位替换。
-     */
-    private String[] splitName(BookingReq req) {
-        if (StringUtils.isNotBlank(req.getGivenName()) && StringUtils.isNotBlank(req.getFamilyName())) {
-            return new String[]{req.getGivenName().trim(), req.getFamilyName().trim()};
-        }
-        String full = StringUtils.trimToEmpty(req.getPersonName());
-        int idx = full.indexOf(' ');
-        if (idx <= 0) {
-            return new String[]{full, full};
-        }
-        return new String[]{full.substring(0, idx), full.substring(idx + 1).trim()};
-    }
 
     @Override
     public BookingRespDTO bookingRespConvert(BookingOutcomeHolder holder) {

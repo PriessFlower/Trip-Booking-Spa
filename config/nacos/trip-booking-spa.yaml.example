@@ -78,4 +78,4 @@ supplier:
     # 故此值应长期稳定；确需更换时，须保留旧值以便反查历史订单。
     #
     # 该邮箱同时接收 Expedia 的订单确认与取消通知，应指向运营团队可长期查收的信箱。
-    booking-contact: '{"email":"2837198145@qq.com","phoneCountryCode":"86","phoneNumber":"2837198145","givenName":"Tripbooking","familyName":"AI","addressLine1":"Kejiyuan Road 1","city":"Shenzhen","stateProvinceCode":"GD","postalCode":"518000","countryCode":"CN"}'
+    booking-contact: '{"email":"2837198145@qq.com","phoneCountryCode":"86","phoneNumber":"2837198145","givenName":"NEO","familyName":"NEO","addressLine1":"Kejiyuan Road 1","city":"Shenzhen","stateProvinceCode":"GD","postalCode":"518000","countryCode":"CN"}'
