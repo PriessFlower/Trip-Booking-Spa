@@ -2,6 +2,7 @@ package com.trip.booking.spa.core.api.expedia.mapper;
 
 import com.trip.booking.spa.core.api.expedia.model.ExpediaQueryPriceTask;
 import com.trip.booking.spa.core.api.ratehawk.model.RateHawkQueryPriceTask;
+import org.apache.ibatis.annotations.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -24,7 +25,9 @@ public interface ExpediaQueryPriceTaskMapper {
      * @param: [priorityLevelNumber, temporaryUpgrade]
      * @return: java.util.List<com.trip.booking.spa.core.api.expedia.model.ExpediaQueryPriceTask>
      **/
-    List<ExpediaQueryPriceTask> getQueryPriceTaskList(int priorityLevelNumber, int temporaryUpgrade);
+    List<ExpediaQueryPriceTask> getQueryPriceTaskList(@Param("priorityLevelNumber") int priorityLevelNumber,
+                                            @Param("temporaryUpgrade") int temporaryUpgrade,
+                                            @Param("batchSize") int batchSize);
 
     /**
      * @description:更新查询次数
