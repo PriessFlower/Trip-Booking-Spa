@@ -46,7 +46,10 @@ ratelimit:
   mode: local                 # local=单机 Guava；distributed=Redisson 跨实例
   default-qps: 20
   acquire-timeout-ms: 5000
-  qps: '{"GLOBAL_LIMIT:EXPEDIA:STATIC_CONTENT":15,"GLOBAL_LIMIT:EXPEDIA:STATIC_REGIONS":10,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_ORDER_PRICE":50}'
+  # 下单与查单的配额刻意远低于查价：正常业务量下单远少于查价，给高值只会在异常时
+  # 放大重复提交；而本层为快速失败，下单被自身限流挡掉会直接影响成单，故取值需宽于
+  # 真实峰值——5 QPS 约合每小时 1.8 万单，远高于可预见业务量，正常运行不会触发。
+  qps: '{"GLOBAL_LIMIT:EXPEDIA:STATIC_CONTENT":15,"GLOBAL_LIMIT:EXPEDIA:STATIC_REGIONS":10,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_ORDER_PRICE":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_CREATE_ORDER":5,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_QUERY_ORDER":10}'
 
 # ── supplier / expedia：静态数据摄取总开关 ──────────────────
 # ── cache：我方自建缓存 ────────────────────────────────────
