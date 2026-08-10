@@ -55,7 +55,7 @@ public class ExpediaCPSQueryPriceServiceImpl implements ExpediaCPSQueryPriceServ
      * <p>不再无限循环。原实现的内层 while 永不退出——取任务 SQL 按 update_time 排序，而处理时会
      * 更新该字段，只要表里有行 list 就不会为空，于是循环长期占锁运行，唯一刹车是启动期绑定的
      * loop-enabled（改 Nacos 对运行中实例无效）。改为一轮一返回后：刷完由 cron 再次触发，
-     * task.expedia-cps.enabled 关闸最迟在一个调度周期内真正停止做功（PROJECT.md §2.8.2、§2.8.3）。
+     * task.expedia-cps.enabled 关闸最迟在一个调度周期内真正停止做功（PROJECT.md §3.8.2、§3.8.3）。
      */
     @Override
     public Boolean queryPriceQueueTask(int priority, int temporaryUpgrade, RateLimiter rateLimiter) {

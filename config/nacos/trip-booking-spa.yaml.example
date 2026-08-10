@@ -1,7 +1,7 @@
 # Nacos Data ID: trip-booking-spa.yaml
 # Group: DEFAULT_GROUP
 #
-# 键名规则见 PROJECT.md §2.7：<域>.<对象>.<属性>，域为封闭枚举 task / ratelimit / cache / supplier。
+# 键名规则见 PROJECT.md §3.7：<域>.<对象>.<属性>，域为封闭枚举 task / ratelimit / cache / supplier。
 # 集合类取值以 JSON 字符串表示（沿用 Apollo 时期格式）。
 # 代码中的兜底默认值一律为安全侧取值，与本文件取值不同；部署前须确认目标环境已包含本文件全部键。
 
@@ -64,5 +64,5 @@ supplier:
     # 静态数据摄取总开关。关闭时目录清单与内容摄取接口一律拒绝调用
     # （播种、ExpediaHotelSyncTask 每日增量同步均失效）。改后需重启容器方生效。
     # 注意：expedia.booking-enabled 与 expedia.production-endpoint-enabled 为安全护栏，
-    # 固定在 application.yml，禁止移入本文件（PROJECT.md §2.2.3）。
+    # 固定在 application.yml，禁止移入本文件（PROJECT.md §3.2.3）。
     static-data-enabled: true

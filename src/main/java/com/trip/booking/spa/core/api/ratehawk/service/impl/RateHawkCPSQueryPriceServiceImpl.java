@@ -58,7 +58,7 @@ public class RateHawkCPSQueryPriceServiceImpl implements RateHawkCPSQueryPriceSe
 
     /**
      * 单次调用只消费一轮：取一批（SQL 按 update_time 升序，条数为 batch-size）、逐行刷完即返回。
-     * 结构与退出条件的说明同 {@code ExpediaCPSQueryPriceServiceImpl#queryPriceQueueTask}（PROJECT.md §2.8.2、§2.8.3）。
+     * 结构与退出条件的说明同 {@code ExpediaCPSQueryPriceServiceImpl#queryPriceQueueTask}（PROJECT.md §3.8.2、§3.8.3）。
      */
     @Override
     public Boolean queryPriceQueueTask(int priority, int temporaryUpgrade,RateLimiter rateLimiter) {
