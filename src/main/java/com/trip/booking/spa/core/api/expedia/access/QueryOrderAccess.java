@@ -14,6 +14,8 @@ import com.trip.booking.spa.core.util.JsonUtils;
 import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -73,11 +75,21 @@ public class QueryOrderAccess extends BaseHttpAccess<String, QueryOrderResponse>
         // 限流由 BaseHttpAccess.access() 统一处理
     }
 
+    /**
+     * 两个参数都必须 URL 编码。上游单号的字符集由上游决定、不受本服务约束；一旦其中出现
+     * {@code &}、{@code =}、空格等字符，裸拼接会产出非法 URL，该单便<b>永远</b>查不出来——
+     * 每次都落 INDETERMINATE，那笔订单从此无法确证。这正是三态契约要消除的死角，
+     * 故此处编码不是防御性冗余，而是契约的一部分。
+     */
     @Override
     protected String buildRequestUrl() {
         return host + ITINERARIES_PATH
-                + "?affiliate_reference_id=" + affiliateReferenceId
-                + "&email=" + email;
+                + "?affiliate_reference_id=" + urlEncode(affiliateReferenceId)
+                + "&email=" + urlEncode(email);
+    }
+
+    static String urlEncode(String value) {
+        return value == null ? "" : URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     /**
