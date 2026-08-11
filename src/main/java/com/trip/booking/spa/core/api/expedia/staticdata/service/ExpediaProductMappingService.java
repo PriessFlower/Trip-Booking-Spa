@@ -5,6 +5,7 @@ import com.trip.booking.spa.core.api.common.enums.SupplierSourceEnum;
 import com.trip.booking.spa.core.api.expedia.access.QueryProductAccess;
 import com.trip.booking.spa.core.api.expedia.bean.request.QueryPriceRequest;
 import com.trip.booking.spa.core.api.expedia.bean.response.QueryPriceResponse;
+import com.trip.booking.spa.core.api.expedia.config.ExpediaContractProfile;
 import com.trip.booking.spa.core.api.expedia.mapper.ExpediaCatalogMapper;
 import com.trip.booking.spa.core.api.expedia.utils.ExpediaUtils;
 import com.trip.booking.spa.core.api.expedia.utils.ThreadPoolUtils;
@@ -41,12 +42,10 @@ public class ExpediaProductMappingService {
     private String sessionId;
     @Value("${expedia.ownIp}")
     private String ownIp;
-    @Value("${expedia.partner_point_of_sale}")
-    private String partnerPointOfSale;
-    @Value("${expedia.payment_terms}")
-    private String paymentTerms;
-    @Value("${expedia.billing_terms}")
-    private String billingTerms;
+
+    /** 合同车道参数的唯一来源；与查价链路共用，避免建档与查价走上不同车道 */
+    @Resource
+    private ExpediaContractProfile contractProfile;
 
     @Resource
     private ExpediaUtils expediaUtils;
@@ -90,16 +89,13 @@ public class ExpediaProductMappingService {
     /** 照抄旧 pushProductInfo：每酒店一个线程，零售价+打包价各建档一遍 */
     private void pushProductInfo(String checkInDate, String checkOutDate, List<String> supplierHotelIds) {
         supplierHotelIds.forEach(supplierHotelId -> ThreadPoolUtils.execute(() -> {
-            QueryPriceRequest queryPriceRequest = QueryPriceRequest.builder()
+            QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder()
                     .property_id(supplierHotelId)
                     .checkin(checkInDate)
                     .checkout(checkOutDate)
                     .currency("USD")
                     .occupancies(List.of("1"))
                     .sales_environment("hotel_only")
-                    .billing_terms(billingTerms)
-                    .payment_terms(paymentTerms)
-                    .partner_point_of_sale(partnerPointOfSale)
                     .build();
             try {
                 ResponseResult<QueryPriceResponse> resultOnly = new QueryProductAccess(

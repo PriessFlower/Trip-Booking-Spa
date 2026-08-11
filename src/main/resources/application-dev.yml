@@ -93,10 +93,13 @@ expedia:
   session: ${EXPEDIA_CUSTOMER_SESSION_ID:trip-booking-spa-dev}
   ownIp: ${EXPEDIA_CUSTOMER_IP:127.0.0.1}
   localFilePath: /home/webrun/spa/logs/file
-  # Tripbooking AI 新合同 B2B profile（2026-08 technical workshop P5/P83）
+  # Tripbooking AI 新合同 B2B profile（2026-08 technical workshop p6）
+  # 四项构成一条车道，必须整体切换；混用会静默拿到另一条车道的报价，
+  # 故 ExpediaContractProfile 在启动期校验，凑不成已知 profile 即拒绝启动。
   partner_point_of_sale: ${EXPEDIA_PARTNER_POS:B2B_SA_PKG_MOD_AGENT}
   payment_terms: ${EXPEDIA_PAYMENT_TERMS:2}
   billing_terms: ${EXPEDIA_BILLING_TERMS:EAC}
+  sales_channel: ${EXPEDIA_SALES_CHANNEL:agent_tool}
   url:
     host: ${EXPEDIA_API_HOST:https://test.ean.com}
 system:

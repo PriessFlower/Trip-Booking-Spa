@@ -22,6 +22,9 @@ expedia:
   booking-enabled: false
   production-endpoint-enabled: false
   user-agent: trip-booking-spa/0.0.1
+  # 查价单次返回的报价条数上限，Expedia 允许的最大值即 250。
+  # 属我方调参，与合同车道参数（partner_point_of_sale 等，见各环境配置）无关。
+  rate-plan-count: 250
   static-data:
     # 摄取总开关不在此处：它是运维可调开关，键为 Nacos 的
     # supplier.expedia.static-data-enabled，兜底默认值见 ExpediaRapidProperties（PROJECT.md §3.2.2、§3.3.3）。

@@ -75,8 +75,8 @@ public class QueryProductAccess extends BaseHttpAccess<QueryPriceRequest, QueryP
             occupancyStr.append("occupancy=").append(occupancy);
         });
         body.put("", occupancyStr.toString());
-        body.put("rate_plan_count", "250");
-        body.put("sales_channel", "agent_tool");
+        body.put("rate_plan_count", request.getRate_plan_count());
+        body.put("sales_channel", request.getSales_channel());
         body.put("sales_environment", request.getSales_environment());
         body.put("billing_terms", request.getBilling_terms());
         body.put("payment_terms", request.getPayment_terms());
