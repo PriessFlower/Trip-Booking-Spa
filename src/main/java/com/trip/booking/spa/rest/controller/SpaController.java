@@ -1,6 +1,7 @@
 package com.trip.booking.spa.rest.controller;
 
 import com.trip.booking.spa.core.api.common.enums.BookingOutcome;
+import com.trip.booking.spa.core.api.common.enums.CheckPriceOutcome;
 import com.trip.booking.spa.core.api.common.enums.OrderPresence;
 import com.trip.booking.spa.core.api.dto.BookingRespDTO;
 import com.trip.booking.spa.core.api.dto.CancelRespDTO;
@@ -121,7 +122,13 @@ public class SpaController {
         CheckPriceRespDTO checkPriceRespDTO = checkPriceSyncService.checkPrice(checkPriceReq);
 
         if (checkPriceRespDTO == null) {
-            return ResponseDTO.error("result is null");
+            // 兜底：模板已保证非空，此处仅防实现绕过模板。不可表达为「不可订」，
+            // 否则会把「我们不知道」说成「供应商说没有」
+            log.error("checkPrice 返回空，按未能确认回报, sProductId={}", checkPriceReq.getSProductId());
+            checkPriceRespDTO = CheckPriceRespDTO.builder()
+                    .outcome(CheckPriceOutcome.INDETERMINATE)
+                    .message("验价未能确认该产品是否可订，请稍后重试")
+                    .build();
         }
 
         return ResponseDTO.success(checkPriceRespDTO);

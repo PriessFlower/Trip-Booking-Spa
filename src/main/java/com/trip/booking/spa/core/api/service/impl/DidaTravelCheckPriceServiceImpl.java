@@ -1,5 +1,6 @@
 package com.trip.booking.spa.core.api.service.impl;
 
+import com.trip.booking.spa.core.api.common.enums.CheckPriceOutcome;
 import com.trip.booking.spa.core.api.dto.CheckPriceRespDTO;
 import com.trip.booking.spa.core.api.request.CheckPriceReq;
 import com.trip.booking.spa.core.api.didatravel.bean.price.priceConfirm.PriceConfirmResponse;
@@ -37,8 +38,7 @@ public class DidaTravelCheckPriceServiceImpl extends AbstractCheckPriceSyncSuppo
 
         return CheckPriceRespDTO.builder()
 //                .referenceNo(priceConfirmResponse.getSuccess().getPriceDetails().getReferenceNo())
-                .checkStatus(true)
-                .prebookToken(priceConfirmResponse.getSuccess().getPriceDetails().getReferenceNo())
+                .outcome(CheckPriceOutcome.BOOKABLE)
                 .salePrice(plan.getTotalPrice().multiply(BigDecimal.valueOf(100)).intValue())
                 .totalPriceAfter(plan.getTotalPrice().multiply(BigDecimal.valueOf(100)).intValue())
                 .totalPriceBefore(plan.getTotalPrice().multiply(BigDecimal.valueOf(100)).intValue())

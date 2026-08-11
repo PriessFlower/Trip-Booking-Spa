@@ -1,5 +1,6 @@
 package com.trip.booking.spa.core.api.service.impl;
 
+import com.trip.booking.spa.core.api.common.enums.CheckPriceOutcome;
 import com.trip.booking.spa.core.api.dto.CheckPriceRespDTO;
 import com.trip.booking.spa.core.api.request.CheckPriceReq;
 import com.trip.booking.spa.core.api.huitravel.bean.price.availability.NightlyRate;
@@ -40,14 +41,13 @@ public class HuiTravelCheckPriceServiceImpl extends AbstractCheckPriceSyncSuppor
             costs.append(",").append(item.getCost());
         }
         return CheckPriceRespDTO.builder()
-                .checkStatus(true)
+                .outcome(CheckPriceOutcome.BOOKABLE)
                 .salePrice(checkResponse.getResult().getNightlyrate().stream()
                         .map(NightlyRate::getCost).reduce(BigDecimal.ZERO, BigDecimal::add).multiply(new BigDecimal(100)).intValue())
                 .totalPriceAfter(checkResponse.getResult().getNightlyrate().stream()
                         .map(NightlyRate::getCost).reduce(BigDecimal.ZERO, BigDecimal::add).multiply(new BigDecimal(100)).intValue())
                 .totalPriceBefore(checkResponse.getResult().getNightlyrate().stream()
                         .map(NightlyRate::getCost).reduce(BigDecimal.ZERO, BigDecimal::add).multiply(new BigDecimal(100)).intValue())
-                .prebookToken(costs.substring(1))
                 .message("CNY")
                 .bedTypeCode(list)
                 .build();

@@ -3,6 +3,7 @@ package com.trip.booking.spa.core.api.meituan.service.impl;
 import com.trip.booking.spa.core.placeholder.HotelBasePlaceholderClient;
 import com.trip.booking.spa.core.placeholder.HotelInfoPlaceholderClient;
 import com.trip.booking.spa.core.api.dto.CancelPolicy;
+import com.trip.booking.spa.core.api.common.enums.CheckPriceOutcome;
 import com.trip.booking.spa.core.api.dto.CheckPriceRespDTO;
 import com.trip.booking.spa.core.api.dto.Meal;
 import com.trip.booking.spa.core.api.dto.PriceInfo;
@@ -239,7 +240,7 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
         CheckPriceResponse.Result checkPriceResponse = response.getData().getResult();
         int sumPrice = checkPriceResponse.getPriceModelList().stream().mapToInt(ProductInfoResponse.PriceModelList::getPrice).sum();
         return CheckPriceRespDTO.builder()
-                .checkStatus(true)
+                .outcome(CheckPriceOutcome.BOOKABLE)
                 .salePrice(sumPrice)
                 .subPrice(sumPrice)
                 .totalPriceAfter(sumPrice)

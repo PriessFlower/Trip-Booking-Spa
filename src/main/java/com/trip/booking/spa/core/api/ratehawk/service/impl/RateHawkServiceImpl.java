@@ -9,6 +9,7 @@ import com.trip.booking.spa.core.placeholder.hotelinfo.response.PageResp;
 import com.trip.booking.spa.core.placeholder.hotelinfo.response.SupplierHotelBaseResponse;
 import com.trip.booking.spa.core.placeholder.hotelinfo.result.InfoResult;
 import com.trip.booking.spa.core.api.dto.CancelPolicy;
+import com.trip.booking.spa.core.api.common.enums.CheckPriceOutcome;
 import com.trip.booking.spa.core.api.dto.CheckPriceRespDTO;
 import com.trip.booking.spa.core.api.dto.Meal;
 import com.trip.booking.spa.core.api.dto.PriceInfo;
@@ -565,8 +566,7 @@ public class RateHawkServiceImpl implements RateHawkService {
                     CheckPriceResponse.Rates rateCheckInfo = hotelCheckInfo.getRates().get(0);
                     CheckPriceResponse.Payment_types checkPriceInfo = rateCheckInfo.getPayment_options().getPayment_types().get(0);
                     return CheckPriceRespDTO.builder()
-                            .checkStatus(true)
-                            .prebookToken(rateCheckInfo.getBook_hash())
+                            .outcome(CheckPriceOutcome.BOOKABLE)
                             .subPrice(new BigDecimal(checkPriceInfo.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
                             .salePrice(new BigDecimal(checkPriceInfo.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
                             .totalPriceAfter(new BigDecimal(checkPriceInfo.getAmount()).multiply(BigDecimal.valueOf(100)).intValue())
