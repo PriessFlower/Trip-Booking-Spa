@@ -4,6 +4,7 @@ import com.trip.booking.spa.core.placeholder.HotelInfoPlaceholderClient;
 import com.trip.booking.spa.core.placeholder.hotelinfo.request.SupplierHotelBaseRequest;
 import com.trip.booking.spa.core.placeholder.hotelinfo.request.SupplierProductBaseRequest;
 import com.trip.booking.spa.core.api.dto.CancelPolicy;
+import com.trip.booking.spa.core.api.common.enums.CheckPriceOutcome;
 import com.trip.booking.spa.core.api.dto.CheckPriceRespDTO;
 import com.trip.booking.spa.core.api.dto.Meal;
 import com.trip.booking.spa.core.api.dto.PriceInfo;
@@ -447,8 +448,7 @@ public class FastPayServiceImpl implements FastPayService {
                     BigDecimal totalPrice = (null == roomInfo.getPriceBinding() || true != roomInfo.getPriceBinding()) ? roomInfo.getTotalPrice() :
                             roomInfo.getPublicPrice();
                     return CheckPriceRespDTO.builder()
-                            .checkStatus(true)
-                            .prebookToken(roomInfo.getReservationToken())
+                            .outcome(CheckPriceOutcome.BOOKABLE)
                             .subPrice(totalPrice.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP).intValue())
                             .salePrice(totalPrice.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP).intValue())
                             .totalPriceAfter(totalPrice.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP).intValue())

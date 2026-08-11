@@ -1,6 +1,7 @@
 
 package com.trip.booking.spa.core.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -17,6 +18,8 @@ public class CancelRespDTO {
     /**
      * 代理商订单号
      */
+    /** 见 BookingRespDTO 类注释：显式钉住线上字段名，避免被 Jackson 命名推断压成 sorderId */
+    @JsonProperty("sOrderId")
     private String sOrderId;
     /**
      * BG订单号

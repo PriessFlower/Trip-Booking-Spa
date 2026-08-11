@@ -1,5 +1,6 @@
 package com.trip.booking.spa.core.api.service.impl;
 
+import com.trip.booking.spa.core.api.common.enums.CheckPriceOutcome;
 import com.trip.booking.spa.core.api.dto.CheckPriceRespDTO;
 import com.trip.booking.spa.core.api.dto.ProductRespDTO;
 import com.trip.booking.spa.core.api.request.CheckPriceReq;
@@ -40,8 +41,7 @@ public class TravelConnectCheckPriceServiceImpl extends AbstractCheckPriceSyncSu
     @Override
     public CheckPriceRespDTO checkPriceRespConvert(SearchResponse searchResponse) {
         return CheckPriceRespDTO.builder()
-                .checkStatus(true)
-                .prebookToken(searchResponse.getPrebookResponse().getData().getPrebookingtoken())
+                .outcome(CheckPriceOutcome.BOOKABLE)
                 .salePrice((int) searchResponse.getPrebookResponse().getData().getTotal() * 100)
                 .plansId(searchResponse.getPlansId())
                 .bedTypeCode(searchResponse.getPrebookResponse().getData().getBedtypes().stream().map(PrebookResponse.DataBean.BedtypesBean::getBedtypeid).collect(Collectors.toList()))

@@ -1,5 +1,6 @@
 package com.trip.booking.spa.core.api.service.impl;
 
+import com.trip.booking.spa.core.api.common.enums.CheckPriceOutcome;
 import com.trip.booking.spa.core.api.dto.CheckPriceRespDTO;
 import com.trip.booking.spa.core.api.request.CheckPriceReq;
 import com.trip.booking.spa.core.api.aichotels.bean.price.prebook.PreBookResponse;
@@ -36,13 +37,12 @@ public class AicHotelsCheckPriceServiceImpl extends AbstractCheckPriceSyncSuppor
     public CheckPriceRespDTO checkPriceRespConvert(PreBookResponse searchResponse) {
         if (searchResponse.getResult().getReturn_status().getSuccess().equals("false")) {
             return CheckPriceRespDTO.builder()
-                    .checkStatus(false)
+                    .outcome(CheckPriceOutcome.INDETERMINATE)
                     .message(searchResponse.getResult().getReturn_status().getException())
                     .build();
         }
         return CheckPriceRespDTO.builder()
-                .checkStatus(true)
-                .prebookToken(searchResponse.getRoom_list().get(0).getRates_and_cancellation_policies().get(0).getRoom_key())
+                .outcome(CheckPriceOutcome.BOOKABLE)
                 .totalPriceAfter((int) (Double.parseDouble(searchResponse.getRoom_list().get(0).getRates_and_cancellation_policies().get(0).getTotal_amount_after_tax()) * 100))
                 .totalPriceBefore((int) (Double.parseDouble(searchResponse.getRoom_list().get(0).getRates_and_cancellation_policies().get(0).getTotal_amount_before_tax()) * 100))
                 .salePrice((int) (Double.parseDouble(searchResponse.getRoom_list().get(0).getRates_and_cancellation_policies().get(0).getTotal_amount_after_tax()) * 100))
