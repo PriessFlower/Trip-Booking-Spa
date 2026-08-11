@@ -2,6 +2,9 @@ package com.trip.booking.spa.core.api.expedia.service.impl;
 
 import com.trip.booking.spa.core.api.common.asynchttp.ResponseResult;
 import com.trip.booking.spa.core.api.common.enums.BookingOutcome;
+import com.trip.booking.spa.core.api.common.enums.SupplierSourceEnum;
+import com.trip.booking.spa.core.api.common.offer.Offer;
+import com.trip.booking.spa.core.api.common.offer.OfferStore;
 import com.trip.booking.spa.core.api.dto.BookingRespDTO;
 import com.trip.booking.spa.core.api.expedia.access.CreateOrderAccess;
 import com.trip.booking.spa.core.api.expedia.access.QueryOrderAccess;
@@ -10,6 +13,7 @@ import com.trip.booking.spa.core.api.expedia.bean.response.CreateOrderResponse;
 import com.trip.booking.spa.core.api.expedia.bean.response.QueryOrderResponse;
 import com.trip.booking.spa.core.api.expedia.config.ExpediaBookingContact;
 import com.trip.booking.spa.core.api.expedia.service.ExpediaBookingClassifier;
+import com.trip.booking.spa.core.api.expedia.service.ExpediaOfferCredentials;
 import com.trip.booking.spa.core.api.expedia.service.ExpediaBookingClassifier.Classification;
 import com.trip.booking.spa.core.api.expedia.utils.ExpediaUtils;
 import com.trip.booking.spa.core.api.request.BookingReq;
@@ -57,13 +61,35 @@ public class ExpediaBookingSyncServiceImpl
     private DistributedRateLimiter rateLimiter;
     @Autowired
     private ExpediaBookingContact bookingContact;
+    @Resource
+    private OfferStore offerStore;
 
     @Override
     public BookingOutcomeHolder doBooking(BookingReq req) {
-        // 令牌缺失属调用方问题，重试不会改变，直接判确定失败——不必打扰 Expedia
-        if (StringUtils.isBlank(req.getPrebookToken())) {
-            return BookingOutcomeHolder.failed(req.getOrderId(), "missing_prebook_token",
-                    "缺少 prebookToken，请先验价并回传该令牌");
+        // 以下三种判定都在向 Expedia 发出任何请求之前完成，供应商侧不会发生任何事，
+        // 故一律判确定失败而非「结果不确定」——上游可以放心地不去查单
+        if (StringUtils.isBlank(req.getOfferId())) {
+            return BookingOutcomeHolder.failed(req.getOrderId(), "missing_offer_id",
+                    "缺少 offerId，请先验价并回传该报价句柄");
+        }
+        Offer offer = offerStore.resolve(req.getOfferId());
+        if (offer == null) {
+            return BookingOutcomeHolder.failed(req.getOrderId(), "offer_unresolvable",
+                    "报价已过期或不存在，请重新验价后下单");
+        }
+        if (!Integer.valueOf(SupplierSourceEnum.EXPEDIA.getCode()).equals(offer.getSupplierId())) {
+            // 拿 A 家的报价来 B 家下单，属调用方串号
+            log.error("expedia booking 报价句柄归属供应商不符 orderId={}, offerSupplierId={}",
+                    req.getOrderId(), offer.getSupplierId());
+            return BookingOutcomeHolder.failed(req.getOrderId(), "offer_supplier_mismatch",
+                    "该报价句柄不属于本供应商，请核对下单请求的供应商");
+        }
+        String bookHref = offer.credential(ExpediaOfferCredentials.BOOK_HREF);
+        if (StringUtils.isBlank(bookHref)) {
+            log.error("expedia booking 报价句柄缺少下单链接 orderId={}, offerId={}",
+                    req.getOrderId(), req.getOfferId());
+            return BookingOutcomeHolder.failed(req.getOrderId(), "offer_credential_missing",
+                    "报价句柄内容不完整，请重新验价后下单");
         }
         try {
             bookingContact.requireUsable();
@@ -75,7 +101,7 @@ public class ExpediaBookingSyncServiceImpl
         String body = JsonUtils.writeObject2Json(buildRequest(req, contact));
 
         ResponseResult<CreateOrderResponse> result = new CreateOrderAccess(
-                host, req.getPrebookToken(), "zh-CN", expediaUtils.signGeneration(),
+                host, bookHref, "zh-CN", expediaUtils.signGeneration(),
                 ownIp, sessionId, rateLimiter).access(body);
 
         int httpStatus = result == null ? 0 : result.getHttpStatus();
