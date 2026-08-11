@@ -29,6 +29,11 @@ public class ExpediaRapidProperties implements InitializingBean {
     private String session = "trip-booking-spa";
     private String ownIp = "127.0.0.1";
     private String userAgent = "trip-booking-spa/0.0.1";
+    /**
+     * 查价单次返回的报价条数上限；Expedia 允许的最大值为 250（PDF p63 "rate_plan_count (max 250)"）。
+     * 它是我方调参，不属合同车道参数——车道参数见 {@link ExpediaContractProfile}。
+     */
+    private int ratePlanCount = 250;
     private boolean bookingEnabled;
     private boolean productionEndpointEnabled;
     private Url url = new Url();
@@ -114,6 +119,17 @@ public class ExpediaRapidProperties implements InitializingBean {
 
     public void setUserAgent(String userAgent) {
         this.userAgent = userAgent;
+    }
+
+    public int getRatePlanCount() {
+        return ratePlanCount;
+    }
+
+    public void setRatePlanCount(int ratePlanCount) {
+        if (ratePlanCount < 1 || ratePlanCount > 250) {
+            throw new IllegalArgumentException("expedia.rate-plan-count must be between 1 and 250");
+        }
+        this.ratePlanCount = ratePlanCount;
     }
 
     public boolean isBookingEnabled() {

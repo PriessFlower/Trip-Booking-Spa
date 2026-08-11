@@ -21,6 +21,7 @@ import com.trip.booking.spa.core.api.expedia.access.QueryProductAccess;
 import com.trip.booking.spa.core.api.expedia.bean.request.QueryPriceRequest;
 import com.trip.booking.spa.core.api.expedia.bean.response.CheckPriceResponse;
 import com.trip.booking.spa.core.api.expedia.bean.response.QueryPriceResponse;
+import com.trip.booking.spa.core.api.expedia.config.ExpediaContractProfile;
 import com.trip.booking.spa.core.api.expedia.service.ExpediaOfferCredentials;
 import com.trip.booking.spa.core.api.expedia.service.ExpediaPriceService;
 import com.trip.booking.spa.core.api.expedia.utils.ExpediaUtils;
@@ -57,12 +58,10 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     String sessionId;
     @Value("${expedia.ownIp}")
     String ownIp;
-    @Value("${expedia.partner_point_of_sale}")
-    private String partnerPointOfSale;
-    @Value("${expedia.payment_terms}")
-    private String paymentTerms;
-    @Value("${expedia.billing_terms}")
-    private String billingTerms;
+
+    /** 合同车道参数的唯一来源；查价起手式与验价链接补参数都经由它，二者从此同源 */
+    @Resource
+    private ExpediaContractProfile contractProfile;
 
     /** 报价展示币种：与 EAC 结算币种（CNY）对齐；上游 request.currency 为空时用此默认 */
     private static final String DEFAULT_QUOTE_CURRENCY = "CNY";
@@ -110,10 +109,6 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     }
 
     /**
-     * price_check/booking 链接必须携带与查价一致的合同参数，否则 Expedia 返回 invalid_input
-     */
-
-    /**
      * 佣金（分）：取 Expedia 按商务协议预计算的 marketing_fee，未下发则为 0
      */
     private int calcCommissionCents(QueryPriceResponse.Occupancy_pricing occupancyPricing) {
@@ -124,23 +119,6 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         }
         return new BigDecimal(totals.getMarketing_fee().getRequest_currency().getValue())
                 .multiply(new BigDecimal("100")).setScale(0, BigDecimal.ROUND_DOWN).intValue();
-    }
-
-    private String appendContractTerms(String href) {
-        if (org.apache.commons.lang3.StringUtils.isBlank(href)) {
-            return href;
-        }
-        StringBuilder sb = new StringBuilder(href);
-        if (org.apache.commons.lang3.StringUtils.isNotBlank(billingTerms)) {
-            sb.append("&billing_terms=").append(billingTerms);
-        }
-        if (org.apache.commons.lang3.StringUtils.isNotBlank(paymentTerms)) {
-            sb.append("&payment_terms=").append(paymentTerms);
-        }
-        if (org.apache.commons.lang3.StringUtils.isNotBlank(partnerPointOfSale)) {
-            sb.append("&partner_point_of_sale=").append(partnerPointOfSale);
-        }
-        return sb.toString();
     }
 
     @Resource
@@ -159,7 +137,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         QueryPriceResponse.HotelPrice hotelPriceOnly = null;
         QueryPriceResponse.HotelPrice hotelPricePackage = null;
 
-        QueryPriceRequest queryPriceRequest = QueryPriceRequest.builder().property_id(supplier.getSHotelId()).checkin(request.getCheckIn()).checkout(request.getCheckout()).currency(StringUtils.isBlank(request.getCurrency()) ? DEFAULT_QUOTE_CURRENCY : request.getCurrency()).sales_environment("hotel_only").billing_terms(billingTerms).payment_terms(paymentTerms).partner_point_of_sale(partnerPointOfSale).build();
+        QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder().property_id(supplier.getSHotelId()).checkin(request.getCheckIn()).checkout(request.getCheckout()).currency(StringUtils.isBlank(request.getCurrency()) ? DEFAULT_QUOTE_CURRENCY : request.getCurrency()).sales_environment("hotel_only").build();
         List<String> occupancies = new ArrayList<>();
         for (int i = 0; i < request.getRoomNum(); i++) {
             String childrenList = "";
@@ -310,7 +288,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     @Override
     public List<ProductRespDTO> queryProductPrice(PriceReq request, Supplier supplier) {
 
-        QueryPriceRequest queryPriceRequest = QueryPriceRequest.builder().property_id(supplier.getSHotelId()).checkin(request.getCheckIn()).checkout(request.getCheckout()).currency(StringUtils.isBlank(request.getCurrency()) ? DEFAULT_QUOTE_CURRENCY : request.getCurrency()).billing_terms(billingTerms).payment_terms(paymentTerms).partner_point_of_sale(partnerPointOfSale).build();
+        QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder().property_id(supplier.getSHotelId()).checkin(request.getCheckIn()).checkout(request.getCheckout()).currency(StringUtils.isBlank(request.getCurrency()) ? DEFAULT_QUOTE_CURRENCY : request.getCurrency()).build();
         List<String> occupancies = new ArrayList<>();
         for (int i = 0; i < request.getRoomNum(); i++) {
             String childrenList = "";
@@ -342,7 +320,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                             QueryPriceResponse.Bed_groups bedGroups = rate.getBed_groups().get(bedId);
                             bedCheckInfos.add(BedCheckInfo.builder().bedId(bedGroups.getId()).bedType(bedGroups.getDescription()).checkHref(bedGroups.getLinks().getPrice_check().getHref()).build());
                         }
-                        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(appendContractTerms(bedCheckInfos.get(0).getCheckHref()));
+                        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedCheckInfos.get(0).getCheckHref()));
                         if (!checkPriceResult.isSucc() || null == checkPriceResult.getData() || "sold_out".equals(checkPriceResult.getData().getStatus())) {
                             log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(checkPriceResult));
                             return null;
@@ -373,7 +351,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                                 QueryPriceResponse.Bed_groups bedGroups = rate.getBed_groups().get(bedId);
                                 bedCheckInfos.add(BedCheckInfo.builder().bedId(bedGroups.getId()).bedType(bedGroups.getDescription()).checkHref(bedGroups.getLinks().getPrice_check().getHref()).build());
                             }
-                            ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(appendContractTerms(bedCheckInfos.get(0).getCheckHref()));
+                            ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedCheckInfos.get(0).getCheckHref()));
                             if (!checkPriceResult.isSucc() || null == checkPriceResult.getData() || "sold_out".equals(checkPriceResult.getData().getStatus())) {
                                 log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(checkPriceResult));
                                 return null;
@@ -397,7 +375,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
 
     @Override
     public CheckPriceRespDTO checkPrices(CheckPriceReq request) {
-        QueryPriceRequest queryPriceRequest = QueryPriceRequest.builder().property_id(request.getSHotelId()).checkin(request.getCheckIn()).checkout(request.getCheckOut()).currency(StringUtils.isBlank(request.getCurrency()) ? DEFAULT_QUOTE_CURRENCY : request.getCurrency()).billing_terms(billingTerms).payment_terms(paymentTerms).partner_point_of_sale(partnerPointOfSale).build();
+        QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder().property_id(request.getSHotelId()).checkin(request.getCheckIn()).checkout(request.getCheckOut()).currency(StringUtils.isBlank(request.getCurrency()) ? DEFAULT_QUOTE_CURRENCY : request.getCurrency()).build();
         queryPriceRequest.setOccupancies(buildOccupancies(request));
 
         // 上游指定了售卖类型就只按它查；未指定时先零售、未命中再打包。
@@ -466,7 +444,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             return outcome(CheckPriceOutcome.RATE_DEAD, "所选床型已不可选，请重新查价后再选择");
         }
 
-        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(appendContractTerms(bedGroups.getLinks().getPrice_check().getHref()));
+        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedGroups.getLinks().getPrice_check().getHref()));
         if (checkPriceResult == null || !checkPriceResult.isSucc() || null == checkPriceResult.getData()) {
             log.warn("expedia验价未取得结果,sProductId={},response:{}", request.getSProductId(), JsonUtils.writeObject2Json(checkPriceResult));
             return outcome(CheckPriceOutcome.INDETERMINATE, "验价调用未取得结果，未能确认该产品是否可订，请稍后重试");
@@ -532,7 +510,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
 
     @Override
     public List<ProductRespDTO> queryPricesCache(PriceReq request, Supplier supplier) {
-        QueryPriceRequest queryPriceRequest = QueryPriceRequest.builder().property_id(supplier.getSHotelId()).checkin(request.getCheckIn()).checkout(request.getCheckout()).currency(StringUtils.isBlank(request.getCurrency()) ? DEFAULT_QUOTE_CURRENCY : request.getCurrency()).sales_environment("hotel_only").billing_terms(billingTerms).payment_terms(paymentTerms).partner_point_of_sale(partnerPointOfSale).build();
+        QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder().property_id(supplier.getSHotelId()).checkin(request.getCheckIn()).checkout(request.getCheckout()).currency(StringUtils.isBlank(request.getCurrency()) ? DEFAULT_QUOTE_CURRENCY : request.getCurrency()).sales_environment("hotel_only").build();
         List<String> occupancies = new ArrayList<>();
         for (int i = 0; i < request.getRoomNum(); i++) {
             String childrenList = "";
