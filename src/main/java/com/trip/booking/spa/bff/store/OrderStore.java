@@ -12,11 +12,20 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * expdia 验收前端订单的本地存储。表由本包独占（bff_order），启动时自建，
- * 不侵入 core 的 mapper 体系。
+ * expdia 验收前端订单的本地存储。表由本包独占，不侵入 core 的 mapper 体系。
+ * 表名以 {@code bff_} 前缀标明归属，与业务表同库共存——重命名或并入 core 的命名体系
+ * 会抹掉这层归属，不应为「整齐」而改。
+ *
+ * <p>建表由 DBA 依 {@code config/mysql/bff-acceptance-schema.sql} 执行，本类只校验、不建表
+ * （见 {@link #verifySchema()}）。
  *
  * <p>request_json / response_json 保存与 Expedia 往来的原文（TR7 证据 + 排障）；
  * traveler_name 保存旅客真实姓名——只落本地，不出境（对 Expedia 使用固定联系人）。
+ *
+ * <p><b>本表是上游的替身，不是网关的订单表。</b>本服务是供应商网关，订单归上游持有：
+ * 下单用的 {@code affiliate_reference_id} 由上游经 {@code BookingReq.orderId} 传入
+ * （见 docs/gateway-boundary.md B5），core 因此一张订单表都没有。验收前端背后没有上游，
+ * 只能由本层代为记账。验收结束、真前端改走上游后，本类与本表应一并退役。
  */
 @Slf4j
 @Component
@@ -70,43 +79,39 @@ public class OrderStore {
         }
     };
 
+    /** 建表 SQL 的交付位置，校验失败时指给运维 */
+    private static final String SCHEMA_FILE = "config/mysql/bff-acceptance-schema.sql";
+
     private final JdbcTemplate jdbcTemplate;
 
     public OrderStore(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    /**
+     * 启动即校验表结构，缺表或缺列一律拒绝启动。
+     *
+     * <p><b>本类不建表。</b>建表属库结构变更，应由 DBA 依 {@value #SCHEMA_FILE} 执行，
+     * 不该由应用在启动时代劳——那会要求运行账号常备 CREATE 权限（MySQL 在
+     * {@code IF NOT EXISTS} 生效前先校验权限，故表已存在也仍需该权限），
+     * 且把「表没建」这种部署事故藏成运行期报错。
+     *
+     * <p>校验用 {@code LIMIT 0} 逐列取一遍：既确认表在，也确认 {@link #MAPPER}
+     * 要读的每一列都在，缺列不必等到第一笔订单才暴露。
+     */
     @PostConstruct
-    public void ensureTable() {
-        jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS bff_order ("
-                + "order_id VARCHAR(32) NOT NULL PRIMARY KEY,"
-                + "itinerary_id VARCHAR(64) NULL,"
-                + "property_id VARCHAR(32) NOT NULL,"
-                + "property_name VARCHAR(512) NULL,"
-                + "checkin VARCHAR(10) NOT NULL,"
-                + "checkout VARCHAR(10) NOT NULL,"
-                + "occupancy VARCHAR(255) NULL,"
-                + "bed_description VARCHAR(255) NULL,"
-                + "traveler_name VARCHAR(255) NULL,"
-                + "traveler_email VARCHAR(255) NULL,"
-                + "traveler_phone VARCHAR(64) NULL,"
-                + "status VARCHAR(32) NOT NULL,"
-                + "request_json JSON NULL,"
-                + "response_json JSON NULL,"
-                + "pricing_json JSON NULL,"
-                + "policy_json JSON NULL,"
-                + "created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),"
-                + "updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)"
-                + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        // 兼容既有表：CREATE IF NOT EXISTS 不会补列，逐列 ALTER，已存在则忽略
-        for (String column : new String[]{"traveler_email VARCHAR(255) NULL", "traveler_phone VARCHAR(64) NULL"}) {
-            try {
-                jdbcTemplate.execute("ALTER TABLE bff_order ADD COLUMN " + column);
-            } catch (Exception e) {
-                // duplicate column，可忽略
-            }
+    public void verifySchema() {
+        try {
+            jdbcTemplate.query("SELECT order_id, itinerary_id, property_id, property_name,"
+                    + " checkin, checkout, occupancy, bed_description, traveler_name,"
+                    + " traveler_email, traveler_phone, status,"
+                    + " request_json, response_json, pricing_json, policy_json, created_at"
+                    + " FROM bff_order LIMIT 0", MAPPER);
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "bff_order 表不存在或结构不符，服务拒绝启动；请先按 " + SCHEMA_FILE + " 建表", e);
         }
-        log.info("bff_order 表就绪");
+        log.info("bff_order 表结构校验通过");
     }
 
     public void insert(OrderRow row) {
