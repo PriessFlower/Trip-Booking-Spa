@@ -37,8 +37,17 @@ supplier:
     rate-plan-count: 250
 
 expedia:
-  # Booking stays disabled until certification and explicit production authorization.
-  booking-enabled: false
+  # 下单闸口。开启后仅在测试端点可下单——沙箱行为，不产生费用、不生成真实预订，
+  # 上线验收需要走通下单与取消链路，故打开。
+  #
+  # 生产端点下单由 ExpediaRapidProperties 启动期硬拦，且无开关可绕（§3.2.3：
+  # 安全护栏的变更必须经发版与评审，"改代码才能开"即最强形式）。
+  #
+  # ⚠️ 由此产生一处耦合：本项为 true 时，端点不得再指向生产。若日后把
+  # EXPEDIA_API_HOST 切到 api.ean.com，服务将拒绝启动，须同时关闭本项，
+  # 或等 Expedia 认证通过后另行评审放开生产下单。
+  booking-enabled: true
+  # 生产端点仍然关闭：误开将产生真实订单与真实费用。
   production-endpoint-enabled: false
   user-agent: trip-booking-spa/0.0.1
   static-data:
