@@ -31,9 +31,12 @@ public class ExpediaRapidProperties implements InitializingBean {
     private String userAgent = "trip-booking-spa/0.0.1";
     /**
      * 查价单次返回的报价条数上限；Expedia 允许的最大值为 250（PDF p63 "rate_plan_count (max 250)"）。
-     * 它是我方调参，不属合同车道参数——车道参数见 {@link ExpediaContractProfile}。
+     * 我方技术调参，不属合同车道参数——车道参数见 {@link ExpediaContractProfile}。
+     * 键名归入 supplier 域而非本类的 expedia 前缀，故用 @Value 单独绑定——
+     * 域为封闭枚举，不得为单个供应商新增顶层域（§3.7.2），同 {@link #staticDataEnabled}。
      */
-    private int ratePlanCount = 250;
+    @Value("${supplier.expedia.rate-plan-count:250}")
+    private int ratePlanCount = 250;   // 字段初值供非 Spring 构造场景（测试）；@Value 默认值供注入场景
     private boolean bookingEnabled;
     private boolean productionEndpointEnabled;
     private Url url = new Url();
@@ -48,6 +51,11 @@ public class ExpediaRapidProperties implements InitializingBean {
 
     @Override
     public void afterPropertiesSet() {
+        // @Value 绑定不经 setter，故此处校验；超出 Expedia 允许范围会被其直接拒绝
+        if (ratePlanCount < 1 || ratePlanCount > 250) {
+            throw new IllegalStateException(
+                    "supplier.expedia.rate-plan-count must be between 1 and 250, but was " + ratePlanCount);
+        }
         URI endpoint = URI.create(url.getHost());
         boolean productionEndpoint = PRODUCTION_HOST.equalsIgnoreCase(endpoint.getHost());
 
@@ -125,10 +133,8 @@ public class ExpediaRapidProperties implements InitializingBean {
         return ratePlanCount;
     }
 
+    /** 仅供测试构造场景使用；运行期取值由 @Value 绑定，校验见 {@link #afterPropertiesSet()} */
     public void setRatePlanCount(int ratePlanCount) {
-        if (ratePlanCount < 1 || ratePlanCount > 250) {
-            throw new IllegalArgumentException("expedia.rate-plan-count must be between 1 and 250");
-        }
         this.ratePlanCount = ratePlanCount;
     }
 

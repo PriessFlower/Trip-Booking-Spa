@@ -10,9 +10,11 @@ import com.trip.booking.spa.bff.config.BffProperties;
 import com.trip.booking.spa.bff.offer.OfferCache;
 import com.trip.booking.spa.bff.store.PropertyContentRepo;
 import com.trip.booking.spa.bff.web.BffException;
+import com.trip.booking.spa.core.api.expedia.config.ExpediaContractProfile;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import javax.annotation.Resource;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -39,14 +41,19 @@ public class BffShopService {
     private final OfferCache offerCache;
     private final BffProperties props;
 
-    // 合同上下文：Rapid 要求 availability 与 price_check 携带一致的销售条款组合，
-    // 取值与 core 同源（application-{profile}.yml 的 expedia.* 键）
-    @Value("${expedia.billing_terms:}")
-    private String billingTerms;
-    @Value("${expedia.payment_terms:}")
-    private String paymentTerms;
-    @Value("${expedia.partner_point_of_sale:}")
-    private String partnerPointOfSale;
+    /**
+     * 合同档案：本层与 core 共用同一份取值，不再各自绑定配置。
+     *
+     * <p>四项参数构成一条车道，必须整体取自同一套档案。此前本层独立绑定三项、
+     * 另把 {@code sales_channel} 写死为 {@code website}，等于在 core 的启动期校验
+     * 之外另开一个写入点——档案切到 B2C 时本层会继续发 {@code website}，实测同一
+     * 报价因此贵约 18%，且无任何报错。本层直接对旅客展示金额，这一差价会照单呈现。
+     *
+     * <p>依赖方向为 bff → core，与本层既有的 {@code ExpediaRapidProperties}、
+     * {@code ExpediaUtils} 一致；core 不感知本层存在。
+     */
+    @Resource
+    private ExpediaContractProfile contractProfile;
 
     public BffShopService(RapidGateway gateway, PropertyContentRepo contentRepo,
                              OfferCache offerCache, BffProperties props) {
@@ -348,7 +355,7 @@ public class BffShopService {
         query.append("&currency=").append(encode(props.getCurrency()));
         query.append("&language=").append(encode(props.getLanguage()));
         query.append("&country_code=").append(encode(props.getCountryCode()));
-        query.append("&sales_channel=website");
+        query.append("&sales_channel=").append(encode(contractProfile.getSalesChannel()));
         query.append("&sales_environment=hotel_only");
         query.append("&rate_plan_count=").append(ratePlanCount);
         appendContractTerms(query);
@@ -383,16 +390,18 @@ public class BffShopService {
         return result;
     }
 
+    /**
+     * 补齐合同条款三项。取值来自 {@link ExpediaContractProfile}，其启动期校验已保证
+     * 四项同属一套档案且均非空，故此处无须再判空——判空只会把「配置缺失」悄悄降级成
+     * 「少发几个参数」。
+     *
+     * <p>此处有意不含 {@code sales_channel}，与 core 的 {@code appendTo} 一致：
+     * 验价链路自接入起就不带该参数且实测通行。
+     */
     private void appendContractTerms(StringBuilder query) {
-        if (!billingTerms.isBlank()) {
-            query.append("&billing_terms=").append(encode(billingTerms));
-        }
-        if (!paymentTerms.isBlank()) {
-            query.append("&payment_terms=").append(encode(paymentTerms));
-        }
-        if (!partnerPointOfSale.isBlank()) {
-            query.append("&partner_point_of_sale=").append(encode(partnerPointOfSale));
-        }
+        query.append("&billing_terms=").append(encode(contractProfile.getBillingTerms()));
+        query.append("&payment_terms=").append(encode(contractProfile.getPaymentTerms()));
+        query.append("&partner_point_of_sale=").append(encode(contractProfile.getPartnerPointOfSale()));
     }
 
     private JsonNode firstRate(JsonNode hotelPrice) {
