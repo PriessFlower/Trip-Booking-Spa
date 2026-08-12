@@ -20,12 +20,20 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
+import java.nio.channels.ReadableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -77,13 +85,130 @@ public class ExpediaCatalogFileClient {
             return target.toFile();
         }
         String href = fetchCatalogHref(lang);
+        long start = System.currentTimeMillis();
+        long total = probeContentLength(href);
+        int connections = properties.getStaticData().getDownloadConnections();
+
+        boolean parallel = total > 0 && connections > 1;
+        if (parallel) {
+            try {
+                downloadInParallel(href, target, total, connections);
+            } catch (Exception e) {
+                // 并行失败一律回落单连接：清单是摄取的唯一输入，宁可慢也不能拿不到
+                log.warn("Catalog 分段并行下载失败，回落单连接: {}", e.toString());
+                parallel = false;
+            }
+        }
+        if (!parallel) {
+            downloadSingleStream(href, target);
+        }
+
+        long cost = System.currentTimeMillis() - start;
+        long size = target.toFile().length();
+        log.info("Catalog 文件下载完成: {} ({} bytes, {} ms, {}, {} KB/s)", target, size, cost,
+                parallel ? connections + " 连接并行" : "单连接",
+                cost > 0 ? size * 1000 / cost / 1024 : 0);
+        return target.toFile();
+    }
+
+    /**
+     * 探测文件总长，并同时确认对端支持 Range。
+     *
+     * <p>不用 HEAD——实测该 S3 桶对 HEAD 返回 XML 错误而不给长度。改用一个 1 字节的 Range
+     * 请求：既从 {@code Content-Range} 拿到总长，又验证了 Range 支持，一次调用办两件事。
+     *
+     * @return 文件总字节数；无法探测或对端不支持 Range 时返回 -1，调用方据此走单连接
+     */
+    private long probeContentLength(String href) {
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL(href).openConnection();
+            conn.setRequestProperty(HttpHeaders.RANGE, "bytes=0-0");
+            conn.setConnectTimeout(15_000);
+            conn.setReadTimeout(30_000);
+            try {
+                if (conn.getResponseCode() != 206) {
+                    log.info("Catalog 源不支持 Range（响应 {}），改用单连接下载", conn.getResponseCode());
+                    return -1;
+                }
+                String range = conn.getHeaderField(HttpHeaders.CONTENT_RANGE);
+                int slash = range == null ? -1 : range.lastIndexOf('/');
+                return slash < 0 ? -1 : Long.parseLong(range.substring(slash + 1).trim());
+            } finally {
+                conn.disconnect();
+            }
+        } catch (Exception e) {
+            log.info("Catalog 长度探测失败，改用单连接下载: {}", e.toString());
+            return -1;
+        }
+    }
+
+    /**
+     * 分段并行下载。
+     *
+     * <p>各段用 {@link FileChannel} 按偏移直写同一个目标文件，故不需要临时分段文件、
+     * 不需要合并：磁盘占用就是文件本身，内存只有每段的传输缓冲。
+     */
+    private void downloadInParallel(String href, Path target, long total, int connections) throws Exception {
+        long segment = (total + connections - 1) / connections;
+        ExecutorService pool = Executors.newFixedThreadPool(connections);
+        try (FileChannel channel = FileChannel.open(target,
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            List<Future<?>> futures = new ArrayList<>();
+            for (int i = 0; i < connections; i++) {
+                long from = i * segment;
+                if (from >= total) {
+                    break;
+                }
+                long to = Math.min(from + segment - 1, total - 1);
+                futures.add(pool.submit(() -> {
+                    fetchRange(href, channel, from, to);
+                    return null;
+                }));
+            }
+            for (Future<?> f : futures) {
+                f.get();   // 任一段失败即整体失败，由调用方回落单连接
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        long written = target.toFile().length();
+        if (written != total) {
+            throw new IllegalStateException("分段下载字节数不符: 期望 " + total + " 实得 " + written);
+        }
+    }
+
+    /** 取 [from, to] 区段，写入 channel 的对应偏移 */
+    private void fetchRange(String href, FileChannel channel, long from, long to) throws Exception {
+        HttpURLConnection conn = (HttpURLConnection) new URL(href).openConnection();
+        conn.setRequestProperty(HttpHeaders.RANGE, "bytes=" + from + "-" + to);
+        conn.setConnectTimeout(15_000);
+        conn.setReadTimeout(120_000);
+        try (InputStream in = conn.getInputStream();
+             ReadableByteChannel src = Channels.newChannel(in)) {
+            long position = from;
+            long remaining = to - from + 1;
+            while (remaining > 0) {
+                long n = channel.transferFrom(src, position, remaining);
+                if (n <= 0) {
+                    break;
+                }
+                position += n;
+                remaining -= n;
+            }
+            if (remaining > 0) {
+                throw new IllegalStateException("区段 " + from + "-" + to + " 少收 " + remaining + " 字节");
+            }
+        } finally {
+            conn.disconnect();
+        }
+    }
+
+    private void downloadSingleStream(String href, Path target) {
         try (InputStream in = new URL(href).openStream()) {
             Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
         } catch (Exception e) {
             throw new IllegalStateException("Catalog 文件下载失败", e);
         }
-        log.info("Catalog 文件下载完成: {} ({} bytes)", target, target.toFile().length());
-        return target.toFile();
     }
 
     /**
