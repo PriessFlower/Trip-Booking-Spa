@@ -96,12 +96,6 @@ huitravel:
   appkey: mock
   secretKey: mock
 
-fliggy:
-  distrib:
-    url: ${MOCK_SUPPLIER_BASE_URL:https://mock.invalid}/fliggy
-    sessionKey: mock
-    appKey: mock
-    appSecret: mock
 
 fastPayHotels:
   username: mock
