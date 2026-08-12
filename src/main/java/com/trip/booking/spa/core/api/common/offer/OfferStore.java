@@ -54,10 +54,15 @@ public class OfferStore {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     /**
-     * 句柄存活秒数。默认取安全侧的短值：过短只是让上游多验一次价，
-     * 过长则会取回已失效的供应商凭据去下单。
+     * 句柄存活秒数。权威取值在 Nacos，此处仅为兜底。
+     *
+     * <p>兜底取 300 而非生产的 600：按 §3.3.3，兜底默认值必须取安全侧，禁止以生产
+     * 实际值充当。此处两个方向的代价并不对称——过短只是让上游多验一次价，过长则会
+     * 取回一个已失效的供应商凭据去下单，而彼时旅客已经付了钱。故兜底往短里取。
+     *
+     * <p>Nacos 缺该键时生效，是「配置没配好」的降级路径，不是常态。
      */
-    @Value("${cache.offer.ttl-seconds:600}")
+    @Value("${cache.offer.ttl-seconds:300}")
     private long ttlSeconds;
 
     @Resource
