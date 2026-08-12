@@ -321,17 +321,32 @@ java -jar target/trip-booking-spa-0.0.1.jar --spring.profiles.active=dev,local \
 
 ## 附录 A　上线前必办事项
 
-第 2 章落地时已将下列配置从 `application*.yml` 迁出，其权威取值改由 Nacos 下发。**代码中的兜底默认值一律为安全侧取值，与生产实际值不同**，因此部署前必须确认目标环境的 Nacos 已包含这些键，否则服务会以保守取值运行。
+运维配置的权威取值在 Nacos，不在 `application*.yml`（§3.2.2）。**代码中的兜底默认值一律为安全侧取值**（§3.3.3），与生产实际值不同——键缺失时服务照常启动，只是以保守取值运行：刷价与缓存**静默停摆**，不报错、不告警。故部署前必须核对目标环境的 Nacos 键是否齐备。
 
-以 `config/nacos/trip-booking-spa.yaml.example` 为准核对：
+**核对基准是 `config/nacos/trip-booking-spa.yaml.example`，本节不再罗列键名**（§3.7.6：完整键值清单以该文件为唯一出处）。此前本节自行列过一份，结果键名改动后未同步，`query.cache.supplier` 等三项在生产早已更名，照着核对反而误导。
 
-| 键 | 缺失时的实际行为 | 影响 |
-|---|---|---|
-| `ratelimit.qps`<br>`ratelimit.default-qps` | 全部接口回落至 `default-qps` 代码默认值 10 | 各接口限速收紧（原 Expedia 查价 50 → 10），静态摄取与查价变慢，但不会超限 |
-| `expedia.query.price.queue.task.{switch,return}` | 回落至 `0` | Expedia 刷价任务不执行，价格缓存不再更新 |
-| `ratehawk.query.price.queue.task.{switch,return}` | 回落至 `0` | RateHawk 刷价任务不执行 |
-| `query.cache.supplier`<br>`supplier.hotel.cache.map`<br>`supplier.query.timezone` | 回落至空 | 查价全部走实时，不读缓存 |
+### A.1 该文件必须与生产 Nacos 保持同步
 
-> 均为保守方向的降级，不会造成超发或超限；但**刷价与缓存会静默停摆**，需在部署后核对。
+它是核对基准，一旦漂移，本附录即失效。因此：
 
-另：现有 dev / prod Nacos 中的 `expedia.commission.rate` 为死配置，代码零引用（佣金取自 Expedia 响应的 `marketing_fee`），应当一并删除。
+- **新增或改名 Nacos 键时，必须同步更新该文件**（§3.6.1）
+- **两侧只应存在值的差异，不应存在键的差异**。该文件承载键名、层级与注释；值为示例，真实取值以各环境 Nacos 为准
+
+### A.2 核对方法
+
+取生产 Nacos 配置与该文件，逐键比对**键名清单**（非取值）：
+
+```bash
+# 两侧各自提取键路径后 diff，应无差异
+```
+
+有差异时按下列方向处置：
+
+| 差异 | 处置 |
+|---|---|
+| 生产有、文件无 | 补进文件——生产在跑的键必须被记录 |
+| 文件有、生产无 | 补进 Nacos。该键属运维可调，取值只能在 Nacos（§3.2.2）；留在代码默认值上意味着调整它需要发版 |
+
+### A.3 部署后仍需核对
+
+启动成功不代表配置齐备——缺键不影响启动，只影响行为。故部署后应实际验证受影响的链路（刷价是否执行、缓存是否命中），而非仅看健康检查。
