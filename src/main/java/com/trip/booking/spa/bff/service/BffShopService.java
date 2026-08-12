@@ -40,12 +40,16 @@ public class BffShopService {
     private final BffProperties props;
 
     // 合同上下文：Rapid 要求 availability 与 price_check 携带一致的销售条款组合，
-    // 取值与 core 同源（application-{profile}.yml 的 expedia.* 键）
-    @Value("${expedia.billing_terms:}")
+    // 取值与 core 同源（application.yml 的 supplier.expedia.* 键）。
+    //
+    // 此处独立绑定，未走 core 的 ExpediaContractProfile：那样能一并消除本层
+    // 硬编码的 sales_channel，但会把 BFF 发出的值由 website 改为 agent_tool，
+    // 属行为变更，须随验收链路一同实测后再做，不与本次键名归位混做。
+    @Value("${supplier.expedia.billing-terms:}")
     private String billingTerms;
-    @Value("${expedia.payment_terms:}")
+    @Value("${supplier.expedia.payment-terms:}")
     private String paymentTerms;
-    @Value("${expedia.partner_point_of_sale:}")
+    @Value("${supplier.expedia.partner-point-of-sale:}")
     private String partnerPointOfSale;
 
     public BffShopService(RapidGateway gateway, PropertyContentRepo contentRepo,

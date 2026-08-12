@@ -17,14 +17,30 @@ mybatis:
 # 统一限流（core/ratelimit/RateLimitManager）为运维可调配置，一律由 Nacos 下发，
 # 兜底默认值见 RateLimitProperties 的 @Value（见 PROJECT.md §3.3）。此处不得配置。
 
+# Expedia 合同档案参数与查价调参。归入 supplier 域（§3.7.2 的封闭枚举中无 expedia），
+# 键名三层、kebab-case（§3.7.1、§3.7.4）。
+#
+# 放在本文件而非各环境剖面，是因为它们不是基础设施差异——dev 与 prod 取值本就相同，
+# 分存两处会让取值来源失去唯一性（§3.4.1、§3.3.1）。
+#
+# 前四项构成一条合同车道，必须整体切换：混用不会被 Expedia 拒绝，只会静默返回另一条
+# 车道的报价（实测同一报价贵约 18%）。ExpediaContractProfile 在启动期校验，凑不成
+# 已知档案即拒绝启动——属安全护栏，故固定于此，禁止移入 Nacos（§3.2.3）。
+supplier:
+  expedia:
+    partner-point-of-sale: ${EXPEDIA_PARTNER_POS:B2B_SA_PKG_MOD_AGENT}
+    payment-terms: ${EXPEDIA_PAYMENT_TERMS:2}
+    billing-terms: ${EXPEDIA_BILLING_TERMS:EAC}
+    sales-channel: ${EXPEDIA_SALES_CHANNEL:agent_tool}
+    # 查价单次返回的报价条数上限，Expedia 允许的最大值即 250。
+    # 属我方技术调参，不是车道参数，不参与上述校验。
+    rate-plan-count: 250
+
 expedia:
   # Booking stays disabled until certification and explicit production authorization.
   booking-enabled: false
   production-endpoint-enabled: false
   user-agent: trip-booking-spa/0.0.1
-  # 查价单次返回的报价条数上限，Expedia 允许的最大值即 250。
-  # 属我方调参，与合同车道参数（partner_point_of_sale 等，见各环境配置）无关。
-  rate-plan-count: 250
   static-data:
     # 摄取总开关不在此处：它是运维可调开关，键为 Nacos 的
     # supplier.expedia.static-data-enabled，兜底默认值见 ExpediaRapidProperties（PROJECT.md §3.2.2、§3.3.3）。

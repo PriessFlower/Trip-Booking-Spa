@@ -76,13 +76,18 @@ public class ExpediaContractProfile implements InitializingBean {
         }
     }
 
-    @Value("${expedia.partner_point_of_sale}")
+    // 以下四项一律不设兜底默认值（PROJECT.md §3.6.2）：任何一项缺配即启动失败。
+    // 车道由四项共同构成，给单项默认值等于允许「三项来自配置、一项来自代码」这种
+    // 半套组合悄悄成立——而混用正是本类要拦的事，兜底反而会把它放过去。
+    // 取值见 application.yml 的 supplier.expedia.*，那里已为每项配好环境变量入口。
+
+    @Value("${supplier.expedia.partner-point-of-sale}")
     private String partnerPointOfSale;
-    @Value("${expedia.payment_terms}")
+    @Value("${supplier.expedia.payment-terms}")
     private String paymentTerms;
-    @Value("${expedia.billing_terms}")
+    @Value("${supplier.expedia.billing-terms}")
     private String billingTerms;
-    @Value("${expedia.sales_channel}")
+    @Value("${supplier.expedia.sales-channel}")
     private String salesChannel;
 
     /** 取 rate_plan_count；它非车道参数，但同属每次查价必带的固定参数，故一并由本类写入 */
