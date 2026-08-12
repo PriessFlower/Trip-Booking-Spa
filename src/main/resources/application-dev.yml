@@ -3,18 +3,24 @@ server:
 spring:
   config:
     import: optional:nacos:trip-booking-spa.yaml
+  # 基础设施连接一律由环境变量注入，与 prod 同形，仓库内不落任何地址与口令。
+  # 原先写死的是旧中台库 intl_bg_admin（8.146.211.133，账号 bystest）——项目已迁至
+  # spa 专属库 tg_trip_spa（docs/legacy-schema-restoration.md），该配置系改名迁移时
+  # 遗留，指向的是被本项目替换掉的那套系统。
+  # 无默认值系有意为之：未注入即启动失败，好过静默连上旧库。
+  # 本地开发用 dev,local，datasource 与 redis 由 local 剖面覆盖，不受此处影响。
   datasource:
-    host: 8.146.211.133
-    port: 3306
-    name: intl_bg_admin
-    username: bystest
-    password: bystest
+    host: ${DB_HOST}
+    port: ${DB_PORT:3306}
+    name: ${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries = true&nullCatalogMeansCurrent=true&serverTimezone=CST&autoReconnect=true
   redis:
-    host: 8.146.211.133
-    port: 6379
-    password:
+    host: ${REDIS_HOST}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
     lettuce:
       pool:
         max-active: 8
@@ -23,10 +29,11 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: 127.0.0.1:8848
+        # 保留本地默认：非机密，且 local 剖面不覆盖此键，去掉默认值会让 dev,local 起不来
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
 #        group: DEV      # 配置分组
       config:
-        server-addr: 127.0.0.1:8848
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
         file-extension: yaml         # 配置文件格式
         prefix: trip-booking-spa      # 配置前缀，通常是应用名
     inetutils:
@@ -39,8 +46,10 @@ management:
       exposure:
         include: prometheus
 
+# rocketmq：pom 无该依赖、代码零引用，本段为改名迁移遗留的死配置。
+# 暂按要求保留，仅去掉写死的地址。
 rocketmq:
-  name-server: 8.146.211.133:9876
+  name-server: ${ROCKETMQ_NAME_SERVER:}
   producer:
     # 发送同一类消息的设置为同一个group，保证唯一
     group: springboot_producer_group
@@ -93,10 +102,8 @@ expedia:
   session: ${EXPEDIA_CUSTOMER_SESSION_ID:trip-booking-spa-dev}
   ownIp: ${EXPEDIA_CUSTOMER_IP:127.0.0.1}
   localFilePath: /home/webrun/spa/logs/file
-  # Tripbooking AI 新合同 B2B profile（2026-08 technical workshop P5/P83）
-  partner_point_of_sale: ${EXPEDIA_PARTNER_POS:B2B_SA_PKG_MOD_AGENT}
-  payment_terms: ${EXPEDIA_PAYMENT_TERMS:2}
-  billing_terms: ${EXPEDIA_BILLING_TERMS:EAC}
+  # 合同档案参数不在此处：它们与剖面无关，统一置于 application.yml 的
+  # supplier.expedia.*（PROJECT.md §3.4.1）。
   url:
     host: ${EXPEDIA_API_HOST:https://test.ean.com}
 system:

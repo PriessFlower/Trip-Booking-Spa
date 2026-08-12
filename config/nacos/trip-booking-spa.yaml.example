@@ -46,7 +46,10 @@ ratelimit:
   mode: local                 # local=单机 Guava；distributed=Redisson 跨实例
   default-qps: 20
   acquire-timeout-ms: 5000
-  qps: '{"GLOBAL_LIMIT:EXPEDIA:STATIC_CONTENT":15,"GLOBAL_LIMIT:EXPEDIA:STATIC_REGIONS":10,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_ORDER_PRICE":50}'
+  # 下单与查单的配额刻意远低于查价：正常业务量下单远少于查价，给高值只会在异常时
+  # 放大重复提交；而本层为快速失败，下单被自身限流挡掉会直接影响成单，故取值需宽于
+  # 真实峰值——5 QPS 约合每小时 1.8 万单，远高于可预见业务量，正常运行不会触发。
+  qps: '{"GLOBAL_LIMIT:EXPEDIA:STATIC_CONTENT":15,"GLOBAL_LIMIT:EXPEDIA:STATIC_REGIONS":10,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_ORDER_PRICE":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_CREATE_ORDER":5,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_QUERY_ORDER":10}'
 
 # ── supplier / expedia：静态数据摄取总开关 ──────────────────
 # ── cache：我方自建缓存 ────────────────────────────────────
@@ -54,6 +57,16 @@ cache:
   price:
     suppliers: '[10005]'                      # 查价走我方缓存的供应商
     hotels: '{"10005":["16024166"]}'          # 走缓存的酒店白名单；某供应商对应空列表=其全部酒店走缓存
+
+  # 报价句柄（offerId → 供应商下单凭据）的存活秒数。
+  #
+  # ⚠️ 本值必须短于供应商下单凭据自身的有效期，否则会取回一个已失效的凭据去下单。
+  # Expedia 的下单令牌约 10 分钟，故取 600。
+  #
+  # 调大的代价：句柄比凭据活得久，下单时才发现凭据已失效，而此刻旅客已经付了钱。
+  # 调小的代价：上游多验一次价，仅此而已。故拿不准时应当往小调。
+  offer:
+    ttl-seconds: 600
 
 # ── supplier：与特定供应商交互的行为 ────────────────────────
 supplier:
@@ -66,3 +79,13 @@ supplier:
     # 注意：expedia.booking-enabled 与 expedia.production-endpoint-enabled 为安全护栏，
     # 固定在 application.yml，禁止移入本文件（PROJECT.md §3.2.3）。
     static-data-enabled: true
+
+    # 下单时提交给 Expedia 的固定联系与账单信息，均为我方（affiliate）信息而非旅客信息。
+    #
+    # ⚠️ booking-email 改动前须知：反查订单必须使用与下单时完全一致的邮箱
+    # （GET /v3/itineraries?affiliate_reference_id=..&email=..）。改此值后，
+    # 改动之前创建的订单将无法再用新邮箱反查——而反查是下单结果不确定时的唯一确证手段。
+    # 故此值应长期稳定；确需更换时，须保留旧值以便反查历史订单。
+    #
+    # 该邮箱同时接收 Expedia 的订单确认与取消通知，应指向运营团队可长期查收的信箱。
+    booking-contact: '{"email":"2837198145@qq.com","phoneCountryCode":"86","phoneNumber":"2837198145","givenName":"NEO","familyName":"NEO","addressLine1":"Kejiyuan Road 1","city":"Shenzhen","stateProvinceCode":"GD","postalCode":"518000","countryCode":"CN"}'

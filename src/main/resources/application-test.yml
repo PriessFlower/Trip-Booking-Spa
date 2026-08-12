@@ -4,18 +4,21 @@ server:
 spring:
   config:
     import: optional:nacos:trip-booking-spa.yaml
+  # 基础设施连接一律由环境变量注入，与 prod 同形，仓库内不落任何地址与口令。
+  # 原先写死的 hotel_base_info（8.146.211.133，账号 bystest）是旧中台库，
+  # 系改名迁移遗留；项目已迁至 spa 专属库 tg_trip_spa。
   datasource:
-    host: 8.146.211.133
-    port: 3306
-    name: hotel_base_info
-    username: bystest
-    password: bystest
+    host: ${DB_HOST}
+    port: ${DB_PORT:3306}
+    name: ${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries = true&nullCatalogMeansCurrent=true&serverTimezone=GMT%2B8
   redis:
-    host: 8.146.211.133
-    port: 6379
-    password:
+    host: ${REDIS_HOST}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
     lettuce:
       pool:
         max-active: 8
@@ -25,20 +28,20 @@ spring:
     nacos:
       discovery:
         # Nacos服务注册中心地址
-        server-addr: 10.18.0.8:8848
+        server-addr: ${NACOS_SERVER_ADDR}
         # 生产环境
-        namespace: dev
+        namespace: ${NACOS_NAMESPACE:dev}
         # Nacos 认证用户
-        username: nacos-test
+        username: ${NACOS_USERNAME:}
         # Nacos 认证密码
-        password: cde3vfr4
+        password: ${NACOS_PASSWORD:}
       config:
         # 是否开启配置中心 默认true
         enabled: true
         # 指定Nacos配置中心的地址
-        server-addr: 10.18.0.8:8848
+        server-addr: ${NACOS_SERVER_ADDR}
         # 区分环境：开发环境、测试环境、预发布环境、⽣产环境
-        namespace: dev
+        namespace: ${NACOS_NAMESPACE:dev}
         # 区分不同应⽤：同⼀个环境内，不同应⽤的配置，通过group来区分。
         group: DEFAULT_GROUP
         #指定yaml格式的配置 默认properties
@@ -46,9 +49,9 @@ spring:
         # 自动刷新配置文件,默认true
         refresh-enabled: true
         # Nacos 认证用户
-        username: nacos-test
+        username: ${NACOS_USERNAME:}
         # Nacos 认证密码
-        password: cde3vfr4
+        password: ${NACOS_PASSWORD:}
         # 配置文件prefix
         prefix: ${spring.application.name}
 
@@ -59,8 +62,9 @@ management:
       exposure:
         include: prometheus
 
+# rocketmq：pom 无该依赖、代码零引用，本段为改名迁移遗留的死配置。
 rocketmq:
-  name-server: 8.146.211.133:9876
+  name-server: ${ROCKETMQ_NAME_SERVER:}
   producer:
     # 发送同一类消息的设置为同一个group，保证唯一
     group: springboot_producer_group

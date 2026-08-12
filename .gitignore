@@ -32,3 +32,6 @@ HANDOFF.md
 
 # Nacos 客户端启动时自动落盘的本地配置快照（断网兜底用），运行时产物不入库
 /config/trip-booking-spa/
+
+# bff 验收证据日志（运行时产物，归档在 expdia 仓库 acceptance-evidence/）
+/logs/
