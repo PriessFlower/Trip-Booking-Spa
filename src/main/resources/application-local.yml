@@ -7,17 +7,17 @@ spring:
         # Keep Nacos Config enabled, but do not register a loopback local instance.
         register-enabled: false
   datasource:
-    host: 127.0.0.1
-    port: 3307
-    name: tg_trip_spa
-    username: tg_local
-    password: tg_local_pw
+    host: ${LOCAL_DB_HOST:127.0.0.1}
+    port: ${LOCAL_DB_PORT:3307}
+    name: ${LOCAL_DB_NAME:tg_trip_spa}
+    username: ${LOCAL_DB_USERNAME:tg_local}
+    password: ${LOCAL_DB_PASSWORD:tg_local_pw}
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&serverTimezone=UTC
   redis:
-    host: 127.0.0.1
-    port: 6380
-    password: local_redis_pw
+    host: ${LOCAL_REDIS_HOST:127.0.0.1}
+    port: ${LOCAL_REDIS_PORT:6380}
+    password: ${LOCAL_REDIS_PASSWORD:local_redis_pw}
     lettuce:
       pool:
         max-active: 8
@@ -27,3 +27,8 @@ spring:
 # 本剖面只承载基础设施差异（见 PROJECT.md §3.4.1）。
 # 运维配置（缓存名单、白名单、时区、刷价开关与 QPS）一律由 Nacos 下发，
 # 兜底默认值写在代码 @Value 中；此处不得再放同名键，否则会覆盖 Nacos。
+#
+# 上列取值均为本地 docker 容器的固定参数，可经 LOCAL_* 环境变量覆盖，变量名见
+# .env.example。默认值有意保留：本剖面只连本机容器，口令不保护任何真实资产，
+# 去掉默认值会让每位开发者都得先配环境变量才能起服务。
+# 严格而言 §3.5.1 不为此开口子——若日后要求零明文，改为不带默认值即可。
