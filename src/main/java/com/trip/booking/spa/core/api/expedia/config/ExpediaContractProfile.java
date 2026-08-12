@@ -151,6 +151,22 @@ public class ExpediaContractProfile implements InitializingBean {
                 .rate_plan_count(String.valueOf(rapidProperties.getRatePlanCount()));
     }
 
+    public String getPartnerPointOfSale() {
+        return partnerPointOfSale;
+    }
+
+    public String getPaymentTerms() {
+        return paymentTerms;
+    }
+
+    public String getBillingTerms() {
+        return billingTerms;
+    }
+
+    public String getSalesChannel() {
+        return salesChannel;
+    }
+
     /**
      * 为验价（price_check）链接补齐合同参数：该链接来自查价响应，
      * 不带这些参数时 Expedia 返回 invalid_input。
