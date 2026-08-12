@@ -184,6 +184,17 @@ public class ExpediaRapidProperties implements InitializingBean {
 
     public static class StaticData {
         private int batchSize = 250;
+        /**
+         * 下载 catalog 清单文件的并发连接数。
+         *
+         * <p>该文件放在 AWS S3 us-west-2 裸源站（无 CDN），RTT 约 170ms。单条 TCP 流在这种
+         * 长肥管道上吞吐被拥塞窗口卡死——实测 21 KB/s，而本机入网能力有 2 MB/s，闲着七十倍。
+         * 分段并行绕开该限制：实测 8 连接 152 KB/s，99MB 文件由 80 分钟降至 11 分钟。
+         *
+         * <p>取 8 是实测有效且保守的值：再往上收益递减，而每段都是一次 S3 请求，过多可能
+         * 触发对端限速。设为 1 即退回单连接。
+         */
+        private int downloadConnections = 8;
         private String language = "en-US";
         /**
          * 摄取的语言列表；不指定语言时按此列表逐语言拉取
@@ -195,6 +206,18 @@ public class ExpediaRapidProperties implements InitializingBean {
 
         public int getBatchSize() {
             return batchSize;
+        }
+
+        public int getDownloadConnections() {
+            return downloadConnections;
+        }
+
+        public void setDownloadConnections(int downloadConnections) {
+            if (downloadConnections < 1 || downloadConnections > 32) {
+                throw new IllegalArgumentException(
+                        "expedia.static-data.download-connections must be between 1 and 32");
+            }
+            this.downloadConnections = downloadConnections;
         }
 
         public void setBatchSize(int batchSize) {
