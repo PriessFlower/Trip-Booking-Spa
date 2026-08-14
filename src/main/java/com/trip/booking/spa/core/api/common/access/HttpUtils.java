@@ -1,4 +1,4 @@
-package com.trip.booking.spa.core.util;
+package com.trip.booking.spa.core.api.common.access;
 
 import com.alibaba.fastjson.JSON;
 import com.trip.booking.spa.core.api.common.asynchttp.BaseResponse;
@@ -20,6 +20,7 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpRequestBase;
@@ -55,6 +56,17 @@ import java.net.UnknownHostException;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 通道层的 HTTP 传输实现：连接池、超时、重试处理器、请求发送与响应读取。
+ *
+ * <p><b>本类属 ④ 通道层</b>（见 {@code docs/architecture.md} §2），与 {@link BaseHttpAccess}、
+ * {@link ChunkedFileAccess} 同层。此前它落在 {@code core/util/}——那是放日期格式化、字符串
+ * 处理这类零碎工具的地方，而本类是八家供应商全部对外请求的底层实现，改错即八家同挂。
+ * 放在「杂物筐」里既掩盖了它的分量，也使通道层的纪律（统一限流、重试、埋点）管不到它。
+ *
+ * <p><b>本类不得包含任何供应商语义</b>：不认识任何一家的字段名、错误码或业务含义，
+ * 只负责「发得出去、收得回来」。需要解释响应含义时，交由 ③ 适配层。
+ */
 @Slf4j
 public class HttpUtils {
 
@@ -192,6 +204,42 @@ public class HttpUtils {
 
         ResponseResult<T> result = new ResponseResult(response.getStatusLine().getStatusCode(), entityStr, data);
         EntityUtils.consume(entity);
+        return result;
+    }
+
+    /**
+     * DELETE，形状与 {@link #accessGet} 一致，复用同一套超时配置。
+     *
+     * <p>调用方通常直接传入供应商响应里给出的完整链接（含 token），故不再拼接参数。
+     *
+     * <p><b>与 GET 的关键差异</b>：DELETE 成功常返回 204 且无响应体，故此处不能像 GET 那样
+     * 以「无 entity」判失败——无 entity 恰恰是成功的常态。是否成功一律以状态码为准。
+     */
+    public static <T extends BaseResponse> ResponseResult accessDelete(String url, Map<String, String> headers,
+                                                                       IParser<T> parser) throws Exception {
+        HttpClient httpClient = getHttpClient(url);
+
+        HttpDelete httpDelete = new HttpDelete(url);
+        configGet(httpDelete);
+        if (MapUtils.isNotEmpty(headers)) {
+            for (Map.Entry<String, String> e : headers.entrySet()) {
+                httpDelete.addHeader(e.getKey(), e.getValue());
+            }
+        }
+
+        HttpResponse response = httpClient.execute(httpDelete);
+        int status = response.getStatusLine().getStatusCode();
+        HttpEntity entity = response.getEntity();
+        String entityStr = entity == null ? Strings.EMPTY : EntityUtils.toString(entity, "UTF-8");
+
+        T data = status >= HttpStatus.SC_OK && status < HttpStatus.SC_MULTIPLE_CHOICES
+                ? parser.parse(entityStr)
+                : parser.parseError(entityStr);
+
+        ResponseResult<T> result = new ResponseResult(status, entityStr, data);
+        if (entity != null) {
+            EntityUtils.consume(entity);
+        }
         return result;
     }
 

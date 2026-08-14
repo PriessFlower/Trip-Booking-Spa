@@ -3,6 +3,22 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.trip.booking.spa.core.api.expedia.mapper.ExpediaPropertySnapshotMapper">
 
+    <!--
+        取已存指纹，供摄取时判断内容是否变化。
+
+        只查两列，不碰 raw_json／normalized_json——这两列合计约 94 KB/行，
+        若一并取回，本查询的开销就会超过它能省下的写入量。
+    -->
+    <select id="selectHashes" resultType="java.util.HashMap">
+        SELECT property_id AS propertyId, raw_sha256 AS rawSha256
+        FROM expedia_property_content
+        WHERE language = #{language}
+          AND property_id IN
+        <foreach collection="propertyIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
     <insert id="upsert"
             parameterType="com.trip.booking.spa.core.api.expedia.staticdata.persistence.ExpediaPropertySnapshotRow">
         INSERT INTO expedia_property_content (

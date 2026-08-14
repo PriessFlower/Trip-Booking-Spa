@@ -11,7 +11,7 @@ import com.trip.booking.spa.core.api.travelconnect.bean.hotel.HotelDetailRequest
 import com.trip.booking.spa.core.api.travelconnect.bean.hotel.HotelDetailResponse;
 import com.trip.booking.spa.core.api.travelconnect.bean.search.request.SearchRequest;
 import com.trip.booking.spa.core.api.travelconnect.bean.search.response.SearchResponse;
-import com.trip.booking.spa.core.util.HttpUtils;
+import com.trip.booking.spa.core.api.common.access.HttpUtils;
 import com.trip.booking.spa.core.util.JsonUtils;
 import com.google.common.collect.Maps;
 

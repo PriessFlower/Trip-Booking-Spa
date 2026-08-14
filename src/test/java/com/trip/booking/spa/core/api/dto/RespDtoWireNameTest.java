@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trip.booking.spa.core.api.common.enums.BookingOutcome;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -37,5 +38,19 @@ class RespDtoWireNameTest {
         String json = mapper.writeValueAsString(CancelRespDTO.builder().sOrderId("7800466075463").build());
 
         assertTrue(json.contains("\"sOrderId\""), json);
+    }
+
+    /**
+     * sOrderStatus 同样会被 Jackson 压成 sorderStatus。
+     *
+     * <p>此前取消未实现，该字段从未被真正序列化，故该缺陷一直潜伏——直到取消接出才暴露。
+     * 上游按 sOrderStatus 读取时会静默得到空，把「取消失败」读成「无状态」。
+     */
+    @Test
+    void cancelRespKeepsSupplierOrderStatusFieldName() throws Exception {
+        String json = mapper.writeValueAsString(CancelRespDTO.builder().sOrderStatus(2).build());
+
+        assertTrue(json.contains("\"sOrderStatus\""), "线上字段名被压平会让上游静默读到空: " + json);
+        assertFalse(json.contains("\"sorderStatus\""), json);
     }
 }

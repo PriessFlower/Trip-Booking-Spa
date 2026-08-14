@@ -10,7 +10,7 @@ import com.trip.booking.spa.core.api.common.enums.SupplierDataTypeEnum;
 import com.trip.booking.spa.core.api.common.enums.SupplierSourceEnum;
 import com.trip.booking.spa.core.api.didatravel.bean.price.priceConfirm.PriceConfirmRequest;
 import com.trip.booking.spa.core.api.didatravel.bean.price.priceConfirm.PriceConfirmResponse;
-import com.trip.booking.spa.core.util.HttpUtils;
+import com.trip.booking.spa.core.api.common.access.HttpUtils;
 import com.trip.booking.spa.core.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 

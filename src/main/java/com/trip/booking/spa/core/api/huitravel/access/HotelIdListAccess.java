@@ -11,7 +11,7 @@ import com.trip.booking.spa.core.api.huitravel.bean.HuiTravelBaseRequest;
 import com.trip.booking.spa.core.api.huitravel.bean.Head;
 import com.trip.booking.spa.core.api.huitravel.bean.hotel.list.HotelListRequest;
 import com.trip.booking.spa.core.api.huitravel.bean.hotel.list.HotelListResponse;
-import com.trip.booking.spa.core.util.HttpUtils;
+import com.trip.booking.spa.core.api.common.access.HttpUtils;
 import com.trip.booking.spa.core.util.JsonUtils;
 import com.trip.booking.spa.core.util.Md5Utils;
 
