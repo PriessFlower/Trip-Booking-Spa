@@ -43,14 +43,13 @@ public class CancelRoomAccess extends BaseHttpAccess<String, CancelRoomResponse>
      */
     public CancelRoomAccess(String cancelHref, String authorization, String customerIp,
                             String customerSessionId, DistributedRateLimiter redisRateLimiter) {
-        // 重试次数固定 0。取消成功返回 204，而 ResponseResult.isSucc() 只认 200，
-        // 于是成功会被判成失败并触发重试；第二次 DELETE 得到 400「Room is already cancelled」，
-        // 最终把一次成功的取消上报成 UNKNOWN。实测（2026-08-14 沙箱）确实发出两次 DELETE。
+        // 允许 1 次重试：取消幂等，重复调用同一房间的终态都是已取消，不产生第二笔副作用。
         //
-        // 取消虽然幂等、重复调用不产生第二笔副作用，但在框架把 204 判为失败的前提下，
-        // 重试只会把正确结论改坏。待 ResponseResult 支持 2xx 判定后可再放开。
+        // 此前曾固定为 0——因为 ResponseResult.isSucc() 只认 200，取消成功的 204 被判失败
+        // 后触发重试，第二次 DELETE 得到 400「Room is already cancelled」，反把成功改成
+        // 了 UNKNOWN。该判据已放宽至 2xx，成因消除，故恢复重试。
         super(SupplierSourceEnum.EXPEDIA, SupplierDataTypeEnum.CANCEL_ORDER,
-                MonitorNameEnum.SPA_SUPPLIER_API_CANCEL_ORDER, 0);
+                MonitorNameEnum.SPA_SUPPLIER_API_CANCEL_ORDER, 1);
         this.cancelHref = cancelHref;
         this.authorization = authorization;
         this.customerIp = customerIp;
