@@ -185,16 +185,19 @@ public class ExpediaRapidProperties implements InitializingBean {
     public static class StaticData {
         private int batchSize = 250;
         /**
-         * 下载 catalog 清单文件的并发连接数。
+         * 下载 catalog 清单文件的并发连接数。<b>暂置 1（等同关闭并行），待生产实测通过后再调回。</b>
          *
-         * <p>该文件放在 AWS S3 us-west-2 裸源站（无 CDN），RTT 约 170ms。单条 TCP 流在这种
-         * 长肥管道上吞吐被拥塞窗口卡死——实测 21 KB/s，而本机入网能力有 2 MB/s，闲着七十倍。
-         * 分段并行绕开该限制：实测 8 连接 152 KB/s，99MB 文件由 80 分钟降至 11 分钟。
+         * <p>并行本身收益明确：该文件在 AWS S3 us-west-2 裸源站（无 CDN），生产机 RTT 约 170ms，
+         * 单条 TCP 流吞吐被拥塞窗口卡死，实测 21 KB/s，而入网能力有 2 MB/s，闲着七十倍。
+         * 多连接实测可达 152 KB/s 以上。
          *
-         * <p>取 8 是实测有效且保守的值：再往上收益递减，而每段都是一次 S3 请求，过多可能
-         * 触发对端限速。设为 1 即退回单连接。
+         * <p>之所以暂置 1：并行实现刚经历一次返工（原按文件长度判完整性，而按偏移写入时
+         * 文件长度等于最高写入偏移，中间块丢失查不出来），重写后的正确性只在本地验过，
+         * 而本地出口在美国、RTT 0.048ms，复现不出生产那条链路的连接中断。
+         *
+         * <p>故默认值维持安全侧，待在生产环境实测确认后，另行一行改动调回 8。
          */
-        private int downloadConnections = 8;
+        private int downloadConnections = 1;
         private String language = "en-US";
         /**
          * 摄取的语言列表；不指定语言时按此列表逐语言拉取
