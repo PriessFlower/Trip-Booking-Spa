@@ -23,9 +23,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
-import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
-import java.nio.channels.ReadableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -142,62 +140,117 @@ public class ExpediaCatalogFileClient {
         }
     }
 
+    /** 分块大小。块越小，单块失败重下的代价越小，长尾也越短；1MB 下 99MB 文件约 99 块 */
+    private static final long CHUNK_SIZE = 1L << 20;
+
+    /** 单块下载的重试次数。跨太平洋链路上连接中断是常态而非异常，故必须重试 */
+    private static final int CHUNK_RETRIES = 3;
+
+    /** 整体时限。防止对端以极慢速率挤字节导致永不超时——单次读超时约束不了总时长 */
+    private static final long DEADLINE_MILLIS = 20 * 60 * 1000L;
+
     /**
-     * 分段并行下载。
+     * 分块并行下载。
      *
-     * <p>各段用 {@link FileChannel} 按偏移直写同一个目标文件，故不需要临时分段文件、
-     * 不需要合并：磁盘占用就是文件本身，内存只有每段的传输缓冲。
+     * <p>切成 {@value #CHUNK_SIZE} 字节的小块投入队列，由固定数量的 worker 抢取，各自用
+     * Range 请求取回并按偏移直写同一目标文件。故不需要临时分段文件、不需要合并：
+     * 磁盘占用就是文件本身，内存只有每个 worker 的读缓冲。
+     *
+     * <p><b>完整性判据是「所有块各自确认收满」，不是文件长度。</b>按偏移写入时文件长度等于
+     * 最高写入偏移，只要末块完成，中间块全丢长度也照样等于期望值——曾据此误判通过，
+     * 实测出现过长度完全正确而文件含 13MB 空洞、gzip 报格式错的情形。
+     *
+     * <p>用工作队列而非等分 N 段，是因为各连接速度不一：等分时快连接跑完即闲置，
+     * 慢连接独自拖尾（实测前 94% 用 5 分钟、末 6% 又用 3 分钟）。队列让快连接多领活。
      */
     private void downloadInParallel(String href, Path target, long total, int connections) throws Exception {
-        long segment = (total + connections - 1) / connections;
+        List<long[]> chunks = new ArrayList<>();
+        for (long from = 0; from < total; from += CHUNK_SIZE) {
+            chunks.add(new long[]{from, Math.min(from + CHUNK_SIZE, total) - 1});
+        }
+        java.util.concurrent.ConcurrentLinkedQueue<long[]> queue =
+                new java.util.concurrent.ConcurrentLinkedQueue<>(chunks);
+        java.util.concurrent.atomic.AtomicLong confirmed = new java.util.concurrent.atomic.AtomicLong();
+        long deadline = System.currentTimeMillis() + DEADLINE_MILLIS;
+
         ExecutorService pool = Executors.newFixedThreadPool(connections);
         try (FileChannel channel = FileChannel.open(target,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
             List<Future<?>> futures = new ArrayList<>();
             for (int i = 0; i < connections; i++) {
-                long from = i * segment;
-                if (from >= total) {
-                    break;
-                }
-                long to = Math.min(from + segment - 1, total - 1);
                 futures.add(pool.submit(() -> {
-                    fetchRange(href, channel, from, to);
+                    long[] chunk;
+                    while ((chunk = queue.poll()) != null) {
+                        if (System.currentTimeMillis() > deadline) {
+                            throw new IllegalStateException("分块下载超过总时限 " + DEADLINE_MILLIS + "ms");
+                        }
+                        confirmed.addAndGet(fetchChunkWithRetry(href, channel, chunk[0], chunk[1]));
+                    }
                     return null;
                 }));
             }
             for (Future<?> f : futures) {
-                f.get();   // 任一段失败即整体失败，由调用方回落单连接
+                f.get();   // 任一 worker 失败即整体失败，由调用方回落单连接
             }
         } finally {
             pool.shutdownNow();
         }
-        long written = target.toFile().length();
-        if (written != total) {
-            throw new IllegalStateException("分段下载字节数不符: 期望 " + total + " 实得 " + written);
+
+        // 判据是各块确认收满的字节之和，不是文件长度
+        if (confirmed.get() != total) {
+            throw new IllegalStateException(
+                    "分块下载确认字节数不符: 期望 " + total + " 实得 " + confirmed.get());
         }
     }
 
-    /** 取 [from, to] 区段，写入 channel 的对应偏移 */
-    private void fetchRange(String href, FileChannel channel, long from, long to) throws Exception {
+    /** 取一块，失败重试；返回该块确认收到的字节数（必等于块长，否则抛出） */
+    private long fetchChunkWithRetry(String href, FileChannel channel, long from, long to) throws Exception {
+        long expected = to - from + 1;
+        Exception last = null;
+        for (int attempt = 1; attempt <= CHUNK_RETRIES; attempt++) {
+            try {
+                long got = fetchChunk(href, channel, from, to);
+                if (got == expected) {
+                    return got;
+                }
+                last = new IllegalStateException("块 " + from + "-" + to + " 应收 " + expected + " 实收 " + got);
+            } catch (Exception e) {
+                last = e;
+            }
+            log.debug("块 {}-{} 第 {} 次失败: {}", from, to, attempt, last.toString());
+        }
+        throw new IllegalStateException("块 " + from + "-" + to + " 重试 " + CHUNK_RETRIES + " 次仍失败", last);
+    }
+
+    /**
+     * 取 [from, to] 一块并写入 channel 对应偏移，返回实际写入字节数。
+     *
+     * <p>用显式读写循环而非 {@code FileChannel.transferFrom}：后者按契约可少传，
+     * 其返回值与流结束的组合此前正是漏字节的来源。这里每读到多少就写多少、逐字节记账，
+     * 收不满由调用方重试。
+     */
+    private long fetchChunk(String href, FileChannel channel, long from, long to) throws Exception {
+        long expected = to - from + 1;
         HttpURLConnection conn = (HttpURLConnection) new URL(href).openConnection();
         conn.setRequestProperty(HttpHeaders.RANGE, "bytes=" + from + "-" + to);
         conn.setConnectTimeout(15_000);
-        conn.setReadTimeout(120_000);
-        try (InputStream in = conn.getInputStream();
-             ReadableByteChannel src = Channels.newChannel(in)) {
+        conn.setReadTimeout(60_000);
+        try (InputStream in = conn.getInputStream()) {
+            byte[] buf = new byte[64 * 1024];
             long position = from;
-            long remaining = to - from + 1;
-            while (remaining > 0) {
-                long n = channel.transferFrom(src, position, remaining);
-                if (n <= 0) {
-                    break;
+            long got = 0;
+            while (got < expected) {
+                int r = in.read(buf, 0, (int) Math.min(buf.length, expected - got));
+                if (r < 0) {
+                    break;   // 对端提前结束，交由调用方按「收不满」重试
                 }
-                position += n;
-                remaining -= n;
+                java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(buf, 0, r);
+                while (bb.hasRemaining()) {
+                    position += channel.write(bb, position);
+                }
+                got += r;
             }
-            if (remaining > 0) {
-                throw new IllegalStateException("区段 " + from + "-" + to + " 少收 " + remaining + " 字节");
-            }
+            return got;
         } finally {
             conn.disconnect();
         }
