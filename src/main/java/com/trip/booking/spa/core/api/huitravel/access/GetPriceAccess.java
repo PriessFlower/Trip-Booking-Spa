@@ -13,7 +13,7 @@ import com.trip.booking.spa.core.api.huitravel.bean.hotel.detail.HotelDetailRequ
 import com.trip.booking.spa.core.api.huitravel.bean.hotel.detail.HotelDetailResponse;
 import com.trip.booking.spa.core.api.huitravel.bean.price.availability.AvailabilityRequest;
 import com.trip.booking.spa.core.api.huitravel.bean.price.availability.AvailabilityResponse;
-import com.trip.booking.spa.core.util.HttpUtils;
+import com.trip.booking.spa.core.api.common.access.HttpUtils;
 import com.trip.booking.spa.core.util.JsonUtils;
 import com.trip.booking.spa.core.util.Md5Utils;
 import lombok.extern.slf4j.Slf4j;

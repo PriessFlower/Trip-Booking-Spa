@@ -1,7 +1,7 @@
 package com.trip.booking.spa.core.api.fastpay.access;
 
 import com.alibaba.fastjson.JSON;
-import com.trip.booking.spa.core.util.HttpUtils;
+import com.trip.booking.spa.core.api.common.access.HttpUtils;
 import com.google.common.collect.Maps;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;

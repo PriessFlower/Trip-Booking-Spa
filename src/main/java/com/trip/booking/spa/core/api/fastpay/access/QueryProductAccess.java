@@ -10,7 +10,7 @@ import com.trip.booking.spa.core.api.common.exception.ParseException;
 import com.trip.booking.spa.core.api.fastpay.bean.request.SearchRequest;
 import com.trip.booking.spa.core.api.fastpay.bean.response.SearchResponse;
 import com.trip.booking.spa.core.redis.DistributedRateLimiter;
-import com.trip.booking.spa.core.util.HttpUtils;
+import com.trip.booking.spa.core.api.common.access.HttpUtils;
 import com.trip.booking.spa.core.util.JsonUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.Maps;

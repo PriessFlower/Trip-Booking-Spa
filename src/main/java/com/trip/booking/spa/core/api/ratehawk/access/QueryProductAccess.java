@@ -12,7 +12,7 @@ import com.trip.booking.spa.core.api.ratehawk.bean.request.QueryProductRequest;
 import com.trip.booking.spa.core.api.ratehawk.bean.response.BaseResult;
 import com.trip.booking.spa.core.api.ratehawk.bean.response.QueryProductResponse;
 import com.trip.booking.spa.core.redis.DistributedRateLimiter;
-import com.trip.booking.spa.core.util.HttpUtils;
+import com.trip.booking.spa.core.api.common.access.HttpUtils;
 import com.trip.booking.spa.core.util.JsonUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.Maps;

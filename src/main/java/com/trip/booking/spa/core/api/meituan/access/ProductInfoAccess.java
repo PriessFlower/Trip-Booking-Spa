@@ -12,7 +12,7 @@ import com.trip.booking.spa.core.api.meituan.bean.request.MeituanRequest;
 import com.trip.booking.spa.core.api.meituan.bean.request.ProductInfoReqBody;
 import com.trip.booking.spa.core.api.meituan.bean.response.ProductInfoResponse;
 import com.trip.booking.spa.core.redis.DistributedRateLimiter;
-import com.trip.booking.spa.core.util.HttpUtils;
+import com.trip.booking.spa.core.api.common.access.HttpUtils;
 import com.trip.booking.spa.core.util.JsonUtils;
 import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
