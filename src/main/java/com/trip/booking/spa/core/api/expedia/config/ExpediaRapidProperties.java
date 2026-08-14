@@ -185,16 +185,22 @@ public class ExpediaRapidProperties implements InitializingBean {
     public static class StaticData {
         private int batchSize = 250;
         /**
-         * 下载 catalog 清单文件的并发连接数。
+         * 下载 catalog 清单文件的并发连接数。<b>暂置 1（等同关闭并行），因并行实现有缺陷。</b>
          *
-         * <p>该文件放在 AWS S3 us-west-2 裸源站（无 CDN），RTT 约 170ms。单条 TCP 流在这种
-         * 长肥管道上吞吐被拥塞窗口卡死——实测 21 KB/s，而本机入网能力有 2 MB/s，闲着七十倍。
-         * 分段并行绕开该限制：实测 8 连接 152 KB/s，99MB 文件由 80 分钟降至 11 分钟。
+         * <p>缺陷：北京到该文件所在的 AWS S3 us-west-2 裸源站链路不稳，连接会中途断开或挂起，
+         * 分段随之收不满。而 {@code downloadInParallel} 的完整性校验看的是<b>文件长度</b>——
+         * 按偏移写入时，文件长度等于最高写入偏移，只要最后一段完成，中间段全丢长度也照样对。
+         * 生产那次恰好断在最后一段才被发现；断在中间就会「校验通过、文件残缺」。
          *
-         * <p>取 8 是实测有效且保守的值：再往上收益递减，而每段都是一次 S3 请求，过多可能
-         * 触发对端限速。设为 1 即退回单连接。
+         * <p>实测佐证：同结构复现中段 3 与段 6 挂起，文件长度 103,679,417 与期望<b>完全一致</b>，
+         * 实占磁盘却只有 86MB（13MB 是空洞），{@code gzip -t} 报 format violated。
+         *
+         * <p>且失败后回落单连接是从头重下，净效果比不并行更慢（约 90 分钟 vs 80 分钟）。
+         *
+         * <p>修复方向：切小块（约 1MB）+ 工作队列 + 块级实收字节校验与重试，
+         * 不再以文件长度作为完整性判据。修好后再将默认值调回。
          */
-        private int downloadConnections = 8;
+        private int downloadConnections = 1;
         private String language = "en-US";
         /**
          * 摄取的语言列表；不指定语言时按此列表逐语言拉取
