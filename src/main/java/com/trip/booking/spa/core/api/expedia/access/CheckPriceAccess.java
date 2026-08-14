@@ -10,7 +10,7 @@ import com.trip.booking.spa.core.api.common.exception.ParseException;
 import com.trip.booking.spa.core.api.expedia.bean.request.QueryPriceRequest;
 import com.trip.booking.spa.core.api.expedia.bean.response.CheckPriceResponse;
 import com.trip.booking.spa.core.redis.DistributedRateLimiter;
-import com.trip.booking.spa.core.util.HttpUtils;
+import com.trip.booking.spa.core.api.common.access.HttpUtils;
 import com.trip.booking.spa.core.util.JsonUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.Maps;

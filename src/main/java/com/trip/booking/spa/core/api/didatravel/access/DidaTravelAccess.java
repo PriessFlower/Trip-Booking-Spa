@@ -11,7 +11,7 @@ import com.trip.booking.spa.core.api.common.enums.SupplierSourceEnum;
 import com.trip.booking.spa.core.api.didatravel.bean.price.DidaTravelRequest;
 import com.trip.booking.spa.core.api.didatravel.bean.price.DidaTravelResponse;
 import com.trip.booking.spa.core.redis.DistributedRateLimiter;
-import com.trip.booking.spa.core.util.HttpUtils;
+import com.trip.booking.spa.core.api.common.access.HttpUtils;
 import com.trip.booking.spa.core.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 

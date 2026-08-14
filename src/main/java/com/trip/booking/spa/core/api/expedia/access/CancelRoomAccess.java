@@ -9,7 +9,7 @@ import com.trip.booking.spa.core.api.common.enums.SupplierDataTypeEnum;
 import com.trip.booking.spa.core.api.common.enums.SupplierSourceEnum;
 import com.trip.booking.spa.core.api.expedia.bean.response.CancelRoomResponse;
 import com.trip.booking.spa.core.redis.DistributedRateLimiter;
-import com.trip.booking.spa.core.util.HttpUtils;
+import com.trip.booking.spa.core.api.common.access.HttpUtils;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
