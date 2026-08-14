@@ -2,6 +2,9 @@ package com.trip.booking.spa.core.api.expedia.staticdata.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.trip.booking.spa.core.api.common.access.ChunkedFileAccess;
+import com.trip.booking.spa.core.api.common.enums.MonitorNameEnum;
+import com.trip.booking.spa.core.api.common.enums.SupplierSourceEnum;
 import com.trip.booking.spa.core.api.expedia.config.ExpediaRapidProperties;
 import com.trip.booking.spa.core.api.expedia.utils.ExpediaUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -18,20 +21,11 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.URL;
-import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -83,186 +77,14 @@ public class ExpediaCatalogFileClient {
             return target.toFile();
         }
         String href = fetchCatalogHref(lang);
-        long start = System.currentTimeMillis();
-        long total = probeContentLength(href);
-        int connections = properties.getStaticData().getDownloadConnections();
-
-        boolean parallel = total > 0 && connections > 1;
-        if (parallel) {
-            try {
-                downloadInParallel(href, target, total, connections);
-            } catch (Exception e) {
-                // 并行失败一律回落单连接：清单是摄取的唯一输入，宁可慢也不能拿不到
-                log.warn("Catalog 分段并行下载失败，回落单连接: {}", e.toString());
-                parallel = false;
-            }
-        }
-        if (!parallel) {
-            downloadSingleStream(href, target);
-        }
-
-        long cost = System.currentTimeMillis() - start;
-        long size = target.toFile().length();
-        log.info("Catalog 文件下载完成: {} ({} bytes, {} ms, {}, {} KB/s)", target, size, cost,
-                parallel ? connections + " 连接并行" : "单连接",
-                cost > 0 ? size * 1000 / cost / 1024 : 0);
+        new ChunkedFileAccess(SupplierSourceEnum.EXPEDIA, MonitorNameEnum.SPA_SUPPLIER_FILE_DOWNLOAD,
+                properties.getStaticData().getDownloadConnections(), DOWNLOAD_DEADLINE_MILLIS)
+                .download(href, target);
         return target.toFile();
     }
 
-    /**
-     * 探测文件总长，并同时确认对端支持 Range。
-     *
-     * <p>不用 HEAD——实测该 S3 桶对 HEAD 返回 XML 错误而不给长度。改用一个 1 字节的 Range
-     * 请求：既从 {@code Content-Range} 拿到总长，又验证了 Range 支持，一次调用办两件事。
-     *
-     * @return 文件总字节数；无法探测或对端不支持 Range 时返回 -1，调用方据此走单连接
-     */
-    private long probeContentLength(String href) {
-        try {
-            HttpURLConnection conn = (HttpURLConnection) new URL(href).openConnection();
-            conn.setRequestProperty(HttpHeaders.RANGE, "bytes=0-0");
-            conn.setConnectTimeout(15_000);
-            conn.setReadTimeout(30_000);
-            try {
-                if (conn.getResponseCode() != 206) {
-                    log.info("Catalog 源不支持 Range（响应 {}），改用单连接下载", conn.getResponseCode());
-                    return -1;
-                }
-                String range = conn.getHeaderField(HttpHeaders.CONTENT_RANGE);
-                int slash = range == null ? -1 : range.lastIndexOf('/');
-                return slash < 0 ? -1 : Long.parseLong(range.substring(slash + 1).trim());
-            } finally {
-                conn.disconnect();
-            }
-        } catch (Exception e) {
-            log.info("Catalog 长度探测失败，改用单连接下载: {}", e.toString());
-            return -1;
-        }
-    }
-
-    /** 分块大小。块越小，单块失败重下的代价越小，长尾也越短；1MB 下 99MB 文件约 99 块 */
-    private static final long CHUNK_SIZE = 1L << 20;
-
-    /** 单块下载的重试次数。跨太平洋链路上连接中断是常态而非异常，故必须重试 */
-    private static final int CHUNK_RETRIES = 3;
-
-    /** 整体时限。防止对端以极慢速率挤字节导致永不超时——单次读超时约束不了总时长 */
-    private static final long DEADLINE_MILLIS = 20 * 60 * 1000L;
-
-    /**
-     * 分块并行下载。
-     *
-     * <p>切成 {@value #CHUNK_SIZE} 字节的小块投入队列，由固定数量的 worker 抢取，各自用
-     * Range 请求取回并按偏移直写同一目标文件。故不需要临时分段文件、不需要合并：
-     * 磁盘占用就是文件本身，内存只有每个 worker 的读缓冲。
-     *
-     * <p><b>完整性判据是「所有块各自确认收满」，不是文件长度。</b>按偏移写入时文件长度等于
-     * 最高写入偏移，只要末块完成，中间块全丢长度也照样等于期望值——曾据此误判通过，
-     * 实测出现过长度完全正确而文件含 13MB 空洞、gzip 报格式错的情形。
-     *
-     * <p>用工作队列而非等分 N 段，是因为各连接速度不一：等分时快连接跑完即闲置，
-     * 慢连接独自拖尾（实测前 94% 用 5 分钟、末 6% 又用 3 分钟）。队列让快连接多领活。
-     */
-    private void downloadInParallel(String href, Path target, long total, int connections) throws Exception {
-        List<long[]> chunks = new ArrayList<>();
-        for (long from = 0; from < total; from += CHUNK_SIZE) {
-            chunks.add(new long[]{from, Math.min(from + CHUNK_SIZE, total) - 1});
-        }
-        java.util.concurrent.ConcurrentLinkedQueue<long[]> queue =
-                new java.util.concurrent.ConcurrentLinkedQueue<>(chunks);
-        java.util.concurrent.atomic.AtomicLong confirmed = new java.util.concurrent.atomic.AtomicLong();
-        long deadline = System.currentTimeMillis() + DEADLINE_MILLIS;
-
-        ExecutorService pool = Executors.newFixedThreadPool(connections);
-        try (FileChannel channel = FileChannel.open(target,
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
-            List<Future<?>> futures = new ArrayList<>();
-            for (int i = 0; i < connections; i++) {
-                futures.add(pool.submit(() -> {
-                    long[] chunk;
-                    while ((chunk = queue.poll()) != null) {
-                        if (System.currentTimeMillis() > deadline) {
-                            throw new IllegalStateException("分块下载超过总时限 " + DEADLINE_MILLIS + "ms");
-                        }
-                        confirmed.addAndGet(fetchChunkWithRetry(href, channel, chunk[0], chunk[1]));
-                    }
-                    return null;
-                }));
-            }
-            for (Future<?> f : futures) {
-                f.get();   // 任一 worker 失败即整体失败，由调用方回落单连接
-            }
-        } finally {
-            pool.shutdownNow();
-        }
-
-        // 判据是各块确认收满的字节之和，不是文件长度
-        if (confirmed.get() != total) {
-            throw new IllegalStateException(
-                    "分块下载确认字节数不符: 期望 " + total + " 实得 " + confirmed.get());
-        }
-    }
-
-    /** 取一块，失败重试；返回该块确认收到的字节数（必等于块长，否则抛出） */
-    private long fetchChunkWithRetry(String href, FileChannel channel, long from, long to) throws Exception {
-        long expected = to - from + 1;
-        Exception last = null;
-        for (int attempt = 1; attempt <= CHUNK_RETRIES; attempt++) {
-            try {
-                long got = fetchChunk(href, channel, from, to);
-                if (got == expected) {
-                    return got;
-                }
-                last = new IllegalStateException("块 " + from + "-" + to + " 应收 " + expected + " 实收 " + got);
-            } catch (Exception e) {
-                last = e;
-            }
-            log.debug("块 {}-{} 第 {} 次失败: {}", from, to, attempt, last.toString());
-        }
-        throw new IllegalStateException("块 " + from + "-" + to + " 重试 " + CHUNK_RETRIES + " 次仍失败", last);
-    }
-
-    /**
-     * 取 [from, to] 一块并写入 channel 对应偏移，返回实际写入字节数。
-     *
-     * <p>用显式读写循环而非 {@code FileChannel.transferFrom}：后者按契约可少传，
-     * 其返回值与流结束的组合此前正是漏字节的来源。这里每读到多少就写多少、逐字节记账，
-     * 收不满由调用方重试。
-     */
-    private long fetchChunk(String href, FileChannel channel, long from, long to) throws Exception {
-        long expected = to - from + 1;
-        HttpURLConnection conn = (HttpURLConnection) new URL(href).openConnection();
-        conn.setRequestProperty(HttpHeaders.RANGE, "bytes=" + from + "-" + to);
-        conn.setConnectTimeout(15_000);
-        conn.setReadTimeout(60_000);
-        try (InputStream in = conn.getInputStream()) {
-            byte[] buf = new byte[64 * 1024];
-            long position = from;
-            long got = 0;
-            while (got < expected) {
-                int r = in.read(buf, 0, (int) Math.min(buf.length, expected - got));
-                if (r < 0) {
-                    break;   // 对端提前结束，交由调用方按「收不满」重试
-                }
-                java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(buf, 0, r);
-                while (bb.hasRemaining()) {
-                    position += channel.write(bb, position);
-                }
-                got += r;
-            }
-            return got;
-        } finally {
-            conn.disconnect();
-        }
-    }
-
-    private void downloadSingleStream(String href, Path target) {
-        try (InputStream in = new URL(href).openStream()) {
-            Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
-        } catch (Exception e) {
-            throw new IllegalStateException("Catalog 文件下载失败", e);
-        }
-    }
+    /** 下载整体时限。防止对端以极慢速率挤字节导致永不超时——单次读超时约束不了总时长 */
+    private static final long DOWNLOAD_DEADLINE_MILLIS = 20 * 60 * 1000L;
 
     /**
      * 闸口 supplier.expedia.static-data-enabled：是否允许调用 Expedia 目录清单接口。
