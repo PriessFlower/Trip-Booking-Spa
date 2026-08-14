@@ -20,6 +20,7 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpRequestBase;
@@ -192,6 +193,42 @@ public class HttpUtils {
 
         ResponseResult<T> result = new ResponseResult(response.getStatusLine().getStatusCode(), entityStr, data);
         EntityUtils.consume(entity);
+        return result;
+    }
+
+    /**
+     * DELETE，形状与 {@link #accessGet} 一致，复用同一套超时配置。
+     *
+     * <p>取消房间用的是供应商反查响应里给出的完整链接（含 token），故不再拼接参数。
+     *
+     * <p><b>与 GET 的关键差异</b>：成功时 Expedia 返回 204 且无响应体，故此处不能像 GET
+     * 那样以「无 entity」判失败——无 entity 恰恰是取消成功的常态。是否成功一律以状态码为准。
+     */
+    public static <T extends BaseResponse> ResponseResult accessDelete(String url, Map<String, String> headers,
+                                                                       IParser<T> parser) throws Exception {
+        HttpClient httpClient = getHttpClient(url);
+
+        HttpDelete httpDelete = new HttpDelete(url);
+        configGet(httpDelete);
+        if (MapUtils.isNotEmpty(headers)) {
+            for (Map.Entry<String, String> e : headers.entrySet()) {
+                httpDelete.addHeader(e.getKey(), e.getValue());
+            }
+        }
+
+        HttpResponse response = httpClient.execute(httpDelete);
+        int status = response.getStatusLine().getStatusCode();
+        HttpEntity entity = response.getEntity();
+        String entityStr = entity == null ? Strings.EMPTY : EntityUtils.toString(entity, "UTF-8");
+
+        T data = status >= HttpStatus.SC_OK && status < HttpStatus.SC_MULTIPLE_CHOICES
+                ? parser.parse(entityStr)
+                : parser.parseError(entityStr);
+
+        ResponseResult<T> result = new ResponseResult(status, entityStr, data);
+        if (entity != null) {
+            EntityUtils.consume(entity);
+        }
         return result;
     }
 
