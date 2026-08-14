@@ -1,4 +1,4 @@
-package com.trip.booking.spa.core.api.expedia.staticdata.client;
+package com.trip.booking.spa.core.api.common.access;
 
 import org.junit.jupiter.api.Test;
 
@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>此前的等分实现漏字节时无人察觉，正因为这块零测试覆盖。切分若有一字节的缝隙或重叠，
  * 下载出的文件会残缺或错位，而当时的完整性判据（文件长度）恰恰查不出这类错误。
  */
-class ExpediaCatalogChunkPlanTest {
+class ChunkedFileAccessPlanTest {
 
     private static final long CHUNK_SIZE = 1L << 20;
 

@@ -49,13 +49,24 @@ public class RateLimitProperties {
             qpsMap = Collections.emptyMap();
             return;
         }
+        Map<String, Double> parsed = null;
         try {
-            qpsMap = JsonUtils.decodeJson(qpsJson, new TypeReference<Map<String, Double>>() {
+            parsed = JsonUtils.decodeJson(qpsJson, new TypeReference<Map<String, Double>>() {
             });
         } catch (Exception e) {
-            log.error("ratelimit.qps JSON parse failed, fallback to empty: {}", qpsJson, e);
-            qpsMap = Collections.emptyMap();
+            log.error("ratelimit.qps JSON 解析抛错，回落空配置（各 key 走 default-qps）: {}", qpsJson, e);
         }
+        // 必须判空而非只接异常：JsonUtils.decodeJson 解析失败时吞掉异常返回 null，
+        // 只写 catch 的话 qpsMap 会被赋成 null，此后每次 qpsOf 都空指针——
+        // 而 qpsOf 在所有限流调用的路径上，等于整个网关瘫痪。
+        if (parsed == null) {
+            log.error("ratelimit.qps 解析结果为空，回落空配置（各 key 走 default-qps={}）: {}",
+                    defaultQps, qpsJson);
+            qpsMap = Collections.emptyMap();
+            return;
+        }
+        qpsMap = parsed;
+        log.info("ratelimit.qps 已加载 {} 个 key，其余走 default-qps={}", parsed.size(), defaultQps);
     }
 
     public boolean isDistributed() {
@@ -66,8 +77,14 @@ public class RateLimitProperties {
         return acquireTimeoutMs;
     }
 
-    /** 查某个限流 key 的 QPS，未配置则用全局默认 */
+    /**
+     * 查某个限流 key 的 QPS，未配置则用全局默认。
+     *
+     * <p>此处再判一次空是有意的冗余：本方法在所有供应商调用的必经路径上，
+     * 一旦抛错即全站不可用。宁可多一次判空，也不让一个配置问题变成全站故障。
+     */
     public double qpsOf(String key) {
-        return qpsMap.getOrDefault(key, defaultQps);
+        Map<String, Double> current = qpsMap;
+        return current == null ? defaultQps : current.getOrDefault(key, defaultQps);
     }
 }
