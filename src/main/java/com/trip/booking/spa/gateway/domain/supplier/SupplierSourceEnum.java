@@ -13,6 +13,7 @@ public enum SupplierSourceEnum {
     FASTPAYHOTELS(10006, "FastpayHotels"),
     RATEHAWK(10007, "ratehawk"),
     MEITUAN(10009, "meituan"),
+    ELONG(10010, "elong"),
     ;
 
     SupplierSourceEnum(int code, String desc) {
