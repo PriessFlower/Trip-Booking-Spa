@@ -109,7 +109,9 @@ class ProductIdentityArchRulesTest {
                 "book_hash", "match_hash",
                 "rate_key", "rateKey",
                 "plansid", "rpid",
-                "prebook_token", "prebookToken");
+                "prebook_token", "prebookToken",
+                "goods_uniq_id", "goodsUniqId",
+                "little_majia_id", "littleMajiaId", "majia_id");
         List<String> violations = new ArrayList<>();
 
         try (Stream<Path> files = Files.walk(MAPPER_DIR)) {

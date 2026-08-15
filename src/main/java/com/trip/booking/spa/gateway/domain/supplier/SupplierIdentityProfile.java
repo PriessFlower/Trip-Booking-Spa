@@ -85,7 +85,22 @@ public enum SupplierIdentityProfile {
      * 未做任何腐性调查，全项按最保守申报（R-4.2）。接入真实流量前必须补齐证据。
      */
     FASTPAYHOTELS(SupplierSourceEnum.FASTPAYHOTELS, RoomIdStability.UNVERIFIED, QuoteCodeStability.PERISHABLE,
-            Duration.ofMinutes(30));
+            Duration.ofMinutes(30)),
+
+    /**
+     * 房型 RoomTypeId：<b>稳定</b>——cursor 全程以其为房型等价判定锚（等价判定与
+     * 静态映射均以它为键），无任何轮换救回代码；hotel_id 同为静态映射主键，稳定。
+     *
+     * <p>报价码 GoodsUniqId + littleMajiaId（马甲）：<b>易腐，官方明示马甲有效期
+     * 30 分钟</b>（hotel.detail 文档「Littlemajiaid 有效期为 30 分钟」，2026-08-15
+     * 核对）。实证：cursor 2026-07-19 隔时重放验价 45/47 全灭（H001144 马甲过期），
+     * 其头号病灶即下单复用验价缓存里的死马甲——SPA 侧二者只进 OfferStore、TTL 短于
+     * 有效期，过期一律凭 productKey 现取现验（R-3.1）。马甲是产品维促销凭证而非
+     * 账号维（单账号），键的账号成分即艺龙账户名。TTL 上限取 10 分钟 = 官方有效期
+     * 之三分之一（R-2.2 要求短于轮换周期），与 OfferStore 生产 TTL（600s）对齐。
+     */
+    ELONG(SupplierSourceEnum.ELONG, RoomIdStability.STABLE, QuoteCodeStability.PERISHABLE,
+            Duration.ofMinutes(10));
 
     /** 房型 ID 的申报档位 */
     public enum RoomIdStability {

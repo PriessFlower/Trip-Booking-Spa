@@ -35,6 +35,16 @@ supplier:
     # 查价单次返回的报价条数上限，Expedia 允许的最大值即 250。
     # 属我方技术调参，不是车道参数，不参与上述校验。
     rate-plan-count: 250
+  # 艺龙（elong）。凭证一律经环境变量注入（§3.5.1），变量名登记于 .env.example；
+  # cursor 仓曾把三项明文写进 yml，SPA 侧禁止重演。测试网关与生产网关凭证相同，
+  # 端点兜底取测试网关为安全侧（§3.3.3）。运维可调项（resolve-enabled、
+  # resolve-price-tolerance、限流 QPS）不在此处，见 Nacos。
+  elong:
+    user: ${ELONG_USER:}
+    app-key: ${ELONG_APP_KEY:}
+    secret: ${ELONG_SECRET:}
+    url-host: ${ELONG_API_HOST:https://api-test.elong.com/rest}
+    version: "1.62"
 
 expedia:
   # 下单闸口。开启后仅在测试端点可下单——沙箱行为，不产生费用、不生成真实预订，
