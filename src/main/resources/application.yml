@@ -17,24 +17,22 @@ mybatis:
 # 统一限流（core/ratelimit/RateLimitManager）为运维可调配置，一律由 Nacos 下发，
 # 兜底默认值见 RateLimitProperties 的 @Value（见 PROJECT.md §3.3）。此处不得配置。
 
-# Expedia 合同档案参数与查价调参。归入 supplier 域（§3.7.2 的封闭枚举中无 expedia），
+# Expedia 合同档案参数。归入 supplier 域（§3.7.2 的封闭枚举中无 expedia），
 # 键名三层、kebab-case（§3.7.1、§3.7.4）。
 #
 # 放在本文件而非各环境剖面，是因为它们不是基础设施差异——dev 与 prod 取值本就相同，
 # 分存两处会让取值来源失去唯一性（§3.4.1、§3.3.1）。
 #
-# 前四项构成一条合同车道，必须整体切换：混用不会被 Expedia 拒绝，只会静默返回另一条
+# 四项构成一条合同车道，必须整体切换：混用不会被 Expedia 拒绝，只会静默返回另一条
 # 车道的报价（实测同一报价贵约 18%）。ExpediaContractProfile 在启动期校验，凑不成
 # 已知档案即拒绝启动——属安全护栏，故固定于此，禁止移入 Nacos（§3.2.3）。
+# （rate_plan_count 曾在此处：已写死为代码常量 250——无"不发版即调整"的运维场景，§3.8.1）
 supplier:
   expedia:
     partner-point-of-sale: ${EXPEDIA_PARTNER_POS:B2B_SA_PKG_MOD_AGENT}
     payment-terms: ${EXPEDIA_PAYMENT_TERMS:2}
     billing-terms: ${EXPEDIA_BILLING_TERMS:EAC}
     sales-channel: ${EXPEDIA_SALES_CHANNEL:agent_tool}
-    # 查价单次返回的报价条数上限，Expedia 允许的最大值即 250。
-    # 属我方技术调参，不是车道参数，不参与上述校验。
-    rate-plan-count: 250
   # 艺龙（elong）。凭证一律经环境变量注入（§3.5.1），变量名登记于 .env.example；
   # cursor 仓曾把三项明文写进 yml，SPA 侧禁止重演。测试网关与生产网关凭证相同，
   # 端点兜底取测试网关为安全侧（§3.3.3）。运维可调项（resolve-enabled、
@@ -45,6 +43,18 @@ supplier:
     secret: ${ELONG_SECRET:}
     url-host: ${ELONG_API_HOST:https://api-test.elong.com/rest}
     version: "1.62"
+
+elong:
+  # 下单闸口——安全护栏（§3.2.3），固定本文件、禁入 Nacos。
+  #
+  # ⚠️ 艺龙与 Expedia 的关键差异：没有沙箱。api-test 网关已死（2026-08-15 实测全服务 403），
+  # 唯一可用端点即生产网关——本项打开后每一笔下单都是真实订单、真实费用（预付授信扣款）。
+  # 下单链路验收以"免费取消窗口产品下真单 + 立即取消"方式人工确认后进行。
+  # 取消（hotel.order.cancel）刻意不读本闸：已存在的真单必须永远可撤。
+  booking-enabled: false
+  # 下单 CustomerIPAddress 兜底（艺龙风控必填，缺失报 H001012）。
+  # 默认值为 cursor 生产实证过闸的出口 IP，SPA 生产可经环境变量切为腾讯云出口。
+  customer-ip-fallback: ${ELONG_CUSTOMER_IP_FALLBACK:47.92.28.195}
 
 expedia:
   # 下单闸口。开启后仅在测试端点可下单——沙箱行为，不产生费用、不生成真实预订，

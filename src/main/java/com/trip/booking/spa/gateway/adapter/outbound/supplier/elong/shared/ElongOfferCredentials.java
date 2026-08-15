@@ -35,6 +35,14 @@ public final class ElongOfferCredentials {
     /** 验价所用 DayPriceList 的 JSON，下单侧复用同一份每日价 */
     public static final String DAY_PRICE_LIST = "dayPriceList";
 
+    /** 验价住期（yyyy-MM-dd）。下单侧以此为准并校验上游传参一致——住期不同则价必不同 */
+    public static final String CHECK_IN = "checkIn";
+
+    public static final String CHECK_OUT = "checkOut";
+
+    /** 验价占用成人数。下单 NumberOfAdults（国际单必填）取此值，与验价口径同源 */
+    public static final String ADULT_COUNT = "adultCount";
+
     private ElongOfferCredentials() {
     }
 }

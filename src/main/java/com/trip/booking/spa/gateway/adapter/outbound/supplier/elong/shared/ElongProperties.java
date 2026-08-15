@@ -41,6 +41,44 @@ public class ElongProperties implements InitializingBean {
     private String version;
 
     /**
+     * 下单闸口——安全护栏（PROJECT.md §3.2.3），固定在 application.yml，禁止移入 Nacos。
+     *
+     * <p><b>艺龙与 Expedia 的关键差异：没有沙箱。</b>api-test 网关已死（2026-08-15 实测
+     * 全服务 403），唯一可用端点即生产网关——本开关打开后每一笔下单都是真实订单、
+     * 真实费用。Expedia 靠"测试端点下单免费"验收下单链路，艺龙做不到，e2e 只能以
+     * "免费取消窗口产品下真单 + 立即取消"的方式进行，且必须人工确认后执行。
+     *
+     * <p>闸口三项声明（§3.8.5）：
+     * <ul>
+     *   <li><b>误开的后果</b>：验收未完成即可能产生真实订单与真实费用（预付、我方
+     *       授信账户扣款）</li>
+     *   <li><b>误关的后果</b>：艺龙下单一律确定失败（供应商侧无任何动作），上游
+     *       可安全改单其他供应商——不丢单、不资损</li>
+     *   <li><b>生效执行面</b>：全部承载 /client/spa/booking 流量的节点（所有 profile），
+     *       仅艺龙链路；查价/验价/查单/取消不读本开关——取消刻意不设闸：
+     *       已存在的真单必须永远可撤</li>
+     * </ul>
+     */
+    @Value("${elong.booking-enabled:false}")
+    private boolean bookingEnabled;
+
+    /**
+     * 下单 CustomerIPAddress 的兜底值。艺龙以此做恶意订单风控（必填，缺失报 H001012），
+     * 而渠道流量常无终端 IP。默认值为 cursor 生产实证过闸的出口 IP
+     * （2026-08-04 单 26080422481151778fd3953b 教训）；SPA 生产切换出口后可经
+     * 环境变量改为腾讯云出口。
+     */
+    @Value("${elong.customer-ip-fallback:47.92.28.195}")
+    private String customerIpFallback;
+
+    /**
+     * 下单 Contact.Email。生产被艺龙接受的报文 3/3 均携带固定客服邮箱（联系人邮箱
+     * 接收供应商通知，应指向运营团队而非旅客）；上游契约不含旅客邮箱，此处配置化。
+     */
+    @Value("${elong.booking-contact-email:customer_service@mail.haowan2000.com}")
+    private String bookingContactEmail;
+
+    /**
      * resolve 管线开关（docs/product-identity.md §3）：验价时报价码（GoodsUniqId）
      * 已不在现货，是否允许按 productKey 在当前现货中自动换票。默认 false 为安全侧
      * 兜底（§3.3.3）。运维可调，权威取值在 Nacos，键名归 supplier 域（§3.7.2）。
@@ -66,15 +104,28 @@ public class ElongProperties implements InitializingBean {
     @Value("${supplier.elong.resolve-price-tolerance:0.02}")
     private double resolvePriceTolerance;
 
+    /**
+     * resolve 换票容差的绝对帽（分）：单笔自动让利的财务上限，与比例容差取严
+     * （issue #59：比例门吃毛利不亏损，但绝对敞口随单价放大，帽封顶大额单）。
+     * 兜底 20 元为安全侧从严（§3.3.3），运维值见 Nacos（与兜底同为 20 元，放宽须先过毛利测算）。
+     */
+    @Value("${supplier.elong.resolve-price-cap-cents:2000}")
+    private int resolvePriceCapCents;
+
     @Override
     public void afterPropertiesSet() {
         if (resolvePriceTolerance < 0 || resolvePriceTolerance > 0.2) {
             throw new IllegalStateException(
                     "supplier.elong.resolve-price-tolerance must be between 0 and 0.2, but was " + resolvePriceTolerance);
         }
-        // 记明端点与凭证态，便于从启动日志确认当前打的是测试网关还是生产网关
-        log.info("艺龙接入配置: urlHost={}, productionEndpoint={}, credentialsConfigured={}",
-                urlHost, urlHost != null && urlHost.contains(PRODUCTION_HOST), isConfigured());
+        if (resolvePriceCapCents < 0 || resolvePriceCapCents > 100000) {
+            throw new IllegalStateException(
+                    "supplier.elong.resolve-price-cap-cents must be between 0 and 100000, but was " + resolvePriceCapCents);
+        }
+        // 记明端点、凭证态与下单闸，便于从启动日志确认当前姿态。
+        // 艺龙无沙箱：bookingEnabled=true 即真单真费用，启动日志必须可查
+        log.info("艺龙接入配置: urlHost={}, productionEndpoint={}, credentialsConfigured={}, bookingEnabled={}",
+                urlHost, urlHost != null && urlHost.contains(PRODUCTION_HOST), isConfigured(), bookingEnabled);
     }
 
     /** 凭证是否齐备；未配置时艺龙链路应如实回报不可用，而非带着空签名去打供应商 */
@@ -102,12 +153,28 @@ public class ElongProperties implements InitializingBean {
         return version;
     }
 
+    public boolean isBookingEnabled() {
+        return bookingEnabled;
+    }
+
+    public String getCustomerIpFallback() {
+        return customerIpFallback;
+    }
+
+    public String getBookingContactEmail() {
+        return bookingContactEmail;
+    }
+
     public boolean isResolveEnabled() {
         return resolveEnabled;
     }
 
     public double getResolvePriceTolerance() {
         return resolvePriceTolerance;
+    }
+
+    public int getResolvePriceCapCents() {
+        return resolvePriceCapCents;
     }
 
     /** 仅供测试构造场景使用；运行期取值由 @Value 绑定 */

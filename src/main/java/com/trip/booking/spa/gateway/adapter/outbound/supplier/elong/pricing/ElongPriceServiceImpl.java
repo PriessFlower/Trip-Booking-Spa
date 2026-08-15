@@ -362,6 +362,10 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         credentials.put(ElongOfferCredentials.SHOPPER_PRODUCT_ID, plan.getShopperProductId());
         credentials.put(ElongOfferCredentials.TOTAL_PRICE, totalPriceYuan.toPlainString());
         credentials.put(ElongOfferCredentials.DAY_PRICE_LIST, JsonUtils.writeObject2Json(dayPrices));
+        credentials.put(ElongOfferCredentials.CHECK_IN, request.getCheckIn());
+        credentials.put(ElongOfferCredentials.CHECK_OUT, request.getCheckOut());
+        credentials.put(ElongOfferCredentials.ADULT_COUNT,
+                String.valueOf(request.getAdultCount() == null ? 1 : request.getAdultCount()));
         String offerId = offerStore.issue(SupplierSourceEnum.ELONG.getCode(), credentials);
         if (StringUtils.isBlank(offerId)) {
             return outcome(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
@@ -416,7 +420,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             }
         }
         return ResolveGate.pickCheapestWithinTolerance(equivalents, ResolveCandidate::priceCents,
-                        request.getTotalPrice(), properties.getResolvePriceTolerance())
+                        request.getTotalPrice(), properties.getResolvePriceTolerance(),
+                        properties.getResolvePriceCapCents())
                 .map(chosen -> {
                     log.info("艺龙验价：令牌已死，按productKey换票成功,原sProductId={},新goodsUniqId={},新价={}分,展示价={}分",
                             request.getSProductId(), chosen.planWithRoom().plan().getGoodsUniqId(),
