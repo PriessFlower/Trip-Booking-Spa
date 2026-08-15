@@ -420,7 +420,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             }
         }
         return ResolveGate.pickCheapestWithinTolerance(equivalents, ResolveCandidate::priceCents,
-                        request.getTotalPrice(), properties.getResolvePriceTolerance())
+                        request.getTotalPrice(), properties.getResolvePriceTolerance(),
+                        properties.getResolvePriceCapCents())
                 .map(chosen -> {
                     log.info("艺龙验价：令牌已死，按productKey换票成功,原sProductId={},新goodsUniqId={},新价={}分,展示价={}分",
                             request.getSProductId(), chosen.planWithRoom().plan().getGoodsUniqId(),

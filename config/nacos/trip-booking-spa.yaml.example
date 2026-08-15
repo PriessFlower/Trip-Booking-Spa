@@ -89,9 +89,12 @@ supplier:
     # 关闭时行为与旧实现完全一致（直接回报 RATE_DEAD）。改后需重启容器方生效。
     resolve-enabled: false
 
-    # resolve 换票价格容差（R-3.3）：新价 ≤ 展示价 ×(1+本值) 才许自动换票，
-    # 超出宁可 RATE_DEAD——防静默涨价成交。取值域 [0, 0.2]。
+    # resolve 换票价格容差（R-3.3 双门取严）：新价 ≤ 展示价 + min(展示价×比例, 绝对帽)。
+    # 比例门吃的是毛利（实测成交毛利 7~11%，2% 任意单价不亏损）；绝对帽是单笔自动
+    # 让利的财务上限（比例制敞口随单价放大：5 万单 2%=1000 元；实测存在 3% 薄单与
+    # 负毛利单，取证 issue #59）。比例取值域 [0, 0.2]，帽取值域 [0, 100000] 分。
     resolve-price-tolerance: 0.02
+    resolve-price-cap-cents: 2000            # 20 元：1000 元以下主流单仍由比例门管
 
     # 下单时提交给 Expedia 的固定联系与账单信息，均为我方（affiliate）信息而非旅客信息。
     #
@@ -109,6 +112,6 @@ supplier:
     # 关闭时行为与不带 productKey 一致（直接回报 RATE_DEAD）。改后需重启容器方生效。
     resolve-enabled: false
 
-    # resolve 换票价格容差（R-3.3）：新价 ≤ 展示价 ×(1+本值) 才许自动换票，
-    # 超出宁可 RATE_DEAD——防静默涨价成交。取值域 [0, 0.2]。
+    # resolve 换票价格容差（R-3.3 双门取严，语义同 supplier.expedia 同名两键）
     resolve-price-tolerance: 0.02
+    resolve-price-cap-cents: 2000

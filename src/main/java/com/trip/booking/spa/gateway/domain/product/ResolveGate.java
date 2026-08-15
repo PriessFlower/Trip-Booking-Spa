@@ -12,9 +12,15 @@ import java.util.function.ToIntFunction;
  *
  * <ol>
  *   <li><b>选最低</b>：一个卖法下多张在售票是常态（艺龙同卖法 ~14 码轮换），选最便宜的</li>
- *   <li><b>容差门</b>：新价 ≤ 展示价 ×(1+容差) 才放行。超出即拒绝自动换票——宁可
- *       RATE_DEAD 让上游重新查价报价，也不静默按更高价格成交</li>
+ *   <li><b>容差门（双门取严）</b>：新价 ≤ 展示价 + min(展示价 × 容差比例, 绝对帽) 才放行。
+ *       超出即拒绝自动换票——宁可 RATE_DEAD 让上游重新查价报价，也不静默按更高价格成交</li>
  * </ol>
+ *
+ * <p><b>为什么是双门</b>（issue #59）：比例门吃的是毛利——生产实测成交毛利 7~11%，
+ * 2% 容差在任意单价下都只是"利润变薄"不是亏损（比例对比例，规模无关）；但比例制的
+ * 绝对敞口随单价无界放大（5 万的单 2% = 1000 元），且实测存在毛利 3% 的薄单与负毛利单。
+ * 绝对帽的角色是<b>单笔自动让利的财务上限</b>：主流单（帽/比例 之下）完全由比例门管、
+ * 命中率不受影响；大额单的单笔让利被钉死在帽内。
  *
  * <p>展示价缺席时一律拒绝：没有基准就没有容差，自动换票的资损风险无从约束。
  * 这也是把 {@code totalPrice} 设为 resolve 前置条件的原因。
@@ -28,14 +34,16 @@ public final class ResolveGate {
     }
 
     /**
-     * @param equivalents    已按 productKey 匹配过的等价报价
-     * @param priceCents     报价 → 上游口径总价（分），必须与查价响应给上游的口径一致
-     * @param seenPriceCents 客人所见展示价（分）；null 或非正值 → 拒绝
-     * @param toleranceRatio 容差比例，如 0.02 = 2%
+     * @param equivalents       已按 productKey 匹配过的等价报价
+     * @param priceCents        报价 → 上游口径总价（分），必须与查价响应给上游的口径一致
+     * @param seenPriceCents    客人所见展示价（分）；null 或非正值 → 拒绝
+     * @param toleranceRatio    容差比例，如 0.02 = 2%
+     * @param toleranceCapCents 容差绝对帽（分）：单笔自动让利上限；非正值按 0（严格等价）
      * @return 最低价且过容差门的报价；无可用报价时 empty，调用方应回报 RATE_DEAD
      */
     public static <T> Optional<T> pickCheapestWithinTolerance(List<T> equivalents, ToIntFunction<T> priceCents,
-                                                              Integer seenPriceCents, double toleranceRatio) {
+                                                              Integer seenPriceCents, double toleranceRatio,
+                                                              int toleranceCapCents) {
         if (equivalents == null || equivalents.isEmpty()
                 || seenPriceCents == null || seenPriceCents <= 0) {
             return Optional.empty();
@@ -46,7 +54,9 @@ public final class ResolveGate {
                 cheapest = candidate;
             }
         }
-        if (priceCents.applyAsInt(cheapest) > seenPriceCents * (1 + toleranceRatio)) {
+        long ratioDriftCents = (long) Math.floor(seenPriceCents * toleranceRatio);
+        long allowedDriftCents = Math.min(ratioDriftCents, Math.max(toleranceCapCents, 0));
+        if (priceCents.applyAsInt(cheapest) > seenPriceCents + allowedDriftCents) {
             return Optional.empty();
         }
         return Optional.of(cheapest);

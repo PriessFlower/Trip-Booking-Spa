@@ -65,6 +65,14 @@ public class ExpediaRapidProperties implements InitializingBean {
     @Value("${supplier.expedia.resolve-price-tolerance:0.02}")
     private double resolvePriceTolerance = 0.02;
 
+    /**
+     * resolve 换票容差的绝对帽（分）：单笔自动让利的财务上限，与比例容差取严
+     * （issue #59：比例门吃毛利不亏损，但绝对敞口随单价放大，帽封顶大额单）。
+     * 兜底 20 元为安全侧从严（§3.3.3），运维值见 Nacos（与兜底同为 20 元，放宽须先过毛利测算）。
+     */
+    @Value("${supplier.expedia.resolve-price-cap-cents:2000}")
+    private int resolvePriceCapCents = 2000;
+
     private boolean bookingEnabled;
     private boolean productionEndpointEnabled;
     private Url url = new Url();
@@ -82,6 +90,10 @@ public class ExpediaRapidProperties implements InitializingBean {
         if (resolvePriceTolerance < 0 || resolvePriceTolerance > 0.2) {
             throw new IllegalStateException(
                     "supplier.expedia.resolve-price-tolerance must be between 0 and 0.2, but was " + resolvePriceTolerance);
+        }
+        if (resolvePriceCapCents < 0 || resolvePriceCapCents > 100000) {
+            throw new IllegalStateException(
+                    "supplier.expedia.resolve-price-cap-cents must be between 0 and 100000, but was " + resolvePriceCapCents);
         }
         URI endpoint = URI.create(url.getHost());
         boolean productionEndpoint = PRODUCTION_HOST.equalsIgnoreCase(endpoint.getHost());
@@ -176,6 +188,15 @@ public class ExpediaRapidProperties implements InitializingBean {
     /** 仅供测试构造场景使用；运行期取值由 @Value 绑定，校验见 {@link #afterPropertiesSet()} */
     public void setResolvePriceTolerance(double resolvePriceTolerance) {
         this.resolvePriceTolerance = resolvePriceTolerance;
+    }
+
+    public int getResolvePriceCapCents() {
+        return resolvePriceCapCents;
+    }
+
+    /** 仅供测试构造场景使用；运行期取值由 @Value 绑定，校验见 {@link #afterPropertiesSet()} */
+    public void setResolvePriceCapCents(int resolvePriceCapCents) {
+        this.resolvePriceCapCents = resolvePriceCapCents;
     }
 
     public boolean isBookingEnabled() {
