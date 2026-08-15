@@ -37,6 +37,22 @@ public class ExpediaRapidProperties implements InitializingBean {
      */
     @Value("${supplier.expedia.rate-plan-count:250}")
     private int ratePlanCount = 250;   // 字段初值供非 Spring 构造场景（测试）；@Value 默认值供注入场景
+
+    /**
+     * resolve 管线开关（docs/product-identity.md §3）：验价时令牌已死，是否允许按
+     * productKey 在当前现货中自动换票。默认 false 为安全侧兜底（§3.3.3）——关闭时
+     * 行为与旧实现完全一致（RATE_DEAD）。运维可调，键名归 supplier 域（§3.7.2）。
+     */
+    @Value("${supplier.expedia.resolve-enabled:false}")
+    private boolean resolveEnabled;
+
+    /**
+     * resolve 换票的价格容差（R-3.3）：新价 ≤ 展示价 ×(1+本值) 才许自动换票，
+     * 超出宁可 RATE_DEAD——防静默涨价成交。0.02 即 2%，取值域 [0, 0.2]。
+     */
+    @Value("${supplier.expedia.resolve-price-tolerance:0.02}")
+    private double resolvePriceTolerance = 0.02;
+
     private boolean bookingEnabled;
     private boolean productionEndpointEnabled;
     private Url url = new Url();
@@ -55,6 +71,10 @@ public class ExpediaRapidProperties implements InitializingBean {
         if (ratePlanCount < 1 || ratePlanCount > 250) {
             throw new IllegalStateException(
                     "supplier.expedia.rate-plan-count must be between 1 and 250, but was " + ratePlanCount);
+        }
+        if (resolvePriceTolerance < 0 || resolvePriceTolerance > 0.2) {
+            throw new IllegalStateException(
+                    "supplier.expedia.resolve-price-tolerance must be between 0 and 0.2, but was " + resolvePriceTolerance);
         }
         URI endpoint = URI.create(url.getHost());
         boolean productionEndpoint = PRODUCTION_HOST.equalsIgnoreCase(endpoint.getHost());
@@ -136,6 +156,24 @@ public class ExpediaRapidProperties implements InitializingBean {
     /** 仅供测试构造场景使用；运行期取值由 @Value 绑定，校验见 {@link #afterPropertiesSet()} */
     public void setRatePlanCount(int ratePlanCount) {
         this.ratePlanCount = ratePlanCount;
+    }
+
+    public boolean isResolveEnabled() {
+        return resolveEnabled;
+    }
+
+    /** 仅供测试构造场景使用；运行期取值由 @Value 绑定 */
+    public void setResolveEnabled(boolean resolveEnabled) {
+        this.resolveEnabled = resolveEnabled;
+    }
+
+    public double getResolvePriceTolerance() {
+        return resolvePriceTolerance;
+    }
+
+    /** 仅供测试构造场景使用；运行期取值由 @Value 绑定，校验见 {@link #afterPropertiesSet()} */
+    public void setResolvePriceTolerance(double resolvePriceTolerance) {
+        this.resolvePriceTolerance = resolvePriceTolerance;
     }
 
     public boolean isBookingEnabled() {

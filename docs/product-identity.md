@@ -51,7 +51,7 @@
 - **R-4.2 (MUST)** 无证据一律按易腐处理。成本不对称：错待稳定码=多一次现查（几百毫秒）；错待易腐码=僵尸价+丢单。
 - **R-4.3 (MUST)** `room_id` 不稳或不存在 → 现货级降级：房型身份用结构化属性（床型+容量+浴室，参照 ratehawk `rg_ext`），不进房型级目录、不参与房型级聚合。
 - **R-4.4 (MUST)** `hotel_id` 不稳 → 拒接（酒店静态映射是业务打底）。
-- **R-4.5** 首批申报（2026-08-14）：
+- **R-4.5** 首批申报（2026-08-14）。**本表是预研快照，不是免检凭证**：每家供应商实际迁入 SPA 时，必须重新核对①该供应商接口文档的原始描述、②cursor 仓内该家的对接代码与救回补丁，复核后按 R-4.1 重新申报（证据可能已过时，供应商也可能改版）：
 
 | 供应商 | 报价标识 | 腐性 | 证据 |
 |---|---|---|---|
@@ -87,9 +87,9 @@
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| 0 | 本文档落地 + 修正 architecture.md §6（rate.id 重铸论、拆解处数） | 本 PR |
-| 1 | `SupplierIdentityProfile`（申报代码化）+ `ProductKeyFactory` + 查价响应附加 productKey（零行为变化） | 本 PR |
-| 2 | resolve 管线接 Expedia（配置开关，默认关） | 待做 |
+| 0 | 本文档落地 + 修正 architecture.md §6（rate.id 重铸论、拆解处数） | ✅ PR #45 |
+| 1 | `SupplierIdentityProfile`（申报代码化）+ `ProductKeyFactory` + 查价响应附加 productKey（零行为变化） | ✅ PR #45 |
+| 2 | resolve 管线接 Expedia：验价令牌死 → 按上游携带的 productKey 现货匹配（`tryResolveByProductKey`）→ `ResolveGate` 选最低+容差门 → 换票或如实 RATE_DEAD。开关 `supplier.expedia.resolve-enabled` 默认关，关闭时行为与旧实现一致 | ✅ 已实现 |
 | 3 | 目录层通电：DDL（hint 列）+ `ExpediaProductMappingService` 改存 productKey，`global_product_supplier` 首次填充 | 待做 |
-| 4 | didatravel 接管线（现用存库码直接验价且无 2005 处理，违反 R-3.1）；huitravel 停止 rpid 落库（违反 R-2.1） | 待做 |
+| 4 | **移植标准**：cursor 供应商迁入 SPA 时必须生在新管线上——申报（§4）→ 适配层两钩子（现货查询、餐食/退改规范化）→ productKey/resolve/OfferStore 全复用。SPA 现存的非 Expedia 供应商代码（didatravel/huitravel/ratehawk/travelconnect/aichotels/meituan）均为待替换旧代码，**整包替换、不原地修补**（其中 didatravel 用存库码直接验价违反 R-3.1、huitravel rpid 落库违反 R-2.1——记录在案，由替换消灭） | 待做 |
 | 5 | 规则测试化：R-6.2 / R-2.1 写成架构约束测试，测试名带规则号 | 待做 |
