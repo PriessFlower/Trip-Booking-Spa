@@ -55,7 +55,7 @@
 
 | 供应商 | 报价标识 | 腐性 | 证据 |
 |---|---|---|---|
-| Expedia | rate_id | 稳定 | 本仓沙箱实测：跨日期/跨天不变；易腐的 `?token=` 上游已分离 |
+| Expedia | rate_id | 稳定 | 本仓测试端点实测：跨日期/跨天不变；易腐的 `?token=` 上游已分离。**跨端点（test↔生产）是否同值未证**，认证后复核 |
 | meituan | goodsId | 稳定 | 供应商文档"产品ID"；cursor 零救回代码 |
 | tourmind | RateCode | 稳定 | 供应商文档"全局唯一" |
 | greencloud | productCode | 稳定 | cursor 代码注释：无独立 token，下单沿用 productCode |
@@ -90,6 +90,6 @@
 | 0 | 本文档落地 + 修正 architecture.md §6（rate.id 重铸论、拆解处数） | ✅ PR #45 |
 | 1 | `SupplierIdentityProfile`（申报代码化）+ `ProductKeyFactory` + 查价响应附加 productKey（零行为变化） | ✅ PR #45 |
 | 2 | resolve 管线接 Expedia：验价令牌死 → 按上游携带的 productKey 现货匹配（`tryResolveByProductKey`）→ `ResolveGate` 选最低+容差门 → 换票或如实 RATE_DEAD。开关 `supplier.expedia.resolve-enabled` 默认关，关闭时行为与旧实现一致 | ✅ 已实现 |
-| 3 | 目录层通电：`supplier_product_id` 改存 productKey、新增 `supplier_quote_hint` 列（DDL：`config/mysql/alter-catalog-product-key.sql`）、UNKNOWN 不入目录、建档键与查价键同一份代码派生 | ✅ 已实现（生产填充待 DDL+发版后执行） |
+| 3 | 目录层通电：`supplier_product_id` 改存 productKey、新增 `supplier_quote_hint` 列（DDL：`config/mysql/alter-catalog-product-key.sql`）、UNKNOWN 不入目录、建档键与查价键同一份代码派生 | ✅ 已实现。**2026-08-15 全量填充经 test.ean.com 完成，属链路打通期数据**：键/属性/有货分布有效（测试端点查价为真实库存镜像，实证推断），hint 跨端点未证——认证切 api.ean.com 后重跑建档整库刷新（幂等，键不变） |
 | 4 | **移植标准**：cursor 供应商迁入 SPA 时必须生在新管线上——申报（§4）→ 适配层两钩子（现货查询、餐食/退改规范化）→ productKey/resolve/OfferStore 全复用。SPA 现存的非 Expedia 供应商代码（didatravel/huitravel/ratehawk/travelconnect/aichotels/meituan）均为待替换旧代码，**整包替换、不原地修补**（其中 didatravel 用存库码直接验价违反 R-3.1、huitravel rpid 落库违反 R-2.1——记录在案，由替换消灭） | 待做 |
 | 5 | 规则测试化：`ProductIdentityArchRulesTest`——R62_gatewayChainsMustNotReadMappingTables（扫 30 个四链路类，禁引用对照表）+ R21_perishableTokensMustNotBePersisted（扫全部 mapper XML，禁令牌字段落库） | ✅ 已实现 |

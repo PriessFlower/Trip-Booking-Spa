@@ -1,0 +1,74 @@
+package com.trip.booking.spa.gateway.application.misc;
+
+
+import com.trip.booking.spa.gateway.adapter.outbound.state.dao.mapper.UpHotelMapper;
+import com.trip.booking.spa.gateway.adapter.outbound.state.dao.entity.UpHotel;
+import com.trip.booking.spa.gateway.application.misc.UpHotelService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
+
+import java.util.List;
+
+@Service
+@Slf4j
+public class UpHotelServiceImpl implements UpHotelService {
+    @Autowired
+    private UpHotelMapper upHotelMapper;
+
+    @Override
+    public List<String> getHotelListByDistributeId(Integer distributeId) {
+
+        List<String> upHotelDTOList =
+                upHotelMapper.getHotelList(distributeId);
+
+        if (CollectionUtils.isEmpty(upHotelDTOList)) {
+            log.warn("getHotelListByDistributeId is empty");
+        }
+
+        return upHotelDTOList;
+    }
+
+    @Override
+    public UpHotel getSellerHotel(Integer distributeId, Integer supplierId, Long bgHotelId) {
+        return upHotelMapper.getSellerHotel(distributeId, supplierId, bgHotelId);
+    }
+
+    @Override
+    public Integer getSellerHotel(List<Integer> distributeIds, Integer supplierId, Long bgHotelId) {
+        return upHotelMapper.getSellerHotels(distributeIds, supplierId, bgHotelId);
+    }
+
+    @Override
+    public UpHotel delMeituanHotel(Long bgHotelId) {
+        return upHotelMapper.delMeituanHotel(bgHotelId);
+    }
+
+
+    @Override
+    public List<String> getHotelListByDistributeId(Integer distributeId, List<Integer> supplierIds) {
+        List<String> upHotelDTOList =
+                upHotelMapper.getHotelList(distributeId);
+
+        if (CollectionUtils.isEmpty(upHotelDTOList)) {
+            log.warn("getHotelListByDistributeIdAndSupplier is empty");
+        }
+
+        return upHotelDTOList;
+    }
+
+    @Override
+    public List<Long> getUpHotelListByDistributeIdAndSupplierIdAndPage(Integer distributeId, List<Integer> supplierIds, int pageNum, int pageSize) {
+        List<Long> upHotelDTOList =
+                upHotelMapper.getUpHotelListByDistributeIdAndSupplierIdAndPage(supplierIds, distributeId, pageNum, pageSize);
+
+        if (CollectionUtils.isEmpty(upHotelDTOList)) {
+            log.warn("getHotelListByDistributeIdAndSupplier is empty");
+        }
+
+        return upHotelDTOList;
+    }
+
+
+}
