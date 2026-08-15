@@ -30,13 +30,15 @@ public class ExpediaRapidProperties implements InitializingBean {
     private String ownIp = "127.0.0.1";
     private String userAgent = "trip-booking-spa/0.0.1";
     /**
-     * 查价单次返回的报价条数上限；Expedia 允许的最大值为 250（PDF p63 "rate_plan_count (max 250)"）。
-     * 我方技术调参，不属合同车道参数——车道参数见 {@link ExpediaContractProfile}。
-     * 键名归入 supplier 域而非本类的 expedia 前缀，故用 @Value 单独绑定——
-     * 域为封闭枚举，不得为单个供应商新增顶层域（§3.7.2），同 {@link #staticDataEnabled}。
+     * 查价单次返回的报价条数上限，固定取 Expedia 允许的最大值 250
+     * （PDF p63 "rate_plan_count (max 250)"）。
+     *
+     * <p><b>有意写死，不上配置面</b>（§3.8.1：无"不发版即调整"的正当运维场景）：
+     * 比价与 resolve 换票都在查价响应的现货池里找票，调小即截断票池、
+     * 降低换票命中率，而"临时调小"没有任何已知场景。上限若随 Expedia 官方
+     * 变更，随发版调整此常量。
      */
-    @Value("${supplier.expedia.rate-plan-count:250}")
-    private int ratePlanCount = 250;   // 字段初值供非 Spring 构造场景（测试）；@Value 默认值供注入场景
+    private static final int RATE_PLAN_COUNT = 250;
 
     /**
      * resolve 管线开关（docs/product-identity.md §3）：验价时令牌已死，是否允许按
@@ -77,11 +79,6 @@ public class ExpediaRapidProperties implements InitializingBean {
 
     @Override
     public void afterPropertiesSet() {
-        // @Value 绑定不经 setter，故此处校验；超出 Expedia 允许范围会被其直接拒绝
-        if (ratePlanCount < 1 || ratePlanCount > 250) {
-            throw new IllegalStateException(
-                    "supplier.expedia.rate-plan-count must be between 1 and 250, but was " + ratePlanCount);
-        }
         if (resolvePriceTolerance < 0 || resolvePriceTolerance > 0.2) {
             throw new IllegalStateException(
                     "supplier.expedia.resolve-price-tolerance must be between 0 and 0.2, but was " + resolvePriceTolerance);
@@ -160,12 +157,7 @@ public class ExpediaRapidProperties implements InitializingBean {
     }
 
     public int getRatePlanCount() {
-        return ratePlanCount;
-    }
-
-    /** 仅供测试构造场景使用；运行期取值由 @Value 绑定，校验见 {@link #afterPropertiesSet()} */
-    public void setRatePlanCount(int ratePlanCount) {
-        this.ratePlanCount = ratePlanCount;
+        return RATE_PLAN_COUNT;
     }
 
     public boolean isResolveEnabled() {
