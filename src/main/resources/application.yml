@@ -44,6 +44,18 @@ supplier:
     url-host: ${ELONG_API_HOST:https://api-test.elong.com/rest}
     version: "1.62"
 
+elong:
+  # 下单闸口——安全护栏（§3.2.3），固定本文件、禁入 Nacos。
+  #
+  # ⚠️ 艺龙与 Expedia 的关键差异：没有沙箱。api-test 网关已死（2026-08-15 实测全服务 403），
+  # 唯一可用端点即生产网关——本项打开后每一笔下单都是真实订单、真实费用（预付授信扣款）。
+  # 下单链路验收以"免费取消窗口产品下真单 + 立即取消"方式人工确认后进行。
+  # 取消（hotel.order.cancel）刻意不读本闸：已存在的真单必须永远可撤。
+  booking-enabled: false
+  # 下单 CustomerIPAddress 兜底（艺龙风控必填，缺失报 H001012）。
+  # 默认值为 cursor 生产实证过闸的出口 IP，SPA 生产可经环境变量切为腾讯云出口。
+  customer-ip-fallback: ${ELONG_CUSTOMER_IP_FALLBACK:47.92.28.195}
+
 expedia:
   # 下单闸口。开启后仅在测试端点可下单——沙箱行为，不产生费用、不生成真实预订，
   # 上线验收需要走通下单与取消链路，故打开。

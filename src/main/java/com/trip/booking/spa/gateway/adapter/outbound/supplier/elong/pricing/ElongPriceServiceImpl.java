@@ -362,6 +362,10 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         credentials.put(ElongOfferCredentials.SHOPPER_PRODUCT_ID, plan.getShopperProductId());
         credentials.put(ElongOfferCredentials.TOTAL_PRICE, totalPriceYuan.toPlainString());
         credentials.put(ElongOfferCredentials.DAY_PRICE_LIST, JsonUtils.writeObject2Json(dayPrices));
+        credentials.put(ElongOfferCredentials.CHECK_IN, request.getCheckIn());
+        credentials.put(ElongOfferCredentials.CHECK_OUT, request.getCheckOut());
+        credentials.put(ElongOfferCredentials.ADULT_COUNT,
+                String.valueOf(request.getAdultCount() == null ? 1 : request.getAdultCount()));
         String offerId = offerStore.issue(SupplierSourceEnum.ELONG.getCode(), credentials);
         if (StringUtils.isBlank(offerId)) {
             return outcome(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
