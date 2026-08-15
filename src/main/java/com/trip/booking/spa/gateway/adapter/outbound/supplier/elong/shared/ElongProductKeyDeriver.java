@@ -54,10 +54,16 @@ public class ElongProductKeyDeriver {
         CancelClass cancelClass;
         if (CollectionUtils.isEmpty(cancelPolicy)) {
             cancelClass = CancelClass.UNKNOWN;
-        } else if (cancelPolicy.stream().anyMatch(p -> Integer.valueOf(1).equals(p.getCancelType()))) {
+        } else if (cancelPolicy.stream().anyMatch(p -> Integer.valueOf(1).equals(p.getCancelType())
+                && RefundType.NO_DEDUCTION == p.getType())) {
+            // 存在免费取消窗口（R-5.1 的 FREE 判据），罚金阶梯照常跟在后面
             cancelClass = CancelClass.FREE_CANCELLABLE;
-        } else {
+        } else if (cancelPolicy.stream().allMatch(p -> Integer.valueOf(0).equals(p.getCancelType()))) {
             cancelClass = CancelClass.NON_REFUNDABLE;
+        } else {
+            // 可取消但全程收费：既非"有免费窗口"也非"全程不可退"，三分类无处安放。
+            // 按元规则 R-1.6（赌错只许少卖）归 UNKNOWN——实时可售，不进目录
+            cancelClass = CancelClass.UNKNOWN;
         }
         return ProductKeyFactory.derive(SupplierSourceEnum.ELONG.getCode(), properties.getUser(),
                 supplierHotelId, roomTypeId, mealSignature, cancelClass, occupancy);
@@ -132,9 +138,11 @@ public class ElongProductKeyDeriver {
      *       响应 interValidateInfo.CancelPolicyList 为准</li>
      * </ul>
      *
-     * <p>阶梯字段（cursor ElongCancelRuleParser 同源）：BeginTime/EndTime 为 Unix 秒；
-     * CutType 0=免费/1=固定金额/3=百分比/5=扣几晚；金额严格取 AmountRmb，缺失即整条
-     * 视为解析失败，禁止拿合约币种 Amount 冒充人民币。
+     * <p>阶梯字段（官方文档 hotel.detail「LadderParse 节点」，2026-08-15 核对；实测样本
+     * CutValue 53.72 × 夜价 ≈ AmountRmb 263.3 反算吻合）：BeginTime/EndTime 为 Unix 秒；
+     * <b>CutType 0=不扣费/1=金额/2=比例/3=首晚房费/4=全额房费</b>——注意 cursor
+     * ElongCancelRuleParser 的旧表（3=百分比/5=扣几晚）与官方文档冲突，以官方为准。
+     * 金额严格取 AmountRmb，缺失即整条视为解析失败，禁止拿合约币种 Amount 冒充人民币。
      */
     public List<CancelPolicy> convertCancelPolicy(String checkIn, JsonNode prepayResult) {
         if (prepayResult == null || prepayResult.isNull() || prepayResult.isEmpty()) {
@@ -147,13 +155,11 @@ public class ElongProductKeyDeriver {
             nonRefundable.add(CancelPolicy.builder().cancelType(0).type(RefundType.NO_CANCEL).build());
             return nonRefundable;
         }
-        if (!cancelTag.contains("免费取消") && !cancelTag.contains("限时取消")) {
-            log.info("艺龙退改规范化：CancelTag 未见已知取值，按 UNKNOWN 处理(R-5.4),cancelTag={},cancelType={}", cancelTag, cancelType);
-            return List.of();
-        }
+        // 阶梯本身语义自足（官方 CutType 表），不以 CancelTag 文案为解析前提——
+        // 实测存在"订单确认后，北京时间…前取消收取￥…"等表外文案，阶梯照样完整
         JsonNode ladders = firstArray(prepayResult, "LadderParseList", "LadderCancel", "CancelRules");
         if (ladders == null) {
-            log.info("艺龙退改规范化：可退产品缺阶梯明细，按 UNKNOWN 处理(R-5.4),cancelTag={}", cancelTag);
+            log.info("艺龙退改规范化：缺阶梯明细，按 UNKNOWN 处理(R-5.4),cancelTag={},cancelType={}", cancelTag, cancelType);
             return List.of();
         }
         List<CancelPolicy> policies = new ArrayList<>();
@@ -183,6 +189,8 @@ public class ElongProductKeyDeriver {
             log.info("艺龙退改规范化：阶梯时间无法解析,endTime={},checkIn={}", ladder.get("EndTime"), checkIn);
             return null;
         }
+        // CutType 取值以官方文档为准（0=不扣费/1=金额/2=比例/3=首晚房费/4=全额房费），
+        // 表外取值一律解析失败（R-5.4），禁止兜底
         switch (ladder.get("CutType").asInt(-1)) {
             case 0:
                 return CancelPolicy.builder().cancelType(1).timeZone(timeZone).before(before)
@@ -193,18 +201,18 @@ public class ElongProductKeyDeriver {
                 }
                 return CancelPolicy.builder().cancelType(1).timeZone(timeZone).before(before)
                         .type(RefundType.DEDUCT_BY_AMOUNT).value(ladder.get("AmountRmb").asDouble()).build();
-            case 3:
+            case 2:
                 if (!ladder.hasNonNull("CutValue")) {
                     return null;
                 }
                 return CancelPolicy.builder().cancelType(1).timeZone(timeZone).before(before)
                         .type(RefundType.DEDUCT_BY_PERCENT).value(ladder.get("CutValue").asDouble()).build();
-            case 5:
-                if (!ladder.hasNonNull("CutValue")) {
-                    return null;
-                }
+            case 3:
                 return CancelPolicy.builder().cancelType(1).timeZone(timeZone).before(before)
-                        .type(RefundType.DEDUCT_DAY_NIGHT).value(ladder.get("CutValue").asDouble()).build();
+                        .type(RefundType.DEDUCT_FIRST_NIGHT).build();
+            case 4:
+                return CancelPolicy.builder().cancelType(1).timeZone(timeZone).before(before)
+                        .type(RefundType.DEDUCT_BY_PERCENT).value(100D).build();
             default:
                 return null;
         }

@@ -269,17 +269,32 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         if (!data.isSucc()) {
             return classifyValidateError(request, plan, data);
         }
-        String resultCode = data.getResult() == null ? null : data.getResult().getResultCode();
-        if (!RESULT_CODE_OK.equalsIgnoreCase(StringUtils.trimToEmpty(resultCode))) {
-            // ResultCode 非 OK 的取值（Product/Inventory/Rate）码义未经官方文档核实，
-            // 只透传不归并（移植风险④）；待核实后才允许升级成 SOLD_OUT/RATE_DEAD
-            log.warn("艺龙验价：ResultCode 非 OK，码义未核实按不确定处理,sHotelId={},goodsUniqId={},resultCode={},errorMessage={}",
+        // ResultCode 语义（官方 hotel.data.validate 文档，2026-08-15 核对）：
+        // OK=正常可预订 / Product=产品无效或关房 / Inventory=房量不够 / Rate=价格不符。
+        // 三个失败态对本次所点报价都是确定性结果，重试同参数不会改变
+        String resultCode = StringUtils.trimToEmpty(data.getResult() == null ? null : data.getResult().getResultCode());
+        if (RESULT_CODE_OK.equalsIgnoreCase(resultCode)) {
+            return buildBookableResp(request, hotelId, plan, dayPrices, totalPriceYuan, data);
+        }
+        if ("Inventory".equalsIgnoreCase(resultCode)) {
+            log.info("艺龙验价：供应商明确房量不够,sHotelId={},goodsUniqId={},resultCode={}",
+                    hotelId, plan.getGoodsUniqId(), resultCode);
+            return outcome(CheckPriceOutcome.SOLD_OUT, "该产品已售罄");
+        }
+        if ("Product".equalsIgnoreCase(resultCode) || "Rate".equalsIgnoreCase(resultCode)) {
+            // 产品无效/关房、价格不符：该票已死，上游重新查价即可拿到换代后的报价
+            log.info("艺龙验价：产品级死态,sHotelId={},goodsUniqId={},resultCode={},errorMessage={}",
                     hotelId, plan.getGoodsUniqId(), resultCode,
                     data.getResult() == null ? null : data.getResult().getErrorMessage());
-            return outcome(CheckPriceOutcome.INDETERMINATE,
-                    "验价未通过(ResultCode=" + resultCode + ")，未能确认该产品是否可订");
+            return outcome(CheckPriceOutcome.RATE_DEAD,
+                    "该产品已不可订(ResultCode=" + resultCode + ")，请重新查价后再选择");
         }
-        return buildBookableResp(request, hotelId, plan, dayPrices, totalPriceYuan, data);
+        // 官方表外的取值只透传不归并（移植风险④）
+        log.warn("艺龙验价：ResultCode 表外取值，按不确定处理,sHotelId={},goodsUniqId={},resultCode={},errorMessage={}",
+                hotelId, plan.getGoodsUniqId(), resultCode,
+                data.getResult() == null ? null : data.getResult().getErrorMessage());
+        return outcome(CheckPriceOutcome.INDETERMINATE,
+                "验价未通过(ResultCode=" + resultCode + ")，未能确认该产品是否可订");
     }
 
     /**
@@ -310,7 +325,14 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                     request.getSHotelId(), plan.getGoodsUniqId(), errorCode, result(data));
             return outcome(CheckPriceOutcome.INDETERMINATE, "验价请求异常(" + errorCode + ")，未能确认该产品是否可订");
         }
-        // 其余（含 H001084/H001189 等码义未核实的）一律透传不归并（移植风险④）
+        if (errorCode.startsWith("H001084")) {
+            // 官方错误码表（2026-08-15 核对）：总价计算错误——我方提交的 TotalPrice 与
+            // 供应商现价不符，即该票价格已换代，重试同参数必再失败
+            log.info("艺龙验价：总价与现价不符,sHotelId={},goodsUniqId={},errorCode={}",
+                    request.getSHotelId(), plan.getGoodsUniqId(), errorCode);
+            return outcome(CheckPriceOutcome.RATE_DEAD, "该产品价格已变化(H001084)，请重新查价后再选择");
+        }
+        // 其余（含 H001189 等码义未核实的）一律透传不归并（移植风险④）
         log.warn("艺龙验价：未核实错误码，按不确定处理,sHotelId={},goodsUniqId={},code={}",
                 request.getSHotelId(), plan.getGoodsUniqId(), data.getCode());
         return outcome(CheckPriceOutcome.INDETERMINATE, "验价未通过(" + errorCode + ")，未能确认该产品是否可订");
