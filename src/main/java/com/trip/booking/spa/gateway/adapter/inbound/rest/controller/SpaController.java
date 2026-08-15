@@ -27,7 +27,8 @@ import com.trip.booking.spa.gateway.application.pricing.ProductSyncService;
 import com.trip.booking.spa.bootstrap.NacosRuntimeConfig;
 import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.util.JsonUtils;
-import com.trip.booking.spa.platform.util.SpringAppContextUtil;
+import com.trip.booking.spa.gateway.application.routing.Capability;
+import com.trip.booking.spa.gateway.application.routing.SupplierCapabilityRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.compress.utils.Lists;
@@ -61,6 +62,9 @@ public class SpaController {
     @Autowired
     private CachePriceService cachePriceService;
 
+    @Resource
+    private SupplierCapabilityRegistry capabilityRegistry;
+
     /**
      * 价格数据
      */
@@ -84,8 +88,7 @@ public class SpaController {
                 }
             } else {
                 //实时查询
-                ProductSyncService hotelService = findSupplierService(
-                        supplier.getSupplierId(), "ProductSyncService", ProductSyncService.class);
+                ProductSyncService hotelService = capabilityRegistry.find(supplier.getSupplierId(), Capability.PRICING, ProductSyncService.class);
                 if (hotelService == null) {
                     return unsupportedSupplierOperation(supplier.getSupplierId(), "price");
                 }
@@ -113,8 +116,7 @@ public class SpaController {
     @PostMapping(value = "/check")
     public ResponseDTO<CheckPriceRespDTO> checkPrice(@RequestBody @Validated CheckPriceReq checkPriceReq) {
 
-        CheckPriceSyncService checkPriceSyncService = findSupplierService(
-                checkPriceReq.getSupplierId(), "CheckPriceSyncService", CheckPriceSyncService.class);
+        CheckPriceSyncService checkPriceSyncService = capabilityRegistry.find(checkPriceReq.getSupplierId(), Capability.CHECK_PRICE, CheckPriceSyncService.class);
         if (checkPriceSyncService == null) {
             return unsupportedSupplierOperation(checkPriceReq.getSupplierId(), "check");
         }
@@ -145,8 +147,7 @@ public class SpaController {
     @PostMapping(value = "/booking")
     public ResponseDTO<BookingRespDTO> booking(@RequestBody @Validated BookingReq bookingReq) {
 
-        BookingSyncService bookingSyncService = findSupplierService(
-                bookingReq.getSupplierId(), "BookingSyncService", BookingSyncService.class);
+        BookingSyncService bookingSyncService = capabilityRegistry.find(bookingReq.getSupplierId(), Capability.BOOKING, BookingSyncService.class);
         if (bookingSyncService == null) {
             return unsupportedSupplierOperation(bookingReq.getSupplierId(), "booking");
         }
@@ -172,8 +173,7 @@ public class SpaController {
      */
     @PostMapping(value = "/cancel")
     public ResponseDTO<CancelRespDTO> cancel(@RequestBody @Validated CancelReq cancelReq) {
-        CancelSyncService cancelSyncService = findSupplierService(
-                cancelReq.getSupplierId(), "CancelSyncService", CancelSyncService.class);
+        CancelSyncService cancelSyncService = capabilityRegistry.find(cancelReq.getSupplierId(), Capability.CANCELLATION, CancelSyncService.class);
         if (cancelSyncService == null) {
             return unsupportedSupplierOperation(cancelReq.getSupplierId(), "cancel");
         }
@@ -193,8 +193,7 @@ public class SpaController {
     @PostMapping(value = "/order")
     public ResponseDTO<OrderRespDTO> orderQuery(@RequestBody @Validated OrderQueryReq orderQueryReq) {
 
-        OrderQuerySyncService orderQuerySyncService = findSupplierService(
-                orderQueryReq.getSupplierId(), "OrderQuerySyncService", OrderQuerySyncService.class);
+        OrderQuerySyncService orderQuerySyncService = capabilityRegistry.find(orderQueryReq.getSupplierId(), Capability.ORDER_QUERY, OrderQuerySyncService.class);
         if (orderQuerySyncService == null) {
             return unsupportedSupplierOperation(orderQueryReq.getSupplierId(), "order");
         }
@@ -232,18 +231,13 @@ public class SpaController {
         return ResponseDTO.success(expediaGeographyIngestionService.queryHotelIdsByRegion(cityId));
     }
 
-    private <T> T findSupplierService(Integer supplierId, String serviceSuffix, Class<T> serviceType) {
-        SupplierSourceEnum supplier = supplierId == null ? null : SupplierSourceEnum.getEnum(supplierId);
-        ApplicationContext applicationContext = SpringAppContextUtil.AppContext.getApplicationContextHolder();
-        if (supplier == null || applicationContext == null) {
-            return null;
-        }
-
-        String beanName = supplier.getDesc() + serviceSuffix;
-        if (!applicationContext.containsBean(beanName)) {
-            return null;
-        }
-        return applicationContext.getBean(beanName, serviceType);
+    /**
+     * 能力发现：供应商 × 能力矩阵。补掉 architecture.md §3.1 的在册缺口——
+     * 此前能力是隐式的,上游只能靠实际调用试探某家支不支持某操作。
+     */
+    @GetMapping(value = "/capabilities")
+    public ResponseDTO<java.util.Map<String, Object>> capabilities() {
+        return ResponseDTO.success(capabilityRegistry.capabilityMatrix());
     }
 
     private <T> ResponseDTO<T> unsupportedSupplierOperation(Integer supplierId, String operation) {

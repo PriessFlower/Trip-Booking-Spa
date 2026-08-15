@@ -133,21 +133,23 @@ legacy 的运维后门在 legacy/ops/LegacyBackDoorController（URL 与拆分前
 
 即：查价验价八家齐，下单查单只有 Expedia，取消尚未实现。
 
-### 3.1 路由靠 bean 名拼接
+### 3.1 路由与能力发现（SupplierCapabilityRegistry）
 
-`SpaController.findSupplierService` 的做法是：
+路由收口在 `gateway/application/routing/SupplierCapabilityRegistry`：启动时按
+`SupplierSourceEnum × Capability` 探测容器建好**不可变矩阵**并逐行打印
+（`能力注册: supplier=expedia(10005) capabilities=[PRICING, ...]`——哪家缺哪个
+能力,启动日志一眼可见、可检索）。bean 名约定（`<供应商desc><能力后缀>`）仍是
+底层接线方式,但拼接只存在于 Registry 一处,SpaController 只按枚举查表：
 
+```java
+capabilityRegistry.find(supplierId, Capability.BOOKING, BookingSyncService.class)
 ```
-beanName = SupplierSourceEnum.getEnum(supplierId).getDesc() + 能力后缀
-         = "expedia"                                        + "BookingSyncService"
-```
 
-然后到 Spring 容器里按名取 bean。**取不到就回报「该供应商不支持该操作」**，不抛异常。
+查不到返回 null → 上游收到「该供应商不支持该操作」,不抛异常（与历史行为一致）。
 
-这带来一个性质：**能力是隐式的**——上游只能通过实际调用来发现某家支不支持某能力，
-没有可查询的能力清单。新增供应商时只要 bean 名对得上就自动接入，无需改动 ①。
-
-> 已知缺口：没有能力发现端点。上游若要预先知道某供应商能否下单，目前只能试。
+**能力发现端点**：`GET /client/spa/capabilities` 返回供应商 × 能力矩阵——上游可以
+预先查询,不必再靠试探调用（此前的在册缺口,2026-08-15 关闭）。新增供应商时
+bean 名对得上就自动进矩阵,无需改动 ①。
 
 ## 4. 网关究竟"网关"了什么
 
@@ -302,5 +304,4 @@ bean 名必须是 `<SupplierSourceEnum.desc><能力后缀>`，否则 ① 路由�
 | 锁单（hold & resume）未使用 | `hold` 硬编码 false |
 | 统一身份 `productKey` 未实现（§6.4，设计已定稿于 `docs/product-identity.md`） | 旧列表点击会得到 `RATE_DEAD` 而非自动救回 |
 | 报价句柄成功后不作废 | 依赖 Expedia 侧 `affiliate_reference_id` 幂等兜底 |
-| 无能力发现端点（§3.1） | 上游只能靠调用来发现支不支持 |
 | 除 Expedia 外各家未做三态分类 | 它们尚无下单实现；实现前必须先补 §5 第四步 |

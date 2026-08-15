@@ -24,6 +24,10 @@ class SpaControllerUnsupportedOperationTest {
     @BeforeEach
     void setUpApplicationContext() {
         SpringAppContextUtil.AppContext.setApplicationContextHolder(mock(ApplicationContext.class));
+        // 空表 registry:find 一律返回 null → "该供应商不支持该操作",语义与旧路由一致
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                controller, "capabilityRegistry",
+                new com.trip.booking.spa.gateway.application.routing.SupplierCapabilityRegistry());
     }
 
     @AfterEach

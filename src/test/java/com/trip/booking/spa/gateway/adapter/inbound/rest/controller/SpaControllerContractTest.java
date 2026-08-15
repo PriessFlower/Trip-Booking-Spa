@@ -51,14 +51,15 @@ class SpaControllerContractTest {
         assertArrayEquals(new String[]{"/query/expediaHotelIdByCity"}, mapping.value());
     }
 
+    /** 8 = 七个业务端点 + /capabilities 能力发现(2026-08-15 新增,补 §3.1 缺口) */
     @Test
-    void exposesExactlySevenPublicOperations() {
+    void exposesExactlyEightPublicOperations() {
         long operationCount = java.util.Arrays.stream(SpaController.class.getDeclaredMethods())
                 .filter(method -> method.isAnnotationPresent(PostMapping.class)
                         || method.isAnnotationPresent(GetMapping.class))
                 .count();
 
-        assertEquals(7, operationCount);
+        assertEquals(8, operationCount);
     }
 
     private Method findMethod(String name) {
