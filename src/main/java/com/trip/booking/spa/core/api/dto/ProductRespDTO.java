@@ -17,6 +17,12 @@ public class ProductRespDTO {
 
     public String hotelId;
     public String productId;
+    /**
+     * 网关派生的稳定产品身份，标识"卖法"（等价类），跨查价不变。
+     * 与 productId（供应商报价标识，各家腐性不一）互不替代：
+     * 身份与令牌永不同字段。派生规则见 docs/product-identity.md R-1.1。
+     */
+    private String productKey;
     private String expediaRoomId;//expedia房型id
     public Integer supplierId;
     public String planSession;
