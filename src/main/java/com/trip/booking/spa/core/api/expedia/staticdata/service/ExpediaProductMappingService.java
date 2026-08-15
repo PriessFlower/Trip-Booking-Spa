@@ -152,6 +152,7 @@ public class ExpediaProductMappingService {
         boolean quoteCodeStable = SupplierIdentityProfile.forCode(SUPPLIER_ID).quoteCodeStability()
                 == SupplierIdentityProfile.QuoteCodeStability.STABLE;
         AtomicInteger skippedUnknown = new AtomicInteger();
+        AtomicInteger upserted = new AtomicInteger();
 
         result.getData().getHotelPrices().forEach(hotelPrice -> {
             if (CollectionUtils.isEmpty(hotelPrice.getRooms())) {
@@ -189,12 +190,12 @@ public class ExpediaProductMappingService {
                         .anyMatch(c -> Integer.valueOf(1).equals(c.getCancelType())) ? 1 : 0);
                 catalogMapper.upsertGlobalProductSupplier(p);
                 catalogMapper.upsertSupplierProductBase(p);
+                upserted.incrementAndGet();
             }));
         });
-        if (skippedUnknown.get() > 0) {
-            log.info("产品建档：{} 条报价餐食/退改解析不出，按 R-5.4 未入目录,hotel={}",
-                    skippedUnknown.get(), request.getProperty_id());
-        }
+        // 每酒店必打一行成果——全量建档 9.7 万家时，进度与产出全靠这行可检索
+        log.info("产品建档：hotel={},salesEnv={},写入 {} 条(等价卖法在库内归并),UNKNOWN 跳过 {} 条",
+                request.getProperty_id(), request.getSales_environment(), upserted.get(), skippedUnknown.get());
     }
 
     private static boolean isPositive(Integer count) {

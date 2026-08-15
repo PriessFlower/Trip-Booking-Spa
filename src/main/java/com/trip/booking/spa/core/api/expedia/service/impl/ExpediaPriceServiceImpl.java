@@ -576,7 +576,11 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                     return chosen.rate();
                 })
                 .orElseGet(() -> {
-                    if (!equivalents.isEmpty()) {
+                    // 未救回的两种成因必须可区分：排障时"没等价票"该查建档/键口径，"价格不合"该查容差参数
+                    if (equivalents.isEmpty()) {
+                        log.info("expedia验价：resolve 未命中——现货中无同卖法等价报价,sHotelId={},sProductId={},productKey={}",
+                                request.getSHotelId(), request.getSProductId(), request.getProductKey());
+                    } else {
                         log.info("expedia验价：存在等价报价但超出容差，拒绝自动换票,sProductId={},展示价={}分,候选最低={}分",
                                 request.getSProductId(), request.getTotalPrice(),
                                 equivalents.stream().mapToInt(ResolveCandidate::priceCents).min().orElse(-1));
