@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.trip.booking.spa.core.api.expedia.mapper.ExpediaPropertySnapshotMapper">
+<mapper namespace="com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ExpediaPropertySnapshotMapper">
 
     <!--
         取已存指纹，供摄取时判断内容是否变化。
@@ -20,7 +20,7 @@
     </select>
 
     <insert id="upsert"
-            parameterType="com.trip.booking.spa.core.api.expedia.staticdata.persistence.ExpediaPropertySnapshotRow">
+            parameterType="com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.persistence.ExpediaPropertySnapshotRow">
         INSERT INTO expedia_property_content (
             property_id, language, active, name, country_code, city, latitude, longitude, star_rating,
             source_added_at, source_updated_at, fetched_at, raw_sha256, mapping_version,

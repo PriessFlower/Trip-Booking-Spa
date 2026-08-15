@@ -9,9 +9,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @MapperScan(basePackages = {
-        "com.trip.booking.spa.core.dao.mapper",
-        "com.trip.booking.spa.core.api.ratehawk.mapper",
-        "com.trip.booking.spa.core.api.expedia.mapper"
+        "com.trip.booking.spa.gateway.adapter.outbound.state.dao.mapper",
+        "com.trip.booking.spa.gateway.adapter.outbound.state.catalog",
+        "com.trip.booking.spa.legacy.ratehawk.mapper"
 })
 @ServletComponentScan
 @EnableAsync

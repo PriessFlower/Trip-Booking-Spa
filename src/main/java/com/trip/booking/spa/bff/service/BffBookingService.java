@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.trip.booking.spa.core.api.expedia.config.ExpediaRapidProperties;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaRapidProperties;
 import com.trip.booking.spa.bff.client.RapidGateway;
 import com.trip.booking.spa.bff.client.RapidReply;
 import com.trip.booking.spa.bff.config.BffProperties;

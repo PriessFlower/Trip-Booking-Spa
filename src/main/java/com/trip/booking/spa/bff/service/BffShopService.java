@@ -10,7 +10,7 @@ import com.trip.booking.spa.bff.config.BffProperties;
 import com.trip.booking.spa.bff.offer.OfferCache;
 import com.trip.booking.spa.bff.store.PropertyContentRepo;
 import com.trip.booking.spa.bff.web.BffException;
-import com.trip.booking.spa.core.api.expedia.config.ExpediaContractProfile;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaContractProfile;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
