@@ -265,15 +265,17 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     }
 
     /**
-     * 派生稳定产品身份（docs/product-identity.md R-1.1），挂在查价响应上，纯附加。
+     * 派生稳定产品身份（docs/product-identity.md R-1.1）。<b>Expedia 键派生的唯一权威</b>：
+     * 查价响应、验价 resolve、目录建档（ExpediaProductMappingService）三处都必须经由
+     * 本方法——键分叉即身份分叉。
      *
      * <p>餐食/退改取<b>契约层转换后的口径</b>（convertMeal / convertCancelPolicy 的产物），
      * 与展示给客人的一致——resolve 换票时"不劣于"比对的就是这份口径，键与门必须同源。
      * 账号成分用 partner_point_of_sale：四个合同参数经 {@link ExpediaContractProfile}
      * 启动校验恒为一套已知档案，其中 PPOS 单值即可唯一命名该档案（R-1.3）。
      */
-    private String deriveProductKey(String supplierHotelId, String supplierRoomId, Meal meal,
-                                    List<CancelPolicy> cancelPolicy, String occupancy) {
+    public String deriveProductKey(String supplierHotelId, String supplierRoomId, Meal meal,
+                                   List<CancelPolicy> cancelPolicy, String occupancy) {
         MealSignature mealSignature = meal == null ? MealSignature.unknown()
                 : MealSignature.known(isPositive(meal.getCount()), isPositive(meal.getLunchCount()), isPositive(meal.getDinnerCount()));
         CancelClass cancelClass;
