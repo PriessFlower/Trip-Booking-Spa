@@ -39,6 +39,7 @@ public class ElongOrderQuerySyncServiceImpl
     private static final int ORDER_STATUS_BOOKING = 20;
     private static final int ORDER_STATUS_BOOK_SUCCESS = 21;
     private static final int ORDER_STATUS_BOOK_FAIL = 22;
+    private static final int ORDER_STATUS_CANCELING = 30;
     private static final int ORDER_STATUS_CANCEL_SUCCESS = 31;
 
     @Resource
@@ -112,6 +113,8 @@ public class ElongOrderQuerySyncServiceImpl
      * <ul>
      *   <li>已成立：A已确认 / C已结账 / F已入住 / B NO-SHOW（订单成立过且未取消）→ 21</li>
      *   <li>处理中：N新单 / V已审 / B1 B2 B3 待查类 / G变价 / H变更 → 20</li>
+     *   <li>取消中：E1（官方表外，真单实测 2026-08-15 单 101067194262：取消受理后
+     *       立即出现、约 30 秒后翻转为 D——即"取消处理中"）→ 30</li>
      *   <li>已取消：E取消 / D删除 / Z删除另换酒店 → 31</li>
      *   <li>未成立：O满房 / U特殊满房 → 22（下单被满房打回）</li>
      *   <li>S特殊：语义不明，不映射</li>
@@ -135,6 +138,8 @@ public class ElongOrderQuerySyncServiceImpl
             case "G":
             case "H":
                 return ORDER_STATUS_BOOKING;
+            case "E1":
+                return ORDER_STATUS_CANCELING;
             case "E":
             case "D":
             case "Z":

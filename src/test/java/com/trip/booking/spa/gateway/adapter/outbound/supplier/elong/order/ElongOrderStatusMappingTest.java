@@ -26,6 +26,12 @@ class ElongOrderStatusMappingTest {
     }
 
     @Test
+    void cancellingInFlightMapsToCanceling() {
+        // E1=取消处理中:真单实测(101067194262)取消受理后立即出现,~30 秒后翻转为 D
+        assertEquals(30, ElongOrderQuerySyncServiceImpl.mapOrderStatus("E1"));
+    }
+
+    @Test
     void cancelledStatesMapToCancelSuccess() {
         for (String s : new String[]{"E", "D", "Z"}) {
             assertEquals(31, ElongOrderQuerySyncServiceImpl.mapOrderStatus(s), s);

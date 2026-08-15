@@ -27,10 +27,14 @@ public final class ElongBookingClassifier {
      *   <li>H001084 总价计算错误——报价已换代（官方文档）</li>
      *   <li>H001097 客人姓名未通过校验（官方文档）</li>
      *   <li>H001188/H001197 请求缺马甲等必要参数（cursor 生产实证，请求被拒于校验层）</li>
+     *   <li>H000033 国籍限制——产品限定客源国籍（hotel.detail 的 RatePlan.Nat），同客人
+     *       重试必再拒。证据：2026-08-15 真单实测（SPA-REAL-20260815-01）报此码后
+     *       按我方单号反查 5 次均 H001054，确证供应商侧无单</li>
      * </ul>
      */
     private static final Set<String> CREATE_DETERMINISTIC_FAILURES = Set.of(
-            "H001012", "H001039", "H001083", "H001084", "H001097", "H001188", "H001197");
+            "H001012", "H001039", "H001083", "H001084", "H001097", "H001188", "H001197",
+            "H000033");
 
     /** 疑似重复：首单可能已成立，必须反查后再定 */
     private static final Set<String> CREATE_DUPLICATE_SUSPECTS = Set.of(

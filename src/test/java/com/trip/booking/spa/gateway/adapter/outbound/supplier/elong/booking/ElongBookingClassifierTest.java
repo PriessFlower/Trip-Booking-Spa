@@ -23,7 +23,8 @@ class ElongBookingClassifierTest {
 
     @Test
     void deterministicFailuresAreWhitelisted() {
-        for (String code : new String[]{"H001012", "H001039", "H001083", "H001084", "H001097", "H001188", "H001197"}) {
+        for (String code : new String[]{"H001012", "H001039", "H001083", "H001084", "H001097", "H001188", "H001197",
+                "H000033"}) {
             assertEquals(Classification.DETERMINISTIC_FAILURE,
                     ElongBookingClassifier.classifyCreate(create(code + "|msg", null)), code);
         }
