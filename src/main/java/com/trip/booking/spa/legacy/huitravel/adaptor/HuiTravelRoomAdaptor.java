@@ -1,0 +1,113 @@
+package com.trip.booking.spa.legacy.huitravel.adaptor;
+
+
+import com.trip.booking.spa.legacy.placeholder.hotelbase.enums.BedTypeExpediaEnum;
+import com.trip.booking.spa.legacy.placeholder.hotelinfo.dto.BedInfoDTO;
+import com.trip.booking.spa.legacy.placeholder.hotelinfo.request.SupplierRoomBaseRequest;
+import com.trip.booking.spa.legacy.huitravel.bean.hotel.detail.Room;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.compress.utils.Lists;
+import org.apache.commons.lang3.StringUtils;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+@Slf4j
+public class HuiTravelRoomAdaptor {
+    public static List<SupplierRoomBaseRequest> transform(List<Room> room, String hotelId) {
+        List<SupplierRoomBaseRequest> list = Lists.newArrayList();
+
+        room.forEach(roomVo -> {
+            SupplierRoomBaseRequest request = new SupplierRoomBaseRequest();
+            request.setSupplierId(10004);
+            request.setSupplierHotelId(hotelId);
+            request.setSupplierRoomId(roomVo.getRid() + "");
+            request.setSupplierRoomName(roomVo.getEn_name());
+            request.setSupplierRoomNameCN(roomVo.getName());
+            request.setArea(roomVo.getArea());
+            request.setCapacity(roomVo.getMax_occupancy());
+            request.setBedInfoList(convertBed(roomVo.getBed_type()));
+            request.setHasWindows(roomVo.getWindow_type() == 0 ? 2 : roomVo.getWindow_type());
+            request.setIsSmoking(0);
+            list.add(request);
+        });
+        return list;
+    }
+
+
+    private static List<List<BedInfoDTO>> convertBed(String beds) {
+        try {
+            List<List<BedInfoDTO>> list = Lists.newArrayList();
+            if (StringUtils.isEmpty(beds)) {
+                return null;
+            }
+            if (beds.contains("/")) {
+                String[] bedInfo = beds.split("/");
+                for (String bed : bedInfo) {
+                    List<BedInfoDTO> bedInfoDTOSOr = new ArrayList<>();
+                    BedInfoDTO bedInfoDTO = new BedInfoDTO();
+                    if (beds.contains(" ")) {
+                        bedInfoDTO.setBedType(convertBedName(bed.split(" ")[1]));
+                        bedInfoDTO.setBedNumber(Integer.parseInt(bed.split(" ")[0]));
+                    } else {
+                        bedInfoDTO.setBedType(convertBedName(bed));
+                        bedInfoDTO.setBedNumber(1);
+                    }
+                    bedInfoDTOSOr.add(bedInfoDTO);
+                    list.add(bedInfoDTOSOr);
+                }
+            } else if (beds.contains("或")) {
+                String[] bedInfo = beds.split("或");
+                for (String bed : bedInfo) {
+                    List<BedInfoDTO> bedInfoDTOSOr = new ArrayList<>();
+                    BedInfoDTO bedInfoDTO = new BedInfoDTO();
+                    if (beds.contains(" ")) {
+                        bedInfoDTO.setBedType(convertBedName(bed.split(" ")[1]));
+                        bedInfoDTO.setBedNumber(Integer.parseInt(bed.split(" ")[0]));
+                    } else {
+                        bedInfoDTO.setBedType(convertBedName(bed));
+                        bedInfoDTO.setBedNumber(1);
+                    }
+                    bedInfoDTOSOr.add(bedInfoDTO);
+                    list.add(bedInfoDTOSOr);
+                }
+            } else {
+                List<BedInfoDTO> bedInfoDTOSOr = new ArrayList<>();
+                BedInfoDTO bedInfoDTO = new BedInfoDTO();
+                if (beds.contains(" ")) {
+                    bedInfoDTO.setBedType(convertBedName(beds.split(" ")[1]));
+                    bedInfoDTO.setBedNumber(Integer.parseInt(beds.split(" ")[0]));
+                } else {
+                    bedInfoDTO.setBedType(convertBedName(beds));
+                    bedInfoDTO.setBedNumber(1);
+                }
+                bedInfoDTOSOr.add(bedInfoDTO);
+                list.add(bedInfoDTOSOr);
+            }
+            return list;
+        } catch (Exception e) {
+            log.error("HuiTravelRoomAdaptor.convertBed error:{}", beds, e);
+            return Collections.emptyList();
+        }
+    }
+
+    private static String convertBedName(String bedName) {
+        switch (bedName) {
+            case "单床":
+            case "单人床":
+                return BedTypeExpediaEnum.TWIN_BED.getValue() + "";
+            case "大床":
+                return BedTypeExpediaEnum.QUEEN_BED.getValue() + "";
+//            case "榻榻米":
+//                return BedTypeExpediaEnum.OTHER.getValue() + "";
+            case "特大床":
+                return BedTypeExpediaEnum.KING_BED.getValue() + "";
+            case "双人床":
+                return BedTypeExpediaEnum.FULL_BED.getValue() + "";
+            default:
+                return BedTypeExpediaEnum.OTHER.getValue() + "";
+        }
+    }
+
+}
