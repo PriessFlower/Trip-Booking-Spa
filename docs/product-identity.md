@@ -92,4 +92,4 @@
 | 2 | resolve 管线接 Expedia：验价令牌死 → 按上游携带的 productKey 现货匹配（`tryResolveByProductKey`）→ `ResolveGate` 选最低+容差门 → 换票或如实 RATE_DEAD。开关 `supplier.expedia.resolve-enabled` 默认关，关闭时行为与旧实现一致 | ✅ 已实现 |
 | 3 | 目录层通电：`supplier_product_id` 改存 productKey、新增 `supplier_quote_hint` 列（DDL：`config/mysql/alter-catalog-product-key.sql`）、UNKNOWN 不入目录、建档键与查价键同一份代码派生 | ✅ 已实现（生产填充待 DDL+发版后执行） |
 | 4 | **移植标准**：cursor 供应商迁入 SPA 时必须生在新管线上——申报（§4）→ 适配层两钩子（现货查询、餐食/退改规范化）→ productKey/resolve/OfferStore 全复用。SPA 现存的非 Expedia 供应商代码（didatravel/huitravel/ratehawk/travelconnect/aichotels/meituan）均为待替换旧代码，**整包替换、不原地修补**（其中 didatravel 用存库码直接验价违反 R-3.1、huitravel rpid 落库违反 R-2.1——记录在案，由替换消灭） | 待做 |
-| 5 | 规则测试化：R-6.2 / R-2.1 写成架构约束测试，测试名带规则号 | 待做 |
+| 5 | 规则测试化：`ProductIdentityArchRulesTest`——R62_gatewayChainsMustNotReadMappingTables（扫 30 个四链路类，禁引用对照表）+ R21_perishableTokensMustNotBePersisted（扫全部 mapper XML，禁令牌字段落库） | ✅ 已实现 |
