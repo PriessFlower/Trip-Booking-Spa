@@ -94,6 +94,9 @@ public class ElongOrderCreateRequest {
     /** 国际单必填：成人数 */
     private Integer numberOfAdults;
 
+    /** 儿童年龄（订单维度）；无儿童也传空数组——生产被接受的报文 3/3 均显式携带 [] */
+    private List<Integer> childAges;
+
     /** 国籍，默认 CN */
     private String nat;
 
@@ -141,6 +144,12 @@ public class ElongOrderCreateRequest {
     public static class Customer {
 
         private String name;
+
+        /** 名（拼音/英文）；国际单生产被接受的报文 3/3 均带 First/LastName */
+        private String firstName;
+
+        /** 姓（拼音/英文） */
+        private String lastName;
 
         private Boolean isChild;
 

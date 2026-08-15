@@ -72,6 +72,13 @@ public class ElongProperties implements InitializingBean {
     private String customerIpFallback;
 
     /**
+     * 下单 Contact.Email。生产被艺龙接受的报文 3/3 均携带固定客服邮箱（联系人邮箱
+     * 接收供应商通知，应指向运营团队而非旅客）；上游契约不含旅客邮箱，此处配置化。
+     */
+    @Value("${elong.booking-contact-email:customer_service@mail.haowan2000.com}")
+    private String bookingContactEmail;
+
+    /**
      * resolve 管线开关（docs/product-identity.md §3）：验价时报价码（GoodsUniqId）
      * 已不在现货，是否允许按 productKey 在当前现货中自动换票。默认 false 为安全侧
      * 兜底（§3.3.3）。运维可调，权威取值在 Nacos，键名归 supplier 域（§3.7.2）。
@@ -140,6 +147,10 @@ public class ElongProperties implements InitializingBean {
 
     public String getCustomerIpFallback() {
         return customerIpFallback;
+    }
+
+    public String getBookingContactEmail() {
+        return bookingContactEmail;
     }
 
     public boolean isResolveEnabled() {

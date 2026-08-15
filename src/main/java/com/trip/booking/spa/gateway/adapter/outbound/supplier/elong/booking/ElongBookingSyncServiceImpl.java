@@ -223,8 +223,11 @@ public class ElongBookingSyncServiceImpl
                 .contact(ElongOrderCreateRequest.Contact.builder()
                         .name(req.getContactName())
                         .mobile(req.getContactPhone())
+                        .email(properties.getBookingContactEmail())
                         .build())
                 .orderRooms(orderRooms)
+                // 无儿童也显式携带空数组——生产被接受的报文 3/3 均如此
+                .childAges(List.of())
                 .customerIPAddress(properties.getCustomerIpFallback())
                 .littleMajiaId(offer.credential(ElongOfferCredentials.LITTLE_MAJIA_ID))
                 .goodsUniqId(offer.credential(ElongOfferCredentials.GOODS_UNIQ_ID))
@@ -239,24 +242,37 @@ public class ElongBookingSyncServiceImpl
     }
 
     /**
-     * 入住人分配：契约的 personName 允许以 、 / ，逗号分隔多人；每间房必须 ≥1 人
+     * 入住人分配：契约的 personName 以 、 ，逗号分隔多人；每间房必须 ≥1 人
      * （艺龙校验），人数不足时复用第一位——渠道单常只有一位代表入住人。
+     *
+     * <p>单个人名内以 {@code /} 分隔"姓/名"（上游既有惯例，cursor 生产同款
+     * "wang/xianen"）：拆出 FirstName/LastName——国际单生产被艺龙接受的报文
+     * 3/3 均携带拼音姓名；无分隔符时只填 Name，交艺龙裁决。
      */
     static List<ElongOrderCreateRequest.OrderRoom> buildOrderRooms(String personName, int rooms) {
-        String[] names = StringUtils.trimToEmpty(personName).split("[,，、/]");
+        String[] names = StringUtils.trimToEmpty(personName).split("[,，、]");
         List<ElongOrderCreateRequest.OrderRoom> result = new ArrayList<>(rooms);
         for (int i = 0; i < rooms; i++) {
             String name = i < names.length && StringUtils.isNotBlank(names[i]) ? names[i].trim() : names[0].trim();
             result.add(ElongOrderCreateRequest.OrderRoom.builder()
                     .roomSequence(i + 1)
-                    .customers(List.of(ElongOrderCreateRequest.Customer.builder()
-                            .name(name)
-                            .isChild(Boolean.FALSE)
-                            .nationality("CN")
-                            .build()))
+                    .customers(List.of(buildCustomer(name)))
                     .build());
         }
         return result;
+    }
+
+    private static ElongOrderCreateRequest.Customer buildCustomer(String name) {
+        ElongOrderCreateRequest.Customer.CustomerBuilder builder = ElongOrderCreateRequest.Customer.builder()
+                .isChild(Boolean.FALSE)
+                .nationality("CN");
+        int slash = name.indexOf('/');
+        if (slash > 0 && slash < name.length() - 1) {
+            String last = name.substring(0, slash).trim();
+            String first = name.substring(slash + 1).trim();
+            return builder.name(last + first).lastName(last).firstName(first).build();
+        }
+        return builder.name(name).build();
     }
 
     private static int parseIntOrDefault(String value, int fallback) {
