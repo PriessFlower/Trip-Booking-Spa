@@ -3,7 +3,7 @@
 > **定位**：本服务是什么、分几层、接一家新供应商要做什么、以及网关究竟"网关"了什么。
 > **配套**：职责边界（吃什么／不吃什么）见 [gateway-boundary.md](gateway-boundary.md)；
 > 提交、分支、配置规范见 [../PROJECT.md](../PROJECT.md)。
-> **准确性**：本文所述均于 2026-08-11 对照代码核实。改动契约或新增能力时须同步本文。
+> **准确性**：本文所述均于 2026-08-15 对照代码核实（六边形目录重构同日落地）。改动契约或新增能力时须同步本文。
 
 ## 1. 一句话
 
@@ -47,67 +47,79 @@
 
 ### 2.1 这五层在目录里长什么样
 
-**目录不是按层组织的，而是二维的**：先按供应商分包，包内再按层分子目录。所以想从目录
-直接读出分层，会在几处被误导——见 §2.2。
+2026-08-15 六边形重构后,目录**按边界组织**(inbound=谁调我们,outbound=我们调谁):
 
 ```
-core/
-├── api/
-│   ├── common/              跨供应商公共物
-│   │   ├── access/          ④ BaseHttpAccess ← 限流唯一闸门
-│   │   ├── asynchttp/       ④ ResponseResult / IParser / BaseResponse
-│   │   ├── enums/           ② 三态枚举 + SupplierSourceEnum
-│   │   └── offer/           ⑤ OfferStore / Offer
-│   ├── dto/                 ② 出站契约  *RespDTO
-│   ├── request/             ② 入站契约  *Req
-│   ├── service/             ② 能力接口 + 5 个 Abstract*SyncSupportService 模板
-│   │   └── impl/            ③ 薄适配：8 家的「查价 + 验价」都挤在这里
-│   │
-│   ├── expedia/             ←── 每家一个包，包内按层
-│   │   ├── access/          ④ 该家 HTTP 通道
-│   │   ├── bean/            　 该家请求 / 响应模型
-│   │   ├── service/impl/    ③ 该家协议逻辑（下单 / 查单也在这）
-│   │   ├── staticdata/      ⑤ 静态数据摄取
-│   │   └── config enums mapper model utils
-│   └── ratehawk/ fastpay/ meituan/ travelconnect/
-│       didatravel/ huitravel/ aichotels/
-│                            └── access bean service adaptor utils
-├── redis/                   ⑤ RedisUtils / 限流器
-├── task/                    定时任务（刷价）
-├── dao/ config/ monitor/ ratelimit/ placeholder/ util/ exception/
-└── rest/controller/         ① 端点层  SpaController
+com/trip/booking/spa/
+├── bootstrap/                          装配(MybatisPlusConfig、NacosRuntimeConfig)
+├── gateway/
+│   ├── domain/                         ② 纯模型:键派生(product/)、申报(supplier/)、
+│   │                                      三态枚举(booking/)、共用件(shared/)
+│   ├── application/                    ② 能力接口+三态模板,按能力分包:
+│   │   │                                  pricing/ checkprice/ booking/ order/ cancellation/ misc/
+│   └── adapter/
+│       ├── inbound/
+│       │   ├── rest/                   ① SpaController · controller/ common/ dto/ request/
+│       │   │   └── ops/                ① BackDoorController(网关侧运维后门,§3.8.9 落点)
+│       │   └── scheduler/                 定时任务入口(刷价)
+│       └── outbound/
+│           ├── supplier/expedia/       ③ 按能力分子包:pricing/ checkprice/ booking/
+│           │                              order/ cancellation/ content/(原 staticdata)
+│           │                              公共件在 shared/(合同档案、签名、原始 bean)
+│           └── state/                  ⑤ offer/(OfferStore) pricecache/ catalog/(建档
+│                                          mapper) dao/(通用实体)
+├── legacy/                             旧供应商隔离区:didatravel huitravel meituan
+│                                       ratehawk travelconnect aichotels fastpay
+│                                       inittimezone placeholder ops/(旧后门,URL 不变)
+├── platform/                           ④+技术设施:http/(BaseHttpAccess=限流唯一闸门、
+│                                       asynchttp) ratelimit/ redis/ observability/
+│                                       mybatis/ util/ exception/
+└── bff/                                浏览器验收 BFF,独立边界
 ```
 
-按需定位：
+按需定位:
 
 | 想找 | 去哪 |
 |---|---|
-| 某端点入口 | `rest/controller/SpaController` |
-| 对外契约长什么样 | `core/api/dto/` + `core/api/request/` |
-| 判定纪律写在哪 | `core/api/service/Abstract*.java` |
-| 某家的错误码怎么分类 | `core/api/<家>/service/`（如 `ExpediaBookingClassifier`） |
-| 某家发什么 HTTP | `core/api/<家>/access/` |
-| 限流 / 重试 | `core/api/common/access/BaseHttpAccess` |
-| 报价句柄 | `core/api/common/offer/` |
+| 某端点入口 | `gateway/adapter/inbound/rest/controller/SpaController` |
+| 对外契约长什么样 | `inbound/rest/dto/` + `inbound/rest/request/` |
+| 判定纪律写在哪 | `gateway/application/<能力>/Abstract*.java` |
+| 键派生/腐性申报 | `gateway/domain/product/` · `gateway/domain/supplier/` |
+| Expedia 的错误码分类 | `outbound/supplier/expedia/booking/ExpediaBookingClassifier` |
+| Expedia 发什么 HTTP | `outbound/supplier/expedia/<能力>/client/` |
+| 限流 / 重试 | `platform/http/BaseHttpAccess` |
+| 报价句柄 | `outbound/state/offer/` |
 
-### 2.2 目录与分层不吻合的四处
+### 2.2 目录即边界（2026-08-15 六边形重构后）
 
-记在此处是为了让读代码的人不必自己踩一遍。**这四处都是历史沿革或疏漏，不是设计意图。**
+目录结构自本次重构起**如实反映边界**,五层与目录的对应:
 
-1. **③ 适配层裂成两处。** 同一层、同一家住两个地方：
-   `core/api/service/impl/ExpediaCheckPriceServiceImpl`（薄包装，转调下面那个）与
-   `core/api/expedia/service/impl/ExpediaPriceServiceImpl`（真正的协议逻辑）。
-   8 家的查价 / 验价薄包装全挤在共享的 `core/api/service/impl/`，厚逻辑各在自家包里。
+```
+① 端点层  gateway/adapter/inbound/rest（ops/ 收纳 §3.8.9 后门端点）
+② 契约层  gateway/domain（纯模型/枚举/键派生） + gateway/application（用例接口与三态模板）
+③ 适配层  gateway/adapter/outbound/supplier/<家>（按能力分子包:pricing/checkprice/booking/order/cancellation/content,公共件在 shared/）
+④ 通道层  platform/http（BaseHttpAccess、HttpUtils、asynchttp）+ platform/ratelimit
+⑤ 状态层  gateway/adapter/outbound/state（offer/pricecache/catalog/dao）
+其他      platform/*（纯技术设施）、bootstrap/（装配）、legacy/（旧供应商隔离区）、bff/（独立边界）
+```
 
-2. **新写的下单 / 查单没走这个两段式。** `ExpediaBookingSyncServiceImpl` 与
-   `ExpediaOrderQuerySyncServiceImpl` 直接在 `expedia/service/impl/` 继承模板，没有薄包装。
-   **约定（新增能力照此办）**：不再加薄包装——它除了多一跳没带来什么。旧的 16 个薄包装
-   （8 家 × 2 能力）应当逐步收敛掉，但那是纯重构，宜在一批发布完成后单独进行。
+**legacy/ 的纪律**:旧供应商代码的临终关怀区,迁一家删一家;gateway/platform/bootstrap
+**不得 import legacy**（架构测试 LEGACY_isolation 强制,反向依赖会让死代码永远拔不掉）。
+legacy 的运维后门在 legacy/ops/LegacyBackDoorController（URL 与拆分前一致）。
 
-3. **② 契约层散在四处**：`dto/`、`request/`、`common/enums/`、`service/`（接口）。
-   想通读一遍对外契约得跑四个目录。
+**新旧词汇对照**（第一拍只搬未改名,第二拍随 cursor 迁移逐能力演进）:
 
-4. **`adaptor` / `adapter` 拼写不一致**：`didatravel` 用 `adapter`，其余 6 家用 `adaptor`。
+| 旧 | 新位置 | 说明 |
+|---|---|---|
+| `core/api/service` 契约接口+三态模板 | `gateway/application/<能力>/` | 名称暂留 *SyncService/Abstract*,第二拍演进为 Provider/UseCase |
+| `core/api/service/impl` 16 个薄壳 | Expedia 的进自家能力包;其余进 legacy | 第二拍由 CapabilityRegistry 取代字符串拼 bean 名后消亡 |
+| `core/api/common/identity·enums·offer` | `gateway/domain/*` 与 `state/offer` | — |
+| `core/api/dto·request` | `gateway/adapter/inbound/rest/dto·request` | 对外 JSON 契约,第一拍原样直通 |
+| `core/api/expedia/**` | `outbound/supplier/expedia/<能力>/` | staticdata→content |
+| `core/util·redis·ratelimit·monitor·exception` | `platform/*` | — |
+
+历史遗留说明:旧 §2.2 记录的"四处不吻合"(薄壳分裂、契约散落四处、adaptor/adapter 拼写)
+中,前两处已由本次重构消除;拼写不一致保留在 legacy 内,随删除消亡。
 
 ## 3. 对外端点与能力矩阵
 
