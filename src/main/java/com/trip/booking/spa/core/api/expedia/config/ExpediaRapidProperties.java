@@ -42,6 +42,16 @@ public class ExpediaRapidProperties implements InitializingBean {
      * resolve 管线开关（docs/product-identity.md §3）：验价时令牌已死，是否允许按
      * productKey 在当前现货中自动换票。默认 false 为安全侧兜底（§3.3.3）——关闭时
      * 行为与旧实现完全一致（RATE_DEAD）。运维可调，键名归 supplier 域（§3.7.2）。
+     *
+     * <p>闸口三项声明（PROJECT.md §3.8.5）：
+     * <ul>
+     *   <li><b>误开的后果</b>：容差门（R-3.3）失效场景下可能按更高价自动成交；正当
+     *       关闭场景是发现资损异常时不发版止血</li>
+     *   <li><b>误关的后果</b>：令牌死的验价一律 RATE_DEAD，旅客被迫重新查价重选——
+     *       退回旧行为，不丢单、不资损，仅体验降级</li>
+     *   <li><b>生效执行面</b>：全部承载 /client/spa/check 流量的节点（所有 profile），
+     *       仅 Expedia 链路；建档与查价链路不读本开关</li>
+     * </ul>
      */
     @Value("${supplier.expedia.resolve-enabled:false}")
     private boolean resolveEnabled;

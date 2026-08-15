@@ -386,6 +386,8 @@ java -jar target/trip-booking-spa-0.0.1.jar --spring.profiles.active=dev,local \
 
 **5.1.3**　与仓内 `docs/` 的分工：wiki 承载设计定稿（跨会话、可引用、含 cursor 取证这类外部证据）；仓内 `docs/` 承载**与代码同 PR 变更的实现文档**（架构现状、接口契约、落地阶段表）。两处互链，不复制正文——两处维护必然漂移（§4.1.1 同理）。
 
+带规则编号、被代码注释与测试引用的实现规范（如 `docs/product-identity.md` 的 R-x.x），**正文只存仓内一份**；wiki 的 AI 版对其做规则索引（编号+一行摘要+链接），不得全文镜像。此时 §5.1.2 的"以 AI 版为准"落在仓内正本上。
+
 **5.1.4**　重大事故取证归档到 GitHub issue（如 #44），wiki 与 docs/ 引用其编号，不搬运内容。
 
 ---

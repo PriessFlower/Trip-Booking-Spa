@@ -530,8 +530,13 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
      * <p>匹配在已取回的查价响应上进行，不追加供应商调用——天然在时间预算内（R-3.4）。
      */
     QueryPriceResponse.Rates tryResolveByProductKey(QueryPriceResponse data, CheckPriceReq request, String occupancy) {
-        if (rapidProperties == null || !rapidProperties.isResolveEnabled()
-                || StringUtils.isBlank(request.getProductKey())) {
+        if (StringUtils.isBlank(request.getProductKey())) {
+            return null;
+        }
+        if (rapidProperties == null || !rapidProperties.isResolveEnabled()) {
+            // §3.8.4：上游明确请求了换票（带 productKey）而被闸口拒绝，必须可检索
+            log.info("闸口 supplier.expedia.resolve-enabled 关闭，拒绝按 productKey 自动换票,sHotelId={},sProductId={}",
+                    request.getSHotelId(), request.getSProductId());
             return null;
         }
         QueryPriceResponse.HotelPrice hotelPrice = data.getHotelPrices().get(0);
