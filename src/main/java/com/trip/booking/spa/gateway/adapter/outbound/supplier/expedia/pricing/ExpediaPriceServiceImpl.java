@@ -543,7 +543,8 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             }
         }
         return ResolveGate.pickCheapestWithinTolerance(equivalents, ResolveCandidate::priceCents,
-                        request.getTotalPrice(), rapidProperties.getResolvePriceTolerance())
+                        request.getTotalPrice(), rapidProperties.getResolvePriceTolerance(),
+                        rapidProperties.getResolvePriceCapCents())
                 .map(chosen -> {
                     log.info("expedia验价：令牌已死，按productKey换票成功,原sProductId={},新rateId={},新价={}分,展示价={}分",
                             request.getSProductId(), chosen.rate().getId(), chosen.priceCents(), request.getTotalPrice());

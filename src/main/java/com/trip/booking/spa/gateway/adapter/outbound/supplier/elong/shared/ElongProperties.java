@@ -104,11 +104,23 @@ public class ElongProperties implements InitializingBean {
     @Value("${supplier.elong.resolve-price-tolerance:0.02}")
     private double resolvePriceTolerance;
 
+    /**
+     * resolve 换票容差的绝对帽（分）：单笔自动让利的财务上限，与比例容差取严
+     * （issue #59：比例门吃毛利不亏损，但绝对敞口随单价放大，帽封顶大额单）。
+     * 兜底 20 元为安全侧从严（§3.3.3），运维值见 Nacos（与兜底同为 20 元，放宽须先过毛利测算）。
+     */
+    @Value("${supplier.elong.resolve-price-cap-cents:2000}")
+    private int resolvePriceCapCents;
+
     @Override
     public void afterPropertiesSet() {
         if (resolvePriceTolerance < 0 || resolvePriceTolerance > 0.2) {
             throw new IllegalStateException(
                     "supplier.elong.resolve-price-tolerance must be between 0 and 0.2, but was " + resolvePriceTolerance);
+        }
+        if (resolvePriceCapCents < 0 || resolvePriceCapCents > 100000) {
+            throw new IllegalStateException(
+                    "supplier.elong.resolve-price-cap-cents must be between 0 and 100000, but was " + resolvePriceCapCents);
         }
         // 记明端点、凭证态与下单闸，便于从启动日志确认当前姿态。
         // 艺龙无沙箱：bookingEnabled=true 即真单真费用，启动日志必须可查
@@ -159,6 +171,10 @@ public class ElongProperties implements InitializingBean {
 
     public double getResolvePriceTolerance() {
         return resolvePriceTolerance;
+    }
+
+    public int getResolvePriceCapCents() {
+        return resolvePriceCapCents;
     }
 
     /** 仅供测试构造场景使用；运行期取值由 @Value 绑定 */
