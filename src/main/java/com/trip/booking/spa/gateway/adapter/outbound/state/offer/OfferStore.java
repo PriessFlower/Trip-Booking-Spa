@@ -128,6 +128,33 @@ public class OfferStore {
         }
     }
 
+    /**
+     * 核销句柄：下单<b>确定成功</b>后调用，票据用完即焚。
+     *
+     * <p>此前句柄在下单成功后仍存活到 TTL 届满，期间同一句柄可再次取出凭据重复下单——
+     * 安全仅系于供应商侧幂等（Expedia 靠 {@code affiliate_reference_id} 拒重）。
+     * 防线必须在自己家：核销后重复下单在网关内即得到确定性失败
+     * （{@link #resolve} 返回 null →「报价已过期或不存在」），不再依赖任何一家的行为。
+     *
+     * <p><b>只在确定成功时核销</b>：FAILED（供应商侧什么都没发生）保留句柄，允许上游修正
+     * 数据后用同一报价重试；UNKNOWN 必须保留——对账与凭单反查可能仍需它，
+     * 且此刻焚票会把「结果不确定」恶化为「无从重试」。
+     *
+     * <p>删除失败仅告警不抛出：核销是收尾动作，此刻订单已成立，绝不能让收尾失败
+     * 污染已确定的成功结论；漏核销的兜底仍是供应商幂等 + TTL 自然过期。
+     */
+    public void consume(String offerId) {
+        if (StringUtils.isBlank(offerId)) {
+            return;
+        }
+        try {
+            redisUtils.remove(REDIS_KEY_PREFIX + offerId);
+            log.info("报价句柄已核销（下单成功，用完即焚） offerId={}", offerId);
+        } catch (Exception e) {
+            log.warn("报价句柄核销失败，句柄将于 TTL 自然过期 offerId={}", offerId, e);
+        }
+    }
+
     /** 供调用方回报给上游，使上游得知该报价还能撑多久 */
     public long getTtlSeconds() {
         return ttlSeconds;

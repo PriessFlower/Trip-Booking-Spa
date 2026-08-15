@@ -66,6 +66,16 @@ public class ExpediaBookingSyncServiceImpl
 
     @Override
     public BookingOutcomeHolder doBooking(BookingReq req) {
+        BookingOutcomeHolder holder = bookInternal(req);
+        // 一次性票据语义：确定成功即核销句柄，重复下单在网关内就得到确定性失败，
+        // 不再把防线寄放在供应商幂等上。FAILED/UNKNOWN 不核销——理由见 OfferStore#consume
+        if (holder != null && holder.outcome == BookingOutcome.SUCCESS) {
+            offerStore.consume(req.getOfferId());
+        }
+        return holder;
+    }
+
+    private BookingOutcomeHolder bookInternal(BookingReq req) {
         // 以下三种判定都在向 Expedia 发出任何请求之前完成，供应商侧不会发生任何事，
         // 故一律判确定失败而非「结果不确定」——上游可以放心地不去查单
         if (StringUtils.isBlank(req.getOfferId())) {
