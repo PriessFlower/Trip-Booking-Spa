@@ -49,7 +49,9 @@ ratelimit:
   # 下单与查单的配额刻意远低于查价：正常业务量下单远少于查价，给高值只会在异常时
   # 放大重复提交；而本层为快速失败，下单被自身限流挡掉会直接影响成单，故取值需宽于
   # 真实峰值——5 QPS 约合每小时 1.8 万单，远高于可预见业务量，正常运行不会触发。
-  qps: '{"GLOBAL_LIMIT:EXPEDIA:STATIC_CONTENT":15,"GLOBAL_LIMIT:EXPEDIA:STATIC_REGIONS":10,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_ORDER_PRICE":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_CREATE_ORDER":5,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_QUERY_ORDER":10}'
+  # 艺龙全账号硬额度 10 QPS（供应商契约），各接口配额之和不得超过它；
+  # 查价 7 / 验价 3——验价链路每次先重打一次查价（现取现验），查价须留大头。
+  qps: '{"GLOBAL_LIMIT:EXPEDIA:STATIC_CONTENT":15,"GLOBAL_LIMIT:EXPEDIA:STATIC_REGIONS":10,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_ORDER_PRICE":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_CREATE_ORDER":5,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_QUERY_ORDER":10,"GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES":7,"GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_ORDER_PRICE":3}'
 
 # ── supplier / expedia：静态数据摄取总开关 ──────────────────
 # ── cache：我方自建缓存 ────────────────────────────────────
@@ -98,3 +100,13 @@ supplier:
     #
     # 该邮箱同时接收 Expedia 的订单确认与取消通知，应指向运营团队可长期查收的信箱。
     booking-contact: '{"email":"2837198145@qq.com","phoneCountryCode":"86","phoneNumber":"2837198145","givenName":"NEO","familyName":"NEO","addressLine1":"Kejiyuan Road 1","city":"Shenzhen","stateProvinceCode":"GD","postalCode":"518000","countryCode":"CN"}'
+
+  elong:
+    # resolve 管线开关（docs/product-identity.md §3）：验价时所点报价码（GoodsUniqId，
+    # 会话级易腐）已不在现货，允许按上游携带的 productKey 在本会话现货中自动换等价新票。
+    # 关闭时行为与不带 productKey 一致（直接回报 RATE_DEAD）。改后需重启容器方生效。
+    resolve-enabled: false
+
+    # resolve 换票价格容差（R-3.3）：新价 ≤ 展示价 ×(1+本值) 才许自动换票，
+    # 超出宁可 RATE_DEAD——防静默涨价成交。取值域 [0, 0.2]。
+    resolve-price-tolerance: 0.02
