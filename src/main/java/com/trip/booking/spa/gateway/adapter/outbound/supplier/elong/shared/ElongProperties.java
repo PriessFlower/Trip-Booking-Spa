@@ -41,6 +41,37 @@ public class ElongProperties implements InitializingBean {
     private String version;
 
     /**
+     * 下单闸口——安全护栏（PROJECT.md §3.2.3），固定在 application.yml，禁止移入 Nacos。
+     *
+     * <p><b>艺龙与 Expedia 的关键差异：没有沙箱。</b>api-test 网关已死（2026-08-15 实测
+     * 全服务 403），唯一可用端点即生产网关——本开关打开后每一笔下单都是真实订单、
+     * 真实费用。Expedia 靠"测试端点下单免费"验收下单链路，艺龙做不到，e2e 只能以
+     * "免费取消窗口产品下真单 + 立即取消"的方式进行，且必须人工确认后执行。
+     *
+     * <p>闸口三项声明（§3.8.5）：
+     * <ul>
+     *   <li><b>误开的后果</b>：验收未完成即可能产生真实订单与真实费用（预付、我方
+     *       授信账户扣款）</li>
+     *   <li><b>误关的后果</b>：艺龙下单一律确定失败（供应商侧无任何动作），上游
+     *       可安全改单其他供应商——不丢单、不资损</li>
+     *   <li><b>生效执行面</b>：全部承载 /client/spa/booking 流量的节点（所有 profile），
+     *       仅艺龙链路；查价/验价/查单/取消不读本开关——取消刻意不设闸：
+     *       已存在的真单必须永远可撤</li>
+     * </ul>
+     */
+    @Value("${elong.booking-enabled:false}")
+    private boolean bookingEnabled;
+
+    /**
+     * 下单 CustomerIPAddress 的兜底值。艺龙以此做恶意订单风控（必填，缺失报 H001012），
+     * 而渠道流量常无终端 IP。默认值为 cursor 生产实证过闸的出口 IP
+     * （2026-08-04 单 26080422481151778fd3953b 教训）；SPA 生产切换出口后可经
+     * 环境变量改为腾讯云出口。
+     */
+    @Value("${elong.customer-ip-fallback:47.92.28.195}")
+    private String customerIpFallback;
+
+    /**
      * resolve 管线开关（docs/product-identity.md §3）：验价时报价码（GoodsUniqId）
      * 已不在现货，是否允许按 productKey 在当前现货中自动换票。默认 false 为安全侧
      * 兜底（§3.3.3）。运维可调，权威取值在 Nacos，键名归 supplier 域（§3.7.2）。
@@ -72,9 +103,10 @@ public class ElongProperties implements InitializingBean {
             throw new IllegalStateException(
                     "supplier.elong.resolve-price-tolerance must be between 0 and 0.2, but was " + resolvePriceTolerance);
         }
-        // 记明端点与凭证态，便于从启动日志确认当前打的是测试网关还是生产网关
-        log.info("艺龙接入配置: urlHost={}, productionEndpoint={}, credentialsConfigured={}",
-                urlHost, urlHost != null && urlHost.contains(PRODUCTION_HOST), isConfigured());
+        // 记明端点、凭证态与下单闸，便于从启动日志确认当前姿态。
+        // 艺龙无沙箱：bookingEnabled=true 即真单真费用，启动日志必须可查
+        log.info("艺龙接入配置: urlHost={}, productionEndpoint={}, credentialsConfigured={}, bookingEnabled={}",
+                urlHost, urlHost != null && urlHost.contains(PRODUCTION_HOST), isConfigured(), bookingEnabled);
     }
 
     /** 凭证是否齐备；未配置时艺龙链路应如实回报不可用，而非带着空签名去打供应商 */
@@ -100,6 +132,14 @@ public class ElongProperties implements InitializingBean {
 
     public String getVersion() {
         return version;
+    }
+
+    public boolean isBookingEnabled() {
+        return bookingEnabled;
+    }
+
+    public String getCustomerIpFallback() {
+        return customerIpFallback;
     }
 
     public boolean isResolveEnabled() {
