@@ -5,6 +5,7 @@ import com.trip.booking.spa.gateway.domain.product.MealSignature;
 import com.trip.booking.spa.gateway.domain.product.ProductKeyFactory;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.QueryPriceResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaContractProfile;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaProductKeyDeriver;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaRapidProperties;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,9 @@ class ExpediaResolveByProductKeyTest {
         ReflectionTestUtils.setField(profile, "partnerPointOfSale", ACCOUNT);
         ReflectionTestUtils.setField(service, "contractProfile", profile);
         ReflectionTestUtils.setField(service, "rapidProperties", properties);
+        ExpediaProductKeyDeriver deriver = new ExpediaProductKeyDeriver();
+        deriver.setContractProfile(profile);
+        ReflectionTestUtils.setField(service, "productKeyDeriver", deriver);
         return service;
     }
 

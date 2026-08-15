@@ -5,7 +5,7 @@ import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierIdentityProfile;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
-import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing.ExpediaPriceServiceImpl;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaProductKeyDeriver;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing.client.QueryProductAccess;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.request.QueryPriceRequest;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.QueryPriceResponse;
@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * R-1.1），供应商真码 rate.id 只进 {@code supplier_quote_hint}（解析快速通道，R-2.3）——
  * 此前直接把 rate.id 当 productId 存，是把令牌当身份（§6.2 禁止的形态）。三条纪律：
  * <ul>
- *   <li>键必须经 {@link ExpediaPriceServiceImpl#deriveProductKey} 派生——建档与查价/resolve
+ *   <li>键必须经 {@link ExpediaProductKeyDeriver#deriveProductKey} 派生——建档与查价/resolve
  *       同一份代码，键分叉即身份分叉</li>
  *   <li>占用是键成分：本档以建档请求的 occupancy（默认 1）派生，目录行只代表该占用下的卖法</li>
  *   <li>餐食/退改解析不出（UNKNOWN）不进目录（R-5.4），宁缺不污染等价类</li>
@@ -66,12 +66,9 @@ public class ExpediaProductMappingService {
     @Resource
     private ExpediaCatalogMapper catalogMapper;
 
-    /**
-     * 键派生与餐食/退改规范化的唯一权威（deriveProductKey / convertMeal / convertCancelPolicy）。
-     * 有意注入实现类而非接口：建档的键必须与查价/resolve 逐字节同口径，不允许第二份实现。
-     */
+    /** 键派生与餐食/退改规范化的唯一权威——建档的键必须与查价/resolve 逐字节同口径 */
     @Resource
-    private ExpediaPriceServiceImpl priceService;
+    private ExpediaProductKeyDeriver productKeyDeriver;
 
     /**
      * 照抄旧 saveOrUpdateProductInfo：指定酒店或分页全量
@@ -159,16 +156,16 @@ public class ExpediaProductMappingService {
                 return;
             }
             hotelPrice.getRooms().forEach(room -> room.getRates().forEach(rate -> {
-                Meal meal = priceService.convertMeal(adults, rate.getAmenities());
+                Meal meal = productKeyDeriver.convertMeal(adults, rate.getAmenities());
                 List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges())
                         ? List.of(CancelPolicy.builder().cancelType(0).build())
-                        : priceService.convertCancelPolicy(request.getCheckin(), rate.getCancel_penalties());
+                        : productKeyDeriver.convertCancelPolicy(request.getCheckin(), rate.getCancel_penalties());
                 // R-5.4：餐食/退改解析不出的不进目录——UNKNOWN 进了目录就会污染等价类匹配
                 if (meal == null || CollectionUtils.isEmpty(cancelPolicy)) {
                     skippedUnknown.incrementAndGet();
                     return;
                 }
-                String productKey = priceService.deriveProductKey(
+                String productKey = productKeyDeriver.deriveProductKey(
                         hotelPrice.getProperty_id(), room.getId(), meal, cancelPolicy, occupancy);
 
                 HashMap<String, Object> p = new HashMap<>();
