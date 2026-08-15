@@ -303,5 +303,4 @@ bean 名必须是 `<SupplierSourceEnum.desc><能力后缀>`，否则 ① 路由�
 | 改单、通知服务未实现 | 认证要求 |
 | 锁单（hold & resume）未使用 | `hold` 硬编码 false |
 | 统一身份 `productKey` 未实现（§6.4，设计已定稿于 `docs/product-identity.md`） | 旧列表点击会得到 `RATE_DEAD` 而非自动救回 |
-| 报价句柄成功后不作废 | 依赖 Expedia 侧 `affiliate_reference_id` 幂等兜底 |
 | 除 Expedia 外各家未做三态分类 | 它们尚无下单实现；实现前必须先补 §5 第四步 |
