@@ -14,9 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 /**
  * 钉死「所点报价是否还在」的判定。
  *
- * <p>这两个判定决定验价是否回报 RATE_DEAD。Expedia 每次查价都会重铸 rate.id，
- * 上游缓存列表、旅客几分钟后点进来时，那份报价可能已经不在——此时必须能确定地说出
- * 「这份报价没了，请重新查价」，而不是含糊地说验不过。
+ * <p>这两个判定决定验价是否回报 RATE_DEAD。rate.id 实测稳定（docs/product-identity.md
+ * E-1 修正），但报价仍会因卖法下架/未开售而消失——上游缓存列表、旅客几分钟后点进来时，
+ * 那份报价可能已经不在。此时必须能确定地说出「这份报价没了，请重新查价」，
+ * 而不是含糊地说验不过。
  */
 class ExpediaRateLookupTest {
 

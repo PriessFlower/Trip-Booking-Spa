@@ -18,6 +18,13 @@ public class CheckPriceReq {
     private String sHotelId;//供应商酒店ID
 
     private String sProductId;//供应商产品Id
+
+    /**
+     * 网关派生的稳定产品身份（查价响应透出的 productKey，docs/product-identity.md R-1.1）。
+     * 可选：携带时，若 sProductId 所指报价已不在（令牌死），网关可按它在现货中
+     * 自动换等价新票（resolve ②）；不带则维持旧行为（RATE_DEAD）。
+     */
+    private String productKey;
     @NonNull
     private String checkIn;//入住日期
     @NonNull
