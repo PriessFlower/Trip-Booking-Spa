@@ -35,9 +35,8 @@ import java.util.List;
  *   <li><b>逐店查询</b>：一行任务 = 一次 hotel.detail 调用，不批量聚合（移植风险⑤）</li>
  * </ul>
  *
- * <p>本类不决定"何时刷"——cron 在 {@code ElongCPSQueryPriceTask}，默认只在 cursor 的
- * 刷价低谷时段执行（其刷价按小时极不均匀是有意设计的错峰，低谷 0.03 QPS、
- * 高峰 4.0 QPS，实测于生产库 hotel_price_freshness）。
+ * <p>本类不决定"何时刷"——cron 在 {@code ElongCPSQueryPriceTask}，覆盖全时段；
+ * 其前置是 cursor 侧已停刷艺龙，否则两边抢额度双输。
  */
 @Slf4j
 @Service
@@ -76,7 +75,8 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
 
     private Boolean runOneRound(int priority, int temporaryUpgrade, String trigger) {
         long roundStart = System.currentTimeMillis();
-        // 兜底 0.3 QPS 为安全侧（§3.3.3）：额度与 cursor 共享，宁可刷得慢也不要互相挤兑到双输
+        // 兜底 0.3 QPS 为安全侧（§3.3.3）：若 cursor 尚未停刷，低速可避免互相挤兑到双输。
+        // 生产运行值见 Nacos（cursor 停刷后取 1.0，测算见 ElongCPSQueryPriceTask 的 cron 注释）
         double qps = environment.getProperty("task.elong-cps.qps", Double.class, 0.3);
         int batchSize = environment.getProperty("task.elong-cps.batch-size", Integer.class, 100);
         RateLimiter rateLimiter = RateLimiter.create(qps);
