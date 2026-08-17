@@ -70,4 +70,23 @@ public class CheckPriceRespDTO {
 
     private String plansId;
 
+    /**
+     * 验价时点的退改条款，仅 {@link CheckPriceOutcome#BOOKABLE} 时有值。
+     *
+     * <p>与查价响应 {@code ProductRespDTO.cancelPolicy} 同结构、同口径，但<b>以验价时点
+     * 为准</b>——查价与验价之间条款可能已变，而下单要认的是这一份。上游据此向旅客展示
+     * "几点前可免费取消"，并按 R-5.3 存入订单契约快照。
+     *
+     * <p>解析不出时为空而非猜测值（R-5.4：不确定不许说成确定）。
+     */
+    private List<CancelPolicy> cancelPolicy;
+
+    /**
+     * 验价时点的每日价明细（分），仅 {@link CheckPriceOutcome#BOOKABLE} 时有值。
+     *
+     * <p>{@link #salePrice} 是其合计。上游做逐日分摊、跨日促销核对时需要明细——
+     * 拿总价除以晚数在阶梯价场景下是错的。
+     */
+    private List<PriceInfo> priceInfos;
+
 }

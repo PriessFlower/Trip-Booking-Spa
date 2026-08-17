@@ -370,8 +370,18 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         if (StringUtils.isBlank(offerId)) {
             return outcome(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
         }
-        log.info("艺龙验价：通过并签发句柄,sHotelId={},goodsUniqId={},salePrice={}分,offerId={}",
-                hotelId, plan.getGoodsUniqId(), salePriceCents, offerId);
+        // 退改与每日价以验价时点为准（查价与验价之间条款可能已变，下单认的是这一份）；
+        // 解析不出则回落本会话查价口径，两者皆无即空——不猜（R-5.4）
+        List<CancelPolicy> cancelPolicy = productKeyDeriver.convertValidatedCancelPolicy(
+                request.getCheckIn(), validatedCancelPolicyList(data));
+        if (cancelPolicy.isEmpty()) {
+            cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), plan.getPrepayResult());
+            log.info("艺龙验价：验价响应退改不可解析，回落查价条款,sHotelId={},goodsUniqId={},回落后条数={}",
+                    hotelId, plan.getGoodsUniqId(), cancelPolicy.size());
+        }
+        List<PriceInfo> priceInfos = validatedPriceInfos(data).orElseGet(() -> buildPriceInfos(dayPrices));
+        log.info("艺龙验价：通过并签发句柄,sHotelId={},goodsUniqId={},salePrice={}分,offerId={},退改条数={},每日价条数={}",
+                hotelId, plan.getGoodsUniqId(), salePriceCents, offerId, cancelPolicy.size(), priceInfos.size());
         return CheckPriceRespDTO.builder()
                 .outcome(CheckPriceOutcome.BOOKABLE)
                 .offerId(offerId)
@@ -379,7 +389,37 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 .salePrice(salePriceCents)
                 .subPrice(salePriceCents)
                 .remainRoomNum(restInventory(data))
+                .cancelPolicy(cancelPolicy)
+                .priceInfos(priceInfos)
                 .build();
+    }
+
+    /** 验价响应里的退改分段；缺任一层级返回 null，交调用方回落 */
+    private static JsonNode validatedCancelPolicyList(ElongDataValidateResponse data) {
+        JsonNode info = data.getResult() == null ? null : data.getResult().getInterValidateInfo();
+        return info == null ? null : info.path("ratePlanInfo").path("CancelPolicyList");
+    }
+
+    /**
+     * 验后每日价：{@code RateNightlyRateList[{Rate,MinRate,Date}]} → 契约每日价（分）。
+     * Date 为带偏移的 ISO 时刻，截取日期部分与查价侧 {@code yyyy-MM-dd} 对齐。
+     */
+    private static Optional<List<PriceInfo>> validatedPriceInfos(ElongDataValidateResponse data) {
+        JsonNode info = data.getResult() == null ? null : data.getResult().getInterValidateInfo();
+        JsonNode list = info == null ? null : info.path("ratePlanInfo").path("RateNightlyRateList");
+        if (list == null || !list.isArray() || list.isEmpty()) {
+            return Optional.empty();
+        }
+        List<PriceInfo> priceInfos = new ArrayList<>();
+        for (JsonNode night : list) {
+            if (!night.hasNonNull("Rate") || !night.hasNonNull("Date")) {
+                return Optional.empty();
+            }
+            int cents = night.get("Rate").decimalValue().multiply(BigDecimal.valueOf(100)).intValue();
+            String date = StringUtils.substringBefore(night.get("Date").asText(), "T");
+            priceInfos.add(PriceInfo.builder().date(date).price(cents).roomPrice(cents).taxes(0).build());
+        }
+        return Optional.of(priceInfos);
     }
 
     /**
