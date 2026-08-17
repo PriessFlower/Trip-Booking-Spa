@@ -56,6 +56,10 @@ public class CachePriceServiceImpl implements CachePriceService {
     @Autowired
     private PriceCacheTrimmer priceCacheTrimmer;
 
+    /** TTL 分档（price-refresh.md F-4）；按入住日期远近给不同存活期 */
+    @Autowired
+    private PriceCacheTtlPolicy priceCacheTtlPolicy;
+
     private static final long ONE_DAY = 86400L;
 
     @Override
@@ -128,6 +132,25 @@ public class CachePriceServiceImpl implements CachePriceService {
         });
 
         return respDTOList;
+    }
+
+    /**
+     * 按 {@code price:{hotelId}:{date}} 里的日期分档写入（F-4）。
+     *
+     * <p>同一批数据可能横跨多个日期（一次刷价覆盖若干住期），故先按 TTL 归并再批量写，
+     * 既保证各日期用对存活期，又不至于退化成逐 key 单发。
+     *
+     * <p>解析不出日期的键归入未来档（偏长而非偏短）——TTL 判定失误不该让刚刷回来的价
+     * 立刻消失。
+     */
+    private void writeWithTieredTtl(Map<String, Map<String, String>> dataMap) {
+        Map<Long, Map<String, Map<String, String>>> byTtl = new HashMap<>();
+        dataMap.forEach((priceKey, value) -> {
+            String date = StringUtils.substringAfterLast(priceKey, ":");
+            long ttl = priceCacheTtlPolicy.ttlSeconds(date);
+            byTtl.computeIfAbsent(ttl, k -> new HashMap<>()).put(priceKey, value);
+        });
+        byTtl.forEach((ttl, batch) -> redisUtils.batchHashMapSetWithExpire(batch, ttl, TimeUnit.SECONDS));
     }
 
     /**
@@ -280,10 +303,10 @@ public class CachePriceServiceImpl implements CachePriceService {
                 });
             }
 
-            // 存储到Redis
+            // 存储到Redis。F-4：TTL 按入住日期远近分档，不再一律 1 天——
+            // 键形如 price:{hotelId}:{date}，故按 date 分组后各用各的存活期
             if (dataMap.size() > 0) {
-                // 把所有价格数据存储到redis，设置过期时间为1天，redis数据结构为hash
-                redisUtils.batchHashMapSetWithExpire(dataMap, 1, TimeUnit.DAYS);
+                writeWithTieredTtl(dataMap);
             }
             //储存除价格其他信
             // 遍历productRespCacheDTOMap，productRespCacheDTOMap里的数据存储到redis，redis数据类型为String，productRespCacheDTOMap存储的是整条产品的基本信息，有效时间为3天
@@ -294,7 +317,8 @@ public class CachePriceServiceImpl implements CachePriceService {
             }
 
             if (!downDataMap.isEmpty()) {
-                redisUtils.batchHashMapSetWithExpire(downDataMap, 1, TimeUnit.DAYS);
+                // 下架标记与价格同档：它代表"该产品此刻无价"，同样应随日期远近失效
+                writeWithTieredTtl(downDataMap);
             }
         } catch (Exception e) {
             log.error("productToCache error:", e);
