@@ -16,5 +16,15 @@ public interface ElongPriceService {
 
     List<ProductRespDTO> queryPrices(PriceReq request, Supplier supplier);
 
+    /**
+     * 查价并把结果写入价格缓存，供刷价任务调用。
+     *
+     * <p>与 {@link #queryPrices} 的唯一区别是多一步落缓存——查价逻辑本身不分叉，
+     * 免得刷价与实时查价的口径漂移（productKey、退改、餐食必须同源）。
+     *
+     * @return 与 queryPrices 同；调用失败或该店当日无在售时分别为 null / 空列表
+     */
+    List<ProductRespDTO> queryPricesCache(PriceReq request, Supplier supplier);
+
     CheckPriceRespDTO checkPrices(CheckPriceReq request);
 }
