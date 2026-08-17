@@ -383,6 +383,15 @@ jobs:
           EXPEDIA_API_KEY: ${{ secrets.PROD_EXPEDIA_API_KEY }}
           EXPEDIA_SHARED_SECRET: ${{ secrets.PROD_EXPEDIA_SHARED_SECRET }}
           EXPEDIA_API_HOST: ${{ vars.PROD_EXPEDIA_API_HOST }}
+          # 艺龙。与 Expedia 不同，凭证缺失不拦部署——ElongProperties.isConfigured()
+          # 判定后只停艺龙链路，其余供应商照常，故不列入下方 required_values。
+          # 反过来说：这几项配错或漏配不会有部署期报错，只会在启动日志里体现为
+          # credentialsConfigured=false，上线后须按附录 A.3 核对该行。
+          ELONG_USER: ${{ secrets.PROD_ELONG_USER }}
+          ELONG_APP_KEY: ${{ secrets.PROD_ELONG_APP_KEY }}
+          ELONG_SECRET: ${{ secrets.PROD_ELONG_SECRET }}
+          ELONG_API_HOST: ${{ vars.PROD_ELONG_API_HOST }}
+          ELONG_CUSTOMER_IP_FALLBACK: ${{ vars.PROD_ELONG_CUSTOMER_IP_FALLBACK }}
         run: |
           set -Eeuo pipefail
 
@@ -433,6 +442,11 @@ jobs:
             printf 'EXPEDIA_API_KEY=%s\n' "$EXPEDIA_API_KEY"
             printf 'EXPEDIA_SHARED_SECRET=%s\n' "$EXPEDIA_SHARED_SECRET"
             printf 'EXPEDIA_API_HOST=%s\n' "$EXPEDIA_API_HOST"
+            printf 'ELONG_USER=%s\n' "$ELONG_USER"
+            printf 'ELONG_APP_KEY=%s\n' "$ELONG_APP_KEY"
+            printf 'ELONG_SECRET=%s\n' "$ELONG_SECRET"
+            printf 'ELONG_API_HOST=%s\n' "$ELONG_API_HOST"
+            printf 'ELONG_CUSTOMER_IP_FALLBACK=%s\n' "$ELONG_CUSTOMER_IP_FALLBACK"
           } | ssh -F "$RUNNER_TEMP/trip-booking-spa-deploy-ssh/config" production \
             'set -Eeuo pipefail; app_dir=/opt/trip-booking-spa; install -d -m 700 "$app_dir"; umask 077; cat > "$app_dir/app.env.next"'
 
