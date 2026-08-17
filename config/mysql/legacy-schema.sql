@@ -73,3 +73,29 @@ CREATE TABLE IF NOT EXISTS supplier_hotel_id_list (
     PRIMARY KEY (id),
     KEY idx_supplier_hotel (supplier_id, s_hotel_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='供应商酒店ID清单';
+
+-- 艺龙价格预热任务队列（ElongQueryPriceTaskMapper.xml）
+--
+-- 与 Expedia/RateHawk 同构，故沿用其列名与索引，便于共用运维习惯。两点艺龙特有：
+--   1. 逐店查询：hotel.detail 非大陆仅支持 1 家/次（官方文档），混批会返回假空
+--      Rooms=[] 被误当无房，故本表一行 = 一次调用，不做批量聚合；
+--   2. 额度共享：艺龙 10 QPS 是账号级硬额度，与 tg-trip-cursor 的刷价共用同一份。
+--      2026-08-17 生产实测：0.62 QPS 时查价成功率 73%，降至约 0.4 QPS 后 92%，
+--      失败几乎全是 A201010001（访问太频繁）。故速率不由本表控制，而由
+--      Nacos ratelimit.qps 的 GLOBAL_LIMIT:ELONG:* 与任务侧 task.elong-cps.qps 共同约束。
+CREATE TABLE IF NOT EXISTS elong_query_price_task (
+    id                    BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    sh_id                 VARCHAR(64)  NOT NULL COMMENT '艺龙酒店id（HotelId）',
+    delay_check_in        INT          NOT NULL DEFAULT 0 COMMENT '入住日期偏移(天)',
+    delay_check_out       INT          NOT NULL DEFAULT 1 COMMENT '离店日期偏移(天)',
+    query_count           INT          NOT NULL DEFAULT 0 COMMENT '已查价次数',
+    create_time           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    last_time             DATETIME     NULL COMMENT '最近一次查价时间',
+    priority_level_number INT          NOT NULL DEFAULT 0 COMMENT '优先级',
+    temporary_upgrade     INT          NOT NULL DEFAULT 0 COMMENT '临时提升优先级 0否 1是',
+    upgrade_deadline      DATETIME     NULL COMMENT '临时优先级截止时间',
+    PRIMARY KEY (id),
+    KEY idx_priority_update (priority_level_number, update_time),
+    KEY idx_sh_id (sh_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='艺龙查价预热任务队列';

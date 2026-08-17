@@ -15,6 +15,19 @@ task:
     qps: 10                   # 调用方配额层：刷价时的查价速率，须小于 ratelimit.qps 对应项
     batch-size: 1000          # 单轮取任务上限。清单总行数 / 本值 = 刷完一遍所需轮数
 
+  # 艺龙刷价：结构同上。额度与 tg-trip-cursor 的艺龙刷价【共用同一个 10 QPS 账号配额】，
+  # 故 enabled=true 的前置是【cursor 侧已停刷艺龙】——2026-08-17 生产实测，
+  # 速率 0.62 QPS 时查价成功率仅 73%，降到约 0.4 QPS 后 92%，掉的全是 A201010001（访问太频繁）。
+  #
+  # qps=1.0 × batch-size=500 × 每 10 分钟一轮 ≈ 每天 7.2 万条，
+  # 对艺龙库 23,584 家即每天全量覆盖三轮（cursor 现状为 24h 刷 45,235 条 / 16,998 家）。
+  # 调整前先看刷价日志的"失败="计数：那是频控命中的直接指标。
+  elong-cps:
+    enabled: false
+    cron: '0 0/10 * * * ?'    # 每 10 分钟一轮（cron 仅启动时读取，改后需重启）
+    qps: 1.0                  # 调用方配额层，须小于 ratelimit.qps 的 ELONG 查价项(5)
+    batch-size: 500
+
   # RateHawk 刷价：结构同上
   ratehawk-cps:
     enabled: false
