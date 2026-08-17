@@ -383,6 +383,19 @@ jobs:
           EXPEDIA_API_KEY: ${{ secrets.PROD_EXPEDIA_API_KEY }}
           EXPEDIA_SHARED_SECRET: ${{ secrets.PROD_EXPEDIA_SHARED_SECRET }}
           EXPEDIA_API_HOST: ${{ vars.PROD_EXPEDIA_API_HOST }}
+          # 艺龙。与 Expedia 同规：凭证与端点缺一即拒绝部署（见下方 required_values）。
+          # 不为"缺了只停这一家"网开一面——那正是附录 A 反复警告的静默降级：服务照常
+          # 启动、日志一片祥和，故障要等真实流量打上来才暴露。此处尤其危险，因为
+          # ELONG_API_HOST 的代码兜底值是测试端点，而艺龙 api-test 已于 2026-08-15
+          # 实测全服务 403——漏配的后果不是"艺龙没开"，是"艺龙每次查价都失败"。
+          #
+          # CUSTOMER_IP_FALLBACK 有意不列入：它有可用的代码兜底（cursor 生产实证过闸
+          # 的出口 IP），缺失只是少一次风控优化，不会导致链路失效。
+          ELONG_USER: ${{ secrets.PROD_ELONG_USER }}
+          ELONG_APP_KEY: ${{ secrets.PROD_ELONG_APP_KEY }}
+          ELONG_SECRET: ${{ secrets.PROD_ELONG_SECRET }}
+          ELONG_API_HOST: ${{ vars.PROD_ELONG_API_HOST }}
+          ELONG_CUSTOMER_IP_FALLBACK: ${{ vars.PROD_ELONG_CUSTOMER_IP_FALLBACK }}
         run: |
           set -Eeuo pipefail
 
@@ -391,6 +404,7 @@ jobs:
             REDIS_HOST REDIS_PORT
             NACOS_SERVER_ADDR NACOS_NAMESPACE NACOS_USERNAME NACOS_PASSWORD
             SERVER_ADDRESS EXPEDIA_API_KEY EXPEDIA_SHARED_SECRET EXPEDIA_API_HOST
+            ELONG_USER ELONG_APP_KEY ELONG_SECRET ELONG_API_HOST
           )
 
           for name in "${required_values[@]}"; do
@@ -415,6 +429,14 @@ jobs:
             exit 1
           fi
 
+          # 艺龙测试网关已于 2026-08-15 实测全服务 403，指向它等于每次调用都失败。
+          # 代码兜底值恰是该测试端点（安全侧默认，§3.3.3），故生产必须显式覆盖——
+          # 这里挡住"忘了覆盖"这一种漏配。
+          if [ "$ELONG_API_HOST" != https://api.elong.com/rest ]; then
+            echo "ELONG_API_HOST must point to the production gateway https://api.elong.com/rest (the test gateway is defunct)." >&2
+            exit 1
+          fi
+
           {
             printf 'SPRING_PROFILES_ACTIVE=prod\n'
             printf 'DB_HOST=%s\n' "$DB_HOST"
@@ -433,6 +455,11 @@ jobs:
             printf 'EXPEDIA_API_KEY=%s\n' "$EXPEDIA_API_KEY"
             printf 'EXPEDIA_SHARED_SECRET=%s\n' "$EXPEDIA_SHARED_SECRET"
             printf 'EXPEDIA_API_HOST=%s\n' "$EXPEDIA_API_HOST"
+            printf 'ELONG_USER=%s\n' "$ELONG_USER"
+            printf 'ELONG_APP_KEY=%s\n' "$ELONG_APP_KEY"
+            printf 'ELONG_SECRET=%s\n' "$ELONG_SECRET"
+            printf 'ELONG_API_HOST=%s\n' "$ELONG_API_HOST"
+            printf 'ELONG_CUSTOMER_IP_FALLBACK=%s\n' "$ELONG_CUSTOMER_IP_FALLBACK"
           } | ssh -F "$RUNNER_TEMP/trip-booking-spa-deploy-ssh/config" production \
             'set -Eeuo pipefail; app_dir=/opt/trip-booking-spa; install -d -m 700 "$app_dir"; umask 077; cat > "$app_dir/app.env.next"'
 
