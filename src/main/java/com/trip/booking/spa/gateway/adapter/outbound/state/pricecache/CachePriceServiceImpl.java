@@ -26,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +47,10 @@ public class CachePriceServiceImpl implements CachePriceService {
 
     @Autowired
     private RedisUtils redisUtils;
+
+    /** 异常价拦截（price-refresh.md F-7）；供应商通用，接一家新供应商即自动受保护 */
+    @Autowired
+    private AbnormalPriceGuard abnormalPriceGuard;
 
     private static final long ONE_DAY = 86400L;
 
@@ -121,6 +126,33 @@ public class CachePriceServiceImpl implements CachePriceService {
         return respDTOList;
     }
 
+    /**
+     * 取缓存中该产品该日期的上一轮价（分），供 F-7 异常价拦截作基准。
+     *
+     * <p>取不到一律返回 null（首刷、键已过期、值为下架标记 0、内容不可解析），
+     * 由 {@link AbnormalPriceGuard} 按"无基准即放行"处理——没有依据就不该拦，
+     * 拦掉首刷会让新产品永远进不了缓存。
+     */
+    private Integer cachedPriceCents(String priceKey, String productId) {
+        try {
+            Map<String, String> cached = redisUtils.hashMapGet(priceKey);
+            if (MapUtils.isEmpty(cached)) {
+                return null;
+            }
+            String json = cached.get(productId);
+            if (StringUtils.isBlank(json) || "0".equals(json)) {
+                return null;
+            }
+            Map<String, Integer> priceMap = JsonUtils.decodeJson(json, new TypeReference<>() {
+            });
+            return priceMap == null ? null : priceMap.get("price");
+        } catch (Exception e) {
+            // 读不到基准不该阻断刷价：拿不到旧价就放行新价，等同于本次不做拦截
+            log.warn("异常价拦截：读取基准价失败，本次放行,priceKey={},productId={}", priceKey, productId);
+            return null;
+        }
+    }
+
     @Override
     public void productToCache(List<ProductRespDTO> list, PriceReq request) {
         try {
@@ -138,6 +170,10 @@ public class CachePriceServiceImpl implements CachePriceService {
             Map<String, Set<String>> cacheProductPriceMap = Maps.newHashMap();
             // 没有报价要下线集合
             Map<String, Map<String, String>> downDataMap = Maps.newHashMap();
+            // 被 F-7 拦下的产品（priceKey → productId 集合）。它们不进 dataMap，
+            // 但【绝不能被下架逻辑当成"本轮无价"而置 0】——那等于把"疑似错价"恶化成
+            // "确定无货"，比不拦截更糟。故单独记一份，供下方下架判断排除
+            Map<String, Set<String>> interceptedMap = Maps.newHashMap();
 
             List<String> dateSet = DateUtil.getDatesBetween(request.getCheckIn(), request.getCheckout());
 
@@ -192,6 +228,16 @@ public class CachePriceServiceImpl implements CachePriceService {
                     // 这个for用来处理变价的逻辑
                     infos.forEach(i -> {
                         String priceKey = RedisKeyUtils.buildPriceKey(productRespDTO.getHotelId(), i.getDate()); // rediskey:price:hotelid:date
+                        // F-7 异常价拦截：新价相对缓存中的上一轮价暴跌时拒绝写入、保留旧价。
+                        // 放在写 dataMap 之前——一旦进了 dataMap 就会被批量写进 Redis，届时错价已对外可见
+                        Integer oldCents = cachedPriceCents(priceKey, productRespDTO.getProductId());
+                        if (abnormalPriceGuard.isAbnormalDrop(oldCents, i.getPrice())) {
+                            abnormalPriceGuard.logIntercepted(productRespDTO.getHotelId(),
+                                    productRespDTO.getProductId(), i.getDate(), oldCents, i.getPrice());
+                            interceptedMap.computeIfAbsent(priceKey, k -> Sets.newHashSet())
+                                    .add(productRespDTO.getProductId());
+                            return;
+                        }
                         //priceJson：{"brokerage":2317,"roomPrice":12728,"price":14658,"storePayPrice":null,"taxes":1930,"stayPrice":0}
                         dataMap.computeIfAbsent(priceKey, k -> new HashMap<>()).put(productRespDTO.getProductId(), convertPriceJsonStr(productRespDTO, i));
                     });
@@ -200,14 +246,21 @@ public class CachePriceServiceImpl implements CachePriceService {
 
             if (MapUtils.isNotEmpty(cacheProductPriceMap)) {
                 cacheProductPriceMap.forEach((key, value) -> {
+                    Set<String> intercepted = interceptedMap.getOrDefault(key, Collections.emptySet());
                     if (MapUtils.isEmpty(dataMap.get(key))) {
                         for (String productId : value) {
+                            if (intercepted.contains(productId)) {
+                                continue;
+                            }
                             Map<String, String> zeroPriceMap = Maps.newHashMap();
                             zeroPriceMap.put(productId, convertPriceJsonStr(null, null));
                             downDataMap.put(key, zeroPriceMap);
                         }
                     } else {
                         for (String productId : value) {
+                            if (intercepted.contains(productId)) {
+                                continue;
+                            }
                             if (StringUtils.isBlank(dataMap.get(key).get(productId))) {
                                 Map<String, String> zeroPriceMap = Maps.newHashMap();
                                 zeroPriceMap.put(productId, convertPriceJsonStr(null, null));
