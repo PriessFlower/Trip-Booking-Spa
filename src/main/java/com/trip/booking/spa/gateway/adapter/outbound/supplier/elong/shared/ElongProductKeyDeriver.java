@@ -17,9 +17,12 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
-import java.text.SimpleDateFormat;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 /**
@@ -38,6 +41,9 @@ import java.util.List;
 @Slf4j
 @Component
 public class ElongProductKeyDeriver {
+
+    /** 艺龙全量时刻以北京时间报出（阶梯 EndTime、CancelPolicyList 的 DateTo 均然） */
+    private static final ZoneOffset ELONG_ZONE = ZoneOffset.ofHours(8);
 
     @Resource
     private ElongProperties properties;
@@ -174,6 +180,76 @@ public class ElongProductKeyDeriver {
         return policies;
     }
 
+    /**
+     * 验价响应的退改 → 契约条款。数据源 {@code interValidateInfo.ratePlanInfo.CancelPolicyList}，
+     * <b>这是验价时点的权威条款</b>（查价的 PrepayResult 可能已过时）。
+     *
+     * <p>结构与查价侧完全不同，故单开一个方法（2026-08-17 抓取生产真实响应确认）：
+     * <pre>
+     * [{"Penalty":0.0,   "PenaltyRMB":0.0,   "DateFrom":"1970-01-01T00:00:00+08:00","DateTo":"2026-08-21T18:00:00+08:00"},
+     *  {"Penalty":42.07, "PenaltyRMB":42.07, "DateFrom":"2026-08-21T18:00:00+08:00","DateTo":"2099-12-31T00:00:00+08:00"}]
+     * </pre>
+     * 语义是<b>时间段</b>而非阶梯点：在 {@code [DateFrom, DateTo)} 内取消收 {@code PenaltyRMB}。
+     * 上例即"08-21 18:00 前免费，之后收 42.07 元"。
+     *
+     * <p>转换口径与 {@link #convertCancelPolicy} 保持一致：{@code before} = 该段截止时刻距
+     * 入住日 24:00 的小时数（下限 25，同查价侧）；罚金为 0 记 {@link RefundType#NO_DEDUCTION}，
+     * 否则记 {@link RefundType#DEDUCT_BY_AMOUNT}。末段 DateTo 恒为 2099（表示"此后一直"），
+     * 算出的负值由下限兜住。
+     *
+     * <p>金额只认 {@code PenaltyRMB}：{@code Penalty} 是合约币种，跨币种直接当人民币用会算错
+     * 罚金——与查价侧只认 {@code AmountRmb} 同一条纪律。
+     *
+     * @return 解析不出返回空列表（R-5.4），调用方不得据此声称"可免费取消"
+     */
+    public List<CancelPolicy> convertValidatedCancelPolicy(String checkIn, JsonNode cancelPolicyList) {
+        if (cancelPolicyList == null || !cancelPolicyList.isArray() || cancelPolicyList.isEmpty()) {
+            return List.of();
+        }
+        List<CancelPolicy> policies = new ArrayList<>();
+        for (JsonNode seg : cancelPolicyList) {
+            if (!seg.hasNonNull("PenaltyRMB") || !seg.hasNonNull("DateTo")) {
+                log.info("艺龙验价退改：分段缺 PenaltyRMB/DateTo，整体按 UNKNOWN 处理(R-5.4),seg={}", seg);
+                return List.of();
+            }
+            Integer before = hoursBeforeCheckIn(seg.get("DateTo").asText(), checkIn);
+            if (before == null) {
+                log.info("艺龙验价退改：DateTo 无法解析，整体按 UNKNOWN 处理(R-5.4),dateTo={}", seg.get("DateTo").asText());
+                return List.of();
+            }
+            double penalty = seg.get("PenaltyRMB").asDouble();
+            policies.add(penalty <= 0
+                    ? CancelPolicy.builder().cancelType(1).timeZone("GMT+08:00").before(before)
+                            .type(RefundType.NO_DEDUCTION).build()
+                    : CancelPolicy.builder().cancelType(1).timeZone("GMT+08:00").before(before)
+                            .type(RefundType.DEDUCT_BY_AMOUNT).value(penalty).build());
+        }
+        return policies;
+    }
+
+    /** ISO 带偏移时刻（如 2026-08-21T18:00:00+08:00）距入住日 24:00 的小时数；下限 25，同查价侧 */
+    private static Integer hoursBeforeCheckIn(String isoInstant, String checkIn) {
+        try {
+            return hoursUntilCheckInEnd(OffsetDateTime.parse(isoInstant).toInstant(), checkIn);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 某时刻距「入住日 24:00」的小时数（下限 25）。
+     *
+     * <p><b>入住日 24:00 一律按 {@link #ELONG_ZONE} 解释，不用服务器时区</b>。
+     * 艺龙的全部时刻（阶梯 EndTime、CancelPolicyList 的 DateTo）都以北京时间报出，
+     * 而基准若随服务器时区漂移，同一份条款在不同机器上会算出不同的 before——
+     * 生产容器实际跑在 UTC（2026-08-17 实测），偏 8 小时，会把"还能免费取消多久"
+     * 说长，旅客据此在窗口外取消就要挨罚金。
+     */
+    private static int hoursUntilCheckInEnd(Instant at, String checkIn) {
+        Instant checkInEnd = LocalDate.parse(checkIn).plusDays(1).atStartOfDay(ELONG_ZONE).toInstant();
+        return Math.max(25, (int) Math.ceil(Duration.between(at, checkInEnd).toMinutes() / 60.0));
+    }
+
     /** 单条阶梯 → CancelPolicy；缺时间、缺 AmountRmb、CutType 未知一律返回 null（解析失败） */
     private CancelPolicy convertLadder(String checkIn, JsonNode ladder) {
         if (!ladder.hasNonNull("EndTime") || !ladder.hasNonNull("CutType")) {
@@ -182,9 +258,9 @@ public class ElongProductKeyDeriver {
         int before;
         String timeZone = "GMT+08:00";
         try {
-            Date end = new Date(ladder.get("EndTime").asLong() * 1000L);
-            Date checkInEnd = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(checkIn + " 24:00:00");
-            before = Math.max(25, DateUtil.diffHour(end, checkInEnd));
+            // EndTime 是 Unix 秒（绝对时刻）；基准「入住日 24:00」按北京时间解释，
+            // 理由见 hoursUntilCheckInEnd —— 用服务器时区会随部署环境漂移
+            before = hoursUntilCheckInEnd(Instant.ofEpochSecond(ladder.get("EndTime").asLong()), checkIn);
         } catch (Exception e) {
             log.info("艺龙退改规范化：阶梯时间无法解析,endTime={},checkIn={}", ladder.get("EndTime"), checkIn);
             return null;
