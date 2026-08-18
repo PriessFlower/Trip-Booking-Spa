@@ -42,7 +42,7 @@
 
 **1.1.3**　`scope` 可选，取值为供应商名或模块名，必须小写。跨模块或全局性改动应当省略 `scope`，禁止为凑格式而填写无意义的值。
 
-现有取值：`expedia`　`ratehawk`　`meituan`　`huitravel`　`didatravel`　`aichotels`　`fastpay`　`amap`　`cache`　`task`　`ratelimit`　`catalog`　`geo`　`db`　`deploy`
+现有取值：`expedia`　`elong`　`amap`　`cache`　`task`　`ratelimit`　`catalog`　`geo`　`db`　`deploy`
 
 新增取值可以直接使用，不需预先登记；但应当复用已有取值，避免同义词泛滥（例如已有 `cache` 就不应再用 `caching`）。
 
@@ -296,7 +296,7 @@ java -jar target/trip-booking-spa-0.0.1.jar --spring.profiles.active=dev,local \
 | `task` | 这是由定时任务驱动的吗？ | `task.expedia-cps.enabled` |
 | `ratelimit` | 这是在控制调用外部接口的速率吗？ | `ratelimit.default-qps` |
 | `cache` | 这是在控制**我方自己**的缓存吗？ | `cache.price.hotels` |
-| `supplier` | 这是发给某供应商、或只对某家生效**且运维可调**的吗？ | `supplier.didatravel.real-time-price` |
+| `supplier` | 这是发给某供应商、或只对某家生效**且运维可调**的吗？ | `supplier.elong.resolve-enabled` |
 | `<供应商名>` | 这是该供应商的**安全护栏**（§3.2.3）或**启动必需**的技术参数吗？——即固定在 `application*.yml`、禁入 Nacos、改它必须发版 | `elong.booking-enabled`　`expedia.url.host` |
 
 **3.7.2.1 `supplier.<家>` 与 `<家>` 的分工**　同一家供应商的配置按**改它要不要发版**分到两个域，前缀即去向：
@@ -380,7 +380,7 @@ java -jar target/trip-booking-spa-0.0.1.jar --spring.profiles.active=dev,local \
 | 不用改，但涉及数据存哪儿、存多久、何时作废 | — | 状态层 |
 | 不用改，且只是对外契约的形状或判定纪律 | — | 契约层 |
 
-**4.1.4**　**目录即边界声明**（2026-08-15 六边形重构起）：`gateway/domain·application·adapter`、`platform/`、`bff/` 的目录位置如实反映层与边界（对应表见 `docs/architecture.md` §2.2）。归属仍以 §4.1.3 判据表为最终依据——目录与判据冲突时，视为放错了目录，修目录而不是改判据。`legacy/` 已于 2026-08-18 整包删除（生产零流量实证后），架构测试守"不复活"：不得再建 legacy 目录，旧供应商接回一律按迁移标准重写进 gateway。
+**4.1.4**　**目录即边界声明**（2026-08-15 六边形重构起）：`gateway/domain·application·adapter`、`platform/`、`bff/` 的目录位置如实反映层与边界（对应表见 `docs/architecture.md` §2.2）。归属仍以 §4.1.3 判据表为最终依据——目录与判据冲突时，视为放错了目录，修目录而不是改判据。`legacy/` 已于 2026-08-18 整包删除（生产零流量实证后），架构测试守"不复活"：不得再建 legacy 目录。
 
 **4.1.5**　新增能力若跨层或归属存疑，必须在 PR 中写明判断依据。写不出依据，等同于未判断。
 

@@ -104,21 +104,21 @@ com/trip/booking/spa/
 生产 24h 日志零流量、外部 import 为零后整包移除（didatravel/huitravel/meituan/ratehawk/
 travelconnect/aichotels/fastpay/inittimezone/placeholder/ops）。架构测试改为
 LEGACY_mustStayDeleted 守"不复活":新供应商一律走 gateway 六边形结构,不得再建 legacy 目录。
-这些供应商将来若要接回,按 docs/product-identity.md §7 迁移标准重写。
+
 
 **新旧词汇对照**（第一拍只搬未改名,第二拍随 cursor 迁移逐能力演进）:
 
 | 旧 | 新位置 | 说明 |
 |---|---|---|
 | `core/api/service` 契约接口+三态模板 | `gateway/application/<能力>/` | 名称暂留 *SyncService/Abstract*,第二拍演进为 Provider/UseCase |
-| `core/api/service/impl` 16 个薄壳 | Expedia 的进自家能力包;其余进 legacy | 第二拍由 CapabilityRegistry 取代字符串拼 bean 名后消亡 |
+| `core/api/service/impl` 16 个薄壳 | Expedia 的进自家能力包;其余曾进 legacy(2026-08-18 随包删除) | 第二拍由 CapabilityRegistry 取代字符串拼 bean 名后消亡 |
 | `core/api/common/identity·enums·offer` | `gateway/domain/*` 与 `state/offer` | — |
 | `core/api/dto·request` | `gateway/adapter/inbound/rest/dto·request` | 对外 JSON 契约,第一拍原样直通 |
 | `core/api/expedia/**` | `outbound/supplier/expedia/<能力>/` | staticdata→content |
 | `core/util·redis·ratelimit·monitor·exception` | `platform/*` | — |
 
 历史遗留说明:旧 §2.2 记录的"四处不吻合"(薄壳分裂、契约散落四处、adaptor/adapter 拼写)
-中,前两处已由本次重构消除;拼写不一致保留在 legacy 内,随删除消亡。
+中,前两处已由本次重构消除;第三处(adaptor 拼写)曾保留在 legacy 内,已随 2026-08-18 legacy 删除而消亡——四处全部清零。
 
 ## 3. 对外端点与能力矩阵
 
