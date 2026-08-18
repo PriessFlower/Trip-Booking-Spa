@@ -54,7 +54,7 @@ class ProductIdentityArchRulesTest {
     }
 
     /**
-     * 四链路类的判定：端点入口 SpaController，以及 gateway（含 legacy 存量）里的
+     * 四链路类的判定：端点入口 SpaController，以及 gateway 里的
      * 查价/验价/下单/取消/订单反查类。目录建档（content 包）是供货侧，不在四链路内。
      */
     private static boolean isGatewayChainClass(Path path) {
@@ -66,32 +66,31 @@ class ProductIdentityArchRulesTest {
         if (file.equals("SpaController.java")) {
             return true;
         }
-        return (normalized.contains("/gateway/") || normalized.contains("/legacy/"))
+        return normalized.contains("/gateway/")
                 && (file.contains("Price") || file.contains("CheckPrice") || file.contains("Booking")
                 || file.contains("Cancel") || file.contains("OrderQuery"));
     }
 
     /**
-     * legacy 隔离：legacy/ 是旧供应商代码的临终关怀区（迁一家删一家），新结构
-     * （gateway/platform/bootstrap）不得反向依赖它——否则死代码永远拔不掉。
+     * legacy 隔离（历史使命已完成）：legacy/ 曾是旧供应商代码的临终关怀区（迁一家删一家），
+     * 2026-08-18 整包删除（10 模块 213 文件，生产 24h 零流量实证）。本规则改为守住
+     * "不复活"：任何路径下不得再出现 legacy 包目录或对它的 import。
      */
     @Test
-    void LEGACY_isolationNewCodeMustNotImportLegacy() throws IOException {
+    void LEGACY_mustStayDeleted() throws IOException {
+        assertTrue(!Files.exists(MAIN_JAVA.resolve("com/trip/booking/spa/legacy")),
+                "legacy 包已于 2026-08-18 删除，不得复活——新供应商一律走 gateway 六边形结构");
         List<String> violations = new ArrayList<>();
         try (Stream<Path> files = Files.walk(MAIN_JAVA)) {
             files.filter(p -> p.toString().endsWith(".java"))
-                    .filter(p -> {
-                        String n = p.toString().replace('\\', '/');
-                        return n.contains("/gateway/") || n.contains("/platform/") || n.contains("/bootstrap/");
-                    })
                     .forEach(p -> {
                         if (read(p).contains("com.trip.booking.spa.legacy.")) {
-                            violations.add(p + " import 了 legacy 包");
+                            violations.add(p + " 引用了已删除的 legacy 包");
                         }
                     });
         }
         assertTrue(violations.isEmpty(),
-                "新结构不得依赖 legacy（迁移隔离区，只出不进）：\n" + String.join("\n", violations));
+                "legacy 包已删除，不得再被引用：\n" + String.join("\n", violations));
     }
 
     /**

@@ -27,11 +27,20 @@ public class ExpediaHotelSyncTask {
     @Autowired
     private Environment environment;
 
+    @Autowired
+    private SupplierTaskExecutors supplierTaskExecutors;
+
     @Scheduled(cron = "${task.expedia-hotel-sync.cron:0 0 2 * * ?}")
     public void run() {
         if (!environment.getProperty("task.expedia-hotel-sync.enabled", Boolean.class, false)) {
             return;
         }
+        // 整个"抢锁→干活→放锁"派发到 expedia 专属线程（F-2.7）——Redisson 锁绑定持有线程，
+        // 不能拆在两条线程上；本任务是长任务（静态全量同步），留在调度线程会挡住所有家
+        supplierTaskExecutors.submit("expedia", "hotel-sync", this::doRun);
+    }
+
+    private void doRun() {
         RLock lock = redissonClient.getLock("task:lock:expediaHotelSync");
         if (!lock.tryLock()) {
             log.info("ExpediaHotelSyncTask 未抢到锁，本实例跳过");
