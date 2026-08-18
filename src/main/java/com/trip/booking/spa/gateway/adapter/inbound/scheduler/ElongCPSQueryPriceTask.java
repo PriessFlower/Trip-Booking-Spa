@@ -41,16 +41,18 @@ public class ElongCPSQueryPriceTask {
      * 即全库每天覆盖三轮，优于 cursor 现状。速率与批量见
      * {@code task.elong-cps.qps} / {@code batch-size}。
      */
+    @Resource
+    private SupplierTaskExecutors supplierTaskExecutors;
+
     @Scheduled(cron = "${task.elong-cps.cron:0 0/10 * * * ?}")
     public void run() {
+        // 闸口检查留在调度线程（毫秒级）；任务体派发到 elong 专属线程（F-2.7），
+        // 调度线程立即释放，不再与其他供应商的任务互相排队
         if (!environment.getProperty("task.elong-cps.enabled", Boolean.class, false)) {
             log.info("[gate] task.elong-cps.enabled=false，跳过本次调度");
             return;
         }
-        try {
-            elongCPSQueryPriceService.queryPriceQueueTask(0, 0, "scheduled");
-        } catch (Exception e) {
-            log.error("ElongCPSQueryPriceTask error:", e);
-        }
+        supplierTaskExecutors.submit("elong", "cps-query-price",
+                () -> elongCPSQueryPriceService.queryPriceQueueTask(0, 0, "scheduled"));
     }
 }

@@ -27,16 +27,18 @@ public class RateHawkCPSQueryPriceTask {
      * 误开风险=持续消耗 RateHawk 查价配额；误关风险=价格缓存停止更新，对外报价逐渐陈旧。
      * 执行面：全部节点（多实例由 Redisson 锁选出唯一执行者）。BackDoor 手动入口不受本闸约束。
      */
+    @Autowired
+    private com.trip.booking.spa.gateway.adapter.inbound.scheduler.SupplierTaskExecutors supplierTaskExecutors;
+
     @Scheduled(cron = "${task.ratehawk-cps.cron:0 0/30 * * * ?}")
     public void run() {
+        // 闸口检查留在调度线程；任务体进 ratehawk 专属线程（F-2.7）。legacy→gateway
+        // 方向的依赖是允许的（arch 规则只禁新结构依赖 legacy）
         if (!environment.getProperty("task.ratehawk-cps.enabled", Boolean.class, false)) {
             log.info("[gate] task.ratehawk-cps.enabled=false，跳过本次调度");
             return;
         }
-        try {
-            rateHawkCPSQueryPriceService.queryPriceQueueTask(0, 0, "scheduled");
-        } catch (Exception e) {
-            log.error("RateHawkCPSQueryPriceTask ,error:", e);
-        }
+        supplierTaskExecutors.submit("ratehawk", "cps-query-price",
+                () -> rateHawkCPSQueryPriceService.queryPriceQueueTask(0, 0, "scheduled"));
     }
 }

@@ -35,11 +35,19 @@ public class ExpediaRemoveHotelTask {
     @Autowired
     private Environment environment;
 
+    @Autowired
+    private SupplierTaskExecutors supplierTaskExecutors;
+
     @Scheduled(cron = "${task.expedia-remove-hotel.cron:0 0 4 * * ?}")
     public void run() {
         if (!environment.getProperty("task.expedia-remove-hotel.enabled", Boolean.class, false)) {
             return;
         }
+        // 抢锁→干活→放锁整体进 expedia 专属线程（F-2.7）——Redisson 锁绑定持有线程
+        supplierTaskExecutors.submit("expedia", "remove-hotel", this::doRun);
+    }
+
+    private void doRun() {
         RLock lock = redissonClient.getLock("task:lock:expediaRemoveHotel");
         if (!lock.tryLock()) {
             log.info("ExpediaRemoveHotelTask 未抢到锁，本实例跳过");
