@@ -68,9 +68,6 @@ com/trip/booking/spa/
 │           │                              公共件在 shared/(合同档案、签名、原始 bean)
 │           └── state/                  ⑤ offer/(OfferStore) pricecache/ catalog/(建档
 │                                          mapper) dao/(通用实体)
-├── legacy/                             旧供应商隔离区:didatravel huitravel meituan
-│                                       ratehawk travelconnect aichotels fastpay
-│                                       inittimezone placeholder ops/(旧后门,URL 不变)
 ├── platform/                           ④+技术设施:http/(BaseHttpAccess=限流唯一闸门、
 │                                       asynchttp) ratelimit/ redis/ observability/
 │                                       mybatis/ util/ exception/
@@ -100,12 +97,14 @@ com/trip/booking/spa/
 ③ 适配层  gateway/adapter/outbound/supplier/<家>（按能力分子包:pricing/checkprice/booking/order/cancellation/content,公共件在 shared/）
 ④ 通道层  platform/http（BaseHttpAccess、HttpUtils、asynchttp）+ platform/ratelimit
 ⑤ 状态层  gateway/adapter/outbound/state（offer/pricecache/catalog/dao）
-其他      platform/*（纯技术设施）、bootstrap/（装配）、legacy/（旧供应商隔离区）、bff/（独立边界）
+其他      platform/*（纯技术设施）、bootstrap/（装配）、bff/（独立边界）
 ```
 
-**legacy/ 的纪律**:旧供应商代码的临终关怀区,迁一家删一家;gateway/platform/bootstrap
-**不得 import legacy**（架构测试 LEGACY_isolation 强制,反向依赖会让死代码永远拔不掉）。
-legacy 的运维后门在 legacy/ops/LegacyBackDoorController（URL 与拆分前一致）。
+**legacy/ 已删除**（2026-08-18,10 模块 213 文件）:旧供应商隔离区完成历史使命——
+生产 24h 日志零流量、外部 import 为零后整包移除（didatravel/huitravel/meituan/ratehawk/
+travelconnect/aichotels/fastpay/inittimezone/placeholder/ops）。架构测试改为
+LEGACY_mustStayDeleted 守"不复活":新供应商一律走 gateway 六边形结构,不得再建 legacy 目录。
+这些供应商将来若要接回,按 docs/product-identity.md §7 迁移标准重写。
 
 **新旧词汇对照**（第一拍只搬未改名,第二拍随 cursor 迁移逐能力演进）:
 

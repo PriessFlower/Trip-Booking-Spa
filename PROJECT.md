@@ -380,7 +380,7 @@ java -jar target/trip-booking-spa-0.0.1.jar --spring.profiles.active=dev,local \
 | 不用改，但涉及数据存哪儿、存多久、何时作废 | — | 状态层 |
 | 不用改，且只是对外契约的形状或判定纪律 | — | 契约层 |
 
-**4.1.4**　**目录即边界声明**（2026-08-15 六边形重构起）：`gateway/domain·application·adapter`、`platform/`、`legacy/`、`bff/` 的目录位置如实反映层与边界（对应表见 `docs/architecture.md` §2.2）。归属仍以 §4.1.3 判据表为最终依据——目录与判据冲突时，视为放错了目录，修目录而不是改判据。`legacy/` 只出不进：gateway/platform/bootstrap 不得 import legacy（架构测试强制）。
+**4.1.4**　**目录即边界声明**（2026-08-15 六边形重构起）：`gateway/domain·application·adapter`、`platform/`、`bff/` 的目录位置如实反映层与边界（对应表见 `docs/architecture.md` §2.2）。归属仍以 §4.1.3 判据表为最终依据——目录与判据冲突时，视为放错了目录，修目录而不是改判据。`legacy/` 已于 2026-08-18 整包删除（生产零流量实证后），架构测试守"不复活"：不得再建 legacy 目录，旧供应商接回一律按迁移标准重写进 gateway。
 
 **4.1.5**　新增能力若跨层或归属存疑，必须在 PR 中写明判断依据。写不出依据，等同于未判断。
 
