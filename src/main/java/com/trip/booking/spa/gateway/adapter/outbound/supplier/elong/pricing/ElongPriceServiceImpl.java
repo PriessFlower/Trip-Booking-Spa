@@ -75,6 +75,9 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     private ElongProductKeyDeriver productKeyDeriver;
     @Resource
     private com.trip.booking.spa.platform.redis.RedisUtils redisUtils;
+    /** 批次4 反馈环:验价事件升档任务行(直调 mapper,避免与 CPS service 循环依赖)。 */
+    @Resource
+    private com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ElongQueryPriceTaskMapper elongQueryPriceTaskMapper;
 
     @Resource
     private OfferStore offerStore;
@@ -197,6 +200,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             log.error("艺龙验价：凭证未配置（ELONG_USER/ELONG_APP_KEY/ELONG_SECRET），无法调用,sHotelId={}", request.getSHotelId());
             return outcome(CheckPriceOutcome.INDETERMINATE, "艺龙凭证未配置，未能确认该产品是否可订");
         }
+        // 批次4 反馈环(F-6):验价=真实需求信号,该酒店升档 24h 被高频档跟刷(fire-and-forget)
+        markHotelHot(request.getSHotelId());
         String occupancy = buildOccupancy(request.getAdultCount(), request.getChildNum(), request.getChildAges());
 
         // 现取现验（R-3.1）：重打一次 hotel.detail 取本会话的新马甲与新报价码
@@ -466,6 +471,22 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * 硬门（R-3.2）由键相等保证：对每条现货按与查价<b>完全相同的口径</b>重新派生再比对。
      * 匹配在已取回的现货响应上进行，不追加供应商调用（R-3.4）。
      */
+    /**
+     * 批次4 反馈环(F-6):真实验价事件 → 该酒店全部日期行临时升档 24h,被高频档
+     * 借入跟刷,让刷价额度自动流向有真实需求的酒店。fire-and-forget:任何异常只记
+     * 日志,绝不影响验价主流程。刷价内部走 queryPrices 不经此处,无自激。
+     */
+    void markHotelHot(String shId) {
+        try {
+            int rows = elongQueryPriceTaskMapper.upgradeByShId(shId);
+            if (rows > 0) {
+                log.info("elong 反馈环:验价事件升档 shId={},影响 {} 行(24h)", shId, rows);
+            }
+        } catch (Exception e) {
+            log.warn("elong 反馈环:升档失败不影响验价 shId={},err={}", shId, e.toString());
+        }
+    }
+
     /**
      * 从产品详情缓存（{@code product:{hotelId}:{productId}}）反查 productKey。
      * 只认本网关刷价写入的票；查不到/解析不出一律返回 null，不影响主流程。
