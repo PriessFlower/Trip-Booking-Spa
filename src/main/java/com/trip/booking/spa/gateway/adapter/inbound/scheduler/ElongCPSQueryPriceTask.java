@@ -39,7 +39,8 @@ public class ElongCPSQueryPriceTask {
      * 额度独享设计——其艺龙刷价现状为 24h 内 45,235 条 / 16,998 家（平均约 0.52 QPS），
      * 而艺龙库共 23,584 家；本任务以 1 QPS × 每轮 500 家的节奏，每天可刷约 7.2 万条，
      * 即全库每天覆盖三轮，优于 cursor 现状。速率与批量见
-     * {@code task.elong-cps.qps} / {@code batch-size}。
+     * {@code task.elong-cps.high-qps}/{@code high-batch-size}(高频档)与
+     * {@code normal-qps}/{@code normal-batch-size}(常规档);旧键 qps/batch-size 自批次3弃用。
      */
     @Resource
     private SupplierTaskExecutors supplierTaskExecutors;
