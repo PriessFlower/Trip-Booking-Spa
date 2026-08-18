@@ -73,6 +73,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     /** 规范化与键派生的唯一权威（查价组装与 resolve 匹配共用，键与门同源） */
     @Resource
     private ElongProductKeyDeriver productKeyDeriver;
+    @Resource
+    private com.trip.booking.spa.platform.redis.RedisUtils redisUtils;
 
     @Resource
     private OfferStore offerStore;
@@ -229,6 +231,17 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             return outcome(CheckPriceOutcome.SOLD_OUT, "该产品已售罄");
         }
         if (found == null) {
+            // key 反查自愈（供应商网关承接方案批次2）：上游只回传 productId 时（渠道协议
+            // 无处存 key），若该票是本网关发的，详情缓存里存着它的 productKey——自己找回。
+            // 上游给了 key 则不覆盖；反查不到（外来票/缓存过期）走原逻辑。
+            if (org.apache.commons.lang3.StringUtils.isBlank(request.getProductKey())) {
+                String recovered = lookupProductKeyFromCache(request.getSHotelId(), request.getSProductId());
+                if (recovered != null) {
+                    log.info("艺龙验价：productKey 反查命中,sHotelId={},sProductId={}",
+                            request.getSHotelId(), request.getSProductId());
+                    request.setProductKey(recovered);
+                }
+            }
             // 报价码已不在现货（会话级轮换是常态）：先按 productKey 换等价新票（resolve ②），
             // 换不到才是确定性 RATE_DEAD
             found = tryResolveByProductKey(hotel, request, occupancy);
@@ -453,6 +466,28 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * 硬门（R-3.2）由键相等保证：对每条现货按与查价<b>完全相同的口径</b>重新派生再比对。
      * 匹配在已取回的现货响应上进行，不追加供应商调用（R-3.4）。
      */
+    /**
+     * 从产品详情缓存（{@code product:{hotelId}:{productId}}）反查 productKey。
+     * 只认本网关刷价写入的票；查不到/解析不出一律返回 null，不影响主流程。
+     */
+    String lookupProductKeyFromCache(String hotelId, String productId) {
+        try {
+            String json = redisUtils.get(
+                    com.trip.booking.spa.platform.util.RedisKeyUtils.buildPriceInfoKey(hotelId, productId));
+            if (org.apache.commons.lang3.StringUtils.isBlank(json)) {
+                return null;
+            }
+            com.fasterxml.jackson.databind.JsonNode node =
+                    com.trip.booking.spa.platform.util.JsonUtils.getObjectMapper().readTree(json);
+            String key = node.path("productKey").asText(null);
+            return org.apache.commons.lang3.StringUtils.isBlank(key) ? null : key;
+        } catch (Exception e) {
+            // 反查是增益路径，任何异常都不该影响验价主流程
+            log.warn("艺龙验价：productKey 反查失败,hotelId={},productId={},err={}", hotelId, productId, e.toString());
+            return null;
+        }
+    }
+
     PlanWithRoom tryResolveByProductKey(ElongHotelDetailResponse.ElongHotel hotel, CheckPriceReq request, String occupancy) {
         if (StringUtils.isBlank(request.getProductKey())) {
             return null;
