@@ -28,13 +28,6 @@ task:
     qps: 1.0                  # 调用方配额层，须小于 ratelimit.qps 的 ELONG 查价项(5)
     batch-size: 500
 
-  # RateHawk 刷价：结构同上
-  ratehawk-cps:
-    enabled: false
-    cron: '0 15/30 * * * ?'   # 每 30 分钟，与 Expedia 错开 15 分钟
-    qps: 0.16
-    batch-size: 1000
-
   # Expedia 静态酒店同步
   expedia-hotel-sync:
     enabled: false
@@ -126,9 +119,6 @@ cache:
 
 # ── supplier：与特定供应商交互的行为 ────────────────────────
 supplier:
-  didatravel:
-    real-time-price: false    # true=要求道旅返回实时价；false=接受其缓存价
-
   expedia:
     # 静态数据摄取总开关。关闭时目录清单与内容摄取接口一律拒绝调用
     # （播种、ExpediaHotelSyncTask 每日增量同步均失效）。改后需重启容器方生效。
