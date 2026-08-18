@@ -27,7 +27,7 @@
         FROM elong_query_price_task
         WHERE priority_level_number = #{priorityLevelNumber}
         <if test="1 == temporaryUpgrade">
-            or temporary_upgrade = #{temporaryUpgrade}
+            or (temporary_upgrade = 1 and (upgrade_deadline is null or upgrade_deadline &gt; now()))
         </if>
         <if test="0 == temporaryUpgrade">
             and temporary_upgrade = #{temporaryUpgrade}
@@ -40,6 +40,13 @@
         update elong_query_price_task
         set query_count = #{queryCount} + 1 , last_time = #{updateTime}, temporary_upgrade = #{temporaryUpgrade}
         WHERE id = #{id}
+    </update>
+
+    <!-- 批次4 反馈环:验价事件把该酒店全部日期行临时升档 24h,高频档借入跟刷 -->
+    <update id="upgradeByShId">
+        update elong_query_price_task
+        set temporary_upgrade = 1, upgrade_deadline = timestampadd(hour, 24, now())
+        WHERE sh_id = #{shId}
     </update>
 
 </mapper>

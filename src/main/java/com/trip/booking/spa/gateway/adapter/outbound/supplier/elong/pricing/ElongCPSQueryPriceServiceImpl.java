@@ -77,8 +77,14 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
         long roundStart = System.currentTimeMillis();
         // 兜底 0.3 QPS 为安全侧（§3.3.3）：若 cursor 尚未停刷，低速可避免互相挤兑到双输。
         // 生产运行值见 Nacos（cursor 停刷后取 1.0，测算见 ElongCPSQueryPriceTask 的 cron 注释）
-        double qps = environment.getProperty("task.elong-cps.qps", Double.class, 0.3);
-        int batchSize = environment.getProperty("task.elong-cps.batch-size", Integer.class, 100);
+        double qps = priority == 0
+                ? environment.getProperty("task.elong-cps.high-qps", Double.class, 2.0)
+                : environment.getProperty("task.elong-cps.normal-qps", Double.class, 1.0);
+        // 分档独立键(批次3):不复用旧 batch-size/qps——生产旧值(500/1.0)是单档时代
+        // 的节奏,直接继承会让两档总时长超出 10 分钟 cron 而回到跳轮状态
+        int batchSize = priority == 0
+                ? environment.getProperty("task.elong-cps.high-batch-size", Integer.class, 400)
+                : environment.getProperty("task.elong-cps.normal-batch-size", Integer.class, 200);
         RateLimiter rateLimiter = RateLimiter.create(qps);
         List<ElongQueryPriceTask> list = elongQueryPriceTaskMapper.getQueryPriceTaskList(priority, temporaryUpgrade, batchSize);
         log.info("elongQueryPriceTask 本轮开始, trigger={}, priority={}, 取到 {} 行, batchSize={}, qps={}",
