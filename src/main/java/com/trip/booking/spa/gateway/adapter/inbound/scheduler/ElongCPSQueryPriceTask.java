@@ -52,7 +52,14 @@ public class ElongCPSQueryPriceTask {
             log.info("[gate] task.elong-cps.enabled=false，跳过本次调度");
             return;
         }
-        supplierTaskExecutors.submit("elong", "cps-query-price",
-                () -> elongCPSQueryPriceService.queryPriceQueueTask(0, 0, "scheduled"));
+        // 批次3 三档优先级(F-2.4,简化两档):同一次派发内顺序跑,受 F-2.7 同供应商
+        // 串行保护。高频档(priority=0,T+0~T+2)带借入(temporaryUpgrade=1:验价升档的
+        // 行一并跟刷);常规档(priority=1,T+3~T+6)排除升档行防双刷。
+        // 默认 400@2qps + 200@1qps ≈ 6.7 分钟 < 10 分钟 cron,不再跳轮;
+        // 高频档 ~2.6h 轮一遍(原 9.6h),QPS 峰值 2 仍在限流键(5)之内。
+        supplierTaskExecutors.submit("elong", "cps-query-price", () -> {
+            elongCPSQueryPriceService.queryPriceQueueTask(0, 1, "scheduled-high");
+            elongCPSQueryPriceService.queryPriceQueueTask(1, 0, "scheduled-normal");
+        });
     }
 }
