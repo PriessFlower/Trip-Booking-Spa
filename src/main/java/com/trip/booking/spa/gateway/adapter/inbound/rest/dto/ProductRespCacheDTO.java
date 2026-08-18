@@ -16,6 +16,14 @@ public class ProductRespCacheDTO {
 
     public String hotelId;
     public String productId;
+    /**
+     * 卖法等价类键（R-1.1，跨次稳定）。缓存必须原样保存——它是对上游的不透明句柄
+     * （gateway-boundary B1）与 resolve 换票的检索键。2026-08-18 发现本 DTO 缺此字段，
+     * 刷价写缓存时 productKey 被静默丢弃、缓存读出的产品 productKey=null，直接阻塞
+     * cursor 走缓存比价的对接。写读两侧均为 BeanUtils.copyProperties 按名复制,
+     * 补上字段即自动透传；旧缓存条目反序列化为 null，随刷价周期自然覆盖。
+     */
+    private String productKey;
     private String expediaRoomId;//expedia房型id
     public Integer supplierId;
     public String planSession;
