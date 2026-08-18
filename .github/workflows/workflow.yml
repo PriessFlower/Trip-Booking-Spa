@@ -61,41 +61,14 @@ jobs:
       RUNTIME_BASE_SOURCE_REPO_DIGEST: ccr.ccs.tencentyun.com/priessflower/trip-booking-spa@sha256:f1647263955accb7b08a027ecf75c930b79a6c14e936359b31d943b4b3bf231f
 
     steps:
-      # 不用 actions/checkout：自建 runner 每个 job 开始都会清空 _actions 缓存，于是每次都得从
-      # codeload.github.com 重新拉 action；该出口 IP 被 GitHub 限流(429)时整条发布链路硬卡死
-      # （2026-08-17 实测连续 6 次重试全 429，预置缓存也因目录被清空而无效）。改走 github.com
-      # 的 git 协议——与 codeload 不同域、不同配额——并断言 HEAD 等于触发本次运行的 commit：
-      # 拿错 commit 就会构建出错误镜像，这一条必须显式钉死而不是依赖 action 的隐式行为。
+      # 这一步必须留着 actions/checkout，别再改成裸 git（2026-08-17 我试过，双重不通）：
+      #   ① 平台 runner(ins-cez660p7, TencentOS 4)上【没装 git】——裸 git 直接 command not found；
+      #   ② 该机【连不上 github.com】(curl 超时)，而 codeload / api.github.com /
+      #      objects.githubusercontent.com 都通。git 协议走的正是不通的那个域。
+      # 08-17 发布卡死的真因是 GitHub 侧故障期间 codeload 对该出口 IP 返 429，属于暂时性；
+      # 故障恢复后 codeload 已回 301/0.6s。换句话说当时该等，不该改检出方式。
       - name: Check out repository
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -Eeuo pipefail
-          : "${GITHUB_WORKSPACE:?Missing GITHUB_WORKSPACE}"
-          : "${GITHUB_SHA:?Missing GITHUB_SHA}"
-          : "${GITHUB_REPOSITORY:?Missing GITHUB_REPOSITORY}"
-
-          # 全新工作区：残留文件会被 Docker 构建上下文捎带进镜像
-          rm -rf -- "$GITHUB_WORKSPACE"
-          mkdir -p -- "$GITHUB_WORKSPACE"
-          cd -- "$GITHUB_WORKSPACE"
-
-          # 凭据只以 remote URL 形式短暂存在，退出前无条件抹掉（含失败路径）
-          cleanup_remote() {
-            git remote set-url origin \
-              "https://github.com/${GITHUB_REPOSITORY}.git" 2>/dev/null || true
-          }
-          trap cleanup_remote EXIT
-
-          git init --quiet
-          git remote add origin \
-            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git -c protocol.version=2 fetch --quiet --depth=1 origin "$GITHUB_SHA"
-          git checkout --quiet FETCH_HEAD
-
-          head="$(git rev-parse HEAD)"
-          test "$head" = "$GITHUB_SHA"
-          echo "checked_out=$head"
+        uses: actions/checkout@v6
 
       - name: Verify platform build tools
         run: |
