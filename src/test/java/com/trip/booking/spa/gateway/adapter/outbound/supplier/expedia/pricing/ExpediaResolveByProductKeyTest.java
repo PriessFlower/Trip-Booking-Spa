@@ -87,7 +87,7 @@ class ExpediaResolveByProductKeyTest {
                 .supplierId(10005).sHotelId(HOTEL).sProductId("276999999")
                 .productKey(productKey)
                 .checkIn("2026-10-04").checkOut("2026-10-08")
-                .roomNum(1).adultCount(2).totalPrice(seenPriceCents)
+                .roomNum(1).adultCount(2).seenPrice(seenPriceCents)
                 .build();
     }
 

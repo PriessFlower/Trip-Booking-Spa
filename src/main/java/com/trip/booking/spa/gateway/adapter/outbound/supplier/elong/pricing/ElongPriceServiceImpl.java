@@ -578,8 +578,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             }
         }
         // 容差基准：上游给了就用上游的；没给则反查本网关刷价时写入的原价（调用方未必持有价格）
-        Integer baseline = request.getTotalPrice() != null
-                ? request.getTotalPrice()
+        Integer baseline = request.getSeenPrice() != null
+                ? request.getSeenPrice()
                 : lookupTotalPriceFromCache(request);
         if (baseline == null) {
             log.info("艺龙验价：无容差基准价（上游未携且缓存反查不到），不自动换票,sHotelId={},sProductId={}",
