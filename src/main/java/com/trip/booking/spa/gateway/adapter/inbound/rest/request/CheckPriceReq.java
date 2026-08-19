@@ -31,8 +31,18 @@ public class CheckPriceReq {
     private String checkOut;//离店日期
     @NonNull
     private Integer roomNum;//房间数量
-    @NonNull
-    private Integer totalPrice;//总价
+    /**
+     * 上游展示价（分）。<b>可选</b>——它的唯一用途是 resolve 换票时的容差基准，
+     * 而基准价网关自己就有（刷价写入的产品详情缓存）。
+     *
+     * <p>曾经是必填（Lombok {@code @NonNull} → 反序列化即抛 → HTTP 400）。但接入方
+     * 未必持有价格：cursor 的验价请求 DTO 就没有价格字段（老路价格从它自己的库里查），
+     * 2026-08-19 因此把 spa# 票据验价全打成 400。网关是报价的权威，不该要求调用方
+     * 把网关自己发的价再告诉它一遍。缺失时按 sProductId 反查缓存原价作基准（见
+     * {@code ElongPriceServiceImpl#lookupTotalPriceFromCache}）；反查不到则不换票
+     * （无基准即无从判断价格漂移，R-1.6 宁可少卖不可卖错）。
+     */
+    private Integer totalPrice;
 
     private String planSession;
 
