@@ -153,6 +153,9 @@ supplier:
     # 会话级易腐）已不在现货，允许按上游携带的 productKey 在本会话现货中自动换等价新票。
     # 关闭时行为与不带 productKey 一致（直接回报 RATE_DEAD）。改后需重启容器方生效。
     resolve-enabled: false
+    # 产品建档(R-2.6):稳定事实(房型/餐食/退改/productKey)落目录表,Redis 只留价与易腐码。
+    # 默认关——开启会给每轮刷价增加数千次 upsert,须先观察写入耗时对刷价周期的影响。
+    catalog-enabled: false
 
     # resolve 换票价格容差（R-3.3 双门取严，语义同 supplier.expedia 同名两键）
     resolve-price-tolerance: 0.02
