@@ -17,6 +17,8 @@ import org.apache.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 
 
@@ -58,7 +60,7 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
         // 统一限流：所有供应商 HTTP 调用的唯一闸门。QPS 配在 Nacos，key = 供应商_接口。
         String limitKey = buildGlobalLimitKey();
         if (!RateLimitHolder.get().tryAcquire(limitKey)) {
-            Monitor.recordOne(buildMonitorKey(SupplierApiConstants.ACCESS_TAG, "limited"));
+            Monitor.recordOne(IO_METRIC, ioTags("limited"));
             throw new RedisLimitException("Request exceeds rate limit, key = " + limitKey);
         }
         beforeAccess(request);
@@ -82,24 +84,36 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
         // 而非让调用方在 result.getData() 上空指针——网络超时是常态，不应表现为 NPE。
         // 返回值 httpStatus != 200 且 data == null，isSucc() 为 false，与既有守卫写法一致。
         if (null == result) {
-            Monitor.recordOne(buildMonitorKey(SupplierApiConstants.ACCESS_TAG, SupplierApiConstants.ERROR_TAG));
+            Monitor.recordOne(IO_METRIC, ioTags(SupplierApiConstants.ERROR_TAG));
             logger.error("access fail, 重试已耗尽, supplier:[{}], interface:[{}], url:[{}]", supplier, monitorKey, url);
             return new ResponseResult<>(HttpStatus.SC_GATEWAY_TIMEOUT, null);
         }
         if (null != result.getData() && result.getData().isEmptyResult()) {
-            Monitor.recordOne(buildMonitorKey(SupplierApiConstants.ACCESS_TAG) + "_empty",
-                    System.currentTimeMillis() - start);
+            Monitor.recordOne(IO_METRIC, ioTags("empty"), System.currentTimeMillis() - start);
         }
-        Monitor.recordOne(buildMonitorKey(SupplierApiConstants.ACCESS_TAG), System.currentTimeMillis() - start);
+        Monitor.recordOne(IO_METRIC, ioTags("ok"), System.currentTimeMillis() - start);
         return result;
     }
 
-    private String buildMonitorKey(String tag) {
-        return JOINER.join(supplier.name(), monitorKey.name(), tag);
-    }
+    /**
+     * 供应商 IO 的指标名。<b>固定一个名字，维度全部进 tag</b>（§3.9.2）。
+     *
+     * <p>原先是 {@code JOINER.join(supplier, 接口, tag, status)} 拼成名字，于是每个
+     * (供应商 × 接口 × 状态) 组合都生成一个独立指标名——接十家供应商、每家五个接口、
+     * 四种状态就是 200 个名字，正是 §3.9.2 要防的名字爆炸（反面即 cursor 的 324 种日志前缀）。
+     * 改为固定名 + tag 后，接多少家供应商都还是这一个名字，按 tag 切片查询。
+     */
+    private static final String IO_METRIC = "supplier_io_access";
 
-    private String buildMonitorKey(String tag, String status) {
-        return JOINER.join(supplier.name(), monitorKey.name(), tag, status);
+    /** 重试单独一个名字：它与"一次调用的结果"不是同一个度量，混在一个 counter 里会把成功率算错 */
+    private static final String IO_RETRY_METRIC = "supplier_io_retry";
+
+    private Map<String, Object> ioTags(String status) {
+        Map<String, Object> tags = new HashMap<>(3);
+        tags.put("supplier", supplier.name());
+        tags.put("interface", monitorKey.name());
+        tags.put("status", status);
+        return tags;
     }
 
     public boolean isParseError() {
@@ -114,14 +128,14 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
             try {
                 count++;
                 if (count > 1) {
-                    Monitor.recordOne(buildMonitorKey(SupplierApiConstants.ACCESS_RETRE_TAG));
+                    Monitor.recordOne(IO_RETRY_METRIC, ioTags("retry"));
                 }
                 result = this.request(url, request, parser);
                 if (result.isSucc()) {
                     break;
                 }
             } catch (Exception e) {
-                Monitor.recordOne(buildMonitorKey(SupplierApiConstants.ACCESS_TAG, SupplierApiConstants.ERROR_TAG));
+                Monitor.recordOne(IO_METRIC, ioTags(SupplierApiConstants.ERROR_TAG));
                 logger.error("query fail, supplier:[{}], interface:[{}], url:[{}] , request:[{}]",
                         supplier, monitorKey, url, JsonUtils.writeObject2Json(request), e);
             }

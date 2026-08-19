@@ -116,7 +116,6 @@ public class ExpediaCPSQueryPriceServiceImpl implements ExpediaCPSQueryPriceServ
                 LocalDate currentCheckout = LocalDate.now().plusDays(expediaQueryPriceTask.getDelayCheckOut());
                 log.info("expediaQueryPriceTask hId: {},currentCheckin:{},currentCheckout:{}  ", expediaQueryPriceTask.getShId(), currentCheckin.toString(), currentCheckout.toString());
                 rateLimiter.acquire();
-                Monitor.recordOne("expedia_cps_query_price_qps_" + priority);
                 PriceReq request = PriceReq.builder().adultNum(2).childNum(0).guestType(0).childAges(new ArrayList<>()).checkIn(currentCheckin.toString()).checkout(currentCheckout.toString()).roomNum(1).build();
                 Supplier supplier = Supplier.builder().sHotelId(expediaQueryPriceTask.getShId()).build();
                 List<ProductRespDTO> productRespDTOList = expediaPriceService.queryPricesCache(request, supplier);

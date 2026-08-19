@@ -19,7 +19,9 @@ import javax.annotation.Resource;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -120,9 +122,12 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
         // 行级并发度。串行时每行 1.45s 均值(p50 1.08 / p90 3.13 / p99 4.51,2026-08-19 生产实测),
         // 于是实际只跑出 0.89 QPS——连当时设的 2 QPS 限额都摸不到,限流器根本不是瓶颈。
         // 要真跑到目标 QPS,并发度须 ≈ QPS × 单行耗时;取值别超连接池(见类注释"三条上限")。
+        // 兜底取 1(串行)是安全侧(§3.3.3):并发化是新引入的能力,Nacos 读不到时应退回
+        // <b>已知安全的旧行为</b>,而不是静默采用新行为。串行只是慢,而并发在连接池配置同时
+        // 未生效的情况下会与出价抢连接——出价是真实客流。生产运行值(高频 6 / 常规 3)在 Nacos。
         int concurrency = priority == 0
-                ? environment.getProperty("task.elong-cps.high-concurrency", Integer.class, 6)
-                : environment.getProperty("task.elong-cps.normal-concurrency", Integer.class, 3);
+                ? environment.getProperty("task.elong-cps.high-concurrency", Integer.class, 1)
+                : environment.getProperty("task.elong-cps.normal-concurrency", Integer.class, 1);
         // 护栏：子配额未登记时 qpsOf 会回落 default-qps（生产 20），刷价会瞬间把账号额度烧穿。
         // 漂移 CI 只核对配置键路径，管不到 qps 这张 JSON 表里的条目，故在运行期显式喊出来。
         double interfaceTotal = rateLimitProperties.qpsOf("GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES");
@@ -172,7 +177,6 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
                 LocalDate checkIn = LocalDate.now().plusDays(task.getDelayCheckIn());
                 LocalDate checkOut = LocalDate.now().plusDays(task.getDelayCheckOut());
                 RateLimitHolder.get().acquire(REFRESH_LIMIT_KEY);
-                Monitor.recordOne("elong_cps_query_price_qps_" + priority);
 
                 PriceReq request = PriceReq.builder().adultNum(1).childNum(0).guestType(0)
                         .childAges(new ArrayList<>()).checkIn(checkIn.toString())
@@ -215,6 +219,20 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
         }
         // §6.1.2：三态各自计数——"刷不出价"是频控还是真无房，处置完全不同
         long roundCost = System.currentTimeMillis() - roundStart;
+        // §3.9.1：可数的业务指标不许只活在日志文本里——日志会被冲掉(生产实测 40 万行仅覆盖
+        // 44 分钟)、发版即清空。这些数正是要跨天比的:失败率决定该不该调速、借入/复位的漂移
+        // 是孤儿行的信号(issue #95)。日志行照留(§6.1.1 不许因为加了指标就删日志)。
+        // 在轮次边界一次上报,不在循环体内逐条打——逐条既放大写入量,也拿不到"这一轮"的口径。
+        Map<String, Object> tags = new HashMap<>(2);
+        tags.put("supplier", "elong");
+        tags.put("priority", String.valueOf(priority));
+        Monitor.recordMany("refresh_rows", tags, list.size());
+        Monitor.recordMany("refresh_onsale", tags, onSale.get());
+        Monitor.recordMany("refresh_empty", tags, empty.get());
+        Monitor.recordMany("refresh_failed", tags, failed.get());
+        Monitor.recordMany("refresh_borrowed", tags, borrowed.get());
+        Monitor.recordMany("refresh_demoted", tags, demoted.get());
+        Monitor.recordTime("refresh_round", tags, roundCost);
         log.info("elongQueryPriceTask 本轮结束, trigger={}, priority={}, 共 {} 行, 有在售={}, 无在售={}, 失败={}, 借入={}, 复位={}, 并发={}, 实际 {} QPS, 耗时 {} ms",
                 trigger, priority, list.size(), onSale.get(), empty.get(), failed.get(),
                 borrowed.get(), demoted.get(), concurrency,

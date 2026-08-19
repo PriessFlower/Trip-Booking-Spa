@@ -5,6 +5,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalo
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProductKeyDeriver;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierIdentityProfile;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
+import com.trip.booking.spa.platform.observability.Monitor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
@@ -65,6 +66,10 @@ public class ElongCatalogService {
     @Value("${supplier.elong.catalog-enabled:false}")
     private boolean catalogEnabled;
 
+    /** 闸口日志去重:true=下次关闸时该打一条。仅为控制日志量,不参与业务判断 */
+    private final java.util.concurrent.atomic.AtomicBoolean gateLogged =
+            new java.util.concurrent.atomic.AtomicBoolean(true);
+
     /**
      * 把一轮查价产出的产品写入目录/档案。
      *
@@ -72,8 +77,15 @@ public class ElongCatalogService {
      */
     public void upsert(List<ProductRespDTO> products) {
         if (!catalogEnabled) {
+            // 闸口的 REJECT 分支必须可检索(§3.8.4:没有可检索输出的闸口视为未实现)。
+            // 但本方法每轮被调数千次,逐次打会淹掉日志——故按开关状态只在翻转后打第一次。
+            // 默认关的功能若完全无输出,"为什么目录表没数据"在日志里就没有答案。
+            if (gateLogged.compareAndSet(true, false)) {
+                log.info("[gate] supplier.elong.catalog-enabled=false，跳过建档");
+            }
             return;
         }
+        gateLogged.set(true);
         if (products == null || products.isEmpty()) {
             return;
         }
@@ -81,9 +93,16 @@ public class ElongCatalogService {
                 == SupplierIdentityProfile.QuoteCodeStability.STABLE ? "" : null;
         int upserted = 0;
         int skippedUnknown = 0;
+        int skippedNoKey = 0;
         for (ProductRespDTO product : products) {
-            if (StringUtils.isBlank(product.getProductKey())
-                    || !productKeyDeriver.isCatalogEligible(product.getMeal(), product.getCancelPolicy())) {
+            // 两个成因必须分开计(§6.2.2):缺 productKey 是<b>派生失败</b>,矛头指向
+            // ElongProductKeyDeriver 或它的入参;UNKNOWN 是<b>解析覆盖不足</b>,矛头指向
+            // 餐食/退改的表外取值。合成一个数,派生回归会被当成"正常的 UNKNOWN 损耗"混过去。
+            if (StringUtils.isBlank(product.getProductKey())) {
+                skippedNoKey++;
+                continue;
+            }
+            if (!productKeyDeriver.isCatalogEligible(product.getMeal(), product.getCancelPolicy())) {
                 // UNKNOWN 照常参与实时链路(key 合法、可售),但不进目录(R-5.4)
                 skippedUnknown++;
                 continue;
@@ -112,13 +131,23 @@ public class ElongCatalogService {
                 upserted++;
             } catch (Exception e) {
                 // 建档是增益路径：写失败绝不打断刷价主路径
-                log.warn("艺龙产品建档：单条写入失败,sHotelId={},productKey={},err={}",
-                        product.getHotelId(), product.getProductKey(), e.toString());
+                // 传 e 而非 e.toString():后者吃掉 cause 链,而"连接池耗尽"与"SQL 写错"
+                // 在包装异常的外层消息上看起来一样(§6.1.1.1 异常堆栈 100% 保留)
+                log.warn("艺龙产品建档：单条写入失败,sHotelId={},productKey={}",
+                        product.getHotelId(), product.getProductKey(), e);
             }
         }
-        // 每批必打一行成果（§6.2.1）——反面是 Expedia 全量建档 9.7 万家时进度不可观测
-        log.info("艺龙产品建档：sHotelId={},写入 {} 条(等价卖法在库内归并),跳过 UNKNOWN {} 条",
-                products.get(0).getHotelId(), upserted, skippedUnknown);
+        // 可数的业务指标不许只活在日志里(§3.9.1):建档覆盖的增长本身就是一条趋势曲线,
+        // 而 skippedNoKey 突增是 productKey 派生回归的早期警报。日志行照留(§6.1.1)。
+        java.util.Map<String, Object> tags = new java.util.HashMap<>(2);
+        tags.put("supplier", "elong");
+        Monitor.recordMany("catalog_upserted", tags, upserted);
+        Monitor.recordMany("catalog_skipped_unknown", tags, skippedUnknown);
+        Monitor.recordMany("catalog_skipped_no_key", tags, skippedNoKey);
+        // 每批必打一行成果（§6.2.1）——反面是 Expedia 全量建档 9.7 万家时进度不可观测。
+        // 键值对形式便于机读(§6.3.2)
+        log.info("艺龙产品建档：sHotelId={},upserted={},skippedUnknown={},skippedNoKey={}",
+                products.get(0).getHotelId(), upserted, skippedUnknown, skippedNoKey);
     }
 
     /** 是否存在免费取消窗口——与 productKey 的 cancelClass 判据同源（R-5.1 的 FREE 判据）。 */
