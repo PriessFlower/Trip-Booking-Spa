@@ -15,3 +15,15 @@
 # 读取方 NacosRuntimeConfig 的 @Value("${task.timezone-init.suppliers:}") 在 dev 上已删除，
 # 但生产镜像 2b2b1c18 里仍在。见 issue #113。
 task.timezone-init.suppliers
+
+# ── 待 #126（刷价并发化 + 限流收口）上生产后再从 Nacos 删除 ──
+# 刷价速率已收口为统一限流的子配额
+# GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH，这两个键的读取方
+# （ElongCPSQueryPriceServiceImpl 里的 environment.getProperty("task.elong-cps.*-qps")）
+# 在 dev 上已删除，但生产镜像 cd7c4d33 里仍在读——故 Nacos 侧必须留到本版本上线之后。
+#
+# 顺带记一处教训：本次先把这两个键从 example 里删掉、却没登记到本文件，
+# 于是流水线的「检查2 example↔Nacos」直接拦住了发布（run 32254418242）。
+# 拦得对——「删读取方」与「删 Nacos 键」是两次发布，中间这段窗口必须靠本文件承接。
+task.elong-cps.high-qps
+task.elong-cps.normal-qps
