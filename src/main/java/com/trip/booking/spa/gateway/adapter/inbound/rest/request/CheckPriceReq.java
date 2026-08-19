@@ -32,17 +32,30 @@ public class CheckPriceReq {
     @NonNull
     private Integer roomNum;//房间数量
     /**
-     * 上游展示价（分）。<b>可选</b>——它的唯一用途是 resolve 换票时的容差基准，
-     * 而基准价网关自己就有（刷价写入的产品详情缓存）。
+     * <b>客人所见价</b>（分）：上游实际展示给客人的该报价总价。<b>可选</b>。
      *
-     * <p>曾经是必填（Lombok {@code @NonNull} → 反序列化即抛 → HTTP 400）。但接入方
-     * 未必持有价格：cursor 的验价请求 DTO 就没有价格字段（老路价格从它自己的库里查），
-     * 2026-08-19 因此把 spa# 票据验价全打成 400。网关是报价的权威，不该要求调用方
-     * 把网关自己发的价再告诉它一遍。缺失时按 sProductId 反查缓存原价作基准（见
-     * {@code ElongPriceServiceImpl#lookupTotalPriceFromCache}）；反查不到则不换票
-     * （无基准即无从判断价格漂移，R-1.6 宁可少卖不可卖错）。
+     * <p>唯一用途是 resolve 换票时的<b>尺子</b>——新票比客人所见贵多少算太贵
+     * （容差双门 min(比例, 绝对帽)，issue #59）。取值优先级：
+     * <ol>
+     *   <li>调用方携带 → 用它（最准，这就是客人看到的数）；</li>
+     *   <li>未携带 → 网关按<b>出价同一条路径</b>反查（见
+     *       {@code ElongPriceServiceImpl#lookupTotalPriceFromCache}）；</li>
+     *   <li>都拿不到 → 不换票（没有尺子就不量，R-1.6 宁可少卖不可卖错）。</li>
+     * </ol>
+     *
+     * <p><b>为什么叫 seenPrice 而不是 totalPrice</b>：旧名字暗示"随便哪个总价都行"，
+     * 2026-08-19 我据此错拿了产品详情快照里的总价（刷价那次的 1 晚价）当基准，而客人
+     * 看的是按其查询区间累加的多晚价——基准小一个量级，多晚订单的换票全被误判超容差。
+     * 名字必须说清"必须是客人看到的那个数"。旧名经 {@code @JsonAlias} 仍可接收，
+     * 存量调用方不受影响。
+     *
+     * <p><b>为什么可选</b>：接入方未必持有价格（cursor 的验价 DTO 就没有价格字段）。
+     * 它曾是必填（Lombok {@code @NonNull} → 反序列化即抛 → HTTP 400），把整条
+     * spa# 票据验价打死。它承担的是"减少无谓变价"的体验优化，不是资损防线
+     * （最后防线在渠道侧的变价上报），不该为它卡死链路。
      */
-    private Integer totalPrice;
+    @com.fasterxml.jackson.annotation.JsonAlias("totalPrice")
+    private Integer seenPrice;
 
     private String planSession;
 
