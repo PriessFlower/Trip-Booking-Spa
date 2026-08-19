@@ -11,6 +11,11 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # 不写则取 Spring Boot 默认 10。刷价并发化后每行要写任务表与目录表两处，
+      # 与出价、验价共用池；显式给 20 并留出可观测的余量，避免默认值被静默撞满。
+      maximum-pool-size: 20
+      minimum-idle: 4
     url: jdbc:mysql://${spring.datasource.host}:${spring.datasource.port}/${spring.datasource.name}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&serverTimezone=GMT%2B8
   redis:
     host: ${REDIS_HOST}
@@ -18,7 +23,9 @@ spring:
     password: ${REDIS_PASSWORD:}
     lettuce:
       pool:
-        max-active: 8
+        # 8 是刷价串行时代的容量。刷价并发化后（默认 6 行并发），刷价与出价会同时取连接，
+        # 而出价是真实客流——池子留在 8 会让提速的代价变成拖慢客人。按"并发度 + 客流余量"抬到 32。
+        max-active: 32
         max-idle: 32
         min-idle: 4
   cloud:
