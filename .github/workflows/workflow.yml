@@ -36,6 +36,12 @@ jobs:
           java-version: '21'
           cache: maven
 
+      # PROJECT.md 附录 A.2 的可执行形态（离线那半）。放在构建之前——它是纯文本比对、
+      # 秒级完成，比编译更早给出反馈。issue #98 的成因（example 键少缩进两格、代码一律
+      # 读不到）会在这里被抓住：example 里多出没人读的死键、同时少了代码要读的键。
+      - name: Check Nacos key registry against the code
+        run: python3 scripts/check-nacos-key-drift.py
+
       - name: Build and test
         run: ./mvnw --batch-mode --activate-profiles test verify
 
@@ -370,6 +376,20 @@ jobs:
                echo "Refusing to deploy: expected trip-offline, got $actual_hostname" >&2
                exit 1
              fi'
+
+      # PROJECT.md 附录 A.2 的可执行形态（对环境那半）。放在推配置与起容器之前——
+      # 键差异属"配了不生效/在跑却没记录"，发现得越晚排障越贵（issue #98 历经三个
+      # 提交周期无人发现，就是因为这一步此前只是一句注释）。
+      #
+      # 本步骤在 platform runner 上跑，Nacos 就在同一台机（172.21.32.14:8848），
+      # 无需经跳板。只读 /nacos/v1/cs/configs，不写。
+      - name: Check Nacos key registry against production Nacos
+        env:
+          NACOS_SERVER_ADDR: ${{ vars.PROD_NACOS_SERVER_ADDR }}
+          NACOS_NAMESPACE: ${{ vars.PROD_NACOS_NAMESPACE }}
+          NACOS_USERNAME: ${{ secrets.PROD_NACOS_USERNAME }}
+          NACOS_PASSWORD: ${{ secrets.PROD_NACOS_PASSWORD }}
+        run: python3 scripts/check-nacos-key-drift.py --with-nacos
 
       - name: Stage production runtime configuration
         env:
