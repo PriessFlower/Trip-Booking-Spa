@@ -206,10 +206,16 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
         // 到点未完则强制收尾并记日志——宁可暴露超时,不可静默截断。
         pool.shutdown();
         try {
-            long budgetSec = Math.max(60, (long) Math.ceil(list.size() / Math.max(qps, 0.1)) + 120);
+            long budgetSec = roundBudgetSeconds(list.size(), qps, concurrency);
             if (!pool.awaitTermination(budgetSec, TimeUnit.SECONDS)) {
-                log.warn("elongQueryPriceTask 本轮超时未完成,强制收尾, trigger={}, priority={}, 预算 {}s",
-                        trigger, priority, budgetSec);
+                // 三态之和小于总行数,差额就是被砍掉、这一轮没刷到的行——必须算出来打给人看,
+                // 否则"共 N 行"会读成"N 行都处理了"(2026-08-19 生产实证:常规档连续三轮
+                // 卡在 220s 预算上被截断,每轮丢 166/400 = 41%,而三态和只有 234)
+                int done = onSale.get() + empty.get() + failed.get();
+                log.error("elongQueryPriceTask 本轮超时被截断,trigger={},priority={},预算={}s,"
+                                + "已处理={},未处理={},并发={},qps={} —— 未处理的行本轮未刷价,"
+                                + "请核对并发度是否配得过低(并发 × 每行耗时 决定实际速率)",
+                        trigger, priority, budgetSec, done, list.size() - done, concurrency, qps);
                 pool.shutdownNow();
             }
         } catch (InterruptedException e) {
@@ -238,5 +244,29 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
                 borrowed.get(), demoted.get(), concurrency,
                 roundCost > 0 ? String.format("%.2f", list.size() * 1000.0 / roundCost) : "-", roundCost);
         return true;
+    }
+
+    /**
+     * 一轮的等待预算(秒)。
+     *
+     * <p><b>不能只按配额算。</b>原实现是 {@code 行数 / qps + 120}，隐含假设"总能跑到配置的 QPS"。
+     * 但实际速率是 {@code min(配额, 并发度 / 单行耗时)}——并发度配得低时跑不到配额，预算却按配额
+     * 给，于是轮次被砍在预算上。2026-08-19 生产实证:常规档配额 4 QPS、并发 3，实际只有 1.82 QPS，
+     * 连续三轮精确卡在 220s 预算被截断，每轮丢 166/400 = 41% 的行，而三态计数之和只有 234。
+     *
+     * <p>故按两者的下限估时，再乘 1.5 留余量并加固定底。宁可等久一点(下一次 cron 会被
+     * SynchronousQueue 拒掉、跳过一轮，这是既有的安全行为)，也不要静默少刷。
+     *
+     * @param rows        本轮行数
+     * @param qps         限流子配额
+     * @param concurrency 行级并发度
+     */
+    static long roundBudgetSeconds(int rows, double qps, int concurrency) {
+        // 单行耗时的保守估计:生产实测均值 1.45s、p90 3.13s，取 p90 作估计基数
+        double perRowSec = 3.2;
+        double capacityQps = Math.max(concurrency, 1) / perRowSec;
+        double effectiveQps = Math.min(Math.max(qps, 0.1), capacityQps);
+        long estimate = (long) Math.ceil(rows / effectiveQps);
+        return Math.max(120, (long) (estimate * 1.5) + 60);
     }
 }
