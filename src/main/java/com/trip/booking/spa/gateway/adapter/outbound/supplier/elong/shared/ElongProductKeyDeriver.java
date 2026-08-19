@@ -100,27 +100,130 @@ public class ElongProductKeyDeriver {
         return count != null && count > 0;
     }
 
+    /** 餐食形态。{@code null} 表示无法归类，一律按 UNKNOWN 处理（R-5.4），绝不猜。 */
+    private enum MealShape {
+        /** 供应商正面声明「无餐食」——这是可信的确定信息，不是"没填" */
+        NONE(false, false, false),
+        BREAKFAST(true, false, false),
+        BREAKFAST_DINNER(true, false, true),
+        BREAKFAST_LUNCH_DINNER(true, true, true),
+        /** 有餐，但到店协商才定是哪几顿——订时不可确定，按 UNKNOWN */
+        INDETERMINATE(false, false, false);
+
+        final boolean breakfast;
+        final boolean lunch;
+        final boolean dinner;
+
+        MealShape(boolean breakfast, boolean lunch, boolean dinner) {
+            this.breakfast = breakfast;
+            this.lunch = lunch;
+            this.dinner = dinner;
+        }
+    }
+
     /**
-     * 餐食规范化：{@code meals.dayMealTable[].breakfastShare} 取<b>最大值</b>
-     * （逐日份数，入住当日常为 0，取最大才是该产品的真实早餐配置——cursor 同口径）。
-     * dayMealTable 缺席时回退历史字段 NightlyRates[].BreakfastCount（同样取最大）。
-     * 两处都解析不出返回 null → MealSignature.unknown() → 不进目录（R-5.4）。
+     * 餐食规范化：以 {@code meals.mealCopyWriting}（艺龙的餐食文案）判定餐食<b>形态</b>，
+     * 以 {@code meals.dayMealTable[].breakfastShare} 判定<b>份数</b>。
      *
-     * <p>艺龙预付产品无午/晚餐概念，lunch/dinner 恒 0。
+     * <p><b>为什么形态不能只看 breakfastShare</b>（2026-08-19 生产实证，828 家酒店 30,243 条报价）：
+     * 艺龙的午/晚餐信息<b>不在</b>结构化字段里，只在文案里；而 breakfastShare 对
+     * 「到店三选二」这类产品报 0——它报的是"早餐不保证"，不是"没有餐"。旧实现把
+     * lunch/dinner 写死 0、只读 breakfastShare，导致约 1.01%（306 条）餐食签名判错：
+     * <ul>
+     *   <li>260 条「N份早餐或N份午餐或N份晚餐(到店3选2)」被判成无餐，<b>与「无餐食」合流</b>；</li>
+     *   <li>46 条「N份早餐和N份午餐和N份晚餐」（全餐）被判成仅含早，<b>与纯含早合流</b>。</li>
+     * </ul>
+     * 后果与 Expedia 2026-08-19 那次同构（见 ExpediaProductKeyDeriver）：裁剪按等价类留最低价，
+     * 含餐多的那条被当同一卖法裁掉（F-3.2）；resolve 硬门是"键相等"，键分不出餐食就可能
+     * 拿无餐票换含餐票（R-3.2）。
+     *
+     * <p><b>文案取值是模板生成的、可枚举的</b>（实测 19 种，归一份数后 9 种），故按结构归类而非
+     * 自由文本解析。归类不出的一律 UNKNOWN 并打日志，让表能长——沿用 Expedia 那次 2203 的
+     * 判据：猜错是<b>卖错</b>，不归类最多<b>少卖</b>（R-1.6 取后者）。
      */
     public Meal convertMeal(ElongRatePlan plan) {
-        Integer breakfast = maxBreakfastShare(plan.getMeals());
-        if (breakfast == null) {
-            breakfast = maxBreakfastCount(plan.getNightlyRates());
-        }
-        if (breakfast == null) {
-            log.info("艺龙餐食规范化：meals.dayMealTable 与 NightlyRates.BreakfastCount 均缺席，按 UNKNOWN 处理(R-5.4),ratePlanId={},goodsUniqId={}",
-                    plan.getRatePlanId(), plan.getGoodsUniqId());
+        String copy = mealCopyWriting(plan);
+        MealShape shape = classifyMealCopy(copy);
+        if (shape == null) {
+            log.info("艺龙餐食规范化：餐食文案无法归类，按 UNKNOWN 处理(R-5.4)，copy=[{}],ratePlanId={},goodsUniqId={}",
+                    copy, plan.getRatePlanId(), plan.getGoodsUniqId());
             return null;
         }
-        String desc = plan.getMeals() != null && plan.getMeals().hasNonNull("mealCopyWriting")
-                ? plan.getMeals().get("mealCopyWriting").asText() : (breakfast > 0 ? "含早餐" : "");
-        return Meal.builder().count(breakfast).lunchCount(0).dinnerCount(0).mealDesc(desc).build();
+        if (shape == MealShape.INDETERMINATE) {
+            log.info("艺龙餐食规范化：餐食组合需到店协商、订时不可确定，按 UNKNOWN 处理(R-5.4)，copy=[{}],ratePlanId={}",
+                    copy, plan.getRatePlanId());
+            return null;
+        }
+
+        // 份数：结构化字段优先（逐日取最大，入住当日常为 0）；缺失时退回文案里的「N份」
+        Integer share = maxBreakfastShare(plan.getMeals());
+        if (share == null) {
+            share = maxBreakfastCount(plan.getNightlyRates());
+        }
+        if (share == null) {
+            share = sharesInCopy(copy);
+        }
+        int portions = share == null ? 1 : share;
+        return Meal.builder()
+                .count(shape.breakfast ? Math.max(portions, 1) : 0)
+                .lunchCount(shape.lunch ? Math.max(portions, 1) : 0)
+                .dinnerCount(shape.dinner ? Math.max(portions, 1) : 0)
+                .mealDesc(copy == null ? "" : copy)
+                .build();
+    }
+
+    private static String mealCopyWriting(ElongRatePlan plan) {
+        JsonNode meals = plan.getMeals();
+        return meals != null && meals.hasNonNull("mealCopyWriting")
+                ? meals.get("mealCopyWriting").asText() : null;
+    }
+
+    /**
+     * 餐食文案归类。返回 {@code null} = 无法归类（调用方按 UNKNOWN 处理）。
+     *
+     * <p><b>判定顺序是安全护栏，不得调整</b>：「或/选」必须最先判。任何"到店协商"的措辞
+     * 都不允许被后续分支读成确定值——这是本方法唯一会造成<b>卖错</b>的方向。
+     */
+    private static MealShape classifyMealCopy(String copy) {
+        if (StringUtils.isBlank(copy)) {
+            return null;   // 文案缺席：午/晚餐无从判断，不可假定为无
+        }
+        String t = copy.replaceAll("\\s+", "");
+        // ① 选择型：到店 N 选 M，订时不可确定
+        if (t.contains("或") || t.contains("选")) {
+            return MealShape.INDETERMINATE;
+        }
+        // ② 供应商正面声明无餐
+        if (t.contains("无餐食")) {
+            return MealShape.NONE;
+        }
+        // ③ 确定型：以「和」并列，逐项认餐（"小食饮料"不计入三餐）
+        boolean b = t.contains("早餐");
+        boolean l = t.contains("午餐");
+        boolean d = t.contains("晚餐");
+        if (!b && !l && !d) {
+            return null;   // 既非无餐、又不含任何餐名：形态不明
+        }
+        if (b && l && d) {
+            return MealShape.BREAKFAST_LUNCH_DINNER;
+        }
+        if (b && !l && d) {
+            return MealShape.BREAKFAST_DINNER;
+        }
+        if (b && !l && !d) {
+            return MealShape.BREAKFAST;
+        }
+        // 仅午餐/仅晚餐/早+午 等组合：生产未见，不臆断（R-1.6）
+        return null;
+    }
+
+    /** 从文案里取份数，如「2份早餐」→ 2。取不到返回 null。 */
+    private static Integer sharesInCopy(String copy) {
+        if (copy == null) {
+            return null;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)份").matcher(copy);
+        return m.find() ? Integer.valueOf(m.group(1)) : null;
     }
 
     private static Integer maxBreakfastShare(JsonNode meals) {
