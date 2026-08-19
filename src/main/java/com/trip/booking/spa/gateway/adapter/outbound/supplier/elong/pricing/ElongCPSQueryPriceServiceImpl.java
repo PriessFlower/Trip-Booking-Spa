@@ -98,10 +98,20 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
         int onSale = 0;
         int empty = 0;
         int failed = 0;
+        // 借入与复位各自计数（§6.2.1）：这两个走向此前无任何日志落点，issue #95 的孤儿行
+        // 正因如此积累了一整天无人察觉。借入数持续不为 0 而复位数长期为 0，即是复位失效的信号
+        int borrowed = 0;
+        int demoted = 0;
         for (ElongQueryPriceTask task : list) {
             try {
+                if (1 == task.getTemporaryUpgrade() && priority != task.getPriorityLevelNumber()) {
+                    borrowed++;
+                }
                 Date upgradeDeadline = task.getUpgradeDeadline();
                 if (null == upgradeDeadline || !upgradeDeadline.after(new Date())) {
+                    if (1 == task.getTemporaryUpgrade()) {
+                        demoted++;
+                    }
                     task.setTemporaryUpgrade(0);
                 }
                 task.setUpdateTime(new Date());
@@ -135,8 +145,9 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
             }
         }
         // §6.1.2：三态各自计数——"刷不出价"是频控还是真无房，处置完全不同
-        log.info("elongQueryPriceTask 本轮结束, trigger={}, priority={}, 共 {} 行, 有在售={}, 无在售={}, 失败={}, 耗时 {} ms",
-                trigger, priority, list.size(), onSale, empty, failed, System.currentTimeMillis() - roundStart);
+        log.info("elongQueryPriceTask 本轮结束, trigger={}, priority={}, 共 {} 行, 有在售={}, 无在售={}, 失败={}, 借入={}, 复位={}, 耗时 {} ms",
+                trigger, priority, list.size(), onSale, empty, failed, borrowed, demoted,
+                System.currentTimeMillis() - roundStart);
         return true;
     }
 }

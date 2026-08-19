@@ -21,6 +21,19 @@
         id, sh_id, delay_check_in, delay_check_out, query_count, update_time, last_time, priority_level_number, temporary_upgrade, upgrade_deadline
     </sql>
 
+    <!--
+      两档的取批条件必须互斥且穷尽:任一行在任一时刻恰好命中一档。否则会出现两档都
+      不匹配的孤儿行,而"升档复位"只在 Java 侧、且只在行被取到时执行
+      (ElongCPSQueryPriceServiceImpl)——取不到即永不复位,永不再刷(issue #95)。
+
+      有效档的定义(借入即"档 0 临时接管"):
+        借入中 = temporary_upgrade = 1 且 (upgrade_deadline 为空 或 尚未到期)
+        有效档 0 = priority_level_number = 0 或 借入中
+        有效档 1 = priority_level_number = 1 且 非借入中
+
+      故常规档必须显式接纳"升档已过期"的行:它们已不在借入中,回本档由本档取走,
+      Java 顺势复位。改动此处务必保持两条件互为取反。
+    -->
     <select id="getQueryPriceTaskList" resultMap="BaseResultMap">
         SELECT
         <include refid="BASE_LIST"/>
@@ -30,7 +43,7 @@
             or (temporary_upgrade = 1 and (upgrade_deadline is null or upgrade_deadline &gt; now()))
         </if>
         <if test="0 == temporaryUpgrade">
-            and temporary_upgrade = #{temporaryUpgrade}
+            and (temporary_upgrade = 0 or (upgrade_deadline is not null and upgrade_deadline &lt;= now()))
         </if>
         order by update_time limit #{batchSize}
     </select>
