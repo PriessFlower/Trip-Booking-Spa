@@ -509,6 +509,28 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         }
     }
 
+    /**
+     * 从产品详情缓存反查该报价的总价（分），作为 resolve 换票的容差基准。
+     * 用于上游未携 totalPrice 的场景（见 {@link CheckPriceReq#getTotalPrice()}）。
+     * 查不到返回 null——无基准则不换票，不猜。
+     */
+    Integer lookupTotalPriceFromCache(String hotelId, String productId) {
+        try {
+            String json = redisUtils.get(
+                    com.trip.booking.spa.platform.util.RedisKeyUtils.buildPriceInfoKey(hotelId, productId));
+            if (org.apache.commons.lang3.StringUtils.isBlank(json)) {
+                return null;
+            }
+            com.fasterxml.jackson.databind.JsonNode node =
+                    com.trip.booking.spa.platform.util.JsonUtils.getObjectMapper().readTree(json);
+            com.fasterxml.jackson.databind.JsonNode price = node.path("totalPrice");
+            return price.isNumber() && price.asInt() > 0 ? price.asInt() : null;
+        } catch (Exception e) {
+            log.warn("艺龙验价：总价反查失败,hotelId={},productId={},err={}", hotelId, productId, e.toString());
+            return null;
+        }
+    }
+
     PlanWithRoom tryResolveByProductKey(ElongHotelDetailResponse.ElongHotel hotel, CheckPriceReq request, String occupancy) {
         if (StringUtils.isBlank(request.getProductKey())) {
             return null;
@@ -538,13 +560,22 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 equivalents.add(new ResolveCandidate(new PlanWithRoom(room, plan), sumCents(dayPrices)));
             }
         }
+        // 容差基准：上游给了就用上游的；没给则反查本网关刷价时写入的原价（调用方未必持有价格）
+        Integer baseline = request.getTotalPrice() != null
+                ? request.getTotalPrice()
+                : lookupTotalPriceFromCache(request.getSHotelId(), request.getSProductId());
+        if (baseline == null) {
+            log.info("艺龙验价：无容差基准价（上游未携且缓存反查不到），不自动换票,sHotelId={},sProductId={}",
+                    request.getSHotelId(), request.getSProductId());
+            return null;
+        }
         return ResolveGate.pickCheapestWithinTolerance(equivalents, ResolveCandidate::priceCents,
-                        request.getTotalPrice(), properties.getResolvePriceTolerance(),
+                        baseline, properties.getResolvePriceTolerance(),
                         properties.getResolvePriceCapCents())
                 .map(chosen -> {
                     log.info("艺龙验价：令牌已死，按productKey换票成功,原sProductId={},新goodsUniqId={},新价={}分,展示价={}分",
                             request.getSProductId(), chosen.planWithRoom().plan().getGoodsUniqId(),
-                            chosen.priceCents(), request.getTotalPrice());
+                            chosen.priceCents(), baseline);
                     return chosen.planWithRoom();
                 })
                 .orElseGet(() -> {
@@ -554,7 +585,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                                 request.getSHotelId(), request.getSProductId(), request.getProductKey());
                     } else {
                         log.info("艺龙验价：存在等价报价但超出容差，拒绝自动换票,sProductId={},展示价={}分,候选最低={}分",
-                                request.getSProductId(), request.getTotalPrice(),
+                                request.getSProductId(), baseline,
                                 equivalents.stream().mapToInt(ResolveCandidate::priceCents).min().orElse(-1));
                     }
                     return null;
