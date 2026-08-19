@@ -35,3 +35,7 @@ HANDOFF.md
 
 # bff 验收证据日志（运行时产物，归档在 expdia 仓库 acceptance-evidence/）
 /logs/
+
+# Python（scripts/ 下的核对脚本本地跑过会生成）
+__pycache__/
+*.pyc
