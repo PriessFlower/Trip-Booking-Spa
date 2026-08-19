@@ -50,6 +50,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -207,13 +208,13 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         if (resultPackage != null && resultPackage.isSucc() && null != resultPackage.getData() && CollectionUtils.isNotEmpty(resultPackage.getData().getHotelPrices())) {
             hotelPricePackage = resultPackage.getData().getHotelPrices().get(0);
         }
-        Monitor.recordOne("expedia_all_query");
+        Monitor.recordOne("pricing_supplier_query", pricingTags("all"));
         if (null == hotelPriceOnly && null == hotelPricePackage) {
             log.info("expedia查询零售价和打包价全部失败,request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(resultOnly));
-            Monitor.recordOne("expedia_all_query_fail");
+            Monitor.recordOne("pricing_supplier_query", pricingTags("fail"));
             return null;
         }
-        Monitor.recordOne("expedia_all_query_success");
+        Monitor.recordOne("pricing_supplier_query", pricingTags("success"));
         // 零售价(hotel_only)与打包价(hotel_package)是两类不同产品，规则上不可混卖，
         // 各自独立成品返回、各带自己的 priceFlag，不做比价合并
         return convertSeparated(hotelPriceOnly, hotelPricePackage, request);
@@ -658,7 +659,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         // 需先给缓存键补类型维度，再在此处放开 hotel_package 查询。
         queryPriceRequest.setSales_environment("hotel_only");
         ResponseResult<QueryPriceResponse> resultOnly = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
-        Monitor.recordOne("expedia_all_query");
+        Monitor.recordOne("pricing_supplier_query", pricingTags("all"));
 
         if (null == resultOnly || !resultOnly.isSucc() || null == resultOnly.getData()
                 || CollectionUtils.isEmpty(resultOnly.getData().getHotelPrices())) {
@@ -670,5 +671,17 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         //插入缓存
         cachePriceService.productToCache(productRespDTOList, request);
         return productRespDTOList;
+    }
+
+    /**
+     * 出价指标的维度。supplier 与成败都必须进 tag，不进名字（§3.9.2）——
+     * 原先是 {@code expedia_all_query} / {@code _fail} / {@code _success} 三个名字，
+     * 接第二家供应商就要再造三个。
+     */
+    private static Map<String, Object> pricingTags(String outcome) {
+        Map<String, Object> tags = new HashMap<>(2);
+        tags.put("supplier", "expedia");
+        tags.put("outcome", outcome);
+        return tags;
     }
 }
