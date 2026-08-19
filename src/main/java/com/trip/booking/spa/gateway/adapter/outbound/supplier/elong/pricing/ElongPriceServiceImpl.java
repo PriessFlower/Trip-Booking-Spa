@@ -86,6 +86,9 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     @Resource
     private CachePriceService cachePriceService;
 
+    @Resource
+    private com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.content.ElongCatalogService elongCatalogService;
+
     /**
      * 查价并落缓存（刷价任务的唯一入口）。查价逻辑复用 {@link #queryPrices}，
      * 只多一步写缓存——刷价与实时查价必须同源，否则 productKey/退改/餐食会分叉。
@@ -101,6 +104,9 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             return null;
         }
         cachePriceService.productToCache(products, request);
+        // 建档(R-2.6):稳定事实落库,与写缓存同一处、同一份数据,不额外调供应商。
+        // 开关默认关;失败不打断刷价(服务内部已吞异常)
+        elongCatalogService.upsert(products);
         return products;
     }
 
