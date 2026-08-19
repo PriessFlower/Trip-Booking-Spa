@@ -543,11 +543,11 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             }
         }
         return ResolveGate.pickCheapestWithinTolerance(equivalents, ResolveCandidate::priceCents,
-                        request.getTotalPrice(), rapidProperties.getResolvePriceTolerance(),
+                        request.getSeenPrice(), rapidProperties.getResolvePriceTolerance(),
                         rapidProperties.getResolvePriceCapCents())
                 .map(chosen -> {
                     log.info("expedia验价：令牌已死，按productKey换票成功,原sProductId={},新rateId={},新价={}分,展示价={}分",
-                            request.getSProductId(), chosen.rate().getId(), chosen.priceCents(), request.getTotalPrice());
+                            request.getSProductId(), chosen.rate().getId(), chosen.priceCents(), request.getSeenPrice());
                     return chosen.rate();
                 })
                 .orElseGet(() -> {
@@ -557,7 +557,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                                 request.getSHotelId(), request.getSProductId(), request.getProductKey());
                     } else {
                         log.info("expedia验价：存在等价报价但超出容差，拒绝自动换票,sProductId={},展示价={}分,候选最低={}分",
-                                request.getSProductId(), request.getTotalPrice(),
+                                request.getSProductId(), request.getSeenPrice(),
                                 equivalents.stream().mapToInt(ResolveCandidate::priceCents).min().orElse(-1));
                     }
                     return null;

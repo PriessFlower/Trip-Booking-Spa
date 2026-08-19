@@ -25,7 +25,7 @@ class AbstractCheckPriceSyncSupportServiceTest {
                 .checkIn("2026-09-25")
                 .checkOut("2026-09-26")
                 .roomNum(1)
-                .totalPrice(188012)
+                .seenPrice(188012)
                 .build();
     }
 
