@@ -10,8 +10,6 @@
     </settings>
 
     <typeHandlers>
-        <typeHandler handler="com.trip.booking.spa.platform.mybatis.typehandler.CodeEnumHandler"
-                     javaType="com.trip.booking.spa.core.api.meituan.enums.MeituanChangeTypeEnum"/>
         <typeHandler handler="com.trip.booking.spa.platform.mybatis.typehandler.StatusEnumHandler"
                      javaType="boolean" jdbcType="INTEGER"/>
     </typeHandlers>

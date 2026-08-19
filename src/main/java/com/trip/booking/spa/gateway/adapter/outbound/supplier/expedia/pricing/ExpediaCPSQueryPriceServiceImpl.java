@@ -25,12 +25,10 @@ import java.util.Date;
 import java.util.List;
 
 /**
- * @BelongsProject: trip-booking-spa
- * @BelongsPackage: com.trip.booking.spa.core.api.ratehawk.service.impl
- * @Author: dick_w
- * @CreateTime: 2025-03-17  14:24
- * @Description: rateHawk查价缓存service实现类
- * @Version: 1.0
+ * Expedia 刷价缓存：消费 expedia_query_price_task 队列，把查回的价格写入我方 Redis 缓存。
+ *
+ * <p>定时入口见 {@code ExpediaCPSQueryPriceTask}，手动入口见 {@code BackDoorController}
+ * 的 {@code /hotel/expedia/priceCache}，两者共用 {@link #LOCK_KEY} 互斥。</p>
  */
 @Slf4j
 @Service

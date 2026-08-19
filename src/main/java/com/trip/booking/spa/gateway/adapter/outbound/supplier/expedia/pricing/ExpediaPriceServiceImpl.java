@@ -278,10 +278,36 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         return stayPrice;
     }
 
+    /**
+     * 逐晚拆分报价，并把总佣金摊到各晚。
+     *
+     * <p><b>不变量：{@code Σ priceInfos.price == totalPrice}</b>。走缓存的读路径是逐晚累加
+     * 重算总价（{@code CachePriceServiceImpl.getPrice}），而实时路径扣的是全额佣金；佣金若
+     * 按晚整除、余数丢弃，同一产品两条路径就会报出相差 {@code sumCommission mod n} 分的
+     * 两个总价（issue #99）。金额极小（最多 n-1 分），但口径不唯一，日后对账会冒出一批
+     * 无法解释的分位差。故余数必须摊回去：前 {@code remainder} 晚各多扣 1 分。
+     *
+     * <p>{@code nightlyLists} 为空或 null 时返回空列表而不是抛异常：整除会 {@code / 0}，
+     * 取 size 会 NPE，而调用链一路无 guard，抛出后在刷价路径上被单行 try 兜成"该行整体
+     * 报废"，在线路径上就是查价失败。尚无证据表明 Expedia 会返回没有 nightly 明细的 rate，
+     * 故此处属预防。
+     */
     public List<PriceInfo> buildQueryPriceInfos(List<List<QueryPriceResponse.Nightly>> nightlyLists, String checkIn, int sumCommission) {
+        if (CollectionUtils.isEmpty(nightlyLists)) {
+            // §6.2.1 非常态走向必须有落点；此处拿得到的键只有住期与佣金，有几个带几个（§6.1.2）
+            log.warn("expedia查价：rate 无 nightly 明细，逐晚报价按空处理,checkIn={},sumCommission={}分",
+                    checkIn, sumCommission);
+            return Lists.newArrayList();
+        }
         List<PriceInfo> priceInfos = Lists.newArrayList();
-        int commission = sumCommission / nightlyLists.size();
+        int nights = nightlyLists.size();
+        // Math.floorDiv/floorMod 而非 / 与 %：佣金理论上非负，但一旦为负，
+        // Java 的 % 会给出负余数，摊派后总和不再等于 sumCommission，不变量即失守
+        int commissionPerNight = Math.floorDiv(sumCommission, nights);
+        int remainder = Math.floorMod(sumCommission, nights);
         for (int i = 0; i < nightlyLists.size(); i++) {
+            // 前 remainder 晚各多扣 1 分，使 Σ 各晚扣减恰好等于 sumCommission
+            int commission = commissionPerNight + (i < remainder ? 1 : 0);
             BigDecimal sumPrice = BigDecimal.ZERO; // 初始化总价累加器为0
             BigDecimal taxes = BigDecimal.ZERO; // 初始化税费累加器为0
             BigDecimal roomPrice = BigDecimal.ZERO; // 初始化房费累加器为0
@@ -645,39 +671,4 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         cachePriceService.productToCache(productRespDTOList, request);
         return productRespDTOList;
     }
-
-    public List<PriceInfo> buildCheckPriceInfos(List<List<QueryPriceResponse.Nightly>> nightlyLists, String checkIn) {
-        List<PriceInfo> priceInfos = Lists.newArrayList();
-        for (int i = 0; i < nightlyLists.size(); i++) {
-            BigDecimal sumPrice = BigDecimal.ZERO; // 初始化累加器为0
-            for (QueryPriceResponse.Nightly nightly : nightlyLists.get(i)) {
-                sumPrice = sumPrice.add(new BigDecimal(nightly.getValue()));
-            }
-            PriceInfo priceInfo = PriceInfo.builder().date(DateUtil.getFutureDay(checkIn, i)).price(sumPrice.multiply(BigDecimal.valueOf(100)).intValue()).build();
-            priceInfos.add(priceInfo);
-        }
-        return priceInfos;
-    }
-
-//    public static void main(String[] args) {
-////        // 创建一个LocalDate对象表示日期
-////        LocalDate date = LocalDate.of(2023, 10, 15); // 这里你可以用你想要查询的日期替换它
-////        // 使用一个明确的日期来构建LocalDateTime
-////        LocalDateTime localDateTime = LocalDateTime.of(date, LocalTime.now()); // LocalTime也可以指定为具体的本地时间
-////
-////        // 获取GMT时区
-////        ZoneId gmtZoneId = ZoneId.of("GMT");
-////        // 将本地日期时间转换为ZonedDateTime并设置到GMT时区
-////        ZonedDateTime gmtDateTime = ZonedDateTime.of(localDateTime, gmtZoneId);
-////
-////        // 打印结果，查看这个日期在GMT时区的时间
-////        System.out.println("Zoned DateTime in GMT: " + gmtDateTime);
-//
-//
-//        String str = "{\"start\":\"2024-10-26T10:00:00.000-07:00\",\"end\":\"2024-10-28T10:00:00.000-07:00\",\"percent\":\"10%\",\"currency\":\"CNY\"}";
-//        QueryPriceResponse.CancelPolicy cancelPolicy = new QueryPriceResponse.CancelPolicy();
-//        productKeyDeriver.convertCancelPolicy("2024-10-28", Arrays.asList(JsonUtils.readValue(str, QueryPriceResponse.CancelPolicy.class)));
-//    }
-
-
 }
