@@ -254,8 +254,21 @@ bean 名必须是 `<SupplierSourceEnum.desc><能力后缀>`，否则 ① 路由�
 **第五步 · 在 Nacos 补该家的限流配额**　键为 `ratelimit.qps` 里的
 `GLOBAL_LIMIT:<供应商>:<接口>`，样例见 `config/nacos/trip-booking-spa.yaml.example`。
 
-**第六步 · 本地实跑**　按 PROJECT.md §2.2.1，合并前必须实际跑通所改链路。
-编译与单测通过不构成验证。
+**第六步 · 建档落库：稳定信息进库，Redis 只留易腐**　按 R-2.6。查价响应里的
+产品事实（productKey、房型、餐食、退改类、占用、房型名）写目录/档案表；供应商的
+易腐报价码只进 `supplier_quote_hint` 列（语义=解析快速通道，非身份）。Redis 只承载
+当轮价格、易腐码与 OfferStore 句柄，靠 TTL 自然消亡。
+
+判据一句话：**「供应商明天换一批报价码，这条信息还对吗？」对 → MySQL；错 → Redis。**
+
+数据源不必额外调接口——刷价本就在查价，写缓存的同时顺手 upsert 即可（Expedia 的
+`ExpediaProductMappingService` 是先例，只是它为建档另查了一遍价）。跳过这步的代价见
+R-2.6：Redis 随覆盖面线性膨胀、TTL 无从取值、缓存被误当事实源。
+
+**第七步 · 本地实跑**　按 PROJECT.md §2.2.1，合并前必须实际跑通所改链路。
+编译与单测通过不构成验证。**且必须从真实入口穿透验证**：2026-08-19 的教训是
+只验两端各自可用、没验请求能从入口流到它们，生产上出价发了 8.3 万条报价而验价
+入口零调用（详见 price-refresh.md 与当日日报）。
 
 ## 6. rateplan：cursor 那个坑，我们做到哪了
 
