@@ -278,10 +278,36 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         return stayPrice;
     }
 
+    /**
+     * 逐晚拆分报价，并把总佣金摊到各晚。
+     *
+     * <p><b>不变量：{@code Σ priceInfos.price == totalPrice}</b>。走缓存的读路径是逐晚累加
+     * 重算总价（{@code CachePriceServiceImpl.getPrice}），而实时路径扣的是全额佣金；佣金若
+     * 按晚整除、余数丢弃，同一产品两条路径就会报出相差 {@code sumCommission mod n} 分的
+     * 两个总价（issue #99）。金额极小（最多 n-1 分），但口径不唯一，日后对账会冒出一批
+     * 无法解释的分位差。故余数必须摊回去：前 {@code remainder} 晚各多扣 1 分。
+     *
+     * <p>{@code nightlyLists} 为空或 null 时返回空列表而不是抛异常：整除会 {@code / 0}，
+     * 取 size 会 NPE，而调用链一路无 guard，抛出后在刷价路径上被单行 try 兜成"该行整体
+     * 报废"，在线路径上就是查价失败。尚无证据表明 Expedia 会返回没有 nightly 明细的 rate，
+     * 故此处属预防。
+     */
     public List<PriceInfo> buildQueryPriceInfos(List<List<QueryPriceResponse.Nightly>> nightlyLists, String checkIn, int sumCommission) {
+        if (CollectionUtils.isEmpty(nightlyLists)) {
+            // §6.2.1 非常态走向必须有落点；此处拿得到的键只有住期与佣金，有几个带几个（§6.1.2）
+            log.warn("expedia查价：rate 无 nightly 明细，逐晚报价按空处理,checkIn={},sumCommission={}分",
+                    checkIn, sumCommission);
+            return Lists.newArrayList();
+        }
         List<PriceInfo> priceInfos = Lists.newArrayList();
-        int commission = sumCommission / nightlyLists.size();
+        int nights = nightlyLists.size();
+        // Math.floorDiv/floorMod 而非 / 与 %：佣金理论上非负，但一旦为负，
+        // Java 的 % 会给出负余数，摊派后总和不再等于 sumCommission，不变量即失守
+        int commissionPerNight = Math.floorDiv(sumCommission, nights);
+        int remainder = Math.floorMod(sumCommission, nights);
         for (int i = 0; i < nightlyLists.size(); i++) {
+            // 前 remainder 晚各多扣 1 分，使 Σ 各晚扣减恰好等于 sumCommission
+            int commission = commissionPerNight + (i < remainder ? 1 : 0);
             BigDecimal sumPrice = BigDecimal.ZERO; // 初始化总价累加器为0
             BigDecimal taxes = BigDecimal.ZERO; // 初始化税费累加器为0
             BigDecimal roomPrice = BigDecimal.ZERO; // 初始化房费累加器为0
