@@ -1,0 +1,18 @@
+# 生产 Nacos 里还留着、但代码已经不读的键。
+#
+# 它们不算「Nacos 有文件无」的漂移失败（那条规则的本意是"生产在跑的键必须被记录"，
+# 而这些键并没有在跑），但必须登记在案：每行写清为什么，运维清掉后把行删掉。
+# 键一旦真的从 Nacos 消失，check-nacos-key-drift.py 会要求删掉对应行——
+# 故本清单不会腐烂成一张永久豁免名单。
+#
+# 发现于 2026-08-19 首次执行附录 A.2 的自动核对（issue #98）。
+
+# didatravel / ratehawk 两家供应商已整包移除（生产 24h 日志零流量后，见 PROJECT.md §「已移除供应商」）
+supplier.didatravel.real-time-price
+task.ratehawk-cps.batch-size
+task.ratehawk-cps.cron
+task.ratehawk-cps.enabled
+task.ratehawk-cps.qps
+
+# InitTimeZoneMapper 及其定时任务已在死代码清理中删除（PR #104）
+task.timezone-init.suppliers

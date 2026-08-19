@@ -476,18 +476,32 @@ java -jar target/trip-booking-spa-0.0.1.jar --spring.profiles.active=dev,local \
 
 ### A.2 核对方法
 
-取生产 Nacos 配置与该文件，逐键比对**键名清单**（非取值）：
+核对由 `scripts/check-nacos-key-drift.py` 执行，**已挂进流水线，键差异非空即失败**：
 
 ```bash
-# 两侧各自提取键路径后 diff，应无差异
+# 离线半：example ↔ 代码实际读取的键。CI 的 test job 每次都跑
+python3 scripts/check-nacos-key-drift.py
+
+# 对环境半：再加 example ↔ 目标 Nacos 的键清单。deploy job 在推配置前跑
+NACOS_SERVER_ADDR=172.21.32.14:8848 NACOS_NAMESPACE=prod \
+NACOS_USERNAME=… NACOS_PASSWORD=… \
+python3 scripts/check-nacos-key-drift.py --with-nacos
 ```
+
+**A.2 此前只有一行注释、没有可执行形态**，结果 example 的 7 个 `cache.price.*` 键从引入那天起就少缩进两格（挂成 `cache.*`），代码一律读不到、无任何提示，历经三个提交周期无人发现（issue #98）。**本节的价值不在方法本身，而在它已被自动执行**——人工核对一旦有一次没做，就等于从未存在。
+
+离线半的判据：**该登记进 Nacos 的键 = 代码读取的键 ∩ example 的顶层域 − `application*.yml` 里声明过的键**。减去 yml 那部分是因为凭证与基础设施地址由环境变量注入、禁止入 Nacos（§3.5.1）；而运维配置禁止出现在 yml（§3.3.1），故该减法不会误伤运维键。它顺带守住 §3.4.2：一旦有人把 Nacos 键写进 yml，该键会从集合中消失并被报为差异。
 
 有差异时按下列方向处置：
 
 | 差异 | 处置 |
 |---|---|
-| 生产有、文件无 | 补进文件——生产在跑的键必须被记录 |
+| 生产有、文件无 | 补进文件——生产在跑的键必须被记录。**若该键对应的代码已删除**，则应从 Nacos 清掉，清掉之前登记到 `config/nacos/pending-removal.txt` 并写明原因 |
 | 文件有、生产无 | 补进 Nacos。该键属运维可调，取值只能在 Nacos（§3.2.2）；留在代码默认值上意味着调整它需要发版 |
+| 文件有、代码不读 | 死键。多半是层级写错（issue #98），也可能是废弃未清理 |
+| 代码读、文件无 | 漏登记。example 是键清单唯一出处（§3.7.6），漏登记会让本附录失效 |
+
+`pending-removal.txt` 不是豁免名单：其中的键一旦真的从 Nacos 消失，核对会要求删掉对应行，故清单只会收缩、不会腐烂。
 
 ### A.3 部署后仍需核对
 
