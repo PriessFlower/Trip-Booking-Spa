@@ -1,18 +1,17 @@
-# 生产 Nacos 里还留着、但代码已经不读的键。
+# 生产 Nacos 里还留着、但仓库里已经没有读取方的键。
 #
 # 它们不算「Nacos 有文件无」的漂移失败（那条规则的本意是"生产在跑的键必须被记录"，
-# 而这些键并没有在跑），但必须登记在案：每行写清为什么，运维清掉后把行删掉。
+# 而这些键并没有在跑），但必须登记在案：每行写清为什么，清掉后把行删掉。
 # 键一旦真的从 Nacos 消失，check-nacos-key-drift.py 会要求删掉对应行——
 # 故本清单不会腐烂成一张永久豁免名单。
 #
-# 发现于 2026-08-19 首次执行附录 A.2 的自动核对（issue #98）。
+# ⚠️ 删 Nacos 键的时机：必须等【删掉读取方的那个版本真正上了生产】之后。
+# 生产跑的镜像可能落后于 dev；提前删键，线上仍在读它的旧版本会静默落回代码兜底值，
+# 等于在无人预期的时刻改变行为。2026-08-19 实证：先删了
+# task.timezone-init.suppliers（dev 上读取方已删、生产镜像上还在），线上立刻落回空值
+# 并打出 "Nacos config ... is empty or invalid"，随即恢复原值。
 
-# didatravel / ratehawk 两家供应商已整包移除（生产 24h 日志零流量后，见 PROJECT.md §「已移除供应商」）
-supplier.didatravel.real-time-price
-task.ratehawk-cps.batch-size
-task.ratehawk-cps.cron
-task.ratehawk-cps.enabled
-task.ratehawk-cps.qps
-
-# InitTimeZoneMapper 及其定时任务已在死代码清理中删除（PR #104）
+# ── 待 #104（死代码清理）随 dev → master 发布上生产后再从 Nacos 删除 ──
+# 读取方 NacosRuntimeConfig 的 @Value("${task.timezone-init.suppliers:}") 在 dev 上已删除，
+# 但生产镜像 2b2b1c18 里仍在。见 issue #113。
 task.timezone-init.suppliers
