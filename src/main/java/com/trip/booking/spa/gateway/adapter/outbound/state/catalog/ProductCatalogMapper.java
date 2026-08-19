@@ -3,6 +3,8 @@ package com.trip.booking.spa.gateway.adapter.outbound.state.catalog;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 产品目录/档案的<b>供应商通用</b>写入口（R-2.6 按腐性分层存储）。
@@ -29,4 +31,13 @@ public interface ProductCatalogMapper {
 
     /** 档案域：供应商产品事实。 */
     int upsertSupplierProductBase(@Param("p") HashMap<String, Object> params);
+
+    /**
+     * 按 productKey 批量取稳定属性（R-2.6 的读侧，供出价组装）。
+     *
+     * <p>查的是 {@code supplier_product_id}——目录的身份列放的就是 productKey。
+     * 易腐报价码不在库里（R-2.1），故<b>无法也不应</b>按 productId 查。
+     */
+    List<Map<String, Object>> selectAttributesByProductKeys(@Param("supplierId") int supplierId,
+                                                            @Param("keys") List<String> productKeys);
 }

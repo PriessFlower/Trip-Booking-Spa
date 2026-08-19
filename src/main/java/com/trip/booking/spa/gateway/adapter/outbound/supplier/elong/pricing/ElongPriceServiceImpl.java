@@ -517,7 +517,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
 
     /**
      * 反查该报价在<b>本次入离日期区间</b>的总价（分），作为 resolve 换票的容差基准。
-     * 用于上游未携 totalPrice 的场景（见 {@link CheckPriceReq#getTotalPrice()}）。
+     * 用于上游未携 totalPrice 的场景（见 {@link CheckPriceReq#getSeenPrice()}）。
      *
      * <p><b>必须走 {@link CachePriceService#getPrice} 这条与出价完全相同的路径</b>，
      * 不能读产品详情缓存里的 totalPrice 字段：后者是<b>刷价那一次</b>写入的快照

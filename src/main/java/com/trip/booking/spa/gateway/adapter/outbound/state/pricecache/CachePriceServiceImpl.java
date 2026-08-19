@@ -60,6 +60,10 @@ public class CachePriceServiceImpl implements CachePriceService {
     @Autowired
     private PriceCacheTtlPolicy priceCacheTtlPolicy;
 
+    /** R-2.6 读侧：稳定属性在目录里，按 productKey 回查（缓存只留易腐码+桥+价） */
+    @Autowired
+    private com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader productAttributeReader;
+
     private static final long ONE_DAY = 86400L;
 
     @Override
@@ -76,6 +80,23 @@ public class CachePriceServiceImpl implements CachePriceService {
         });
         //productMap--sProductId,List<PriceInfo>
         fetchAndProcessPriceInfo(productMap, supplier, keyList);
+
+        // R-2.6：缓存里只有易腐码+桥+价，稳定属性批量回查目录一次（本地缓存命中后零 IO）
+        java.util.List<String> keysForAttr = new ArrayList<>();
+        Map<String, ProductRespCacheDTO> cacheDtoMap = new HashMap<>();
+        productMap.keySet().forEach(pid -> {
+            String json = redisUtils.get(RedisKeyUtils.buildPriceInfoKey(supplier.getSHotelId(), pid));
+            if (StringUtils.isNotBlank(json)) {
+                ProductRespCacheDTO dto = JsonUtils.decodeJson(json, new TypeReference<>() {
+                });
+                cacheDtoMap.put(pid, dto);
+                if (StringUtils.isNotBlank(dto.getProductKey())) {
+                    keysForAttr.add(dto.getProductKey());
+                }
+            }
+        });
+        Map<String, com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader.ProductAttribute>
+                attrMap = productAttributeReader.batchGet(supplier.getSupplierId(), keysForAttr);
 
         // 使用已经收集的价格信息构建响应对象
         productMap.forEach((key, value) -> {
@@ -108,17 +129,22 @@ public class CachePriceServiceImpl implements CachePriceService {
                     return;
                 }
             }
-            //补充产品其他信息
-            //key是product:sHotelId:sProductId,value是ProductRespCacheDTO
-            String priceInfoKey = RedisKeyUtils.buildPriceInfoKey(supplier.getSHotelId(), key);
-            String priceInfoJson = redisUtils.get(priceInfoKey);
-            if (StringUtils.isNotBlank(priceInfoJson)) {
-                ProductRespCacheDTO productRespCacheDTO = JsonUtils.decodeJson(priceInfoJson, new TypeReference<>() {
-                });
+            // 缓存侧：易腐码 + 桥(productKey) + 价
+            ProductRespCacheDTO productRespCacheDTO = cacheDtoMap.get(key);
+            if (productRespCacheDTO != null) {
                 BeanUtils.copyProperties(productRespCacheDTO, respDTO);
                 respDTO.setTotalPrice(totalPrice);
                 respDTO.setTotalTaxes(totalTaxes);
                 respDTO.setRoomTotalPrice(roomTotalPrice);
+                // 目录侧：稳定属性按桥回查。查不到就只出价不出属性——建档未覆盖或 UNKNOWN
+                // 不进目录都是正常态，不能因此丢掉这条报价（R-1.6 宁可少给信息，不可不报价）
+                var attr = productRespCacheDTO.getProductKey() == null
+                        ? null : attrMap.get(productRespCacheDTO.getProductKey());
+                if (attr != null) {
+                    respDTO.setRoom(attr.toRoom());
+                    respDTO.setMeal(attr.toMeal());
+                    respDTO.setProductInfo(attr.toProductInfo());
+                }
             }
             respDTO.setSupplierId(supplier.getSupplierId());
             respDTO.setProductId(key);
@@ -231,28 +257,15 @@ public class CachePriceServiceImpl implements CachePriceService {
 
                 String priceInfoKey = RedisKeyUtils.buildPriceInfoKey(productRespDTO.getHotelId(), productRespDTO.getProductId());
 
-                String productInfoJson = redisUtils.get(priceInfoKey);
-
                 if (CollectionUtils.isNotEmpty(productRespDTO.getPriceInfos())) {
 
-                    if (StringUtils.isBlank(productInfoJson)) {
-                        ProductRespCacheDTO respCacheDTO = new ProductRespCacheDTO();
-                        BeanUtils.copyProperties(productRespDTO, respCacheDTO);
-                        productRespCacheDTOMap.put(priceInfoKey, respCacheDTO);
-                    } else {
-                        // 这里处理早餐变更的数据
-                        ProductRespCacheDTO respCacheDTO = JsonUtils.decodeJson(productInfoJson, new TypeReference<>() {
-                        });
-                        // 如果早餐有变化，则把发生早餐变化的产品id放入changeBreakfastSet，更新缓存productRespCacheDTOMap
-                        // 用 Objects.equals 而非 count.equals：缓存中可能存在 count 为空的历史数据
-                        if (respCacheDTO.getMeal() != null && productRespDTO.getMeal() != null
-                                && !Objects.equals(respCacheDTO.getMeal().count, productRespDTO.getMeal().getCount())) {
-                            //产品变更早餐
-                            ProductRespCacheDTO dto = new ProductRespCacheDTO();
-                            BeanUtils.copyProperties(productRespDTO, dto);
-                            productRespCacheDTOMap.put(priceInfoKey, dto);
-                        }
-                    }
+                    // R-2.6 后缓存只存易腐码+桥+价，每轮无条件覆盖即可。
+                    // 原先此处有一段「早餐变更检测」——只在早餐变了时才重写缓存。瘦身后它
+                    // 既无必要也无从判断：餐食已不在缓存里，且餐食一旦变化 productKey 本身
+                    // 就变了（餐食是键成分），那是另一条记录，不存在"同一条的早餐变了"。
+                    ProductRespCacheDTO respCacheDTO = new ProductRespCacheDTO();
+                    BeanUtils.copyProperties(productRespDTO, respCacheDTO);
+                    productRespCacheDTOMap.put(priceInfoKey, respCacheDTO);
 
                     List<PriceInfo> infos = productRespDTO.getPriceInfos();
 

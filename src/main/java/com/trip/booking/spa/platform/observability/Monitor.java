@@ -115,6 +115,21 @@ public class Monitor {
         getCounter(monitorName + COUNTER_METRIC_SUFFIX, tags).increment();
     }
 
+    /**
+     * 带维度地按量累加。
+     *
+     * <p>补这个重载，是因为原先只有「无 tag 按量累加」与「带 tag 只加一」两种。想同时做到
+     * 「维度进 tag、不进名字」和「一个业务周期上报一次总量」，就只能把维度拼进指标名——
+     * 那正是要避免的指标名爆炸（对照 cursor：324 种日志前缀里，六种其实是供应商这一个
+     * 维度的取值被写成了前缀）。
+     */
+    public static void recordMany(String monitorName, Map<String, Object> tags, int count) {
+        if (null == monitorService) {
+            return;
+        }
+        getCounter(monitorName + COUNTER_METRIC_SUFFIX, tags).increment(count);
+    }
+
     public static void recordValue(String monitorName, int value) {
         if (null == monitorService) {
             return;

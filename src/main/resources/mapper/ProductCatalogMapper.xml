@@ -43,4 +43,12 @@
             cancel_type = VALUES(cancel_type), del = 0
     </insert>
 
+    <select id="selectAttributesByProductKeys" resultType="java.util.Map">
+        SELECT supplier_product_id, supplier_room_id, supplier_product_name, breakfast, cancel_type
+        FROM supplier_product_base
+        WHERE del = 0 AND supplier_id = #{supplierId}
+          AND supplier_product_id IN
+        <foreach collection="keys" item="k" open="(" separator="," close=")">#{k}</foreach>
+    </select>
+
 </mapper>
