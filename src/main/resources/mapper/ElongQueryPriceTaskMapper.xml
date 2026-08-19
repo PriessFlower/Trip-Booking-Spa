@@ -33,6 +33,15 @@
 
       故常规档必须显式接纳"升档已过期"的行:它们已不在借入中,回本档由本档取走,
       Java 顺势复位。改动此处务必保持两条件互为取反。
+
+      排序键必须是 last_time(上次查价时间),不是 update_time(issue #102)。
+      update_time 带 ON UPDATE CURRENT_TIMESTAMP,任何一次写这行都会把它刷成当前
+      时刻——包括 upgradeByShId 这种只想改优先级、不代表刷过价的写入。用它排序,
+      等于"升档即排到队尾",越要紧的行越晚刷。last_time 只由本任务在真刷时写
+      (updateAddCount),正是"谁最久没刷过谁先刷"该问的那一列。
+
+      附带:新插入的行 last_time 为空,排在最前(MySQL 升序 NULL 优先),即新上架的
+      酒店优先刷第一次;若按 update_time 则新行反而排在队尾。
     -->
     <select id="getQueryPriceTaskList" resultMap="BaseResultMap">
         SELECT
@@ -45,7 +54,7 @@
         <if test="0 == temporaryUpgrade">
             and (temporary_upgrade = 0 or (upgrade_deadline is not null and upgrade_deadline &lt;= now()))
         </if>
-        order by update_time limit #{batchSize}
+        order by last_time limit #{batchSize}
     </select>
 
     <update id="updateAddCount"
@@ -55,7 +64,14 @@
         WHERE id = #{id}
     </update>
 
-    <!-- 批次4 反馈环:验价事件把该酒店全部日期行临时升档 24h,高频档借入跟刷 -->
+    <!--
+      批次4 反馈环:验价事件把该酒店全部日期行临时升档 24h,高频档借入跟刷。
+
+      本语句会顺带把 update_time 刷成当前时刻(ON UPDATE CURRENT_TIMESTAMP),这是
+      无害的——取批排序看 last_time 而不看 update_time(见 getQueryPriceTaskList
+      的注释)。若将来把排序键改回 update_time,本语句必须同时显式写
+      update_time = update_time,否则 issue #102 复现。
+    -->
     <update id="upgradeByShId">
         update elong_query_price_task
         set temporary_upgrade = 1, upgrade_deadline = timestampadd(hour, 24, now())
