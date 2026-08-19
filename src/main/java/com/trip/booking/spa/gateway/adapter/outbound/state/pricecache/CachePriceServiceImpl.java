@@ -276,6 +276,10 @@ public class CachePriceServiceImpl implements CachePriceService {
             }
 
             if (MapUtils.isNotEmpty(cacheProductPriceMap)) {
+                // downDataMap 的一个 key（price:{hotelId}:{date}）下可能有多个产品同时下架，
+                // 故必须【累加】而非整体覆盖——循环维度是 productId，用 put 会让每次迭代
+                // 把该 key 的整张 map 换成只含一条的新 map，只剩最后一条真被置 0，其余保留
+                // 旧价直到 TTL 过期（issue #96）。写法与上方 dataMap、interceptedMap 一致
                 cacheProductPriceMap.forEach((key, value) -> {
                     Set<String> intercepted = interceptedMap.getOrDefault(key, Collections.emptySet());
                     if (MapUtils.isEmpty(dataMap.get(key))) {
@@ -283,9 +287,8 @@ public class CachePriceServiceImpl implements CachePriceService {
                             if (intercepted.contains(productId)) {
                                 continue;
                             }
-                            Map<String, String> zeroPriceMap = Maps.newHashMap();
-                            zeroPriceMap.put(productId, convertPriceJsonStr(null, null));
-                            downDataMap.put(key, zeroPriceMap);
+                            downDataMap.computeIfAbsent(key, k -> Maps.newHashMap())
+                                    .put(productId, convertPriceJsonStr(null, null));
                         }
                     } else {
                         for (String productId : value) {
@@ -293,9 +296,8 @@ public class CachePriceServiceImpl implements CachePriceService {
                                 continue;
                             }
                             if (StringUtils.isBlank(dataMap.get(key).get(productId))) {
-                                Map<String, String> zeroPriceMap = Maps.newHashMap();
-                                zeroPriceMap.put(productId, convertPriceJsonStr(null, null));
-                                downDataMap.put(key, zeroPriceMap);
+                                downDataMap.computeIfAbsent(key, k -> Maps.newHashMap())
+                                        .put(productId, convertPriceJsonStr(null, null));
                             }
                         }
 
