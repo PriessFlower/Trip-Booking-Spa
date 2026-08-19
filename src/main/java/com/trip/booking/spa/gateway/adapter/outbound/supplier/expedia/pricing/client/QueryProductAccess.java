@@ -83,8 +83,10 @@ public class QueryProductAccess extends BaseHttpAccess<QueryPriceRequest, QueryP
         body.put("partner_point_of_sale", request.getPartner_point_of_sale());
         long start = System.currentTimeMillis();
         String result = HttpUtils.doGet(url, headers, body);
-        Monitor.recordOne("EXPEDIA_ORIGINAL_QUERY",
-                System.currentTimeMillis() - start);
+        // supplier 进 tag 不进名字（§3.9.2）；原名 EXPEDIA_ORIGINAL_QUERY 把供应商写死在名字里
+        java.util.Map<String, Object> tags = new java.util.HashMap<>(1);
+        tags.put("supplier", "expedia");
+        Monitor.recordOne("supplier_io_original_query", tags, System.currentTimeMillis() - start);
         List<QueryPriceResponse.HotelPrice> hotelPrices = JsonUtils.decodeJson(result, new TypeReference<List<QueryPriceResponse.HotelPrice>>() {
         });
         QueryPriceResponse queryPriceResponse = new QueryPriceResponse();

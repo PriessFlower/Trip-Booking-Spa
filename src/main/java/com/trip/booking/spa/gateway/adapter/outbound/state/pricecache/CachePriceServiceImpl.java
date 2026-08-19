@@ -62,6 +62,30 @@ public class CachePriceServiceImpl implements CachePriceService {
 
     private static final long ONE_DAY = 86400L;
 
+    /**
+     * 价格缓存的<b>字段名</b>：一律用 productKey（R-1.1，跨次稳定），不用 productId。
+     *
+     * <p><b>为什么必须是 productKey</b>（2026-08-19 生产实证）：刷价按<b>单晚</b>切片，
+     * T+0~T+6 每个日期是一次<b>独立的</b> hotel.detail 调用；而艺龙的 productId 申报为
+     * {@link com.trip.booking.spa.gateway.domain.supplier.SupplierIdentityProfile.QuoteCodeStability#PERISHABLE}
+     * （会话级轮换），于是同一个卖法在 08-19 与 08-20 两次调用里拿到的 productId 不同。
+     * 而 {@link #getPrice} 要求产品在住期内<b>每一天</b>都有价，两天的 productId 交集恒为空，
+     * 结果是<b>住 2 晚及以上一个产品都出不来</b>——实测某酒店 08-19 缓存 42 个产品、
+     * 08-20 有 47 个，连续两天都在的 0 个。当时 cursor 打 SPA 出价 6,403 次，
+     * 空结果 83.1%、跨云超时 8.4%、真正拿到报价仅 8.6%。
+     *
+     * <p>顺带解决内存的结构性增长：易腐码每轮刷价都铸出一整套全新的键，旧键要等 TTL
+     * 才消失，故同时并存"TTL/刷价周期"代垃圾（提速后档位 0 约 12 代）。键稳定后每轮
+     * 写的是同一批键，代数压到 1。
+     *
+     * <p>productKey 缺席时退回 productId：不是所有供应商都派生了键，退回可保住报价
+     * （多晚查询对这部分仍不可用，属已知缺口），好过整条不报（R-1.6）。
+     */
+    private static String cacheField(ProductRespDTO product) {
+        return StringUtils.isNotBlank(product.getProductKey())
+                ? product.getProductKey() : product.getProductId();
+    }
+
     @Override
     public List<ProductRespDTO> getPrice(PriceReq priceReq, Supplier supplier) {
         List<ProductRespDTO> respDTOList = new ArrayList<>();
@@ -108,20 +132,27 @@ public class CachePriceServiceImpl implements CachePriceService {
                     return;
                 }
             }
-            //补充产品其他信息
-            //key是product:sHotelId:sProductId,value是ProductRespCacheDTO
+            // 补充产品其他信息。key 是 productKey（见 cacheField），
+            // 详情键随之为 product:{sHotelId}:{productKey}
             String priceInfoKey = RedisKeyUtils.buildPriceInfoKey(supplier.getSHotelId(), key);
             String priceInfoJson = redisUtils.get(priceInfoKey);
-            if (StringUtils.isNotBlank(priceInfoJson)) {
-                ProductRespCacheDTO productRespCacheDTO = JsonUtils.decodeJson(priceInfoJson, new TypeReference<>() {
-                });
-                BeanUtils.copyProperties(productRespCacheDTO, respDTO);
-                respDTO.setTotalPrice(totalPrice);
-                respDTO.setTotalTaxes(totalTaxes);
-                respDTO.setRoomTotalPrice(roomTotalPrice);
+            if (StringUtils.isBlank(priceInfoJson)) {
+                // 详情缺席 = 拿不到可下单的票据（productId 只存在于详情里，依 R-2.1 不落库）。
+                // 只有价没有票的报价不可成交，不如不报（R-1.6）
+                return;
             }
+            ProductRespCacheDTO productRespCacheDTO = JsonUtils.decodeJson(priceInfoJson, new TypeReference<>() {
+            });
+            BeanUtils.copyProperties(productRespCacheDTO, respDTO);
+            respDTO.setTotalPrice(totalPrice);
+            respDTO.setTotalTaxes(totalTaxes);
+            respDTO.setRoomTotalPrice(roomTotalPrice);
             respDTO.setSupplierId(supplier.getSupplierId());
-            respDTO.setProductId(key);
+            // 票据取自详情（最近一轮刷价写入的那张），不是缓存字段名——字段名现在是
+            // 跨次稳定的 productKey，拿它去下单会被供应商拒（它不是报价码）
+            if (StringUtils.isBlank(respDTO.getProductId())) {
+                return;
+            }
             respDTO.setHotelId(supplier.getSHotelId());
             List<PriceInfo> priceInfos = ModelConverterUtils.convert(value, PriceInfo.class);
             respDTO.setPriceInfos(priceInfos);
@@ -229,30 +260,18 @@ public class CachePriceServiceImpl implements CachePriceService {
                     }
                 });
 
-                String priceInfoKey = RedisKeyUtils.buildPriceInfoKey(productRespDTO.getHotelId(), productRespDTO.getProductId());
-
-                String productInfoJson = redisUtils.get(priceInfoKey);
+                String field = cacheField(productRespDTO);
+                String priceInfoKey = RedisKeyUtils.buildPriceInfoKey(productRespDTO.getHotelId(), field);
 
                 if (CollectionUtils.isNotEmpty(productRespDTO.getPriceInfos())) {
 
-                    if (StringUtils.isBlank(productInfoJson)) {
-                        ProductRespCacheDTO respCacheDTO = new ProductRespCacheDTO();
-                        BeanUtils.copyProperties(productRespDTO, respCacheDTO);
-                        productRespCacheDTOMap.put(priceInfoKey, respCacheDTO);
-                    } else {
-                        // 这里处理早餐变更的数据
-                        ProductRespCacheDTO respCacheDTO = JsonUtils.decodeJson(productInfoJson, new TypeReference<>() {
-                        });
-                        // 如果早餐有变化，则把发生早餐变化的产品id放入changeBreakfastSet，更新缓存productRespCacheDTOMap
-                        // 用 Objects.equals 而非 count.equals：缓存中可能存在 count 为空的历史数据
-                        if (respCacheDTO.getMeal() != null && productRespDTO.getMeal() != null
-                                && !Objects.equals(respCacheDTO.getMeal().count, productRespDTO.getMeal().getCount())) {
-                            //产品变更早餐
-                            ProductRespCacheDTO dto = new ProductRespCacheDTO();
-                            BeanUtils.copyProperties(productRespDTO, dto);
-                            productRespCacheDTOMap.put(priceInfoKey, dto);
-                        }
-                    }
+                    // 每轮无条件覆盖详情：键是 productKey，本就一个卖法一条，覆盖即刷新票据。
+                    // 原先此处有一段「早餐变更检测」——只在早餐变了时才重写。改键后它既无必要
+                    // 也无从判断：餐食是 productKey 的成分，餐食一变键就变了，那是另一条记录，
+                    // 不存在"同一条的早餐变了"
+                    ProductRespCacheDTO respCacheDTO = new ProductRespCacheDTO();
+                    BeanUtils.copyProperties(productRespDTO, respCacheDTO);
+                    productRespCacheDTOMap.put(priceInfoKey, respCacheDTO);
 
                     List<PriceInfo> infos = productRespDTO.getPriceInfos();
 
@@ -261,16 +280,15 @@ public class CachePriceServiceImpl implements CachePriceService {
                         String priceKey = RedisKeyUtils.buildPriceKey(productRespDTO.getHotelId(), i.getDate()); // rediskey:price:hotelid:date
                         // F-7 异常价拦截：新价相对缓存中的上一轮价暴跌时拒绝写入、保留旧价。
                         // 放在写 dataMap 之前——一旦进了 dataMap 就会被批量写进 Redis，届时错价已对外可见
-                        Integer oldCents = cachedPriceCents(priceKey, productRespDTO.getProductId());
+                        Integer oldCents = cachedPriceCents(priceKey, field);
                         if (abnormalPriceGuard.isAbnormalDrop(oldCents, i.getPrice())) {
                             abnormalPriceGuard.logIntercepted(productRespDTO.getHotelId(),
                                     productRespDTO.getProductId(), i.getDate(), oldCents, i.getPrice());
-                            interceptedMap.computeIfAbsent(priceKey, k -> Sets.newHashSet())
-                                    .add(productRespDTO.getProductId());
+                            interceptedMap.computeIfAbsent(priceKey, k -> Sets.newHashSet()).add(field);
                             return;
                         }
                         //priceJson：{"brokerage":2317,"roomPrice":12728,"price":14658,"storePayPrice":null,"taxes":1930,"stayPrice":0}
-                        dataMap.computeIfAbsent(priceKey, k -> new HashMap<>()).put(productRespDTO.getProductId(), convertPriceJsonStr(productRespDTO, i));
+                        dataMap.computeIfAbsent(priceKey, k -> new HashMap<>()).put(field, convertPriceJsonStr(productRespDTO, i));
                     });
                 }
             }
