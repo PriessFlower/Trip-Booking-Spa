@@ -29,9 +29,18 @@ task:
     # 再常规档(priority=1,T+3~T+6)。默认 400@2qps + 200@1qps ≈ 6.7 分钟 < cron 周期，
     # 高频档 ~2.6h 轮一遍。旧键 qps/batch-size 自批次3起弃用（避免继承单档时代旧值）。
     high-batch-size: 400
-    high-qps: 2.0             # 两档合计峰值 2.0，仍小于 ratelimit.qps 的 ELONG 查价项(5)
     normal-batch-size: 200
-    normal-qps: 1.0
+    # 刷价速率不在本域——它是统一限流的子配额，见下方 ratelimit.qps 的
+    # GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH（§3.3：限流一律走统一限流）。
+    # 曾在此处配 high-qps/normal-qps 并在代码里自建 Guava RateLimiter，是对该条的违反：
+    # 同一件事有了两个开关、两处取值，运维改了统一限流却不生效。2026-08-19 已收口。
+    # 行级并发度。2026-08-19 实测：串行时单行均值 1.45s（p50 1.08 / p90 3.13 / p99 4.51），
+    # 于是限额设 2 QPS 也只跑出 0.89——限流器从来不是瓶颈，串行才是。并发度 ≈ 目标 QPS × 单行耗时：
+    #   高频档 4 QPS × 1.45s ≈ 6，常规档 1 QPS × 1.45s ≈ 2（给 3 留富余）
+    # 上调前先看两处：① Redis 连接池（出价链路读同一个池，抢连接会拖慢真实客流）；
+    # ② 线程若堆在 acquire() 上超过 ratelimit.acquire-timeout-ms 会变成假失败。
+    high-concurrency: 6
+    normal-concurrency: 3
 
   # Expedia 静态酒店同步
   expedia-hotel-sync:
@@ -59,7 +68,11 @@ ratelimit:
   # 各接口配额之和不得超过它：查价 5 / 验价 2 / 下单 1 / 查单 1 / 取消 1 = 10。
   # 验价链路每次先重打一次查价（现取现验），查价须留大头；订单三链路流量极低，
   # 各留 1 QPS 已远高于可预见业务量（1 QPS=每小时 3600 次）。
-  qps: '{"GLOBAL_LIMIT:EXPEDIA:STATIC_CONTENT":15,"GLOBAL_LIMIT:EXPEDIA:STATIC_REGIONS":10,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_ORDER_PRICE":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_CREATE_ORDER":5,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_QUERY_ORDER":10,"GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES":5,"GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_ORDER_PRICE":2,"GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_CREATE_ORDER":1,"GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_QUERY_ORDER":1,"GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_CANCEL_ORDER":1}'
+  #
+  # 查价那 5 QPS 内部再分子配额：:REFRESH=4 归刷价（后台、阻塞排队），余下约 1 留给验价的
+  # 现取现验（客人正在点，走 tryAcquire）。刷价并发化后会持续贴着上限跑，不分子配额则会把
+  # 验价挤到 acquire 超时——那是可成交请求的直接损失。子配额之和不得超过父配额。
+  qps: '{"GLOBAL_LIMIT:EXPEDIA:STATIC_CONTENT":15,"GLOBAL_LIMIT:EXPEDIA:STATIC_REGIONS":10,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_ORDER_PRICE":50,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_CREATE_ORDER":5,"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_QUERY_ORDER":10,"GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES":5,"GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH":4,"GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_ORDER_PRICE":2,"GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_CREATE_ORDER":1,"GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_QUERY_ORDER":1,"GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_CANCEL_ORDER":1}'
 
 # ── supplier / expedia：静态数据摄取总开关 ──────────────────
 # ── cache：我方自建缓存 ────────────────────────────────────
