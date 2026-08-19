@@ -509,6 +509,45 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         }
     }
 
+    /**
+     * 反查该报价在<b>本次入离日期区间</b>的总价（分），作为 resolve 换票的容差基准。
+     * 用于上游未携 totalPrice 的场景（见 {@link CheckPriceReq#getTotalPrice()}）。
+     *
+     * <p><b>必须走 {@link CachePriceService#getPrice} 这条与出价完全相同的路径</b>，
+     * 不能读产品详情缓存里的 totalPrice 字段：后者是<b>刷价那一次</b>写入的快照
+     * （任务行区间通常 1 晚），而客人看到的价是出价时按其查询区间<b>逐日累加</b>
+     * 出来的。客人查 3 晚、基准取 1 晚，容差判断会整体失真——那不是精度问题，
+     * 是量级错误（2026-08-19 Owner 质疑时发现）。
+     *
+     * <p>查不到返回 null——无基准则不换票，不猜。
+     */
+    Integer lookupTotalPriceFromCache(CheckPriceReq request) {
+        try {
+            PriceReq priceReq = PriceReq.builder()
+                    .checkIn(request.getCheckIn()).checkout(request.getCheckOut())
+                    .roomNum(request.getRoomNum())
+                    .adultNum(request.getAdultCount()).childNum(request.getChildNum())
+                    .childAges(request.getChildAges() == null ? new ArrayList<>() : request.getChildAges())
+                    .guestType(0)
+                    .build();
+            Supplier supplier = Supplier.builder()
+                    .supplierId(SupplierSourceEnum.ELONG.getCode())
+                    .sHotelId(request.getSHotelId())
+                    .sProductId(request.getSProductId())
+                    .build();
+            List<ProductRespDTO> products = cachePriceService.getPrice(priceReq, supplier);
+            if (products == null || products.isEmpty()) {
+                return null;
+            }
+            Integer total = products.get(0).getTotalPrice();
+            return total != null && total > 0 ? total : null;
+        } catch (Exception e) {
+            log.warn("艺龙验价：总价反查失败,sHotelId={},sProductId={},err={}",
+                    request.getSHotelId(), request.getSProductId(), e.toString());
+            return null;
+        }
+    }
+
     PlanWithRoom tryResolveByProductKey(ElongHotelDetailResponse.ElongHotel hotel, CheckPriceReq request, String occupancy) {
         if (StringUtils.isBlank(request.getProductKey())) {
             return null;
@@ -538,13 +577,22 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 equivalents.add(new ResolveCandidate(new PlanWithRoom(room, plan), sumCents(dayPrices)));
             }
         }
+        // 容差基准：上游给了就用上游的；没给则反查本网关刷价时写入的原价（调用方未必持有价格）
+        Integer baseline = request.getTotalPrice() != null
+                ? request.getTotalPrice()
+                : lookupTotalPriceFromCache(request);
+        if (baseline == null) {
+            log.info("艺龙验价：无容差基准价（上游未携且缓存反查不到），不自动换票,sHotelId={},sProductId={}",
+                    request.getSHotelId(), request.getSProductId());
+            return null;
+        }
         return ResolveGate.pickCheapestWithinTolerance(equivalents, ResolveCandidate::priceCents,
-                        request.getTotalPrice(), properties.getResolvePriceTolerance(),
+                        baseline, properties.getResolvePriceTolerance(),
                         properties.getResolvePriceCapCents())
                 .map(chosen -> {
                     log.info("艺龙验价：令牌已死，按productKey换票成功,原sProductId={},新goodsUniqId={},新价={}分,展示价={}分",
                             request.getSProductId(), chosen.planWithRoom().plan().getGoodsUniqId(),
-                            chosen.priceCents(), request.getTotalPrice());
+                            chosen.priceCents(), baseline);
                     return chosen.planWithRoom();
                 })
                 .orElseGet(() -> {
@@ -554,7 +602,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                                 request.getSHotelId(), request.getSProductId(), request.getProductKey());
                     } else {
                         log.info("艺龙验价：存在等价报价但超出容差，拒绝自动换票,sProductId={},展示价={}分,候选最低={}分",
-                                request.getSProductId(), request.getTotalPrice(),
+                                request.getSProductId(), baseline,
                                 equivalents.stream().mapToInt(ResolveCandidate::priceCents).min().orElse(-1));
                     }
                     return null;
