@@ -3,7 +3,7 @@
 > **定位**：本服务是什么、分几层、接一家新供应商要做什么、以及网关究竟"网关"了什么。
 > **配套**：职责边界（吃什么／不吃什么）见 [gateway-boundary.md](gateway-boundary.md)；
 > 提交、分支、配置规范见 [../PROJECT.md](../PROJECT.md)。
-> **准确性**：本文所述均于 2026-08-15 对照代码核实（六边形目录重构同日落地）。改动契约或新增能力时须同步本文。
+> **准确性**：本文所述均于 2026-08-19 对照代码核实（能力矩阵以启动日志实跑核对）。改动契约或新增能力时须同步本文。
 
 ## 1. 一句话
 
@@ -67,7 +67,7 @@ com/trip/booking/spa/
 │           │                              order/ cancellation/ content/(原 staticdata)
 │           │                              公共件在 shared/(合同档案、签名、原始 bean)
 │           └── state/                  ⑤ offer/(OfferStore) pricecache/ catalog/(建档
-│                                          mapper) dao/(通用实体)
+│                                          与刷价任务队列 mapper)
 ├── platform/                           ④+技术设施:http/(BaseHttpAccess=限流唯一闸门、
 │                                       asynchttp) ratelimit/ redis/ observability/
 │                                       mybatis/ util/ exception/
@@ -105,6 +105,17 @@ com/trip/booking/spa/
 travelconnect/aichotels/fastpay/inittimezone/placeholder/ops）。架构测试改为
 LEGACY_mustStayDeleted 守"不复活":新供应商一律走 gateway 六边形结构,不得再建 legacy 目录。
 
+**继承来的死设施已清除**（2026-08-19,53 文件）:legacy 删除后仍散落在各层的零引用残留
+——微信公众号推送（`platform/util/wx/**` + `DingTalkUtils`）、四个无调用方的工具类、
+`state/dao/` 整包（时区建档 `city_zone`、分销挂牌 `db_up_hotel`、供应商酒店清单
+`supplier_hotel_id_list` 三条链的 mapper 与实体）、以及 `mybatis-config.xml` 中指向已删
+`MeituanChangeTypeEnum` 的 typeHandler 与 `@MapperScan` 里的悬空包名。三张表的 DDL 仍
+留在 `config/mysql/legacy-schema.sql` 作存量记录,但代码侧已无读写方。
+
+> 教训:mapper XML 必须与其实体同批删除。MyBatis 在构建 `SqlSessionFactory` 时解析
+> `classpath*:/mapper/**/*.xml` 的**每一个**文件并解析其 `resultMap` 类名,残留一个引用
+> 已删实体的 XML 会导致**启动硬失败**（`ClassNotFoundException` → `sqlSessionFactory`
+> 创建失败),而编译与单测一概发现不了——本次删除即因构建产物中残留旧 XML 复现过一次。
 
 **新旧词汇对照**（第一拍只搬未改名,第二拍随 cursor 迁移逐能力演进）:
 
@@ -124,13 +135,22 @@ LEGACY_mustStayDeleted 守"不复活":新供应商一律走 gateway 六边形结
 
 | 端点 | 能力接口 | 已实现的供应商 |
 |---|---|---|
-| `POST /client/spa/price` | `ProductSyncService` | 8 家（expedia、didatravel、huitravel、travelConnect、aicHotels、ratehawk、meituan、FastpayHotels） |
-| `POST /client/spa/check` | `CheckPriceSyncService` | 同上 8 家 |
-| `POST /client/spa/booking` | `BookingSyncService` | **仅 expedia** |
-| `POST /client/spa/order` | `OrderQuerySyncService` | **仅 expedia** |
-| `POST /client/spa/cancel` | `CancelSyncService` | **无** |
+| `POST /client/spa/price` | `ProductSyncService` | expedia、elong |
+| `POST /client/spa/check` | `CheckPriceSyncService` | expedia、elong |
+| `POST /client/spa/booking` | `BookingSyncService` | expedia、elong |
+| `POST /client/spa/order` | `OrderQuerySyncService` | expedia、elong |
+| `POST /client/spa/cancel` | `CancelSyncService` | expedia、elong |
 
-即：查价验价八家齐，下单查单只有 Expedia，取消尚未实现。
+即：两家供应商五个能力全齐。启动日志的能力矩阵可核对（2026-08-19 本地实跑）：
+
+```
+能力注册: supplier=expedia(10005) capabilities=[PRICING, CHECK_PRICE, BOOKING, ORDER_QUERY, CANCELLATION]
+能力注册: supplier=elong(10010)   capabilities=[PRICING, CHECK_PRICE, BOOKING, ORDER_QUERY, CANCELLATION]
+```
+
+`SupplierSourceEnum` 中其余 7 家（travelConnect、aicHotels、didatravel、huitravel、
+FastpayHotels、ratehawk、meituan）只保留供应商编码，无任何实现——它们的适配代码已随
+2026-08-18 的 `legacy/` 整包删除而消亡，矩阵中一律为空。
 
 ### 3.1 路由与能力发现（SupplierCapabilityRegistry）
 
@@ -254,7 +274,7 @@ bean 名必须是 `<SupplierSourceEnum.desc><能力后缀>`，否则 ① 路由�
 | 半边 | 是什么 | 我们的状态 |
 |---|---|---|
 | **令牌** | 一次性、易腐、下单用 | ✅ 已由 OfferStore 收进网关（§4.2） |
-| **身份** | 稳定、可重复解析、上游长期持有 | ❌ **尚未派生统一 `productKey`**（设计已定稿，见 `docs/product-identity.md`） |
+| **身份** | 稳定、可重复解析、上游长期持有 | ✅ 已派生统一 `productKey`（`domain/product/ProductKeyFactory`，两家均已接线） |
 
 > 2026-08-14 实测更正：Expedia 的 `rate.id` **不是易腐令牌** —— 沙箱实测同参数两次、
 > 跨日期、跨天均不变；易腐的是验价 href 里的 `?token=` query（每次不同）。Expedia 属于
@@ -280,26 +300,33 @@ bean 名必须是 `<SupplierSourceEnum.desc><能力后缀>`，否则 ① 路由�
 死码打成"无响应"，而"无响应"落进硬错误集合被数据库价兜底成"可订"，于是死产品反复
 曝光、用户下单后在建单段暴死——丢的是真单。
 
-### 6.4 还没做的：稳定身份与陈码重解析
+### 6.4 已落地的：稳定身份与陈码重解析
 
-- **稳定 `productKey`**：由 (supplier_code, 账号/渠道 profile, supplier_hotel_id,
-  supplier_room_id, 餐食, 退改类, 占用) 派生的哈希。床型、价格、供应商报价码、自由文本
+- **稳定 `productKey`**（已落地）：由 (supplier_code, 账号/渠道 profile, supplier_hotel_id,
+  supplier_room_id, 餐食, 退改类, 占用) 派生的 sha256。床型、价格、供应商报价码、自由文本
   一律不进键（成分规范见 `docs/product-identity.md` §1）。申报为稳定的供应商真码
-  （如 Expedia `rate.id`、美团 `goodsId`）降级为解析快速通道（hint），不再充当身份。
-- **陈码重解析（resolve）**：验价时若令牌已死，用 `productKey` 向供应商**实时现货**
-  找等价报价重新验价，对上游无感。**硬门不可放宽——同房型 ID、同餐、退改不劣于**：
-  cursor 实证过"只按最便宜救会把含早错配成不含早"（订单 49046202）；且只许打现货，
-  cursor 实测重验旧码 0%、翻自家陈缓存 8%、睡等刷新 92% 白等。
+  （如 Expedia `rate.id`）降级为解析快速通道（hint），不再充当身份。
+  实现在 `domain/product/ProductKeyFactory`，两家各有一个 `*ProductKeyDeriver` 负责
+  归一餐食与退改后调它；查价响应里 `productId`（易腐报价码）与 `productKey`（稳定身份）
+  分列两字段。
+- **陈码重解析（resolve）**（已落地，默认关闭）：验价时若令牌已死，用 `productKey` 向
+  供应商**实时现货**找等价报价重新验价，对上游无感。**硬门不可放宽——同房型 ID、同餐、
+  退改不劣于**：cursor 实证过"只按最便宜救会把含早错配成不含早"（订单 49046202）；
+  且只许打现货，cursor 实测重验旧码 0%、翻自家陈缓存 8%、睡等刷新 92% 白等。
+  判定收口在 `domain/product/ResolveGate`（比例门 `resolve-price-tolerance` ∧
+  绝对帽 `resolve-price-cap-cents` 双门同时成立才换）。
 
-这两件是一对：`productKey` 是重解析的依据，缺了它第二件无从落地。
+闸口：`supplier.expedia.resolve-enabled` / `supplier.elong.resolve-enabled`，
+**两者代码默认与 Nacos 现值均为 `false`** ——即能力在册但尚未放量，关闸期间陈码仍走
+`RATE_DEAD` 正门（拒绝时打 `闸口 ... 关闭，拒绝按 productKey 自动换票` 日志）。
+
 完整规则（R-x.x 编号、腐性申报表、聚合边界）见 `docs/product-identity.md`。
 
 ## 7. 当前缺口一览
 
 | 缺口 | 影响 |
 |---|---|
-| 取消（`CancelSyncService`）零实现 | 认证硬性要求 |
 | 改单、通知服务未实现 | 认证要求 |
-| 锁单（hold & resume）未使用 | `hold` 硬编码 false |
-| 统一身份 `productKey` 未实现（§6.4，设计已定稿于 `docs/product-identity.md`） | 旧列表点击会得到 `RATE_DEAD` 而非自动救回 |
-| 除 Expedia 外各家未做三态分类 | 它们尚无下单实现；实现前必须先补 §5 第四步 |
+| 锁单（hold & resume）未使用 | `hold` 在 `ExpediaBookingSyncServiceImpl` 中硬编码 false |
+| 陈码重解析（resolve）两家均未放量 | 闸口默认关闭（§6.4），旧列表点击目前仍得到 `RATE_DEAD` 而非自动救回 |
+| 新接第三家时须先补三态分类 | 判据见 §5 第四步；错判会直接造成资损 |

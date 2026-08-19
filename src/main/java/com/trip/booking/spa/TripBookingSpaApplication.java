@@ -8,10 +8,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
-@MapperScan(basePackages = {
-        "com.trip.booking.spa.gateway.adapter.outbound.state.dao.mapper",
-        "com.trip.booking.spa.gateway.adapter.outbound.state.catalog"
-})
+@MapperScan(basePackages = "com.trip.booking.spa.gateway.adapter.outbound.state.catalog")
 @ServletComponentScan
 @EnableAsync
 @EnableScheduling

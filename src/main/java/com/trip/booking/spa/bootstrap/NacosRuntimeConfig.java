@@ -32,17 +32,8 @@ public class NacosRuntimeConfig {
     @Value("${cache.price.hotels:}")
     private String cachePriceHotelsJson;
 
-    /** 时区建档流程的供应商范围 */
-    @Value("${task.timezone-init.suppliers:}")
-    private String timezoneInitSuppliersJson;
-
-    /** 是否要求道旅返回实时价（false 则接受其缓存价） */
-    @Value("${supplier.didatravel.real-time-price:false}")
-    private boolean didatravelRealTimePrice;
-
     private List<Integer> cachePriceSuppliers = Collections.emptyList();
     private Map<Integer, List<String>> cachePriceHotels = Collections.emptyMap();
-    private List<String> timezoneInitSuppliers = Collections.emptyList();
 
     @PostConstruct
     void parseStructuredValues() {
@@ -54,10 +45,6 @@ public class NacosRuntimeConfig {
                 JsonUtils.decodeJson(cachePriceHotelsJson, new TypeReference<Map<Integer, List<String>>>() {}),
                 Collections.emptyMap(),
                 "cache.price.hotels");
-        timezoneInitSuppliers = valueOrEmpty(
-                JsonUtils.decodeJson(timezoneInitSuppliersJson, new TypeReference<List<String>>() {}),
-                Collections.emptyList(),
-                "task.timezone-init.suppliers");
     }
 
     private <T> T valueOrEmpty(T value, T emptyValue, String key) {
