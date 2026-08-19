@@ -45,11 +45,6 @@ task:
     cron: '0 0 4 * * ?'       # 每日 04:00
     delete-date: ''           # 指定日期；空=默认取 7 天前
 
-  # 时区建档：拉取城市信息构建 city_zone
-  # 注意：该链路依赖 hotelBasePlaceholderClient，当前为熔断状态，调用即抛异常
-  timezone-init:
-    suppliers: '["10005"]'    # 参与建档的供应商
-
 # ── ratelimit：调用外部接口的限流 ───────────────────────────
 # key = GLOBAL_LIMIT:供应商:接口（BaseHttpAccess.buildGlobalLimitKey 产出）。
 # 未在 qps 表中列出的 key 使用 default-qps。改 qps 热生效（@RefreshScope）。
