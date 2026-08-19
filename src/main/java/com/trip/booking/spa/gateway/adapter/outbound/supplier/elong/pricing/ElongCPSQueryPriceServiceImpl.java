@@ -201,21 +201,36 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
             }
             });
         }
-        // 必须等本轮所有行落地才收口:计数与日志否则会少算,而"本轮结束"那行日志是
-        // 唯一的轮次事实来源。超时上限按最坏情况给足(每行 p99 4.5s,并发后仍留富余),
-        // 到点未完则强制收尾并记日志——宁可暴露超时,不可静默截断。
+        // 等它跑完，**不设截断**。刷价是后台循环、没有外部截止时间，跑久一点没有代价；
+        // 而"跑太久"本来就有正确的处理，不需要在这里另造一套：
+        //
+        // ① 单行已被封死：HTTP 层连接/读取超时各 10s（HttpUtils.TIME_OUT）、重试次数有限，
+        //    故一轮时长必然收敛——"一直等"不会卡死；
+        // ② 一轮跑过 cron 周期已有处理：供应商执行器是单线程 + SynchronousQueue，下一次 cron
+        //    会被拒掉并打"上一轮未结束，本轮跳过"。跳一次是安全的，一行都不丢。
+        //
+        // 此处原先自造了「等待预算 + shutdownNow」，凭空造出一条数据丢失路径。预算按
+        // 行数/配额 算，隐含假设总能跑到配置的 QPS，而实际速率是 min(配额, 并发度/单行耗时)。
+        // 2026-08-19 生产实证：常规档配额 4、并发 3，实际只有 1.82 QPS，预算 220s 与实需 220s
+        // 撞上，连续三轮被截断、每轮丢 166/400 = 41% 的行；更糟的是那些行的 last_time 已在
+        // 调用供应商之前更新，会被当成"刚刷过"排到队尾饿死，要等下一次全量才轮到。
         pool.shutdown();
         try {
-            long budgetSec = Math.max(60, (long) Math.ceil(list.size() / Math.max(qps, 0.1)) + 120);
-            if (!pool.awaitTermination(budgetSec, TimeUnit.SECONDS)) {
-                log.warn("elongQueryPriceTask 本轮超时未完成,强制收尾, trigger={}, priority={}, 预算 {}s",
-                        trigger, priority, budgetSec);
-                pool.shutdownNow();
+            long expectedSec = Math.max(60, estimateRoundSeconds(list.size(), qps, concurrency));
+            while (!pool.awaitTermination(expectedSec, TimeUnit.SECONDS)) {
+                // 超出预期只报告、不动手。把已处理数打出来，免得"共 N 行"被读成"N 行都处理了"
+                int done = onSale.get() + empty.get() + failed.get();
+                log.warn("elongQueryPriceTask 本轮超出预期仍在继续（不截断）,trigger={},priority={},"
+                                + "已处理={}/{},预期={}s,并发={},qps={}"
+                                + " —— 下一次调度会被「上一轮未结束」跳过，不丢行",
+                        trigger, priority, done, list.size(), expectedSec, concurrency, qps);
             }
         } catch (InterruptedException e) {
+            // 只有容器关闭才该打断在跑的行；此时如实报出已处理数
             Thread.currentThread().interrupt();
             pool.shutdownNow();
-            log.warn("elongQueryPriceTask 本轮被中断, trigger={}, priority={}", trigger, priority);
+            log.warn("elongQueryPriceTask 本轮被中断（容器关闭）,trigger={},priority={},已处理={}/{}",
+                    trigger, priority, onSale.get() + empty.get() + failed.get(), list.size());
         }
         // §6.1.2：三态各自计数——"刷不出价"是频控还是真无房，处置完全不同
         long roundCost = System.currentTimeMillis() - roundStart;
@@ -238,5 +253,31 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
                 borrowed.get(), demoted.get(), concurrency,
                 roundCost > 0 ? String.format("%.2f", list.size() * 1000.0 / roundCost) : "-", roundCost);
         return true;
+    }
+
+    /**
+     * 单行耗时，用于估算<b>吞吐</b>。取生产实测均值 1.45s，向上取 1.5s。
+     *
+     * <p>不能取 p90(3.13s)：p90 管的是"单独一行最坏要多久"，而并发下的整轮吞吐由<b>均值</b>
+     * 决定。用 p90 算会高估近一倍——并发 3 实测跑出 1.82 QPS(反推单行 1.65s)，按 p90 算却得
+     * 0.94 QPS。这个估值现在只用来定"多久没跑完该报告一声"的阈值，宁可略早报，不要虚高。
+     */
+    private static final double PER_ROW_SEC_MEAN = 1.5;
+
+    /**
+     * 本轮<b>预计</b>耗时(秒)。只用来决定"多久还没跑完就该报告一声"，<b>不用来截断</b>。
+     *
+     * <p>关键是取 {@code min(配额, 并发能力)} 的下限。只按配额算会隐含假设"总能跑到配置的
+     * QPS"，而并发度配得低时跑不到——2026-08-19 生产实证：常规档配额 4 QPS、并发 3，实际
+     * 只有 1.82 QPS。曾经拿这个偏小的估值当截断预算，导致每轮丢 41% 的行（见上方等待段注释）。
+     *
+     * @param rows        本轮行数
+     * @param qps         限流子配额
+     * @param concurrency 行级并发度
+     */
+    static long estimateRoundSeconds(int rows, double qps, int concurrency) {
+        double capacityQps = Math.max(concurrency, 1) / PER_ROW_SEC_MEAN;
+        double effectiveQps = Math.min(Math.max(qps, 0.1), capacityQps);
+        return (long) Math.ceil(rows / effectiveQps);
     }
 }
