@@ -671,39 +671,4 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         cachePriceService.productToCache(productRespDTOList, request);
         return productRespDTOList;
     }
-
-    public List<PriceInfo> buildCheckPriceInfos(List<List<QueryPriceResponse.Nightly>> nightlyLists, String checkIn) {
-        List<PriceInfo> priceInfos = Lists.newArrayList();
-        for (int i = 0; i < nightlyLists.size(); i++) {
-            BigDecimal sumPrice = BigDecimal.ZERO; // 初始化累加器为0
-            for (QueryPriceResponse.Nightly nightly : nightlyLists.get(i)) {
-                sumPrice = sumPrice.add(new BigDecimal(nightly.getValue()));
-            }
-            PriceInfo priceInfo = PriceInfo.builder().date(DateUtil.getFutureDay(checkIn, i)).price(sumPrice.multiply(BigDecimal.valueOf(100)).intValue()).build();
-            priceInfos.add(priceInfo);
-        }
-        return priceInfos;
-    }
-
-//    public static void main(String[] args) {
-////        // 创建一个LocalDate对象表示日期
-////        LocalDate date = LocalDate.of(2023, 10, 15); // 这里你可以用你想要查询的日期替换它
-////        // 使用一个明确的日期来构建LocalDateTime
-////        LocalDateTime localDateTime = LocalDateTime.of(date, LocalTime.now()); // LocalTime也可以指定为具体的本地时间
-////
-////        // 获取GMT时区
-////        ZoneId gmtZoneId = ZoneId.of("GMT");
-////        // 将本地日期时间转换为ZonedDateTime并设置到GMT时区
-////        ZonedDateTime gmtDateTime = ZonedDateTime.of(localDateTime, gmtZoneId);
-////
-////        // 打印结果，查看这个日期在GMT时区的时间
-////        System.out.println("Zoned DateTime in GMT: " + gmtDateTime);
-//
-//
-//        String str = "{\"start\":\"2024-10-26T10:00:00.000-07:00\",\"end\":\"2024-10-28T10:00:00.000-07:00\",\"percent\":\"10%\",\"currency\":\"CNY\"}";
-//        QueryPriceResponse.CancelPolicy cancelPolicy = new QueryPriceResponse.CancelPolicy();
-//        productKeyDeriver.convertCancelPolicy("2024-10-28", Arrays.asList(JsonUtils.readValue(str, QueryPriceResponse.CancelPolicy.class)));
-//    }
-
-
 }
