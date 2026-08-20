@@ -2,6 +2,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.content;
 
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogMapper;
+import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProductKeyDeriver;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierIdentityProfile;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
@@ -98,35 +99,34 @@ public class ElongCatalogService {
             // 两个成因必须分开计(§6.2.2):缺 productKey 是<b>派生失败</b>,矛头指向
             // ElongProductKeyDeriver 或它的入参;UNKNOWN 是<b>解析覆盖不足</b>,矛头指向
             // 餐食/退改的表外取值。合成一个数,派生回归会被当成"正常的 UNKNOWN 损耗"混过去。
-            if (StringUtils.isBlank(product.getProductKey())) {
+            if (product.getIdentity() == null || StringUtils.isBlank(product.getProductKey())) {
                 skippedNoKey++;
                 continue;
             }
+            ProductIdentity identity = product.getIdentity();
             if (!productKeyDeriver.isCatalogEligible(product.getMeal(), product.getCancelPolicy())) {
                 // UNKNOWN 照常参与实时链路(key 合法、可售),但不进目录(R-5.4)
                 skippedUnknown++;
                 continue;
             }
             try {
+                // 全部照抄派生器的产物（R-2.8）：本处<b>一个判定都不做</b>。
+                // 原先这里把 Meal/CancelPolicy 重判一遍再压成 breakfast/cancelType 两个 int，
+                // 既降维（B1L1D1 与 B1L0D0 同为 1、占用无处安放）又与派生器分叉。
                 HashMap<String, Object> p = new HashMap<>();
-                // 统一侧以供应商侧打底（1:1），聚合接入后可重写（R-2.4）
-                p.put("productId", product.getProductKey());
-                p.put("roomId", product.getRoom() == null ? null : product.getRoom().getRoomId());
-                p.put("hotelId", product.getHotelId());
                 p.put("supplierId", SUPPLIER_ID);
-                p.put("supplierHotelId", product.getHotelId());
-                p.put("supplierRoomId", product.getRoom() == null ? null : product.getRoom().getRoomId());
-                // 身份列=productKey；艺龙报价码易腐，hint 恒 null（R-2.3）
-                p.put("supplierProductId", product.getProductKey());
-                p.put("supplierQuoteHint", quoteHint == null ? null : product.getProductId());
+                p.put("productKey", identity.productKey());
+                p.put("supplierAccount", identity.account());
+                p.put("supplierHotelId", identity.supplierHotelId());
+                p.put("supplierRoomId", identity.supplierRoomId());
+                p.put("mealSignature", identity.mealSignature());
+                p.put("cancelClass", identity.cancelClass());
+                p.put("occupancy", identity.occupancy());
                 p.put("supplierProductName", product.getProductInfo() == null
                         ? null : product.getProductInfo().getProductName());
-                // 有窗是房型层事实，产品层占位（同 Expedia）
-                p.put("hasWindow", 0);
-                p.put("breakfast", product.getMeal() != null && isPositive(product.getMeal().getCount()) ? 1 : 0);
-                p.put("cancelType", hasFreeCancelWindow(product) ? 1 : 0);
+                // 艺龙报价码易腐，hint 恒 null（R-2.3）
+                p.put("supplierQuoteHint", quoteHint == null ? null : product.getProductId());
                 p.put("operator", OPERATOR);
-                productCatalogMapper.upsertGlobalProductSupplier(p);
                 productCatalogMapper.upsertSupplierProductBase(p);
                 upserted++;
             } catch (Exception e) {
@@ -150,13 +150,5 @@ public class ElongCatalogService {
                 products.get(0).getHotelId(), upserted, skippedUnknown, skippedNoKey);
     }
 
-    /** 是否存在免费取消窗口——与 productKey 的 cancelClass 判据同源（R-5.1 的 FREE 判据）。 */
-    private static boolean hasFreeCancelWindow(ProductRespDTO product) {
-        return product.getCancelPolicy() != null && product.getCancelPolicy().stream()
-                .anyMatch(c -> Integer.valueOf(1).equals(c.getCancelType()));
-    }
 
-    private static boolean isPositive(Integer count) {
-        return count != null && count > 0;
-    }
 }

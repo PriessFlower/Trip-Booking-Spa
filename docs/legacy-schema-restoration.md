@@ -167,9 +167,9 @@
 | `latitude` | decimal(13,10) | `latitude` (BigDecimal) |  |
 | `note` | varchar(64) | `note` (String) | 旧代码存 region type（city/province_state 等） |
 
-### `global_product_supplier` ← `GlobalProductSupplierRequest`（16 字段）
+### ~~`global_product_supplier`~~ ← `GlobalProductSupplierRequest`（16 字段）　**不采用（2026-08-20 撤除）**
 
-产品-供应商映射（查价响应建档）。**键**：UNIQUE(supplier_id, supplier_product_id)、KEY(hotel_id)｜字段A/键B
+产品-供应商映射（查价响应建档）。**本仓不建此表**：它是聚合域的桥，而 R-6.1 定案「聚合不放在供应商网关」。旧中台 hotel-base 带聚合层，SPA 不带；还原时一并建了是范围划错。撤除前实况：全仓零 SELECT、统一侧是供应商侧的 1:1 拷贝。**键**：UNIQUE(supplier_id, supplier_product_id)、KEY(hotel_id)｜字段A/键B
 
 | 列 | 类型 | 来源字段 | 说明 |
 |---|---|---|---|

@@ -23,6 +23,20 @@ public class ProductRespDTO {
      * 身份与令牌永不同字段。派生规则见 docs/product-identity.md R-1.1。
      */
     private String productKey;
+    /**
+     * productKey 的<b>全部成分</b>，供建档原样落库（R-2.7 / R-2.8）。
+     *
+     * <p><b>不出网关</b>：{@code @JsonIgnore}，也不进价格缓存
+     * （{@code ProductRespCacheDTO} 无同名字段，{@code BeanUtils.copyProperties} 按名复制，
+     * 自然不会带过去）。它是内部执行材料，对上游只暴露 {@link #productKey}。
+     *
+     * <p>为什么挂在出参 DTO 上：建档的入口是
+     * {@code CatalogService.upsert(List<ProductRespDTO>)}，而成分只在查价组装那一刻
+     * 由派生器算出。不挂在这里，建档就只能拿 {@link #meal}/{@link #cancelPolicy}
+     * 重判一遍——那正是 R-2.8 要消灭的东西。
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private com.trip.booking.spa.gateway.domain.product.ProductIdentity identity;
     private String expediaRoomId;//expedia房型id
     public Integer supplierId;
     public String planSession;

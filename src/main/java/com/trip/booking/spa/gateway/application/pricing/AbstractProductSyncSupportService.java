@@ -1,48 +1,48 @@
 package com.trip.booking.spa.gateway.application.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.StringUtils;
 
-import java.util.List;
-
+/**
+ * 查价能力的三态模板。
+ *
+ * <p><b>本类持有的唯一纪律：不确定的事不许说成确定的。</b>兜底一律落到
+ * {@link com.trip.booking.spa.gateway.domain.booking.PricingOutcome#INDETERMINATE}——
+ * 判定「确定无在售」的权力只交给适配层（③），只有它读得懂供应商在说什么。
+ *
+ * <p>本类<b>禁止出现任何一家供应商的字段名、错误码或 supplierId</b>（architecture.md §2）。
+ */
 @Slf4j
-public abstract class AbstractProductSyncSupportService<T> implements ProductSyncService {
+public abstract class AbstractProductSyncSupportService implements ProductSyncService {
 
     @Override
-    public List<ProductRespDTO> queryPrice(PriceReq priceReq, Supplier supplier) {
+    public PricingResult queryPrice(PriceReq priceReq, Supplier supplier) {
         try {
-            long start = System.currentTimeMillis();
-            T t = querySupplierPrice(priceReq, supplier);
-
-            if (t == null) {
-                log.error("ProductSyncService querySupplierPrice is null priceReq : {}, supplier : {}",
+            PricingResult result = querySupplierPrice(priceReq, supplier);
+            if (result == null) {
+                // 实现方绕过分态直接返回空：不可表达为「无在售」，否则会把「我们不知道」
+                // 说成「供应商说没有」
+                log.error("查价：实现方返回空结果，按未能确认回报,priceReq={},supplier={}",
                         JsonUtils.writeObject2Json(priceReq), JsonUtils.writeObject2Json(supplier));
-                return null;
+                return PricingResult.indeterminate();
             }
-            if (10005 == supplier.getSupplierId() && StringUtils.isNotBlank(supplier.getSProductId())) {
-                log.info("ProductSyncService priceReq : {},supplier : {},response: {},useTime:{}",
-                        JsonUtils.writeObject2Json(priceReq), JsonUtils.writeObject2Json(supplier),
-                        JsonUtils.writeObject2Json(t), System.currentTimeMillis() - start);
-            }
-            List<ProductRespDTO> list = productRespConvert(t);
-            if (CollectionUtils.isEmpty(list)) {
-//                log.error("ProductSyncService productRespConvert is null,priceReq : {},supplier : {} T : {}", JsonUtils.writeObject2Json(priceReq),
-//                        JsonUtils.writeObject2Json(supplier), JsonUtils.writeObject2Json(t));
-            }
-            return list;
+            return result;
         } catch (Exception e) {
-            log.error("ProductSyncService is error e:", e);
-            return null;
+            log.error("查价：过程异常，按未能确认回报,supplierId={},sHotelId={}",
+                    supplier.getSupplierId(), supplier.getSHotelId(), e);
+            return PricingResult.indeterminate();
         }
     }
 
-    public abstract T querySupplierPrice(PriceReq priceReq, Supplier supplier);
-
-    public abstract List<ProductRespDTO> productRespConvert(T t);
+    /**
+     * 各家自行实现：调供应商、解析响应、判分态。
+     *
+     * <p>判据见 {@link com.trip.booking.spa.gateway.domain.booking.PricingOutcome}：
+     * 只有供应商<b>明确</b>回答无可售产品时才允许 {@link PricingResult#noInventory()}；
+     * 超时、限流、5xx、响应无法判读、凭据缺失一律 {@link PricingResult#indeterminate()}。
+     */
+    public abstract PricingResult querySupplierPrice(PriceReq priceReq, Supplier supplier);
 
 }

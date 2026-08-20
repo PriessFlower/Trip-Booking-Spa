@@ -54,6 +54,40 @@ class ProductIdentityArchRulesTest {
     }
 
     /**
+     * R-6.1：聚合域的桥（{@code global_product_supplier}）<b>不得存在于本仓</b>。
+     *
+     * <p>它的用途只有比价检索——把聚合后的统一产品与各家供应商的卖法连起来。而 R-6.1 定案
+     * 「聚合不放在供应商网关」、R-6.3「聚合域引用 productKey；网关执行路径不引用聚合产物」。
+     * 谁做聚合谁自建这张表，SPA 只负责产出 productKey。
+     *
+     * <p>它当初在这里，只因 2026-08-07 还原旧中台时一并建了（旧中台 hotel-base 带聚合层）。
+     * 撤除前的实况：全仓零 SELECT，统一侧三列是供应商侧的 1:1 拷贝（生产抽样 1000/1000 相同）。
+     * 2026-08-20 停写并撤表——本条防复活，重新写它等于把聚合域拖回网关。
+     *
+     * <p>只认<b>真正的用法</b>，不认提及：方法调用/声明 {@code upsertGlobalProductSupplier(}，
+     * 以及 SQL 里 {@code INTO/FROM/UPDATE/JOIN global_product_supplier}。
+     * 否则本条会把解释"为什么撤除"的注释自己判成违规——而那些注释正是要留下的。
+     */
+    @Test
+    void R61_aggregationBridgeMustNotComeBack() throws IOException {
+        java.util.regex.Pattern usage = java.util.regex.Pattern.compile(
+                "upsertGlobalProductSupplier\\s*\\(|(?i:into|from|update|join)\\s+global_product_supplier");
+        List<String> violations = new ArrayList<>();
+        for (Path root : List.of(MAIN_JAVA, MAPPER_DIR)) {
+            try (Stream<Path> files = Files.walk(root)) {
+                files.filter(Files::isRegularFile).forEach(p -> {
+                    if (usage.matcher(read(p)).find()) {
+                        violations.add(p + " 引用了聚合域的桥 global_product_supplier");
+                    }
+                });
+            }
+        }
+        assertTrue(violations.isEmpty(),
+                "违反 R-6.1（聚合不放在供应商网关，docs/product-identity.md §6）：\n"
+                        + String.join("\n", violations));
+    }
+
+    /**
      * 四链路类的判定：端点入口 SpaController，以及 gateway 里的
      * 查价/验价/下单/取消/订单反查类。目录建档（content 包）是供货侧，不在四链路内。
      */

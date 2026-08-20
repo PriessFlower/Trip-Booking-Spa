@@ -97,39 +97,12 @@
         ORDER BY id LIMIT #{limit} OFFSET #{offset}
     </select>
 
-    <insert id="upsertGlobalProductSupplier" parameterType="java.util.HashMap">
-        INSERT INTO global_product_supplier (
-            product_id, room_id, hotel_id, supplier_id, supplier_hotel_id, supplier_room_id,
-            supplier_product_id, supplier_quote_hint, supplier_product_name, has_window, breakfast, cancel_type, operator
-        ) VALUES (
-            #{productId}, #{roomId}, #{hotelId}, #{supplierId}, #{supplierHotelId}, #{supplierRoomId},
-            #{supplierProductId}, #{supplierQuoteHint}, #{supplierProductName}, #{hasWindow}, #{breakfast}, #{cancelType}, 'expedia-transform'
-        )
-        ON DUPLICATE KEY UPDATE
-            product_id = VALUES(product_id), room_id = VALUES(room_id), hotel_id = VALUES(hotel_id),
-            supplier_room_id = VALUES(supplier_room_id),
-            supplier_quote_hint = VALUES(supplier_quote_hint),
-            supplier_product_name = VALUES(supplier_product_name),
-            has_window = VALUES(has_window), breakfast = VALUES(breakfast),
-            cancel_type = VALUES(cancel_type), del = 0
-    </insert>
 
-    <insert id="upsertSupplierProductBase" parameterType="java.util.HashMap">
-        INSERT INTO supplier_product_base (
-            product_id, room_id, supplier_id, supplier_hotel_id, supplier_room_id,
-            supplier_product_id, supplier_quote_hint, supplier_product_name, has_window, breakfast, cancel_type, operator
-        ) VALUES (
-            #{productId}, #{roomId}, #{supplierId}, #{supplierHotelId}, #{supplierRoomId},
-            #{supplierProductId}, #{supplierQuoteHint}, #{supplierProductName}, #{hasWindow}, #{breakfast}, #{cancelType}, 'expedia-transform'
-        )
-        ON DUPLICATE KEY UPDATE
-            product_id = VALUES(product_id), room_id = VALUES(room_id),
-            supplier_hotel_id = VALUES(supplier_hotel_id), supplier_room_id = VALUES(supplier_room_id),
-            supplier_quote_hint = VALUES(supplier_quote_hint),
-            supplier_product_name = VALUES(supplier_product_name),
-            has_window = VALUES(has_window), breakfast = VALUES(breakfast),
-            cancel_type = VALUES(cancel_type), del = 0
-    </insert>
+
+
+    <!-- 产品档案的两条 upsert 已迁至 ProductCatalogMapper（供应商通用，2026-08-20）：
+         SQL 除 operator 外与供应商无关，两份同构语句必然漂移。
+         global_product_supplier 同时撤除——聚合域的桥不放在网关（R-6.1）。 -->
 
     <update id="markHotelDetailsInactive">
         UPDATE hotel_details SET del = 1, status = 0

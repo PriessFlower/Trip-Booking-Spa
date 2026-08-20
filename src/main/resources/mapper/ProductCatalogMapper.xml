@@ -1,46 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!--
-  产品目录/档案的供应商通用写入口。语句与 ExpediaCatalogMapper.xml 的同名 upsert 同构，
-  差别仅在 operator 参数化（原为硬编码 'expedia-transform'）。
-  身份列 supplier_product_id 放 productKey；supplier_quote_hint 仅稳定真码可填（R-2.3）。
+  产品档案的供应商通用写入口。一行 = 一个卖法（productKey 粒度）。
+
+  写入的每一列都必须是「派生器算出来的产物」，本处不做任何判定（R-2.8）——
+  重判必然降维、且会与派生器分叉。
+  身份列 product_key 放 productKey；supplier_quote_hint 仅申报稳定的真码可填（R-2.3）。
 -->
 <mapper namespace="com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogMapper">
 
-    <insert id="upsertGlobalProductSupplier" parameterType="java.util.HashMap">
-        INSERT INTO global_product_supplier (
-            product_id, room_id, hotel_id, supplier_id, supplier_hotel_id, supplier_room_id,
-            supplier_product_id, supplier_quote_hint, supplier_product_name, has_window, breakfast, cancel_type, operator
-        ) VALUES (
-            #{p.productId}, #{p.roomId}, #{p.hotelId}, #{p.supplierId}, #{p.supplierHotelId}, #{p.supplierRoomId},
-            #{p.supplierProductId}, #{p.supplierQuoteHint}, #{p.supplierProductName},
-            #{p.hasWindow}, #{p.breakfast}, #{p.cancelType}, #{p.operator}
-        )
-        ON DUPLICATE KEY UPDATE
-            product_id = VALUES(product_id), room_id = VALUES(room_id), hotel_id = VALUES(hotel_id),
-            supplier_room_id = VALUES(supplier_room_id),
-            supplier_quote_hint = VALUES(supplier_quote_hint),
-            supplier_product_name = VALUES(supplier_product_name),
-            has_window = VALUES(has_window), breakfast = VALUES(breakfast),
-            cancel_type = VALUES(cancel_type), del = 0
-    </insert>
-
     <insert id="upsertSupplierProductBase" parameterType="java.util.HashMap">
         INSERT INTO supplier_product_base (
-            product_id, room_id, supplier_id, supplier_hotel_id, supplier_room_id,
-            supplier_product_id, supplier_quote_hint, supplier_product_name, has_window, breakfast, cancel_type, operator
+            supplier_id, product_key,
+            supplier_account, supplier_hotel_id, supplier_room_id,
+            meal_signature, cancel_class, occupancy,
+            supplier_product_name, supplier_quote_hint, operator
         ) VALUES (
-            #{p.productId}, #{p.roomId}, #{p.supplierId}, #{p.supplierHotelId}, #{p.supplierRoomId},
-            #{p.supplierProductId}, #{p.supplierQuoteHint}, #{p.supplierProductName},
-            #{p.hasWindow}, #{p.breakfast}, #{p.cancelType}, #{p.operator}
+            #{p.supplierId}, #{p.productKey},
+            #{p.supplierAccount}, #{p.supplierHotelId}, #{p.supplierRoomId},
+            #{p.mealSignature}, #{p.cancelClass}, #{p.occupancy},
+            #{p.supplierProductName}, #{p.supplierQuoteHint}, #{p.operator}
         )
         ON DUPLICATE KEY UPDATE
-            product_id = VALUES(product_id), room_id = VALUES(room_id),
-            supplier_hotel_id = VALUES(supplier_hotel_id), supplier_room_id = VALUES(supplier_room_id),
-            supplier_quote_hint = VALUES(supplier_quote_hint),
+            supplier_account = VALUES(supplier_account),
+            supplier_hotel_id = VALUES(supplier_hotel_id),
+            supplier_room_id = VALUES(supplier_room_id),
+            meal_signature = VALUES(meal_signature),
+            cancel_class = VALUES(cancel_class),
+            occupancy = VALUES(occupancy),
             supplier_product_name = VALUES(supplier_product_name),
-            has_window = VALUES(has_window), breakfast = VALUES(breakfast),
-            cancel_type = VALUES(cancel_type), del = 0
+            supplier_quote_hint = VALUES(supplier_quote_hint),
+            del = 0
     </insert>
 
 </mapper>
