@@ -151,6 +151,13 @@ cache:
 # ── supplier：与特定供应商交互的行为 ────────────────────────
 supplier:
   expedia:
+    # 当天入住拦截闸口：名单内的酒店（泰韩部分店）当天入住不报价。
+    # on  = 拦截（现行）；off = 放行，这些店当天入住照常报价。
+    # 误开风险=报出的价大概率验价失败；误关风险=当天入住查无报价。
+    # 名单本身在制品里（11,681 条 126KB，超 Nacos 单配置上限；本质是酒店层事实，
+    # 归宿应是 supplier_hotel_base 的一列）。本开关只解决「不发版能否关掉」（§3.8.6）。
+    same-day-block-enabled: true
+
     # 静态数据摄取总开关。关闭时目录清单与内容摄取接口一律拒绝调用
     # （播种、ExpediaHotelSyncTask 每日增量同步均失效）。改后需重启容器方生效。
     # 注意：expedia.booking-enabled 与 expedia.production-endpoint-enabled 为安全护栏，
