@@ -3,6 +3,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfo;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.platform.redis.RedisUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,6 +72,10 @@ class CachePriceServiceImplTest {
         Mockito.when(redisUtils.hashMapGet(PRICE_KEY)).thenReturn(cached);
     }
 
+    private static Supplier sup() {
+        return Supplier.builder().supplierId(10010).sHotelId("H1").build();
+    }
+
     private static PriceReq oneNight() {
         // PriceReq 的这些字段带 @NonNull，缺一个就在 build() 抛 NPE；取值与本用例无关
         return PriceReq.builder().checkIn(DATE).checkout("2026-09-02")
@@ -108,7 +113,7 @@ class CachePriceServiceImplTest {
         givenCached("p1", "p2", "p3");
 
         // 入参产品无任何报价 → 该日期本轮零在售
-        service.productToCache(List.of(product("p1", null)), oneNight());
+        service.productToCache(List.of(product("p1", null)), oneNight(), sup());
 
         assertEquals(Set.of("p1", "p2", "p3"), zeroedProductIds());
     }
@@ -118,7 +123,7 @@ class CachePriceServiceImplTest {
     void zeroesEveryVanishedProductWhenSomeRemainOnSale() {
         givenCached("p1", "p2", "p3");
 
-        service.productToCache(List.of(product("p1", 12345)), oneNight());
+        service.productToCache(List.of(product("p1", 12345)), oneNight(), sup());
 
         assertEquals(Set.of("p2", "p3"), zeroedProductIds());
     }
@@ -134,7 +139,7 @@ class CachePriceServiceImplTest {
         Mockito.when(guard.isAbnormalDrop(any(), any())).thenReturn(true);
 
         // p1 报了新价但被拦下：它既不进 dataMap，也不该被置 0；p2/p3 是真下架
-        service.productToCache(List.of(product("p1", 1)), oneNight());
+        service.productToCache(List.of(product("p1", 1)), oneNight(), sup());
 
         assertEquals(Set.of("p2", "p3"), zeroedProductIds());
     }

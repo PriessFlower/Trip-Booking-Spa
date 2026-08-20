@@ -18,18 +18,13 @@ public class RedisKeyUtils {
 
     public static final Joiner JOINER = Joiner.on(":").skipNulls();
 
-    public static final String PRODUCT_TYPE = "P";
 
     public static final String PRICE = "price";
 
     /** 易腐票据键前缀。旧前缀 {@code product} 已弃用，见类注释 */
     public static final String QUOTE = "quote";
 
-    public static final String DOWN_HOTEL = "DOWN";
 
-    public static String buildProductKey(String source, String product, String checkinDate, String checkoutDate) {
-        return JOINER.join(PRODUCT_TYPE, product, source, checkinDate, checkoutDate);
-    }
 
     /**
      * 当日价格 Hash：{@code price:{hotelId}:{occupancy}:{date}}，field = productKey。
@@ -45,8 +40,5 @@ public class RedisKeyUtils {
         return JOINER.join(QUOTE, hotelId, productKey);
     }
 
-    public static String buildDownHotelKey(String hotelId, String checkIn) {
-        return JOINER.join(DOWN_HOTEL, hotelId, checkIn);
-    }
 
 }
