@@ -11,6 +11,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.mod
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.QueryPriceResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaContractProfile;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ExpediaCatalogMapper;
+import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaUtils;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ThreadPoolUtils;
 import com.trip.booking.spa.platform.redis.DistributedRateLimiter;
@@ -28,8 +29,10 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 产品映射建档：查价响应 → global_product_supplier（目录域）+ supplier_product_base（档案域）。
- * 流程沿旧链路：默认 +9/+10 天占位日期、occupancy=1、零售价+打包价各查一遍、每酒店线程池并发、双推。
+ * 产品建档：查价响应 → {@code supplier_product_base}（一行=一个卖法）。
+ * 流程沿旧链路：默认 +9/+10 天占位日期、occupancy=1、零售价+打包价各查一遍、每酒店线程池并发。
+ *
+ * <p>2026-08-20 起不再双推——聚合域的桥按 R-6.1 不放在供应商网关，已撤表。
  *
  * <p><b>身份语义（docs/product-identity.md）</b>：目录行的身份列存 productKey（稳定"卖法"，
  * R-1.1），供应商真码 rate.id 只进 {@code supplier_quote_hint}（解析快速通道，R-2.3）——
@@ -46,6 +49,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ExpediaProductMappingService {
 
     private static final int SUPPLIER_ID = SupplierSourceEnum.EXPEDIA.getCode();
+    private static final String OPERATOR = "expedia-transform";
     private static final int PAGE_SIZE = 100;
 
     @Value("${expedia.url.host}")
@@ -65,6 +69,10 @@ public class ExpediaProductMappingService {
     private DistributedRateLimiter rateLimiter;
     @Resource
     private ExpediaCatalogMapper catalogMapper;
+
+    /** 产品档案走供应商通用写入口；ExpediaCatalogMapper 只留 Expedia 专属的表操作 */
+    @javax.annotation.Resource
+    private com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogMapper productCatalogMapper;
 
     /** 键派生与餐食/退改规范化的唯一权威——建档的键必须与查价/resolve 逐字节同口径 */
     @Resource
@@ -165,28 +173,28 @@ public class ExpediaProductMappingService {
                     skippedUnknown.incrementAndGet();
                     return;
                 }
-                String productKey = productKeyDeriver.deriveProductKey(
+                ProductIdentity identity = productKeyDeriver.deriveIdentity(
                         hotelPrice.getProperty_id(), room.getId(), meal, cancelPolicy, occupancy);
 
+                // 全部照抄派生器的产物（R-2.8）：本处一个判定都不做。
+                // 原先把 Meal/CancelPolicy 重判一遍压成 breakfast/cancelType 两个 int，
+                // 既降维（B1L1D1 与 B1L0D0 同为 1、占用无处安放）又与派生器分叉。
+                // 房型层的 has_window 与聚合域的 product_id/room_id/hotel_id 已随表重设计移除
+                // （R-2.9 / R-6.1）。
                 HashMap<String, Object> p = new HashMap<>();
-                // Expedia 打底：统一侧 = 供应商侧（1:1）。统一侧列属聚合域，将来可改（R-2.4）
-                p.put("productId", productKey);
-                p.put("roomId", room.getId());
-                p.put("hotelId", hotelPrice.getProperty_id());
                 p.put("supplierId", SUPPLIER_ID);
-                p.put("supplierHotelId", hotelPrice.getProperty_id());
-                p.put("supplierRoomId", room.getId());
-                // 身份列（唯一键）：productKey。rate.id 是报价标识，只当快速通道（R-2.3）
-                p.put("supplierProductId", productKey);
-                p.put("supplierQuoteHint", quoteCodeStable ? rate.getId() : null);
+                p.put("productKey", identity.productKey());
+                p.put("supplierAccount", identity.account());
+                p.put("supplierHotelId", identity.supplierHotelId());
+                p.put("supplierRoomId", identity.supplierRoomId());
+                p.put("mealSignature", identity.mealSignature());
+                p.put("cancelClass", identity.cancelClass());
+                p.put("occupancy", identity.occupancy());
                 p.put("supplierProductName", room.getRoom_name());
-                // 有窗是房型层事实（supplier_room_base.hasWindows 已有），产品层保持占位
-                p.put("hasWindow", 0);
-                p.put("breakfast", isPositive(meal.getCount()) ? 1 : 0);
-                p.put("cancelType", cancelPolicy.stream()
-                        .anyMatch(c -> Integer.valueOf(1).equals(c.getCancelType())) ? 1 : 0);
-                catalogMapper.upsertGlobalProductSupplier(p);
-                catalogMapper.upsertSupplierProductBase(p);
+                // rate.id 是报价标识，只当快速通道（R-2.3）；申报稳定才可填
+                p.put("supplierQuoteHint", quoteCodeStable ? rate.getId() : null);
+                p.put("operator", OPERATOR);
+                productCatalogMapper.upsertSupplierProductBase(p);
                 upserted.incrementAndGet();
             }));
         });
@@ -195,7 +203,4 @@ public class ExpediaProductMappingService {
                 request.getProperty_id(), request.getSales_environment(), upserted.get(), skippedUnknown.get());
     }
 
-    private static boolean isPositive(Integer count) {
-        return count != null && count > 0;
-    }
 }

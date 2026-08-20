@@ -41,9 +41,7 @@ public interface ExpediaCatalogMapper {
                                         @Param("offset") int offset,
                                         @Param("limit") int limit);
 
-    int upsertGlobalProductSupplier(HashMap<String, Object> params);
-
-    int upsertSupplierProductBase(HashMap<String, Object> params);
+    // 产品档案的 upsert 已迁至 ProductCatalogMapper（供应商通用，2026-08-20）
 
     int markHotelDetailsInactive(@Param("hotelIds") List<String> hotelIds);
 }

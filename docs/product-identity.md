@@ -18,7 +18,7 @@
 
 ## 1. 身份规则
 
-- **R-1.1 (MUST)** `productKey = hash(supplier_code, 账号/渠道profile, supplier_hotel_id, supplier_room_id, 餐食规范值, 退改类, 占用)`。sha256 hex（64 字符，恰好适配现有 `product_id VARCHAR(64)`）。
+- **R-1.1 (MUST)** `productKey = hash(supplier_code, 账号/渠道profile, supplier_hotel_id, supplier_room_id, 餐食规范值, 退改类, 占用)`。sha256 hex（64 字符）。档案表的身份列即 `supplier_product_base.product_key`（2026-08-20 前叫 `supplier_product_id`——旧列被改了语义而列名没改，读起来像"供应商的产品 id"，实际存的是我方 productKey）。
 - **R-1.2 (MUST NOT)** 以下不得进键：供应商报价码、价格、床型、房型名称等自由文本、任何含绝对时间戳的字段、任何对照表/聚合产物。
 - **R-1.3 (MUST)** 账号必须进键。证据：cursor 汇智双账号共享产品 ID 空间，抽样 600 家 69% 价格不同，三要素裸查被其 spec 定性为 bug（2026-07-11）。
 - **R-1.4 (MUST)** productKey 语义为等价类（"卖法"）。一个 key 对应 0..N 条在售报价均为正常态。证据：艺龙同房同餐 ~14 个 GoodsUniqId 轮换在售。
@@ -30,7 +30,9 @@
 - **R-2.1 (MUST NOT)** 易腐令牌不得写入 MySQL（目录表、订单表、任何持久层）。
 - **R-2.2 (MUST)** 易腐令牌只存 OfferStore，TTL < 该供应商已知轮换周期（汇智 4h → TTL ≤ 2h）。承接既有纪律：句柄存活时间必须短于供应商凭据有效期（`OfferStore` javadoc）。
 - **R-2.3 (MAY)** 申报为稳定且有证据的供应商真码（美团 `goodsId`、Expedia `rate_id`）可入目录 hint 列，语义=解析快速通道，**非身份**。身份列只放 productKey。
-- **R-2.4 (MUST)** `global_product_supplier` 行=桥：统一侧列（聚合结果）可改；供应商侧列（事实）不改。聚合纠错只允许重写统一侧。
+- **R-2.4 (MUST)** **聚合的映射表不建在网关**。「统一产品 ↔ 各家供应商卖法」这张桥属聚合域（用途只有比价检索），由做聚合的一方自建；SPA 只负责产出 productKey。桥的内部纪律仍然成立——统一侧列（聚合结果）可改，供应商侧列（事实）不改，聚合纠错只许重写统一侧——但那是聚合域自己要守的，不在本仓。
+
+  本仓原有 `global_product_supplier`，是 2026-08-07 还原旧中台（hotel-base 带聚合层）时一并建的。撤除前实况：**全仓零 SELECT**，统一侧三列是供应商侧的 1:1 拷贝（生产抽样 1000/1000 相同），每条档案白写两遍。2026-08-20 停写并撤表，守护测试 `ProductIdentityArchRulesTest.R61_aggregationBridgeMustNotComeBack` 防复活。
 - **R-2.5 (MUST)** 订单/快照只绑供应商侧（productKey + 条款快照），不得以对照表统一侧 ID 作身份。
 - **R-2.6 (MUST)** **按腐性分层存储**：稳定信息进 MySQL，易腐信息进 Redis 并靠 TTL 自然消亡。
 
@@ -44,6 +46,44 @@
   为什么是 MUST 而不是优化建议：把稳定信息塞进短命缓存会同时坏三件事——① Redis 承载与刷价覆盖面线性膨胀（2026-08-19 实测：艺龙仅 2,615 家酒店就占 1.19G/2G，其中 **97.4% 是产品详情**，按全量 23,584 家外推超 10G）；② TTL 无从取值，长了浪费、短了验价反查不到；③ 缓存被当成事实源，口径随刷价区间漂移（2026-08-19 的换票基准 bug：详情快照是刷价那次的 1 晚价，客人看的是查询区间的多晚价，差一个量级）。
 
   Redis 里的稳定信息只应作为**读性能副本**存在（可随时重建、丢了不影响正确性），不得成为唯一事实源。
+
+- **R-2.7 (MUST)** **档案表的列必须能重算出 productKey**。即 R-1.1 的七个成分
+  （supplier_code、账号、supplier_hotel_id、supplier_room_id、餐食、退改类、占用）
+  各有一列，且**按派生时的原形存**——餐食存 `MealSignature.canonical()`（如 `B1L0D0`）、
+  退改存 `CancelClass` 名（如 `FREE_CANCELLABLE`），不得压成布尔或整型。
+
+  判据可执行：拿表里的列重算一遍 sha256，必须等于 `product_key`。不等即缺列或写错。
+
+  为什么是 MUST：productKey 是 sha256，**单向不可逆**。成分在派生时是完整的
+  （`MealSignature`/`CancelClass` 都是内部规范型），一旦落表时被降维，表就既没有原信息、
+  也无法从身份列反推——档案自此无法自证，也无法用于对账。
+  反面即改造前（2026-08-20 已修）：`breakfast INT` 把 `B1L1D1`（含三餐）与 `B1L0D0`（只含早）
+  压成同一个 `1`；占用连列都没有，同一 (酒店,房型,餐食,退改) 下 1,359 组各有 2~3 行
+  productKey 不同的档案，从表上看完全一样。
+
+  > 成因备注：该表是 2026-08-07 从旧中台还原的（`legacy-schema-restoration.md`），
+  > `breakfast INT` / `cancel_type INT` 是旧接口 DTO 的字段类型；productKey 是 8 天后
+  > 以「改一列语义 + 加一列 hint」retrofit 上去的，列没有重新设计。不是权衡后的取舍。
+
+- **R-2.8 (MUST)** **建档只落派生产物，不得自行判定**。餐食/退改/占用等键成分由
+  productKey 派生器一次算出并原样透出，建档侧照抄入库；禁止建档从原始响应或出参 DTO
+  重新判一遍。
+
+  为什么：同一事实两处判定必然漂移，且漂移不报错。反面即改造前（2026-08-20 已修）——建档侧
+  `ElongCatalogService.hasFreeCancelWindow` 只看 `cancelType==1`，而派生器
+  `classifyCancel` 还要求 `RefundType.NO_DEDUCTION`；两者目前结论一致，靠的是
+  UNKNOWN 先被 `isCatalogEligible` 挡掉（R-5.4），**不是靠共用判据**。UNKNOWN 口径一动即分叉。
+
+  推论：派生器的返回值不能只是 key 字符串，须一并带出各成分——实物即 `ProductIdentity`。
+
+- **R-2.9 (MUST NOT)** 档案表不得混入非产品层的属性。房型层事实（有窗、床型、面积、
+  容量、吸烟）归 `supplier_room_base`，酒店层归 `supplier_hotel_base`。
+
+  为什么：一行档案=一个卖法，而同一 (酒店,房型) 下实测最多 8 个卖法
+  （餐食 × 退改 × 占用），房型层的一个事实要在 8 行里各写一遍，且无机制保证一致。
+  反面即改造前的 `supplier_product_base.has_window`（2026-08-20 已随表重设计移除）：两家供应商都硬编码 0
+  （`ExpediaProductMappingService` 注释自认「有窗是房型层事实，产品层保持占位」），
+  30.8 万行全是 0 —— 有列、无数据、不报错，比没有这列更危险。
 
 ## 3. resolve 管线规则
 
@@ -104,4 +144,5 @@
 | 2 | resolve 管线接 Expedia：验价令牌死 → 按上游携带的 productKey 现货匹配（`tryResolveByProductKey`）→ `ResolveGate` 选最低+容差门 → 换票或如实 RATE_DEAD。开关 `supplier.expedia.resolve-enabled` 默认关，关闭时行为与旧实现一致 | ✅ 已实现 |
 | 3 | 目录层通电：`supplier_product_id` 改存 productKey、新增 `supplier_quote_hint` 列（DDL：`config/mysql/alter-catalog-product-key.sql`）、UNKNOWN 不入目录、建档键与查价键同一份代码派生 | ✅ 已实现。**2026-08-15 全量填充经 test.ean.com 完成，属链路打通期数据**：键/属性/有货分布有效（测试端点查价为真实库存镜像，实证推断），hint 跨端点未证——认证切 api.ean.com 后重跑建档整库刷新（幂等，键不变） |
 | 4 | **移植标准**：cursor 供应商迁入 SPA 时必须生在新管线上——申报（§4）→ 适配层两钩子（现货查询、餐食/退改规范化）→ productKey/resolve/OfferStore 全复用 → **建档落库（R-2.6：稳定信息进目录表，Redis 只留易腐与 TTL 自消项）**。SPA 现存的非 Expedia 供应商代码（didatravel/huitravel/ratehawk/travelconnect/aichotels/meituan）均为待替换旧代码，**整包替换、不原地修补**（其中 didatravel 用存库码直接验价违反 R-3.1、huitravel rpid 落库违反 R-2.1——记录在案，由替换消灭） | 待做 |
+| 5 | **档案表重设计**（R-2.7/2.8/2.9）：身份列更名 `product_key`；七个成分各有一列且按派生原形存（`meal_signature`/`cancel_class`/`occupancy`/`supplier_account`）；房型层与聚合域列移除；`global_product_supplier` 停写并撤表。派生器改出 `ProductIdentity`，建档只照抄不判定 | ✅ 已实现（2026-08-20）。**存量清空重建**：艺龙随刷价约 2h 自动铺回；Expedia 需手动跑 `/hotel/expedia/catalog/products`（无定时任务，且认证切 api.ean.com 后本就要重跑整库） |
 | 5 | 规则测试化：`ProductIdentityArchRulesTest`——R62_gatewayChainsMustNotReadMappingTables（扫 30 个四链路类，禁引用对照表）+ R21_perishableTokensMustNotBePersisted（扫全部 mapper XML，禁令牌字段落库） | ✅ 已实现 |

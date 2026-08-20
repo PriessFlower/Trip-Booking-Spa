@@ -29,6 +29,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongNightlyRate;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongRatePlan;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
+import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.domain.product.ResolveGate;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
@@ -193,12 +194,16 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         Meal meal = productKeyDeriver.convertMeal(plan);
         List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), plan.getPrepayResult());
         int totalPriceCents = sumCents(dayPrices);
+        // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍
+        ProductIdentity identity = productKeyDeriver.deriveIdentity(
+                hotelId, plan.getRoomTypeId(), meal, cancelPolicy, occupancy);
         ProductRespDTO product = ProductRespDTO.builder()
                 .hotelId(hotelId)
                 // 报价标识=GoodsUniqId（会话级易腐，申报见 SupplierIdentityProfile.ELONG）；
                 // 身份=productKey，二者永不同字段
                 .productId(plan.getGoodsUniqId())
-                .productKey(productKeyDeriver.deriveProductKey(hotelId, plan.getRoomTypeId(), meal, cancelPolicy, occupancy))
+                .productKey(identity.productKey())
+                .identity(identity)
                 .supplierId(SupplierSourceEnum.ELONG.getCode())
                 .room(Room.builder().roomId(plan.getRoomTypeId()).roomName(room.getName()).build())
                 .productInfo(ProductInfo.builder().inventory(plan.getCurrentAlloment()).productStatus(1)

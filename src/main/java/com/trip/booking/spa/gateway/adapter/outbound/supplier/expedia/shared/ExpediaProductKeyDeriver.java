@@ -4,6 +4,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
 import com.trip.booking.spa.gateway.domain.product.CancelClass;
 import com.trip.booking.spa.gateway.domain.product.MealSignature;
+import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.domain.product.ProductKeyFactory;
 import com.trip.booking.spa.gateway.domain.product.RefundType;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
@@ -129,8 +130,14 @@ public class ExpediaProductKeyDeriver {
         this.contractProfile = contractProfile;
     }
 
-    public String deriveProductKey(String supplierHotelId, String supplierRoomId, Meal meal,
-                                   List<CancelPolicy> cancelPolicy, String occupancy) {
+    /**
+     * 派生身份<b>及其全部成分</b>（R-2.8：成分只算一次，下游照抄）。
+     *
+     * <p>建档要落的 {@code meal_signature}/{@code cancel_class}/{@code occupancy} 都从这里取，
+     * 不许拿 {@link Meal}/{@link CancelPolicy} 再判一遍——重判必然降维且会与本方法分叉。
+     */
+    public ProductIdentity deriveIdentity(String supplierHotelId, String supplierRoomId, Meal meal,
+                                          List<CancelPolicy> cancelPolicy, String occupancy) {
         MealSignature mealSignature = meal == null ? MealSignature.unknown()
                 : MealSignature.known(isPositive(meal.getCount()), isPositive(meal.getLunchCount()), isPositive(meal.getDinnerCount()));
         CancelClass cancelClass;
@@ -141,8 +148,14 @@ public class ExpediaProductKeyDeriver {
         } else {
             cancelClass = CancelClass.NON_REFUNDABLE;
         }
-        return ProductKeyFactory.derive(SupplierSourceEnum.EXPEDIA.getCode(), contractProfile.getPartnerPointOfSale(),
+        return ProductIdentity.of(SupplierSourceEnum.EXPEDIA.getCode(), contractProfile.getPartnerPointOfSale(),
                 supplierHotelId, supplierRoomId, mealSignature, cancelClass, occupancy);
+    }
+
+    /** 只要 key 不要成分时用（如 resolve 匹配只做键比对） */
+    public String deriveProductKey(String supplierHotelId, String supplierRoomId, Meal meal,
+                                   List<CancelPolicy> cancelPolicy, String occupancy) {
+        return deriveIdentity(supplierHotelId, supplierRoomId, meal, cancelPolicy, occupancy).productKey();
     }
 
     private static boolean isPositive(Integer count) {
