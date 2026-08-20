@@ -51,6 +51,18 @@ public interface CachePriceService {
      */
     List<ProductRespDTO> getPrice(PriceReq priceReq, Supplier supplier, String cacheField);
 
-    void productToCache(List<ProductRespDTO> respDTOS, PriceReq request);
+    /**
+     * 把一轮查价的产物落缓存。
+     *
+     * <p><b>{@code supplier} 必须显式传</b>，不可从 {@code request.getSuppliers()} 取：
+     * 刷价路径构造的 {@link PriceReq} <b>不带 suppliers</b>（酒店是另一个参数），
+     * 从里面取到的是 null。2026-08-20 无货标记就栽在这里——单测自己构造了带 suppliers 的
+     * 请求，真实调用方永远不会那样构造，于是标记一条都没写成、日志里只有一行
+     * 「请求里没有酒店 id，跳过」。
+     *
+     * <p>空列表不是"什么都不做"：它是「刷到了、供应商明确无在售」这个确定事实，
+     * 依 F-5.2 照常落缓存（写无货标记）。
+     */
+    void productToCache(List<ProductRespDTO> respDTOS, PriceReq request, Supplier supplier);
 
 }

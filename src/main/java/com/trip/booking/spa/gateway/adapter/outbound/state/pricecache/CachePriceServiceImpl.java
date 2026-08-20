@@ -292,11 +292,10 @@ public class CachePriceServiceImpl implements CachePriceService {
      * 刷价固定按 1 成人问，故 2 人的片仍然是"没刷过"——不能因为想给 2 人一个确定答案
      * 就把它也标成无货，那是拿"我们没问"冒充"供应商说没有"（R-1.6）。
      */
-    private void markNoInventory(PriceReq request) {
+    private void markNoInventory(PriceReq request, Supplier supplier) {
         String occupancy = Occupancy.canonical(request.getAdultNum(), request.getChildNum(),
                 request.getChildAges());
-        String hotelId = request.getSuppliers() == null || request.getSuppliers().isEmpty()
-                ? null : request.getSuppliers().get(0).getSHotelId();
+        String hotelId = supplier == null ? null : supplier.getSHotelId();
         if (StringUtils.isBlank(hotelId)) {
             // 拿不到酒店就无从标记。不猜、也不静默——否则"为什么没标记"在日志里没有答案
             log.warn("无货标记：请求里没有酒店 id，跳过,checkIn={}", request.getCheckIn());
@@ -350,12 +349,12 @@ public class CachePriceServiceImpl implements CachePriceService {
     }
 
     @Override
-    public void productToCache(List<ProductRespDTO> list, PriceReq request) {
+    public void productToCache(List<ProductRespDTO> list, PriceReq request, Supplier supplier) {
         try {
             if (list == null || list.isEmpty()) {
                 // F-5.2：明确无货照常落缓存。原实现直接 return，于是「刷过且无货」这个
                 // 确定事实在 Redis 里与「压根没刷过」无从分辨，读侧只能一律报未能确认
-                markNoInventory(request);
+                markNoInventory(request, supplier);
                 return;
             }
             // F-3 裁剪：按 productKey 等价类留最低价的前 N 条。放在最前面——
@@ -538,6 +537,12 @@ public class CachePriceServiceImpl implements CachePriceService {
                 for (Map.Entry<String, String> entry : mValue.entrySet()) {
                     String key = entry.getKey(); // 获取键
                     String value = entry.getValue(); // 获取值
+                    if (NO_INVENTORY_FIELD.equals(key)) {
+                        // 无货标记不是价格，跳过。它与真实 field 同住一个 Hash（同生共死于
+                        // 同一份 TTL），故这里必须显式排除——否则下面会把 "1" 当价格 JSON 解析，
+                        // decodeJson 返回 null 直接 NPE（2026-08-20 本地实跑抓到，返回 500）
+                        continue;
+                    }
 
                     // 如果 productMap 中不存在该键，则插入一个新的 ArrayList
                     if (!productMap.containsKey(key)) {

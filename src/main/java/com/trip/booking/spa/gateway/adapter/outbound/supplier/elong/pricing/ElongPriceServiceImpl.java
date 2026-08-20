@@ -109,7 +109,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             return null;
         }
         List<ProductRespDTO> products = result.products();
-        cachePriceService.productToCache(products, request);
+        cachePriceService.productToCache(products, request, supplier);
         // 建档(R-2.6):稳定事实落库,与写缓存同一处、同一份数据,不额外调供应商。
         // 开关默认关;失败不打断刷价(服务内部已吞异常)
         elongCatalogService.upsert(products);

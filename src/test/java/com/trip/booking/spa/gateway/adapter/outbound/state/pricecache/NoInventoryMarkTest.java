@@ -55,7 +55,6 @@ class NoInventoryMarkTest {
     private static PriceReq req(int adults) {
         return PriceReq.builder().checkIn(D1).checkout(D2)
                 .roomNum(1).adultNum(adults).childNum(0).childAges(List.of()).guestType(0)
-                .suppliers(List.of(Supplier.builder().supplierId(10010).sHotelId("H1").build()))
                 .build();
     }
 
@@ -66,7 +65,7 @@ class NoInventoryMarkTest {
     @Test
     @DisplayName("刷到无在售 → 写无货标记，不是什么都不做")
     void emptyRefreshWritesTheMarker() {
-        service.productToCache(List.of(), req(1));
+        service.productToCache(List.of(), req(1), sup());
 
         ArgumentCaptor<Map<String, Map<String, String>>> cap = ArgumentCaptor.forClass(Map.class);
         Mockito.verify(redisUtils).batchHashMapSetWithExpire(cap.capture(), anyLong(), any(TimeUnit.class));
@@ -83,7 +82,7 @@ class NoInventoryMarkTest {
     @Test
     @DisplayName("只标记本次刷价的那一片占用")
     void marksOnlyTheRefreshedOccupancyShard() {
-        service.productToCache(List.of(), req(1));
+        service.productToCache(List.of(), req(1), sup());
 
         ArgumentCaptor<Map<String, Map<String, String>>> cap = ArgumentCaptor.forClass(Map.class);
         Mockito.verify(redisUtils).batchHashMapSetWithExpire(cap.capture(), anyLong(), any(TimeUnit.class));
@@ -133,12 +132,44 @@ class NoInventoryMarkTest {
     void partialMarkIsNotEnough() {
         PriceReq threeNights = PriceReq.builder().checkIn(D1).checkout("2026-09-04")
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).guestType(0)
-                .suppliers(List.of(Supplier.builder().supplierId(10010).sHotelId("H1").build()))
                 .build();
         Mockito.when(redisUtils.hmGet("price:H1:1:" + D1, CachePriceServiceImpl.NO_INVENTORY_FIELD))
                 .thenReturn("1");
         // 第二、三天没标记
 
         assertEquals(PricingOutcome.INDETERMINATE, service.getPriceResult(threeNights, sup()).outcome());
+    }
+
+    /**
+     * 标记与真实价格同住一个 Hash，读侧遍历每个 field 当价格 JSON 解析——必须显式跳过标记。
+     *
+     * <p>2026-08-20 本地实跑抓到：不跳过时 {@code decodeJson("1")} 返回 null，
+     * 下一行 {@code priceMap.get("price")} 直接 NPE，出价整个 500。
+     * 单测当时全绿——因为没有任何一条喂过"Hash 里同时有标记"这个真实形状。
+     */
+    @Test
+    @DisplayName("读价时必须跳过无货标记，不能拿它当价格解析")
+    void theMarkerIsNotParsedAsAPrice() {
+        Mockito.when(redisUtils.hashMapListAndKey(Mockito.anyList()))
+                .thenReturn(Map.of("price:H1:1:" + D1,
+                        Map.of(CachePriceServiceImpl.NO_INVENTORY_FIELD, "1")));
+
+        PricingResult r = org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> service.getPriceResult(req(1), sup()));
+
+        assertEquals(PricingOutcome.INDETERMINATE, r.outcome(),
+                "只有标记没有价：本用例没桩 hmGet，故落未能确认；要点是不许抛异常");
+    }
+
+    /** 同一片里既有真实价又有陈留标记时：有货优先，且不因标记而崩 */
+    @Test
+    @DisplayName("标记与真实价共存时照常出价")
+    void realPricesSurviveAlongsideAStaleMarker() {
+        Mockito.when(redisUtils.hashMapListAndKey(Mockito.anyList()))
+                .thenReturn(Map.of("price:H1:1:" + D1, Map.of(
+                        CachePriceServiceImpl.NO_INVENTORY_FIELD, "1",
+                        "a".repeat(64), "{\"price\":12345}")));
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> service.getPriceResult(req(1), sup()));
     }
 }
