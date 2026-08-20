@@ -137,12 +137,6 @@ public class ProductAttributeReader {
         return o == null ? null : String.valueOf(o);
     }
 
-    private static Integer intOf(Object o) {
-        if (o == null) {
-            return null;
-        }
-        return o instanceof Number ? ((Number) o).intValue() : Integer.valueOf(String.valueOf(o));
-    }
 
     /** 目录里的稳定属性子集——只放出价响应真正要用的，不做全量映射 */
     @Data

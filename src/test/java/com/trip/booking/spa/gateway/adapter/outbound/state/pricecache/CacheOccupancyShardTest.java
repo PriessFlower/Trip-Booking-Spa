@@ -75,6 +75,10 @@ class CacheOccupancyShardTest {
                 .build();
     }
 
+    private static Supplier sup() {
+        return Supplier.builder().supplierId(10010).sHotelId("H1").build();
+    }
+
     /** 出价读侧走批量取，捕获它请求的那批键 */
     @SuppressWarnings("unchecked")
     private List<String> readKeys() {
@@ -96,7 +100,7 @@ class CacheOccupancyShardTest {
     @Test
     @DisplayName("写入的键带占用片，且占用取自 identity（与 productKey 同源）")
     void writeShardsByIdentityOccupancy() {
-        service.productToCache(List.of(productFor("2")), req(2, 0, List.of()));
+        service.productToCache(List.of(productFor("2")), req(2, 0, List.of()), sup());
 
         assertTrue(writtenPriceKeys().contains("price:H1:2:" + DATE),
                 "实际写入: " + writtenPriceKeys());
@@ -121,7 +125,7 @@ class CacheOccupancyShardTest {
     @Test
     @DisplayName("写侧与读侧算出同一片——两处拼键必须不可能漂移")
     void writeAndReadAgreeOnTheSameShard() {
-        service.productToCache(List.of(productFor("2-9,4")), req(2, 2, List.of(9, 4)));
+        service.productToCache(List.of(productFor("2-9,4")), req(2, 2, List.of(9, 4)), sup());
         java.util.Set<String> written = writtenPriceKeys();
 
         Mockito.clearInvocations(redisUtils);

@@ -696,7 +696,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         List<ProductRespDTO> productRespDTOList = convertPriceResp(resultOnly.getData().getHotelPrices().get(0), "hotel_only", request);
 
         //插入缓存
-        cachePriceService.productToCache(productRespDTOList, request);
+        cachePriceService.productToCache(productRespDTOList, request, supplier);
         return productRespDTOList;
     }
 
