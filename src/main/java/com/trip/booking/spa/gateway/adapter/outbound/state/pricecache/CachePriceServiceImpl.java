@@ -572,7 +572,14 @@ public class CachePriceServiceImpl implements CachePriceService {
      * @return: java.lang.String
      **/
     private String getDatePartFromPriceKey(String priceKey) {
-        return priceKey.split(":")[2];
+        // 日期恒在最后一段，与键有几段无关。原实现取 split(":")[2]，那是老键
+        // price:{hotel}:{date} 的位置；2026-08-20 键加了占用段变成
+        // price:{hotel}:{occupancy}:{date} 之后，[2] 取到的是占用串——生产实测每日价
+        // 明细里 date 全变成 "1"，两晚的两条还彼此无法区分（总价对，日期标签错）。
+        //
+        // 用 substringAfterLast 而非固定下标：下次再加段也不会错，且与写侧
+        // writeWithTieredTtl 取日期的方式一致（同一个键，两处必须同口径）。
+        return StringUtils.substringAfterLast(priceKey, ":");
     }
 
     /**
