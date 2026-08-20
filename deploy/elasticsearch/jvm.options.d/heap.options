@@ -1,0 +1,4 @@
+-Xms3g
+-Xmx3g
+-Des.enforce.bootstrap.checks=true
+

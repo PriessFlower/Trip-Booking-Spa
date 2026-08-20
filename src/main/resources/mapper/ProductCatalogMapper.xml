@@ -33,4 +33,17 @@
             del = 0
     </insert>
 
+    <select id="selectAttributesByProductKeys" resultType="java.util.HashMap">
+        SELECT product_key,
+               supplier_room_id,
+               supplier_product_name,
+               meal_signature,
+               cancel_class
+          FROM supplier_product_base
+         WHERE del = 0
+           AND supplier_id = #{supplierId}
+           AND product_key IN
+        <foreach collection="productKeys" item="k" open="(" separator="," close=")">#{k}</foreach>
+    </select>
+
 </mapper>

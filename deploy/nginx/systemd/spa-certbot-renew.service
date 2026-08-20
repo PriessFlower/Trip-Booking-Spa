@@ -1,0 +1,15 @@
+[Unit]
+Description=Renew spa.haowan2000.com TLS certificate
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/opt/nginx/certbot/conf/renewal/spa.haowan2000.com.conf
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/rm -f /opt/nginx/certbot/www/.spa-certificate-renewed
+ExecStart=/usr/bin/docker run --rm --name spa-certbot-renew -v /opt/nginx/certbot/conf:/etc/letsencrypt -v /opt/nginx/certbot/www:/var/www/certbot certbot/certbot:v5.7.0@sha256:34ee91d2f43008eb78a007d22f23ed4b2eaa9a454cb27ca2c042b49527a695b4 renew --non-interactive --quiet --no-random-sleep-on-renew --deploy-hook="touch /var/www/certbot/.spa-certificate-renewed"
+ExecStartPost=/bin/sh -ec 'if test -f /opt/nginx/certbot/www/.spa-certificate-renewed; then /usr/bin/docker exec trip-platform-nginx nginx -t; /usr/bin/docker exec trip-platform-nginx nginx -s reload; /usr/bin/rm -f /opt/nginx/certbot/www/.spa-certificate-renewed; fi'
+
+[Install]
+WantedBy=multi-user.target
