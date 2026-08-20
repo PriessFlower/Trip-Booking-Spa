@@ -130,6 +130,18 @@ cache:
   offer:
     ttl-seconds: 600
 
+  # ── cache.product-attribute：出价读侧的产品属性进程内缓存 ──
+  #
+  # 属性（房型 id、产品名、餐食规范串、退改类）按 productKey 取自档案表
+  # supplier_product_base，不再随每轮刷价重写进 Redis（R-2.6 按腐性分层）。
+  #
+  # 只设容量不设 TTL：这个映射跨刷价周期稳定——房型/餐食/退改类一旦变化，
+  # productKey 本身就变了，那是另一条记录，不存在"同一条的属性变了"。
+  # 满时按插入顺序淘汰十分之一；冷键下次查回即可，代价只是一次批量查库。
+  # 按实测每条约 300 字节估，5 万条约 15MB。
+  product-attribute:
+    max-size: 50000
+
 # ── supplier：与特定供应商交互的行为 ────────────────────────
 supplier:
   expedia:
