@@ -3,6 +3,8 @@ package com.trip.booking.spa.gateway.adapter.outbound.state.catalog;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 产品档案的<b>供应商通用</b>写入口（R-2.6 按腐性分层存储）。
@@ -33,4 +35,14 @@ public interface ProductCatalogMapper {
 
     /** 档案域：供应商产品事实。 */
     int upsertSupplierProductBase(@Param("p") HashMap<String, Object> params);
+
+    /**
+     * 出价读侧：按 productKey 批量取稳定属性（R-2.6）。
+     *
+     * <p>返回行的列名即 map 的 key，调用方是 {@code ProductAttributeReader}。
+     * 只取出价响应真正要用的几列，不做 {@code SELECT *}——档案表会长，
+     * 而多取的列会顺着进程内缓存长期驻留在内存里。
+     */
+    List<Map<String, Object>> selectAttributesByProductKeys(@Param("supplierId") int supplierId,
+                                                            @Param("productKeys") List<String> productKeys);
 }

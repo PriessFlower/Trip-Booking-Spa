@@ -1,0 +1,31 @@
+cluster.name: trip-prod-search
+node.name: trip-prod-search-1
+
+path.data: /usr/share/elasticsearch/data
+path.logs: /usr/share/elasticsearch/logs
+
+network.host: 0.0.0.0
+http.port: 9200
+discovery.type: single-node
+bootstrap.memory_lock: true
+
+xpack.security.enabled: true
+xpack.security.enrollment.enabled: false
+xpack.security.http.ssl:
+  enabled: true
+  key: certs/trip-prod-search/trip-prod-search.key
+  certificate: certs/trip-prod-search/trip-prod-search.crt
+  certificate_authorities: certs/ca/ca.crt
+xpack.security.transport.ssl:
+  enabled: true
+  verification_mode: certificate
+  key: certs/trip-prod-search/trip-prod-search.key
+  certificate: certs/trip-prod-search/trip-prod-search.crt
+  certificate_authorities: certs/ca/ca.crt
+
+# Elasticsearch currently shares the 50 GiB system disk with the OS and Nginx.
+# Absolute free-space watermarks protect the host until a dedicated data disk is attached.
+cluster.routing.allocation.disk.watermark.low: 20gb
+cluster.routing.allocation.disk.watermark.high: 15gb
+cluster.routing.allocation.disk.watermark.flood_stage: 10gb
+
