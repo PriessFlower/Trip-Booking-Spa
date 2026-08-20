@@ -13,6 +13,8 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.application.pricing.CachePriceService;
+import com.trip.booking.spa.gateway.application.pricing.PricingResult;
+import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.checkprice.client.DataValidateAccess;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing.client.HotelDetailAccess;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongOfferCredentials;
@@ -98,11 +100,13 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      */
     @Override
     public List<ProductRespDTO> queryPricesCache(PriceReq request, Supplier supplier) {
-        List<ProductRespDTO> products = queryPrices(request, supplier);
-        if (products == null) {
-            // 调用失败与"无在售"必须分开：失败时不动缓存，避免一次网络抖动清空在售价
+        PricingResult result = queryPrices(request, supplier);
+        if (result.outcome() == PricingOutcome.INDETERMINATE) {
+            // 调用失败与"无在售"必须分开（F-5.1）：没问出结果时不动缓存，
+            // 避免一次网络抖动清空在售价
             return null;
         }
+        List<ProductRespDTO> products = result.products();
         cachePriceService.productToCache(products, request);
         // 建档(R-2.6):稳定事实落库,与写缓存同一处、同一份数据,不额外调供应商。
         // 开关默认关;失败不打断刷价(服务内部已吞异常)
@@ -111,11 +115,11 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     }
 
     @Override
-    public List<ProductRespDTO> queryPrices(PriceReq request, Supplier supplier) {
+    public PricingResult queryPrices(PriceReq request, Supplier supplier) {
         if (!properties.isConfigured()) {
             log.error("艺龙查价：凭证未配置（ELONG_USER/ELONG_APP_KEY/ELONG_SECRET），无法调用,sHotelId={}",
                     supplier.getSHotelId());
-            return null;
+            return PricingResult.indeterminate();
         }
         List<String> occupancies = buildOccupancies(request.getRoomNum(), request.getAdultNum(),
                 request.getChildNum(), request.getChildAges());
@@ -125,19 +129,30 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 request.getCheckout(), request.getRoomNum(), request.getAdultNum(), request.getChildNum(), request.getChildAges());
         if (result == null || result.getData() == null) {
             log.warn("艺龙查价：调用未取得结果,sHotelId={},checkIn={}", supplier.getSHotelId(), request.getCheckIn());
-            return null;
+            return PricingResult.indeterminate();
         }
         ElongHotelDetailResponse data = result.getData();
         if (!data.isSucc()) {
-            // 错误码透传不归并（移植风险④）：码义未核实的一律原样落日志
+            // 错误码透传不归并（移植风险④）：码义未核实的一律原样落日志。
+            // 码义未核实就不能断言「确实无房」，故落未能确认
             log.warn("艺龙查价：供应商返回业务错误,sHotelId={},code={}", supplier.getSHotelId(), data.getCode());
-            return null;
+            return PricingResult.indeterminate();
         }
         if (data.isEmptyResult()) {
             log.info("艺龙查价：该店当日无在售产品,sHotelId={},checkIn={}", supplier.getSHotelId(), request.getCheckIn());
-            return List.of();
+            return PricingResult.noInventory();
         }
-        return convertPriceResp(data.getResult().getHotels().get(0), request);
+        List<ProductRespDTO> products = convertPriceResp(data.getResult().getHotels().get(0), request);
+        if (products.isEmpty()) {
+            // 供应商给了产品、但被我们三道过滤全部丢掉（停售/零库存、缺会话凭据、无每日价，
+            // 分类计数见 convertPriceResp 的日志）。这里<b>不能</b>说 NO_INVENTORY：
+            // 只有「缺凭据」「无每日价」那两类是我方原因，房其实还在，说成无房会让上游
+            // 据此劝退旅客。要升级成确定态，得先把三类跳过原因分开统计（待做）
+            log.info("艺龙查价：供应商有产品但全部不可用，按未能确认回报,sHotelId={},checkIn={}",
+                    supplier.getSHotelId(), request.getCheckIn());
+            return PricingResult.indeterminate();
+        }
+        return PricingResult.available(products);
     }
 
     private List<ProductRespDTO> convertPriceResp(ElongHotelDetailResponse.ElongHotel hotel, PriceReq request) {
@@ -524,6 +539,10 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * （任务行区间通常 1 晚），而客人看到的价是出价时按其查询区间<b>逐日累加</b>
      * 出来的。客人查 3 晚、基准取 1 晚，容差判断会整体失真——那不是精度问题，
      * 是量级错误（2026-08-19 Owner 质疑时发现）。
+     *
+     * <p><b>限定用 productKey 而不是 sProductId</b>：缓存字段自 0853d11 起是 productKey
+     * （艺龙报价码会话级轮换，用它当字段会让多晚查询的交集恒为空）。本方法只在
+     * {@link #tryResolveByProductKey} 内被调用，那里已保证 productKey 非空。
      *
      * <p>查不到返回 null——无基准则不换票，不猜。
      */

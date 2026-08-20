@@ -32,6 +32,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.Exp
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing.ExpediaPriceService;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaUtils;
 import com.trip.booking.spa.gateway.application.pricing.CachePriceService;
+import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.redis.DistributedRateLimiter;
 import com.trip.booking.spa.platform.util.DateUtil;
@@ -144,7 +145,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     private CachePriceService cachePriceService;
 
     @Override
-    public List<ProductRespDTO> queryPrices(PriceReq request, Supplier supplier) {
+    public PricingResult queryPrices(PriceReq request, Supplier supplier) {
         ResponseResult<QueryPriceResponse> resultOnly = null;
         ResponseResult<QueryPriceResponse> resultPackage = null;
         QueryPriceResponse.HotelPrice hotelPriceOnly = null;
@@ -210,14 +211,33 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         }
         Monitor.recordOne("pricing_supplier_query", pricingTags("all"));
         if (null == hotelPriceOnly && null == hotelPricePackage) {
+            // 「问到了、答没有」与「压根没问出结果」必须分开（PricingOutcome）：
+            // 只要有一趟调用是成功回应的，无报价就是 Expedia 明确说这个住期没有可售；
+            // 两趟都没成功回应（超时、非 2xx、限流被拒、响应无法判读）则我们并不知道
+            boolean answered = answered(resultOnly) || answered(resultPackage);
+            if (answered) {
+                log.info("expedia查价：该店该住期无可售报价,property_id={},checkin={}",
+                        queryPriceRequest.getProperty_id(), queryPriceRequest.getCheckin());
+                Monitor.recordOne("pricing_supplier_query", pricingTags("empty"));
+                return PricingResult.noInventory();
+            }
             log.info("expedia查询零售价和打包价全部失败,request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(resultOnly));
             Monitor.recordOne("pricing_supplier_query", pricingTags("fail"));
-            return null;
+            return PricingResult.indeterminate();
         }
         Monitor.recordOne("pricing_supplier_query", pricingTags("success"));
         // 零售价(hotel_only)与打包价(hotel_package)是两类不同产品，规则上不可混卖，
         // 各自独立成品返回、各带自己的 priceFlag，不做比价合并
-        return convertSeparated(hotelPriceOnly, hotelPricePackage, request);
+        return PricingResult.of(convertSeparated(hotelPriceOnly, hotelPricePackage, request));
+    }
+
+    /**
+     * 该趟调用是否「拿到了供应商的回答」——成功回应且响应体可判读。
+     *
+     * <p>{@code null} 表示这趟压根没发（按 priceFlag 只查了另一类），同样不构成回答。
+     */
+    private static boolean answered(ResponseResult<QueryPriceResponse> result) {
+        return result != null && result.isSucc() && null != result.getData();
     }
 
     /**
