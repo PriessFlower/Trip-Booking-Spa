@@ -143,17 +143,36 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             log.info("艺龙查价：该店当日无在售产品,sHotelId={},checkIn={}", supplier.getSHotelId(), request.getCheckIn());
             return PricingResult.noInventory();
         }
-        List<ProductRespDTO> products = convertPriceResp(data.getResult().getHotels().get(0), request);
+        ElongHotelDetailResponse.ElongHotel hotel = data.getResult().getHotels().get(0);
+        if (countPlans(hotel) == 0) {
+            // 供应商把酒店回来了、但一条报价都没给 —— 这是「确定无货」，不是「没问出来」。
+            // isEmptyResult() 只看 Hotels 是否为空，盖不住这一种（2026-08-20 生产实测：
+            // 一轮 900 行里有 134 个酒店-日期是这个形态）。误判成 INDETERMINATE 的代价是
+            // 缓存不被清（F-5.1 失败不动缓存），已下架的酒店会留着陈价继续对外报，
+            // 直到 TTL 过期 —— 正是 B7 说的僵尸价。
+            log.info("艺龙查价：该店当日无任何报价,sHotelId={},checkIn={}", supplier.getSHotelId(), request.getCheckIn());
+            return PricingResult.noInventory();
+        }
+        List<ProductRespDTO> products = convertPriceResp(hotel, request);
         if (products.isEmpty()) {
             // 供应商给了产品、但被我们三道过滤全部丢掉（停售/零库存、缺会话凭据、无每日价，
             // 分类计数见 convertPriceResp 的日志）。这里<b>不能</b>说 NO_INVENTORY：
             // 只有「缺凭据」「无每日价」那两类是我方原因，房其实还在，说成无房会让上游
             // 据此劝退旅客。要升级成确定态，得先把三类跳过原因分开统计（待做）
-            log.info("艺龙查价：供应商有产品但全部不可用，按未能确认回报,sHotelId={},checkIn={}",
+            log.info("艺龙查价：供应商给了报价但被我方过滤全丢，按未能确认回报,sHotelId={},checkIn={}",
                     supplier.getSHotelId(), request.getCheckIn());
             return PricingResult.indeterminate();
         }
         return PricingResult.available(products);
+    }
+
+    /** 供应商这一店回了多少条报价（过滤之前）。0 = 供应商没给货，属确定无货 */
+    private static int countPlans(ElongHotelDetailResponse.ElongHotel hotel) {
+        int n = 0;
+        for (ElongHotelDetailResponse.ElongRoom room : emptyIfNull(hotel.getRooms())) {
+            n += emptyIfNull(room.getRatePlans()).size();
+        }
+        return n;
     }
 
     private List<ProductRespDTO> convertPriceResp(ElongHotelDetailResponse.ElongHotel hotel, PriceReq request) {
