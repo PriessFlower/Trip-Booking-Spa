@@ -257,19 +257,17 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             return outcome(CheckPriceOutcome.SOLD_OUT, "该产品已售罄");
         }
         if (found == null) {
-            // key 反查自愈（供应商网关承接方案批次2）：上游只回传 productId 时（渠道协议
-            // 无处存 key），若该票是本网关发的，详情缓存里存着它的 productKey——自己找回。
-            // 上游给了 key 则不覆盖；反查不到（外来票/缓存过期）走原逻辑。
-            if (org.apache.commons.lang3.StringUtils.isBlank(request.getProductKey())) {
-                String recovered = lookupProductKeyFromCache(request.getSHotelId(), request.getSProductId());
-                if (recovered != null) {
-                    log.info("艺龙验价：productKey 反查命中,sHotelId={},sProductId={}",
-                            request.getSHotelId(), request.getSProductId());
-                    request.setProductKey(recovered);
-                }
-            }
             // 报价码已不在现货（会话级轮换是常态）：先按 productKey 换等价新票（resolve ②），
-            // 换不到才是确定性 RATE_DEAD
+            // 换不到才是确定性 RATE_DEAD。
+            //
+            // 原先此处还有一段「productKey 反查自愈」：上游只回传 productId 时，去详情缓存
+            // product:{hotelId}:{productId} 里把 key 找回来。0853d11 把详情键改成按 productKey
+            // 存之后，这条反查在结构上就不可能命中了——productId→productKey 需要全店扫描，
+            // 而给易腐码另建一套反向索引，正是那次改名要消除的内存增长。已删除，不留静默空转。
+            //
+            // 代价：上游不携 productKey 时 resolve 无检索键，一律走 RATE_DEAD 正门。
+            // 补法在上游——查价响应里 productKey 与 productId 是分开两个字段发出去的，
+            // 验价时原样带回来即可（cursor 侧 SpaCheckPriceRequest.productKey 目前写死 null）。
             found = tryResolveByProductKey(hotel, request, occupancy);
         }
         if (found == null) {
@@ -509,30 +507,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     }
 
     /**
-     * 从产品详情缓存（{@code product:{hotelId}:{productId}}）反查 productKey。
-     * 只认本网关刷价写入的票；查不到/解析不出一律返回 null，不影响主流程。
-     */
-    String lookupProductKeyFromCache(String hotelId, String productId) {
-        try {
-            String json = redisUtils.get(
-                    com.trip.booking.spa.platform.util.RedisKeyUtils.buildPriceInfoKey(hotelId, productId));
-            if (org.apache.commons.lang3.StringUtils.isBlank(json)) {
-                return null;
-            }
-            com.fasterxml.jackson.databind.JsonNode node =
-                    com.trip.booking.spa.platform.util.JsonUtils.getObjectMapper().readTree(json);
-            String key = node.path("productKey").asText(null);
-            return org.apache.commons.lang3.StringUtils.isBlank(key) ? null : key;
-        } catch (Exception e) {
-            // 反查是增益路径，任何异常都不该影响验价主流程
-            log.warn("艺龙验价：productKey 反查失败,hotelId={},productId={},err={}", hotelId, productId, e.toString());
-            return null;
-        }
-    }
-
-    /**
      * 反查该报价在<b>本次入离日期区间</b>的总价（分），作为 resolve 换票的容差基准。
-     * 用于上游未携 totalPrice 的场景（见 {@link CheckPriceReq#getTotalPrice()}）。
+     * 用于上游未携展示价的场景（见 {@link CheckPriceReq#getSeenPrice()}）。
      *
      * <p><b>必须走 {@link CachePriceService#getPrice} 这条与出价完全相同的路径</b>，
      * 不能读产品详情缓存里的 totalPrice 字段：后者是<b>刷价那一次</b>写入的快照
@@ -558,9 +534,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             Supplier supplier = Supplier.builder()
                     .supplierId(SupplierSourceEnum.ELONG.getCode())
                     .sHotelId(request.getSHotelId())
-                    .sProductId(request.getSProductId())
                     .build();
-            List<ProductRespDTO> products = cachePriceService.getPrice(priceReq, supplier);
+            List<ProductRespDTO> products = cachePriceService.getPrice(priceReq, supplier, request.getProductKey());
             if (products == null || products.isEmpty()) {
                 return null;
             }
