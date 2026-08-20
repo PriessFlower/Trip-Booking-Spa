@@ -88,6 +88,11 @@ public class CachePriceServiceImpl implements CachePriceService {
 
     @Override
     public List<ProductRespDTO> getPrice(PriceReq priceReq, Supplier supplier) {
+        return getPrice(priceReq, supplier, null);
+    }
+
+    @Override
+    public List<ProductRespDTO> getPrice(PriceReq priceReq, Supplier supplier, String cacheField) {
         List<ProductRespDTO> respDTOList = new ArrayList<>();
         List<String> checkList = DateUtil.getDatesBetween(priceReq.getCheckIn(), priceReq.getCheckout());
         Map<String, List<PriceInfoCache>> productMap = new HashMap<>();
@@ -98,8 +103,8 @@ public class CachePriceServiceImpl implements CachePriceService {
             String priceKey = RedisKeyUtils.buildPriceKey(supplier.getSHotelId(), c);
             keyList.add(priceKey);
         });
-        //productMap--sProductId,List<PriceInfo>
-        fetchAndProcessPriceInfo(productMap, supplier, keyList);
+        //productMap--缓存字段(productKey),List<PriceInfo>
+        fetchAndProcessPriceInfo(productMap, cacheField, keyList);
 
         // 使用已经收集的价格信息构建响应对象
         productMap.forEach((key, value) -> {
@@ -345,17 +350,16 @@ public class CachePriceServiceImpl implements CachePriceService {
         }
     }
     /**
-     * @description:组装价格信息
-     * @author: dick_w
-     * @date: 2025/3/12 10:25
-     * @param: [productMap, supplier, keySet]
-     * @return: void
+     * 组装价格信息。
+     *
+     * @param cacheField 非空则只取该字段（{@link #cacheField(ProductRespDTO)}，即 productKey）；
+     *                   为空则取该店该日期下的全部字段
      **/
-    private void fetchAndProcessPriceInfo(Map<String, List<PriceInfoCache>> productMap, Supplier supplier, List<String> keySet) {
-        if (StringUtils.isNotBlank(supplier.getSProductId())) {
-            //根据priceKey（price:sHotelId:yyyy-MM-dd）查询map（sProductId,price)
+    private void fetchAndProcessPriceInfo(Map<String, List<PriceInfoCache>> productMap, String cacheField, List<String> keySet) {
+        if (StringUtils.isNotBlank(cacheField)) {
+            //根据priceKey（price:sHotelId:yyyy-MM-dd）查询map（productKey,price)
             keySet.forEach(priceKey -> {
-                String price = redisUtils.hmGet(priceKey, supplier.getSProductId());
+                String price = redisUtils.hmGet(priceKey, cacheField);
                 if (StringUtils.isNotBlank(price)) {
                     String datePart = getDatePartFromPriceKey(priceKey);
                     // priceJson
@@ -380,7 +384,7 @@ public class CachePriceServiceImpl implements CachePriceService {
                     Integer stayPrice = Objects.isNull(priceMap.get("stayPrice")) ? null : priceMap.get("stayPrice");
                     Integer storePayPrice = Objects.isNull(priceMap.get("storePayPrice")) ? null : priceMap.get("storePayPrice");
                     Integer brokerage = Objects.isNull(priceMap.get("brokerage")) ? null : priceMap.get("brokerage");
-                    productMap.computeIfAbsent(supplier.getSProductId(), k -> new ArrayList<>()).add(new PriceInfoCache(datePart, totalPrice, taxes, roomPrice, stayPrice, storePayPrice, brokerage));
+                    productMap.computeIfAbsent(cacheField, k -> new ArrayList<>()).add(new PriceInfoCache(datePart, totalPrice, taxes, roomPrice, stayPrice, storePayPrice, brokerage));
                 }
             });
         } else {

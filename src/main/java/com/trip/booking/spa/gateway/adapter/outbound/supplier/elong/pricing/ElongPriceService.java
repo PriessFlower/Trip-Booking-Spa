@@ -5,6 +5,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 
 import java.util.List;
 
@@ -14,7 +15,11 @@ import java.util.List;
  */
 public interface ElongPriceService {
 
-    List<ProductRespDTO> queryPrices(PriceReq request, Supplier supplier);
+    /**
+     * 查价。分态由本层判定——只有供应商明确回答无在售（{@code isEmptyResult}）才是
+     * 「确定没有」，调用失败、业务错误码、凭据缺失一律「未能确认」。
+     */
+    PricingResult queryPrices(PriceReq request, Supplier supplier);
 
     /**
      * 查价并把结果写入价格缓存，供刷价任务调用。

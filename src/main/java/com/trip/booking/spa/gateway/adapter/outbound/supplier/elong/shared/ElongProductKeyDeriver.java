@@ -7,6 +7,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongRatePlan;
 import com.trip.booking.spa.gateway.domain.product.CancelClass;
 import com.trip.booking.spa.gateway.domain.product.MealSignature;
+import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.domain.product.ProductKeyFactory;
 import com.trip.booking.spa.gateway.domain.product.RefundType;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
@@ -53,13 +54,25 @@ public class ElongProductKeyDeriver {
         this.properties = properties;
     }
 
-    public String deriveProductKey(String supplierHotelId, String roomTypeId, Meal meal,
-                                   List<CancelPolicy> cancelPolicy, String occupancy) {
+    /**
+     * 派生身份<b>及其全部成分</b>（R-2.8：成分只算一次，下游照抄）。
+     *
+     * <p>建档要落的 {@code meal_signature}/{@code cancel_class}/{@code occupancy} 都从这里取，
+     * 不许拿 {@link Meal}/{@link CancelPolicy} 再判一遍——重判必然降维且会与本方法分叉。
+     */
+    public ProductIdentity deriveIdentity(String supplierHotelId, String roomTypeId, Meal meal,
+                                          List<CancelPolicy> cancelPolicy, String occupancy) {
         MealSignature mealSignature = meal == null ? MealSignature.unknown()
                 : MealSignature.known(isPositive(meal.getCount()), isPositive(meal.getLunchCount()), isPositive(meal.getDinnerCount()));
         CancelClass cancelClass = classifyCancel(cancelPolicy);
-        return ProductKeyFactory.derive(SupplierSourceEnum.ELONG.getCode(), properties.getUser(),
+        return ProductIdentity.of(SupplierSourceEnum.ELONG.getCode(), properties.getUser(),
                 supplierHotelId, roomTypeId, mealSignature, cancelClass, occupancy);
+    }
+
+    /** 只要 key 不要成分时用（如 resolve 匹配只做键比对） */
+    public String deriveProductKey(String supplierHotelId, String roomTypeId, Meal meal,
+                                   List<CancelPolicy> cancelPolicy, String occupancy) {
+        return deriveIdentity(supplierHotelId, roomTypeId, meal, cancelPolicy, occupancy).productKey();
     }
 
     /** 退改三分类。抽出以便建档判定（{@link #isCatalogEligible}）复用同一判据，杜绝两处漂移。 */

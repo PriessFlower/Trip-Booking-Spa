@@ -3,6 +3,7 @@ package com.trip.booking.spa.gateway.adapter.inbound.rest.controller;
 import com.trip.booking.spa.gateway.domain.booking.BookingOutcome;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
 import com.trip.booking.spa.gateway.domain.booking.OrderPresence;
+import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.BookingRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
@@ -23,6 +24,7 @@ import com.trip.booking.spa.gateway.application.pricing.CachePriceService;
 import com.trip.booking.spa.gateway.application.cancellation.CancelSyncService;
 import com.trip.booking.spa.gateway.application.checkprice.CheckPriceSyncService;
 import com.trip.booking.spa.gateway.application.order.OrderQuerySyncService;
+import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.application.pricing.ProductSyncService;
 import com.trip.booking.spa.bootstrap.NacosRuntimeConfig;
 import com.trip.booking.spa.platform.observability.Monitor;
@@ -72,6 +74,7 @@ public class SpaController {
     public ResponseDTO<List<ProductRespDTO>> queryPrice(@RequestBody @Validated PriceReq priceReq) {
         long startTime = System.currentTimeMillis();
         List<ProductRespDTO> respDTOList = Lists.newArrayList();
+        List<PricingOutcome> outcomes = Lists.newArrayList();
         List<Integer> cachePriceSuppliers = nacosRuntimeConfig.getCachePriceSuppliers();
         Map<Integer, List<String>> cachePriceHotels = nacosRuntimeConfig.getCachePriceHotels();
         for (Supplier supplier : priceReq.getSuppliers()) {
@@ -85,6 +88,12 @@ public class SpaController {
                 List<ProductRespDTO> price = cachePriceService.getPrice(priceReq, supplier);
                 if (CollectionUtils.isNotEmpty(price)) {
                     respDTOList.addAll(price);
+                    outcomes.add(PricingOutcome.AVAILABLE);
+                } else {
+                    // 缓存未命中一律「未能确认」，不可说成无房：它只说明我们没刷到（或已过 TTL），
+                    // 不说明供应商没有。要如实回报无房，得先按 F-5.2 把「无在售」也落进缓存，
+                    // 让「缓存里记着没有」与「缓存里什么都没有」可辨（待做）
+                    outcomes.add(PricingOutcome.INDETERMINATE);
                 }
             } else {
                 //实时查询
@@ -92,22 +101,54 @@ public class SpaController {
                 if (hotelService == null) {
                     return unsupportedSupplierOperation(supplier.getSupplierId(), "price");
                 }
-                List<ProductRespDTO> list = hotelService.queryPrice(priceReq, supplier);
-
-                if (CollectionUtils.isNotEmpty(list)) {
-                    respDTOList.addAll(list);
-                }
+                PricingResult result = hotelService.queryPrice(priceReq, supplier);
+                respDTOList.addAll(result.products());
+                outcomes.add(result.outcome());
             }
 
         }
 
         Monitor.recordTime("query_price_for_spa", System.currentTimeMillis() - startTime);
 
-        if (CollectionUtils.isEmpty(respDTOList)) {
-            return ResponseDTO.error("result is null");
-        }
+        return toPriceResponse(mergeOutcomes(outcomes), respDTOList);
+    }
 
-        return ResponseDTO.success(respDTOList);
+    /**
+     * 分态落到信封。<b>形状必须与改造前逐字节兼容</b>：上游现有判读只看 HTTP 码与
+     * {@code result} 是否为空，故 AVAILABLE/NO_INVENTORY 走 200+数组、INDETERMINATE 走
+     * 200+{@code result=null}，与原先一致；新增的只有 {@code outcome} 一个字段。
+     */
+    static ResponseDTO<List<ProductRespDTO>> toPriceResponse(PricingOutcome outcome,
+                                                             List<ProductRespDTO> products) {
+        if (outcome == PricingOutcome.AVAILABLE) {
+            return ResponseDTO.success(products).withOutcome(outcome);
+        }
+        if (outcome == PricingOutcome.NO_INVENTORY) {
+            // 「确实没有」是一个成功的回答，如实回空列表——上游据此可以告知旅客并停止重试
+            return ResponseDTO.success(Collections.<ProductRespDTO>emptyList()).withOutcome(outcome);
+        }
+        // 「没问出来」才算失败，且 result 必须保持 null：改成空数组会让上游把
+        // 「未能确认」读成「确实没有」。errorMsg 也保持原文，避免踩到别处的字符串匹配
+        return ResponseDTO.error("result is null").withOutcome(outcome);
+    }
+
+    /**
+     * 多供应商分态合并。取<b>安全侧</b>：只要还有一家没问出结果，整体就不能说「都没有」。
+     *
+     * <p>顺序是 {@link PricingOutcome#AVAILABLE} &gt; {@link PricingOutcome#INDETERMINATE}
+     * &gt; {@link PricingOutcome#NO_INVENTORY}：有货即有货；无货但有一家没问出来，
+     * 整体算没问出来；全部明确无货才是无货。
+     *
+     * <p>请求里一个供应商都没有时按未能确认——空请求不构成「确实没有」的证据。
+     */
+    static PricingOutcome mergeOutcomes(List<PricingOutcome> outcomes) {
+        if (outcomes.contains(PricingOutcome.AVAILABLE)) {
+            return PricingOutcome.AVAILABLE;
+        }
+        if (outcomes.isEmpty() || outcomes.contains(PricingOutcome.INDETERMINATE)) {
+            return PricingOutcome.INDETERMINATE;
+        }
+        return PricingOutcome.NO_INVENTORY;
     }
 
     /**
