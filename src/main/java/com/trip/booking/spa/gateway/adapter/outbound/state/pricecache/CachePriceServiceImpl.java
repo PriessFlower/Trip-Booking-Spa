@@ -7,6 +7,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespCacheDTO;
 import com.trip.booking.spa.gateway.application.pricing.CachePriceService;
+import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.platform.redis.RedisUtils;
 import com.trip.booking.spa.platform.util.DateUtil;
 import com.trip.booking.spa.platform.util.JsonUtils;
@@ -69,6 +70,18 @@ public class CachePriceServiceImpl implements CachePriceService {
     private static final long ONE_DAY = 86400L;
 
     /**
+     * 「刷到了，供应商明确无在售」的标记，占价格 Hash 的一个保留 field（F-5.2）。
+     *
+     * <p>取这个名字是为了<b>不可能与真实 field 相撞</b>：真实 field 是 64 位 sha256 hex
+     * （productKey），或未派生键供应商的报价码——两者都不含下划线。
+     *
+     * <p>为什么必须有它：没有标记时，「这一片没刷过」与「刷过且无货」在 Redis 里长得
+     * 一模一样（都是键不存在），读侧只能一律回报未能确认。而后者是确定事实，
+     * 说成未能确认会诱发上游无谓重试。
+     */
+    static final String NO_INVENTORY_FIELD = "__no_inventory__";
+
+    /**
      * 价格缓存的<b>字段名</b>：一律用 productKey（R-1.1，跨次稳定），不用 productId。
      *
      * <p><b>为什么必须是 productKey</b>（2026-08-19 生产实证）：刷价按<b>单晚</b>切片，
@@ -109,6 +122,58 @@ public class CachePriceServiceImpl implements CachePriceService {
     @Override
     public List<ProductRespDTO> getPrice(PriceReq priceReq, Supplier supplier) {
         return getPrice(priceReq, supplier, null);
+    }
+
+    /**
+     * 取缓存并分态（F-5.1 / F-5.2）。判定顺序不可调换：
+     *
+     * <ol>
+     *   <li>有可售产品 → AVAILABLE；</li>
+     *   <li>否则看这一片有没有无货标记 → NO_INVENTORY（确定事实，重试无用）；</li>
+     *   <li>都没有 → INDETERMINATE（这一片没刷过、或已过 TTL）。</li>
+     * </ol>
+     *
+     * <p>先判产品再判标记：同一片里既有产品又有陈留标记时（下一轮刷回了货但标记未过期），
+     * 有货优先——宁可多报也不能把在售说成无货。
+     */
+    @Override
+    public PricingResult getPriceResult(PriceReq priceReq, Supplier supplier) {
+        List<ProductRespDTO> products = getPrice(priceReq, supplier, null);
+        if (products != null && !products.isEmpty()) {
+            return PricingResult.available(products);
+        }
+        return hasNoInventoryMark(priceReq, supplier)
+                ? PricingResult.noInventory() : PricingResult.indeterminate();
+    }
+
+    /**
+     * 这一片是否刷过且被明确标记为无在售。
+     *
+     * <p><b>要求住期内每一天都有标记</b>：与出价"每一天都得有价才报"同一口径。
+     * 只有部分日期有标记，说明另一些日期压根没刷过，那整段就不能说成确定无货。
+     */
+    private boolean hasNoInventoryMark(PriceReq priceReq, Supplier supplier) {
+        try {
+            String occupancy = Occupancy.canonical(priceReq.getAdultNum(), priceReq.getChildNum(),
+                    priceReq.getChildAges());
+            List<String> dates = DateUtil.getDatesBetween(priceReq.getCheckIn(), priceReq.getCheckout());
+            if (dates.isEmpty()) {
+                return false;
+            }
+            for (String date : dates) {
+                String v = redisUtils.hmGet(
+                        RedisKeyUtils.buildPriceKey(supplier.getSHotelId(), occupancy, date),
+                        NO_INVENTORY_FIELD);
+                if (StringUtils.isBlank(v)) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            // 读标记失败退回"未能确认"——它是更保守的那一态
+            log.warn("无货标记读取失败,sHotelId={},err={}", supplier.getSHotelId(), e.toString());
+            return false;
+        }
     }
 
     @Override
@@ -217,6 +282,36 @@ public class CachePriceServiceImpl implements CachePriceService {
      * <p>解析不出日期的键归入未来档（偏长而非偏短）——TTL 判定失误不该让刚刷回来的价
      * 立刻消失。
      */
+    /**
+     * 记下「这一片刷过、供应商明确无在售」（F-5.2）。
+     *
+     * <p>逐日写入保留 field，走与正常价同一套分档 TTL——标记和它所描述的那批价必须
+     * 同生共死，否则标记比价活得久就会在价已过期后继续宣称"无货"。
+     *
+     * <p><b>只标记本次刷价的那一片占用</b>：刷价按什么占用问的，就只能替那一片作答。
+     * 刷价固定按 1 成人问，故 2 人的片仍然是"没刷过"——不能因为想给 2 人一个确定答案
+     * 就把它也标成无货，那是拿"我们没问"冒充"供应商说没有"（R-1.6）。
+     */
+    private void markNoInventory(PriceReq request) {
+        String occupancy = Occupancy.canonical(request.getAdultNum(), request.getChildNum(),
+                request.getChildAges());
+        String hotelId = request.getSuppliers() == null || request.getSuppliers().isEmpty()
+                ? null : request.getSuppliers().get(0).getSHotelId();
+        if (StringUtils.isBlank(hotelId)) {
+            // 拿不到酒店就无从标记。不猜、也不静默——否则"为什么没标记"在日志里没有答案
+            log.warn("无货标记：请求里没有酒店 id，跳过,checkIn={}", request.getCheckIn());
+            return;
+        }
+        Map<String, Map<String, String>> dataMap = new HashMap<>();
+        for (String date : DateUtil.getDatesBetween(request.getCheckIn(), request.getCheckout())) {
+            dataMap.put(RedisKeyUtils.buildPriceKey(hotelId, occupancy, date),
+                    Map.of(NO_INVENTORY_FIELD, "1"));
+        }
+        writeWithTieredTtl(dataMap);
+        log.info("无货标记：已落缓存,hotelId={},occupancy={},checkIn={},checkOut={},共 {} 天",
+                hotelId, occupancy, request.getCheckIn(), request.getCheckout(), dataMap.size());
+    }
+
     private void writeWithTieredTtl(Map<String, Map<String, String>> dataMap) {
         Map<Long, Map<String, Map<String, String>>> byTtl = new HashMap<>();
         dataMap.forEach((priceKey, value) -> {
@@ -258,7 +353,9 @@ public class CachePriceServiceImpl implements CachePriceService {
     public void productToCache(List<ProductRespDTO> list, PriceReq request) {
         try {
             if (list == null || list.isEmpty()) {
-                log.info("productToCache list is empty");
+                // F-5.2：明确无货照常落缓存。原实现直接 return，于是「刷过且无货」这个
+                // 确定事实在 Redis 里与「压根没刷过」无从分辨，读侧只能一律报未能确认
+                markNoInventory(request);
                 return;
             }
             // F-3 裁剪：按 productKey 等价类留最低价的前 N 条。放在最前面——

@@ -4,6 +4,8 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 
+import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
+
 import java.util.List;
 
 /**
@@ -15,8 +17,27 @@ import java.util.List;
  **/
 public interface CachePriceService {
 
-    /** 取该店该住期缓存里的全部产品 */
+    /** 取该店该住期缓存里的全部产品。不区分「没刷到」与「刷到了但无货」——需要区分时用
+     * {@link #getPriceResult}。 */
     List<ProductRespDTO> getPrice(PriceReq priceReq, Supplier supplier);
+
+    /**
+     * 取缓存并<b>如实分态</b>（F-5.1 / F-5.2）。
+     *
+     * <p>此前出价读缓存只有「有产品」和「没有」两种结果，空一律回报
+     * {@link PricingOutcome#INDETERMINATE}。于是三件不同的事塌成了一态：
+     * <ul>
+     *   <li>这一片压根没刷过（如 2 人的占用片，而刷价只刷 1 人）；</li>
+     *   <li>刷过、供应商明确答无在售；</li>
+     *   <li>刷过、但已过 TTL。</li>
+     * </ul>
+     * 第二种是<b>确定事实</b>，说成「未能确认」会诱发上游无谓重试；而反过来把前两种
+     * 说成「无货」更糟——那是拿"我们没问"冒充"供应商说没有"。
+     *
+     * <p>做法依 F-5.2：刷价拿到 NO_INVENTORY 时照常落缓存（写无货标记），读到标记即
+     * {@link PricingOutcome#NO_INVENTORY}，键整个不存在才是 INDETERMINATE。
+     */
+    PricingResult getPriceResult(PriceReq priceReq, Supplier supplier);
 
     /**
      * 只取缓存字段等于 {@code cacheField} 的那一条。

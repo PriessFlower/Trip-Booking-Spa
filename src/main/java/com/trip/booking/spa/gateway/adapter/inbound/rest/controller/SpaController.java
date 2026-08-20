@@ -85,16 +85,17 @@ public class SpaController {
                     && cachePriceSuppliers.contains(supplier.getSupplierId())
                     //查询供应商是全量走缓存还是部分酒店走缓存
                     && (CollectionUtils.isEmpty(hotelIdList) || hotelIdList.contains(supplier.getSHotelId()))) {
-                List<ProductRespDTO> price = cachePriceService.getPrice(priceReq, supplier);
-                if (CollectionUtils.isNotEmpty(price)) {
-                    respDTOList.addAll(price);
-                    outcomes.add(PricingOutcome.AVAILABLE);
-                } else {
-                    // 缓存未命中一律「未能确认」，不可说成无房：它只说明我们没刷到（或已过 TTL），
-                    // 不说明供应商没有。要如实回报无房，得先按 F-5.2 把「无在售」也落进缓存，
-                    // 让「缓存里记着没有」与「缓存里什么都没有」可辨（待做）
-                    outcomes.add(PricingOutcome.INDETERMINATE);
+                // 缓存读侧如实分态（F-5.1 / F-5.2，2026-08-20）：
+                //   有产品     → AVAILABLE
+                //   有无货标记 → NO_INVENTORY（刷过、供应商明确答没有；重试无用）
+                //   两者皆无   → INDETERMINATE（这一片没刷过，或已过 TTL）
+                // 此前三者塌成一态、一律回报「未能确认」。塌了之后：既诱发上游对确定无货的
+                // 无谓重试，也让「刷价没覆盖到这个占用片」这类缺口在出价侧完全不可见
+                PricingResult cached = cachePriceService.getPriceResult(priceReq, supplier);
+                if (cached.outcome() == PricingOutcome.AVAILABLE) {
+                    respDTOList.addAll(cached.products());
                 }
+                outcomes.add(cached.outcome());
             } else {
                 //实时查询
                 ProductSyncService hotelService = capabilityRegistry.find(supplier.getSupplierId(), Capability.PRICING, ProductSyncService.class);
