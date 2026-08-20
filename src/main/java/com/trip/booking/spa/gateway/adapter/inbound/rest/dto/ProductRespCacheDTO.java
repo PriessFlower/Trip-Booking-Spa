@@ -54,4 +54,23 @@ public class ProductRespCacheDTO {
 
     /** 报价币种（对外字段名）。与 {@link #currencyType} 并存是历史契约，不在本次收敛范围 */
     public String currency;
+
+    /**
+     * 完整退改条款。
+     *
+     * <p><b>它必须留在这里，档案表装不下</b>：条款是「卖法 × 住期」的函数——同一个卖法，
+     * 住 8/23 与住 9/1 的免费取消截止、罚金阶梯都可能不同。而档案表一行只对应一个卖法
+     * （R-2.7），没有住期维度；它只存得下粗分类 {@code cancel_class}
+     * （FREE_CANCELLABLE / NON_REFUNDABLE，R-5.1 的键内成分）。
+     *
+     * <p><b>也不是"含绝对时间戳所以易腐"</b>：字段都是相对住期的（{@code before}=入住前多少
+     * 小时、{@code moveUpCancelDays/Hour}=相对入住日），不随墙上时钟漂移，与它描述的那份
+     * 报价同生共死——正是 Redis 该装的东西（R-2.6）。
+     *
+     * <p><b>2026-08-20 教训</b>：瘦身时我把它当成"可从档案表补回"的稳定属性删掉了，
+     * 而读侧只补了房型/餐食/产品名。后果是走缓存的出价 {@code cancelPolicy} 恒为 null，
+     * 上游按"退改从严"兜底——<b>26,011 个可免费取消的卖法在渠道侧全部显示为不可退</b>。
+     * 这比丢失更糟：它露出了，但卖点没了。
+     */
+    private java.util.List<CancelPolicy> cancelPolicy;
 }
