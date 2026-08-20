@@ -29,6 +29,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongNightlyRate;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongRatePlan;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
+import com.trip.booking.spa.gateway.domain.product.Occupancy;
 import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.domain.product.ResolveGate;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
@@ -122,7 +123,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                     supplier.getSHotelId());
             return PricingResult.indeterminate();
         }
-        List<String> occupancies = buildOccupancies(request.getRoomNum(), request.getAdultNum(),
+        List<String> occupancies = Occupancy.perRoom(request.getRoomNum(), request.getAdultNum(),
                 request.getChildNum(), request.getChildAges());
         request.setOccupancies(occupancies);
 
@@ -247,7 +248,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         }
         // 批次4 反馈环(F-6):验价=真实需求信号,该酒店升档 24h 被高频档跟刷(fire-and-forget)
         markHotelHot(request.getSHotelId());
-        String occupancy = buildOccupancy(request.getAdultCount(), request.getChildNum(), request.getChildAges());
+        String occupancy = Occupancy.canonical(request.getAdultCount(), request.getChildNum(), request.getChildAges());
 
         // 现取现验（R-3.1）：重打一次 hotel.detail 取本会话的新马甲与新报价码
         ResponseResult<ElongHotelDetailResponse> result = queryHotelDetail(request.getSHotelId(), request.getCheckIn(),
@@ -741,23 +742,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     }
 
     /** 占用串与 Expedia 同口径：一间房一项，「成人数-儿童年龄,儿童年龄」 */
-    private static List<String> buildOccupancies(Integer roomNum, Integer adultNum, Integer childNum, List<Integer> childAges) {
-        List<String> occupancies = new ArrayList<>();
-        for (int i = 0; i < roomNum; i++) {
-            occupancies.add(buildOccupancy(adultNum, childNum, childAges));
-        }
-        return occupancies;
-    }
 
-    private static String buildOccupancy(Integer adultNum, Integer childNum, List<Integer> childAges) {
-        StringBuilder occupancy = new StringBuilder(String.valueOf(adultNum));
-        if (childNum != null && childNum > 0 && CollectionUtils.isNotEmpty(childAges)) {
-            for (int i = 0; i < childAges.size(); i++) {
-                occupancy.append(i == 0 ? "-" : ",").append(childAges.get(i));
-            }
-        }
-        return occupancy.toString();
-    }
 
     private static String result(ElongDataValidateResponse data) {
         return JsonUtils.writeObject2Json(data);

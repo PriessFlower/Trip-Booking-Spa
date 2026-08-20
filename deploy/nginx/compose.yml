@@ -1,0 +1,37 @@
+services:
+  nginx:
+    image: nginx:1.30.4-alpine
+    container_name: trip-platform-nginx
+    restart: unless-stopped
+    network_mode: host
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    tmpfs:
+      - /var/cache/nginx:uid=0,gid=0,mode=0755
+      - /var/run:uid=0,gid=0,mode=0755
+    volumes:
+      - /opt/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /opt/nginx/conf.d:/etc/nginx/conf.d:ro
+      - /opt/nginx/www:/usr/share/nginx/html:ro
+      - /opt/nginx/certbot/www:/var/www/certbot:ro
+      - /opt/nginx/certbot/conf:/etc/letsencrypt:ro
+      - /opt/nginx/logs:/var/log/nginx
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "--header=Host: spa.haowan2000.com", "http://127.0.0.1/_health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

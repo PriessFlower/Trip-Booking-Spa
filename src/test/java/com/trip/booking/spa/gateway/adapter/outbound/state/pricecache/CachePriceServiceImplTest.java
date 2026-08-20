@@ -32,7 +32,11 @@ import static org.mockito.ArgumentMatchers.anyString;
 class CachePriceServiceImplTest {
 
     private static final String DATE = "2026-09-01";
-    private static final String PRICE_KEY = "price:H1:" + DATE;
+    /**
+     * 价格键自 2026-08-20 起带占用分片：{@code price:{hotel}:{occupancy}:{date}}。
+     * 本用例的 {@code oneNight()} 是 1 成人 0 儿童，故占用片为 {@code 1}。
+     */
+    private static final String PRICE_KEY = "price:H1:1:" + DATE;
 
     private CachePriceServiceImpl service;
     private RedisUtils redisUtils;

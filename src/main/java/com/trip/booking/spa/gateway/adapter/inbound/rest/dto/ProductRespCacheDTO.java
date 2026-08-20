@@ -1,20 +1,26 @@
 package com.trip.booking.spa.gateway.adapter.inbound.rest.dto;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.BedCheckInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.BookingRule;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Room;
 import lombok.Data;
 
-import java.util.List;
-
+/**
+ * 产品详情缓存的载荷（R-2.6 按腐性分层存储）。
+ *
+ * <p><b>只放三类</b>：易腐码、通往目录的桥、当轮价格。稳定属性（房型、餐食、退改、
+ * 占用、产品名）由目录表承载，出价时按 {@link #productKey} 回查（见
+ * {@code ProductAttributeReader}）。
+ *
+ * <p>此前本 DTO 承载全部 24 个字段，导致 Redis 里 17.5 万条详情占该实例 97.4% 的键、
+ * 1.19G/2G 内存，而这只覆盖 2,615 家酒店；且因缓存成为稳定信息的唯一事实源，
+ * 换票基准一度错取刷价快照的单晚价（2026-08-19）。瘦身后单条约 1,225 → 366 字节。
+ *
+ * <p><b>{@code productKey} 是那条桥，删它等于把库里的属性永久锁死</b>——出价拿到的是
+ * 易腐的 productId，而 productId 依 R-2.1 不落库，只能靠本字段转一道。
+ */
 @Data
 public class ProductRespCacheDTO {
 
-    public String hotelId;
+    /** 供应商报价码：易腐（艺龙会话级轮换），故只存缓存、禁止落库（R-2.1） */
+
     public String productId;
     /**
      * 卖法等价类键（R-1.1，跨次稳定）。缓存必须原样保存——它是对上游的不透明句柄
@@ -24,8 +30,6 @@ public class ProductRespCacheDTO {
      * 补上字段即自动透传；旧缓存条目反序列化为 null，随刷价周期自然覆盖。
      */
     private String productKey;
-    private String expediaRoomId;//expedia房型id
-    public Integer supplierId;
     public String planSession;
     /**
      * 总价
@@ -60,48 +64,7 @@ public class ProductRespCacheDTO {
      */
     private String currencyType;
     /**
-     * 产品基本信息
-     */
-    public ProductInfo productInfo;
-    /**
-     * 总价
-     */
-    public Room room;
-    /**
      * 外币币种
      */
     public String currency;
-    /**
-     * 规则
-     */
-    public List<BookingRule> bookingRule;
-    /**
-     * 餐食
-     */
-    public Meal meal;
-    /**
-     * 取消政策
-     */
-    public List<CancelPolicy> cancelPolicy;
-//    /**
-//     * 价格
-//     */
-//    public List<PriceInfo> priceInfos;
-    /**
-     * 最大入住人数
-     */
-    private Integer maxOccupancy;
-    /**
-     * hotel_package-打包价 hotel_only-零售价
-     */
-    private String priceFlag;
-    /**
-     * 专属分销标识，可能是高佣金 true 是   false 否
-     */
-    private boolean distribution;
-    /**
-     * 床型选择信息
-     */
-    private List<BedCheckInfo> bedCheckInfos;
-
 }
