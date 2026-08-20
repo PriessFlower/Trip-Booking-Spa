@@ -33,11 +33,14 @@ class QuotePayloadContentTest {
      *   <li>{@code productId}——供应商报价码，易腐，且依 R-2.1 禁止落库，只能在这儿；</li>
      *   <li>{@code productKey}——通往档案表的桥，删了库里的属性就再也取不出来；</li>
      *   <li>{@code storePayCurrency} / {@code currencyType} / {@code currency}——币种不在
-     *       每日价里，也不是产品的稳定属性，读侧无处可算。</li>
+     *       每日价里，也不是产品的稳定属性，读侧无处可算；</li>
+     *   <li>{@code cancelPolicy}——条款是「卖法 × 住期」的函数，档案表一行只对应一个卖法、
+     *       没有住期维度，装不下（它只存得下粗分类 cancel_class）。2026-08-20 曾把它删掉，
+     *       后果是 26,011 个可免费取消的卖法在渠道侧全部显示不可退。</li>
      * </ul>
      */
     private static final Set<String> ALLOWED = Set.of(
-            "productId", "productKey", "storePayCurrency", "currencyType", "currency");
+            "productId", "productKey", "storePayCurrency", "currencyType", "currency", "cancelPolicy");
 
     private static List<String> declaredFields() {
         return Arrays.stream(ProductRespCacheDTO.class.getDeclaredFields())
