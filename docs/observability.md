@@ -46,7 +46,7 @@
   | 键 | 概念 | 取值出处 |
   |---|---|---|
   | `status` | 一次供应商调用的终态 | `CallStatus` 枚举，六个值，互斥且穷尽 |
-  | `outcome` | 校验类检查结果、分态结论这类非终态的结果 | 由该指标自行定义并在 `MetricNames` 注释里写明 |
+  | `outcome` | 校验类检查结果、下载方式、分态结论这类非终态的结果 | 由该指标自行定义并在 `MetricNames` 注释里写明 |
   | `stage` | 漏斗阶段：报价丢在哪一环 | `FunnelStage` 枚举（O-4.6：小集合且稳定） |
   | `reason` | 报价为什么被丢弃 | `DropReason` 枚举（O-4.4） |
   | `source` | 查价这条腿走缓存还是实时 | `MetricTags.SOURCE_CACHE` / `SOURCE_LIVE` 两个常量 |

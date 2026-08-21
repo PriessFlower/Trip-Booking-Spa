@@ -1740,7 +1740,7 @@
         "type": "prometheus",
         "uid": "spa-prom"
       },
-      "description": "available=出报；no_inventory=刷过、确定无货；indeterminate=没刷过或已过 TTL——它高说明刷价覆盖不住查询流量。source=cache|live 区分走缓存还是实时问供应商。",
+      "description": "available=出报；no_inventory=刷过、确定无货；indeterminate=没刷过或已过 TTL——它高说明刷价覆盖不住查询流量；error=处理中抛异常（HTTP 报错出去）。source=cache|live 区分走缓存还是实时问供应商。",
       "gridPos": {
         "h": 8,
         "w": 12,

@@ -95,7 +95,13 @@ public class SpaController {
                 //   两者皆无   → INDETERMINATE（这一片没刷过，或已过 TTL）
                 // 此前三者塌成一态、一律回报「未能确认」。塌了之后：既诱发上游对确定无货的
                 // 无谓重试，也让「刷价没覆盖到这个占用片」这类缺口在出价侧完全不可见
-                PricingResult cached = cachePriceService.getPriceResult(priceReq, supplier);
+                PricingResult cached;
+                try {
+                    cached = cachePriceService.getPriceResult(priceReq, supplier);
+                } catch (RuntimeException e) {
+                    recordFailedLeg(supplier, MetricTags.SOURCE_CACHE);
+                    throw e;
+                }
                 if (cached.outcome() == PricingOutcome.AVAILABLE) {
                     respDTOList.addAll(cached.products());
                 }
@@ -107,7 +113,13 @@ public class SpaController {
                 if (hotelService == null) {
                     return unsupportedSupplierOperation(supplier.getSupplierId(), "price");
                 }
-                PricingResult result = hotelService.queryPrice(priceReq, supplier);
+                PricingResult result;
+                try {
+                    result = hotelService.queryPrice(priceReq, supplier);
+                } catch (RuntimeException e) {
+                    recordFailedLeg(supplier, MetricTags.SOURCE_LIVE);
+                    throw e;
+                }
                 respDTOList.addAll(result.products());
                 outcomes.add(result.outcome());
                 recordPriceLeg(supplier, MetricTags.SOURCE_LIVE, result);
@@ -139,6 +151,16 @@ public class SpaController {
             Monitor.recordMany(MetricNames.SPA_PRICE_QUOTED,
                     MetricTags.quoted(supplierEnum, source), result.products().size());
         }
+    }
+
+    /** 腿的词表必须穷尽（O-3.3）：异常出去的腿不计数，出报率分母就偏小、算出来偏高 */
+    private static void recordFailedLeg(Supplier supplier, String source) {
+        SupplierSourceEnum supplierEnum = SupplierSourceEnum.getEnum(supplier.getSupplierId());
+        if (supplierEnum == null) {
+            return;
+        }
+        Monitor.recordOne(MetricNames.SPA_PRICE_LEG,
+                MetricTags.leg(supplierEnum, source, MetricNames.LEG_ERROR));
     }
 
     /**

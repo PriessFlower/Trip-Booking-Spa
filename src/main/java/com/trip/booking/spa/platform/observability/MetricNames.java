@@ -102,10 +102,14 @@ public final class MetricNames {
 
     /**
      * 对外查价的一条「请求×供应商」腿。一个 HTTP 请求带 N 家供应商就是 N 条腿，每腿记一次。
-     * 标签 supplier / source（cache|live）/ outcome（available|no_inventory|indeterminate，
-     * 即 PricingOutcome 小写）。出报率 = available 腿 / 全部腿（O-4.2 的请求数与出报率）。
+     * 标签 supplier / source（cache|live）/ outcome（available|no_inventory|indeterminate
+     * 即 PricingOutcome 小写，外加 {@link #LEG_ERROR}=处理中抛异常）。
+     * 出报率 = available 腿 / 全部腿（O-4.2 的请求数与出报率）。
      */
     public static final String SPA_PRICE_LEG = "spa_price_leg";
+
+    /** 腿的第四个 outcome：处理中抛异常（HTTP 报错出去）。不补上它，sum(腿) 就不等于腿总数（O-3.3） */
+    public static final String LEG_ERROR = "error";
 
     /** 对外查价实际出报的产品条数。标签 supplier/source。与 spa_price_leg 相除得每腿平均条数 */
     public static final String SPA_PRICE_QUOTED = "spa_price_quoted";
