@@ -226,6 +226,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 .identity(identity)
                 .supplierId(SupplierSourceEnum.ELONG.getCode())
                 .room(Room.builder().roomId(plan.getRoomTypeId()).roomName(room.getName()).build())
+                // inventory 原样透出艺龙的 CurrentAlloment（房量限额，0/999/9999=不限，非剩余房量）。
+                // 上游若按 inventory<=0 过滤，会误杀"不限"的产品——语义见 ElongRatePlan 字段注释
                 .productInfo(ProductInfo.builder().inventory(plan.getCurrentAlloment()).productStatus(1)
                         .productName(StringUtils.isNotBlank(plan.getRatePlanName()) ? plan.getRatePlanName() : room.getName()).build())
                 .currencyType(plan.getCurrencyCode())
@@ -277,12 +279,10 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             log.info("艺龙验价：所点产品已停售,sHotelId={},sProductId={}", request.getSHotelId(), request.getSProductId());
             return outcome(CheckPriceOutcome.RATE_DEAD, "该产品已停售，请重新查价后再选择");
         }
-        if (found != null && (found.plan().getCurrentAlloment() == null || found.plan().getCurrentAlloment() <= 0)) {
-            // 供应商明确报库存≤0，是确定性结果
-            log.info("艺龙验价：所点产品库存为0,sHotelId={},sProductId={},currentAlloment={}",
-                    request.getSHotelId(), request.getSProductId(), found.plan().getCurrentAlloment());
-            return outcome(CheckPriceOutcome.SOLD_OUT, "该产品已售罄");
-        }
+        // 此处原有一段「CurrentAlloment <= 0 → SOLD_OUT」已删除：该字段是"房量限额"不是"剩余房量"，
+        // 0/999/9999 均表示不限，官方对每种口径都写明「最少有 1 间可以预定」，而我方一次只订 1 间。
+        // 判成售罄的方向是少卖。详见 ElongRatePlan#getCurrentAlloment() 字段注释。
+        // 真正的售罄由 validate 的 ResultCode=Inventory 给出——那是供应商此刻的确定答复（见下方分态）。
         if (found == null) {
             // 报价码已不在现货（会话级轮换是常态）：先按 productKey 换等价新票（resolve ②），
             // 换不到才是确定性 RATE_DEAD。
@@ -665,9 +665,18 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     }
 
     /** 在售判定：总开关开 ∧ 库存>0 ∧ 有房型锚（键成分，缺了无从派生身份） */
+    /**
+     * 在售判定：只看 {@code Status} 与房型 ID。
+     *
+     * <p><b>刻意不看 {@code CurrentAlloment}</b>——它是"房量限额"不是"剩余房量"，
+     * 0/999/9999 都表示<b>不限</b>；官方对每种口径都写明「最少有 1 间可以预定」，
+     * 而我方一次只订 1 间。此前把 {@code <=0} 当作不可订，方向是少卖，详见
+     * {@link ElongRatePlan#getCurrentAlloment()} 的字段注释。
+     *
+     * <p>该字段留给<b>多间预订</b>（{@code NumberOfRooms > 1}）时用，届时须按境内外分口径解读。
+     */
     private static boolean isOnSale(ElongRatePlan plan) {
         return !Boolean.FALSE.equals(plan.getStatus())
-                && plan.getCurrentAlloment() != null && plan.getCurrentAlloment() > 0
                 && StringUtils.isNotBlank(plan.getRoomTypeId());
     }
 
