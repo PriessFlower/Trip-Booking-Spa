@@ -1,0 +1,37 @@
+# Scraping stays inside the VPC. A same-VPC private address is not automatically
+# reachable: security group sg-2bkpoddf must allow 8080 from this host's group
+# (sg-p1ogl5st), and that ACCEPT rule must sit before the trailing deny-all.
+global:
+  scrape_interval: 30s
+  scrape_timeout: 10s
+  evaluation_interval: 30s
+  external_labels:
+    env: prod
+    cloud: tencent
+
+# Alerts are evaluated but not routed anywhere: there is no Alertmanager yet, so a
+# firing rule is only visible in the Prometheus UI and on the Grafana dashboard.
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  # Application metrics. The prod profile exposes only health and prometheus.
+  - job_name: trip-booking-spa
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['172.21.32.4:8080']
+        labels:
+          app: trip-booking-spa
+          host: trip-offline
+
+  - job_name: node
+    static_configs:
+      - targets: ['172.21.32.14:9100']
+        labels:
+          host: trip-prod-platform
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ['127.0.0.1:9090']
+        labels:
+          host: trip-prod-platform

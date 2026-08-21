@@ -41,24 +41,29 @@ class SupplierIdentityProfileTest {
         }
     }
 
-    /** 有证据升级前，room_id 未核验的家不得进房型级目录（R-4.3） */
+    /**
+     * 只有 room_id 申报为 STABLE 的家许进房型级目录（R-4.3）。
+     *
+     * <p>写成全枚举不变式而不是逐家断言：在产只剩两家且都是 STABLE（2026-08-21 删去
+     * 七家未接入的家，R-4.6），逐家写就只剩正例、判定方法一旦写反也拦不住。
+     */
     @Test
     void onlyVerifiedRoomIdEntersRoomLevelCatalog() {
+        for (SupplierIdentityProfile profile : SupplierIdentityProfile.values()) {
+            boolean stable = profile.roomIdStability() == SupplierIdentityProfile.RoomIdStability.STABLE;
+            assertEquals(stable, profile.catalogEligibleAtRoomLevel(),
+                    profile + " 的房型级目录准入与 room_id 申报不一致（R-4.3）");
+        }
         assertTrue(SupplierIdentityProfile.EXPEDIA.catalogEligibleAtRoomLevel());
-        assertTrue(SupplierIdentityProfile.MEITUAN.catalogEligibleAtRoomLevel());
-        // ratehawk 没有房型 ID——现货级降级的活样本
-        assertEquals(SupplierIdentityProfile.RoomIdStability.ABSENT,
-                SupplierIdentityProfile.RATEHAWK.roomIdStability());
-        assertTrue(!SupplierIdentityProfile.RATEHAWK.catalogEligibleAtRoomLevel());
-        assertTrue(!SupplierIdentityProfile.FASTPAYHOTELS.catalogEligibleAtRoomLevel());
+        assertTrue(SupplierIdentityProfile.ELONG.catalogEligibleAtRoomLevel());
     }
 
-    /** 当前的稳定名单只有拿得出证据的两家（Expedia 沙箱实测、美团供应商文档） */
+    /** 稳定名单只有拿得出证据的那家：Expedia（沙箱实测）。艺龙马甲有官方 30 分钟时效，按易腐 */
     @Test
     void stableQuoteCodeListIsEvidenceBacked() {
         for (SupplierIdentityProfile profile : SupplierIdentityProfile.values()) {
             boolean stable = profile.quoteCodeStability() == SupplierIdentityProfile.QuoteCodeStability.STABLE;
-            boolean evidenced = profile == SupplierIdentityProfile.EXPEDIA || profile == SupplierIdentityProfile.MEITUAN;
+            boolean evidenced = profile == SupplierIdentityProfile.EXPEDIA;
             assertEquals(evidenced, stable, profile + " 的稳定申报与证据清单不一致（R-4.2：无证据一律按易腐）");
         }
     }

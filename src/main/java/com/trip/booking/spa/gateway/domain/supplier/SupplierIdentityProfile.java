@@ -20,6 +20,10 @@ import java.time.Duration;
  *
  * <p>证据写在各常量的 javadoc 里，改申报必须同步改证据。hotel_id 不稳的供应商直接
  * 拒接（R-4.4），故本枚举不设 hotel_id 字段——能出现在这里的，酒店 ID 都已核验稳定。
+ *
+ * <p><b>只登记在产供应商</b>（R-4.6）。2026-08-21 删去七家未接入的家；其预研结论是
+ * docs/product-identity.md §4 的表，那里才是正本。未接入的家不在此预留条目——迁入时
+ * 本就要按 R-4.1 重新申报，提前铺设只会与表漂移。
  */
 public enum SupplierIdentityProfile {
 
@@ -31,61 +35,6 @@ public enum SupplierIdentityProfile {
      * 目录（本仓已入库 35.6 万间）。
      */
     EXPEDIA(SupplierSourceEnum.EXPEDIA, RoomIdStability.STABLE, QuoteCodeStability.STABLE, null),
-
-    /**
-     * 报价码 goodsId：<b>稳定</b>。供应商文档定义为"产品ID"（Long 业务号，非 hash）；
-     * cursor 对美团零救回代码；本仓静态同步链路将其作为主数据推送。
-     */
-    MEITUAN(SupplierSourceEnum.MEITUAN, RoomIdStability.STABLE, QuoteCodeStability.STABLE, null),
-
-    /**
-     * 报价码 RatePlanID：<b>易腐，轮换快于 4h</b>。证据：供应商错误码 2005（报价码
-     * 已轮换）；cursor 2026-06-29 实证——验价失败的 rpId 全部不在现货清单（该酒店
-     * 有 164 个现行 plan）；其 KR 静态库 25.6% 映射是死 id。
-     * TTL 上限取 30 分钟：确切轮换周期未知，按已观测最短间隔保守取值。
-     */
-    DIDATRAVEL(SupplierSourceEnum.DIDATRAVEL, RoomIdStability.STABLE, QuoteCodeStability.PERISHABLE,
-            Duration.ofMinutes(30)),
-
-    /**
-     * 报价码 rpid/ratePlanCode：<b>易腐 ≤4h</b>。证据：cursor 团队与供应商确认
-     * （2026-06-19）；告警样本 35/35 全 ERR:1001（报价码过期）。本仓现有代码也已
-     * 用行为承认这一点：验价前强制重打一次 getPrice、rpid 从新响应现取。
-     * TTL 上限 = 轮换周期之半（R-2.2）。
-     */
-    HUITRAVEL(SupplierSourceEnum.HUITRAVEL, RoomIdStability.STABLE, QuoteCodeStability.PERISHABLE,
-            Duration.ofHours(2)),
-
-    /**
-     * <b>无房型 ID</b>：查价响应只有 room_name（自由文本）+ rg_ext（床型/浴室/容量
-     * 结构化属性），走现货级降级（R-4.3），房型身份由适配层用 rg_ext 属性拼替身。
-     * 报价码 book_hash：<b>易腐</b>（字段名即自白）；本仓现有代码从不复用上一轮的
-     * book_hash，验价必现查。
-     */
-    RATEHAWK(SupplierSourceEnum.RATEHAWK, RoomIdStability.ABSENT, QuoteCodeStability.PERISHABLE,
-            Duration.ofMinutes(30)),
-
-    /**
-     * 报价码 plansid：<b>易腐（会话级）</b>。本仓现有代码即自白：验价时丢弃入参里的
-     * planSession，重发一次 search 现取新 plansid。room_id 稳定性无证据，按未核验
-     * 处理（R-4.2）。
-     */
-    TRAVELCONNECT(SupplierSourceEnum.TRAVELCONNECT, RoomIdStability.UNVERIFIED, QuoteCodeStability.PERISHABLE,
-            Duration.ofMinutes(30)),
-
-    /**
-     * 报价码 room_key：结构上是确定性合成（base64(room_type..*rate_plan_code..*hotel_id)，
-     * 无时间戳、无 nonce），<b>但无供应商文档背书，按易腐起步</b>（R-4.2），
-     * 待实测证据再升级。room_id 稳定性同样未核验。
-     */
-    AICHOTELS(SupplierSourceEnum.AICHOTELS, RoomIdStability.UNVERIFIED, QuoteCodeStability.PERISHABLE,
-            Duration.ofMinutes(30)),
-
-    /**
-     * 未做任何腐性调查，全项按最保守申报（R-4.2）。接入真实流量前必须补齐证据。
-     */
-    FASTPAYHOTELS(SupplierSourceEnum.FASTPAYHOTELS, RoomIdStability.UNVERIFIED, QuoteCodeStability.PERISHABLE,
-            Duration.ofMinutes(30)),
 
     /**
      * 房型 RoomTypeId：<b>稳定</b>——cursor 全程以其为房型等价判定锚（等价判定与
