@@ -159,7 +159,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
     },
     {
       "id": 4,
@@ -358,7 +359,7 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "空结果占比",
+      "title": "无房占比",
       "datasource": {
         "type": "prometheus",
         "uid": "spa-prom"
@@ -376,7 +377,7 @@
             "uid": "spa-prom"
           },
           "refId": "A",
-          "expr": "sum by (supplier) (rate(supplier_io_access_count_total{job=\"trip-booking-spa\",status=\"empty\"}[10m])) / sum by (supplier) (rate(supplier_io_access_count_total{job=\"trip-booking-spa\"}[10m]))",
+          "expr": "sum by (supplier) (rate(supplier_io_access_count_total{job=\"trip-booking-spa\",status=\"no_inventory\"}[10m])) / sum by (supplier) (rate(supplier_io_access_count_total{job=\"trip-booking-spa\"}[10m]))",
           "legendFormat": "{{supplier}}",
           "editorMode": "code",
           "range": true
@@ -413,7 +414,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "供应商答了但没房（status=no_inventory）在全部调用里的占比。分母是 sum by(status)，四态互斥穷尽，故可直接相除（O-3.3）。此前 ok 被无条件补记一次，这个比例被系统性低估。"
     },
     {
       "id": 9,
@@ -482,7 +484,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
     },
     {
       "id": 10,
@@ -680,7 +683,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
     },
     {
       "id": 13,
@@ -760,12 +764,13 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
     },
     {
       "id": 14,
       "type": "timeseries",
-      "title": "比价查询计数",
+      "title": "比价查询终态",
       "datasource": {
         "type": "prometheus",
         "uid": "spa-prom"
@@ -783,10 +788,10 @@
             "uid": "spa-prom"
           },
           "refId": "A",
-          "expr": "sum by (supplier) (rate(pricing_supplier_query_count_total{job=\"trip-booking-spa\"}[5m]))",
-          "legendFormat": "{{supplier}}",
           "editorMode": "code",
-          "range": true
+          "range": true,
+          "expr": "sum by (supplier, status) (rate(pricing_supplier_query_count_total{job=\"trip-booking-spa\"}[5m]))",
+          "legendFormat": "{{supplier}} {{status}}"
         }
       ],
       "fieldConfig": {
@@ -819,7 +824,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "比价链路向供应商发起的查价，按终态切片。此前只有一个不可加的 outcome=all，算不出成功率（O-3.3 已修）。"
     },
     {
       "id": 15,
@@ -891,7 +897,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
     },
     {
       "id": 17,
@@ -951,7 +958,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
     },
     {
       "id": 18,
@@ -1010,7 +1018,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
     },
     {
       "id": 19,
@@ -1105,7 +1114,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
     },
     {
       "id": 21,
@@ -1174,7 +1184,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
     },
     {
       "id": 22,
@@ -1255,7 +1266,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
     },
     {
       "id": 23,
@@ -1418,7 +1430,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
     },
     {
       "id": 25,
@@ -1500,7 +1513,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
     },
     {
       "id": 26,
@@ -1571,7 +1585,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
     },
     {
       "id": 27,
@@ -1640,7 +1655,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
     }
   ]
 }
