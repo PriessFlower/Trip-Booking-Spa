@@ -34,14 +34,21 @@
 
 ## 2. 名字与标签
 
-- **O-2.1 (MUST)** **维度进 tag，不进名字**（PROJECT.md §3.9.2）。证据：`ChunkedFileAccess.monitorName` 把 supplier 与 interface 拼进名字，最多产生 1080 个独立指标名；同包的 `BaseHttpAccess` 注释里写的却是相反约定。同包两种做法并存，是本条必须成文的直接理由。
+- **O-2.1 (MUST)** **维度进 tag，不进名字**（PROJECT.md §3.9.2）。证据两处：① `ChunkedFileAccess.monitorName` 把 supplier 与 interface 拼进名字，最多产生 1080 个独立指标名，而同包的 `BaseHttpAccess` 注释里写的却是相反约定——同包两种做法并存，是本条必须成文的直接理由；② 艺龙验价把**结果**拼进名字，拆成 `elong_validate_day_price_mismatch` / `_retry_ok` / `_retry_failed` 三个指标，于是“对齐失败率”这一个问题要查三个指标才能回答。
 - **O-2.2 (MUST)** 埋点名禁止自带 `_count`/`_time`/`_value`/`_total`——后缀由框架追加，自带会得到 `xxx_count_count`。
 - **O-2.3 (MUST)** `supplier` 标签值一律取 `SupplierSourceEnum.name()`，即**只有 `ELONG` 与 `EXPEDIA` 两个合法值**。禁止字面量（现存小写 `"elong"`/`"expedia"` 硬编码 4 处）、禁止 `getDesc()`、禁止数字 code（现存 `catalog_attribute_*` 用 `"10010"`）。
   后果不是不好看而是**不可用**：`catalog_attribute_hit{supplier="10010"}` 与 `supplier_io_access{supplier="ELONG"}` 在 PromQL 里拼不起来，“无房型映射丢多少”这个问题因此在指标通道上无解。
 - **O-2.4 (MUST)** 指标名与标签键必须有**唯一出处**（常量类或枚举），禁止散落字面量。现存 7 个文件各写一遍 `"supplier"`/`"status"`，改名时无从知道改全了没有。
 - **O-2.5 (MUST NOT)** 高基数字段禁止进标签：`hotelId`、`orderId`、`productKey`、日期、URL、异常消息、任何自由文本。判据：取值集合是否随业务量增长——增长即禁止。
 - **O-2.6 (MUST)** 本仓自建的 `_time` **一律毫秒**；Micrometer 自带的 `*_seconds` 是秒，两者禁止进同一表达式或同一 Y 轴。证据：`supplier_io_access_time` 生产实测 `sum/count ≈ 1269`（艺龙查价约 1.3 秒），当秒读会差三个数量级。
-- **O-2.7 (MUST)** **同一概念只许一个标签键、一套取值**。禁止一处 `status`、一处 `outcome`、一处 `result` 表达同一件事——现状正是这三个键并存，都在说“这次调用的终态”，取值集合各不相同。后果：跨供应商跨接口的成功率没有一条 PromQL 能回答，只能手工拼，而拼法因人而异、结论随之不同。
+- **O-2.7 (MUST)** **同一概念只许一个标签键、一套取值**。键与概念的对应关系固定为两条，不得混用：
+
+  | 键 | 概念 | 取值出处 |
+  |---|---|---|
+  | `status` | 一次供应商调用的终态 | `CallStatus` 枚举，六个值，互斥且穷尽 |
+  | `outcome` | 校验类检查结果、下载方式这类非终态的结果 | 由该指标自行定义并在 `MetricNames` 注释里写明 |
+
+  反面即改造前：`supplier_io_access` 用 `status`（`ok`/`empty`/`error`/`limited`）、`pricing_supplier_query` 用 `outcome`（`all`/`empty`/`fail`/`success`），两个键都在说“这次调用的终态”，取值集合却不同——于是“全平台调用成功率”没有一条 PromQL 能回答，只能手工拼，而拼法因人而异、结论随之不同。
 
 ## 3. 取值必须说人话
 
@@ -119,26 +126,33 @@
 
 ## 10. 当前欠账
 
-规则已成文，代码尚未对齐。按依赖排序——前项不做，后项就建在错数上：
+按依赖排序——前项不做，后项就建在错数上。「状态」列记录对齐进度。
 
-| 序 | 事项 | 违反 | 位置 |
-|---|---|---|---|
-| 1 | 空结果双计 | O-3.3、O-3.5 | `BaseHttpAccess.access` |
-| 2 | 取值不说人话（`ok`/`all`） | O-3.1 | `BaseHttpAccess`、`ExpediaPriceServiceImpl` |
-| 3 | `supplier` 标签两种方言 | O-2.3 | `ProductAttributeReader`（数字）、艺龙/Expedia 四处小写字面量 |
-| 4 | 同一概念三个键（`status`/`outcome`/`result`） | O-2.7 | 三处 |
-| 5 | 维度拼进指标名 | O-2.1 | `ChunkedFileAccess.monitorName` |
-| 6 | 指标名/标签键无唯一出处 | O-2.4 | 7 个文件 |
-| 7 | 指标无解释 | O-3.2 | 全部 31 个埋点 + 看板 27 面板 |
-| 8 | 覆盖率指标无消费方 | O-5.1 | `catalog_attribute_*` |
-| 9 | 入口缺请求数/出报数 | O-4.2 | `SpaController` |
-| 10 | 已算出的计数只落日志 | O-1.3 | 四处（见 O-1.3） |
-| 11 | 静默丢弃无 reason | O-4.5、O-4.6 | `CachePriceServiceImpl.getPrice` 的 forEach 五个 `return`；艺龙三类跳过；写侧 `productToCache`/`fetchAndProcessPriceInfo` 的 `continue` |
-| 12 | 看板未按业务分块 | O-4.1 | `spa-overview.json`（现按技术层分组） |
-| 13 | 日志无落点、无 traceId | O-6.1~O-6.3 | `log4j2.xml` |
-| 14 | 报文快照表不存在 | O-7.1、O-7.2 | 无 |
-| 15 | 诊断端点不存在 | O-8.1 | 无 |
-| 16 | 告警不投递、无 `for`、无关闭条件 | O-9.3~O-9.6 | `spa.yml` 12 条规则 |
+| 序 | 事项 | 违反 | 位置 | 状态 |
+|---|---|---|---|---|
+| 1 | 空结果双计：记了 `empty` 又无条件补记 `ok` | O-3.3、O-3.5 | `BaseHttpAccess.access` | 已修 |
+| 1b | 重试双计：每抛一次异常记一条终态，一次调用最多 N+1 条 | O-3.1 | `BaseHttpAccess.query` | 已修 |
+| 1c | `!isSucc()`（HTTP 非 2xx、业务错误码）被算成 `ok` | O-3.3 | `BaseHttpAccess.access` | 已修 |
+| 1d | Expedia 缓存刷价路只记不可加的 `all`，失败分支零落点 | O-3.1、O-3.3 | `ExpediaPriceServiceImpl` | 已修 |
+| 2 | 取值不说人话（`ok`/`all`） | O-3.1 | `BaseHttpAccess`、`ExpediaPriceServiceImpl` | 已修（`CallStatus` 六词表） |
+| 3 | `supplier` 标签两种方言：数字 1 处、小写字面量 5 处 | O-2.3 | `ProductAttributeReader`、`QueryProductAccess`、`ElongCatalogService`、`ElongCPSQueryPriceServiceImpl`、`ElongPriceServiceImpl`、`ExpediaPriceServiceImpl` | 已修 |
+| 4 | 同一概念两个键（`status` / `outcome`） | O-2.7 | 同上 | 已修（键与概念一一对应） |
+| 5 | 维度拼进指标名：两处 | O-2.1 | `ChunkedFileAccess.monitorName`、艺龙验价三个名字 | 已修 |
+| 6 | 指标名/标签键无唯一出处 | O-2.4 | 7 个文件 | 已修（`MetricNames`/`MetricTags`/`CallStatus`） |
+| 7 | 指标无解释 | O-3.2 | 31 个埋点 + 看板 27 面板 | 部分：看板 description 已补全，埋点注释随迁移补在 `MetricNames` |
+| 8 | 覆盖率指标无消费方 | O-5.1 | `catalog_attribute_*` | 未修 |
+| 9 | 入口缺请求数/出报数 | O-4.2 | `SpaController` | 未修（第 2 步） |
+| 10 | 已算出的计数只落日志 | O-1.3 | 四处（见 O-1.3） | 未修（第 2 步） |
+| 11 | 静默丢弃无 reason | O-4.5、O-4.6 | `CachePriceServiceImpl.getPrice` 的 forEach 五个 `return`；艺龙三类跳过；写侧 `productToCache`/`fetchAndProcessPriceInfo` 的 `continue` | 未修（第 2 步） |
+| 12 | 看板未按业务分块 | O-4.1 | `spa-overview.json`（现按技术层分组） | 未修（第 3 步） |
+| 13 | 日志无落点、无 traceId | O-6.1~O-6.3 | `log4j2.xml` | 未修 |
+| 14 | 报文快照表不存在 | O-7.1、O-7.2 | 无 | 未修 |
+| 15 | 诊断端点不存在 | O-8.1 | 无 | 未修 |
+| 16 | 告警不投递 | O-9.3 | `spa.yml` 12 条规则 | 未修（`for` 与关闭条件已补） |
+
+「已修」指 2026-08-21 的口径统一那批。超时与连接/解析失败目前仍混在 `error` 一态里——
+底层把它们都抛成普通 `Exception`，要分出 `timeout` 得先在 `request()` 里辨别异常类型，
+这笔留在欠账里，不因为词表里有 `timeout` 就假装已经分开了。
 
 两项待评估，暂不立规则：
 

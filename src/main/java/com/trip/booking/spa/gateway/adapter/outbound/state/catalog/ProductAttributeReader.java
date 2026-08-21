@@ -1,6 +1,9 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.catalog;
 
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
+import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
+import com.trip.booking.spa.platform.observability.MetricNames;
+import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductInfo;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Room;
@@ -104,17 +107,22 @@ public class ProductAttributeReader {
      * 不带房型餐食：SPA 自身一切正常（不报错、不失败），而下游按房型做映射的装配会整片
      * 落空。这种"看起来健康的残缺"没有异常可抓，只能靠覆盖率数字暴露。
      *
-     * <p>依 O-1.2 生在指标通道而非日志：它是要跨天对比的业务数字（建档铺开的进度曲线），
+     * <p>依 O-2.2 生在指标通道而非日志：它是要跨天对比的业务数字（建档铺开的进度曲线），
      * 不是排障现场。维度进 tag 不进名字（O-2.1）。
      */
     private static void reportCoverage(int supplierId, int asked, int hit) {
         if (asked <= 0) {
             return;
         }
-        Map<String, Object> tags = new HashMap<>(2);
-        tags.put("supplier", String.valueOf(supplierId));
-        Monitor.recordMany("catalog_attribute_asked", tags, asked);
-        Monitor.recordMany("catalog_attribute_hit", tags, hit);
+        SupplierSourceEnum supplier = SupplierSourceEnum.getEnum(supplierId);
+        if (null == supplier) {
+            // 观测不得反噬业务：编码没登记就不报这条指标，出价照走
+            log.warn("覆盖率上报跳过：未登记的供应商编码 {}", supplierId);
+            return;
+        }
+        Map<String, Object> tags = MetricTags.of(supplier);
+        Monitor.recordMany(MetricNames.CATALOG_ATTRIBUTE_ASKED, tags, asked);
+        Monitor.recordMany(MetricNames.CATALOG_ATTRIBUTE_HIT, tags, hit);
     }
 
     private void putLocal(String key, ProductAttribute attr) {

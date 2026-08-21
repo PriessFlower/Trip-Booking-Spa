@@ -6,6 +6,8 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ElongQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongQueryPriceTask;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
+import com.trip.booking.spa.platform.observability.MetricNames;
+import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.ratelimit.RateLimitHolder;
 import lombok.extern.slf4j.Slf4j;
@@ -239,15 +241,15 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
         // 是孤儿行的信号(issue #95)。日志行照留(§6.1.1 不许因为加了指标就删日志)。
         // 在轮次边界一次上报,不在循环体内逐条打——逐条既放大写入量,也拿不到"这一轮"的口径。
         Map<String, Object> tags = new HashMap<>(2);
-        tags.put("supplier", "elong");
+        tags.put(MetricTags.SUPPLIER, SupplierSourceEnum.ELONG.name());
         tags.put("priority", String.valueOf(priority));
-        Monitor.recordMany("refresh_rows", tags, list.size());
-        Monitor.recordMany("refresh_onsale", tags, onSale.get());
-        Monitor.recordMany("refresh_empty", tags, empty.get());
-        Monitor.recordMany("refresh_failed", tags, failed.get());
-        Monitor.recordMany("refresh_borrowed", tags, borrowed.get());
-        Monitor.recordMany("refresh_demoted", tags, demoted.get());
-        Monitor.recordTime("refresh_round", tags, roundCost);
+        Monitor.recordMany(MetricNames.REFRESH_ROWS, tags, list.size());
+        Monitor.recordMany(MetricNames.REFRESH_ONSALE, tags, onSale.get());
+        Monitor.recordMany(MetricNames.REFRESH_EMPTY, tags, empty.get());
+        Monitor.recordMany(MetricNames.REFRESH_FAILED, tags, failed.get());
+        Monitor.recordMany(MetricNames.REFRESH_BORROWED, tags, borrowed.get());
+        Monitor.recordMany(MetricNames.REFRESH_DEMOTED, tags, demoted.get());
+        Monitor.recordTime(MetricNames.REFRESH_ROUND, tags, roundCost);
         log.info("elongQueryPriceTask 本轮结束, trigger={}, priority={}, 共 {} 行, 有在售={}, 无在售={}, 失败={}, 借入={}, 复位={}, 并发={}, 实际 {} QPS, 耗时 {} ms",
                 trigger, priority, list.size(), onSale.get(), empty.get(), failed.get(),
                 borrowed.get(), demoted.get(), concurrency,
