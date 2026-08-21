@@ -38,6 +38,10 @@ import com.trip.booking.spa.gateway.domain.product.ResolveGate;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
 import com.trip.booking.spa.platform.redis.RedisUtils;
+import com.trip.booking.spa.platform.observability.DropReason;
+import com.trip.booking.spa.platform.observability.FunnelStage;
+import com.trip.booking.spa.platform.observability.MetricNames;
+import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -76,16 +80,11 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     /** 验价通过的 ResultCode 原文 */
     private static final String RESULT_CODE_OK = "OK";
 
-    /** 每日价口径不符（H001189）命中数——判断艺龙两个接口的 MinRate 是否已统一的唯一指标 */
-    private static final String VALIDATE_DAY_PRICE_MISMATCH = "elong_validate_day_price_mismatch";
 
-    /** 按艺龙回传 MinRate 重试后通过 */
-    private static final String VALIDATE_DAY_PRICE_RETRY_OK = "elong_validate_day_price_retry_ok";
 
-    /** 重试后仍被判价格异常——成因未明，已随复现报告提报艺龙 */
-    private static final String VALIDATE_DAY_PRICE_RETRY_FAILED = "elong_validate_day_price_retry_failed";
 
-    private static final Map<String, Object> ELONG_TAG = Map.of("supplier", "elong");
+    private static final Map<String, Object> ELONG_TAG =
+            Map.of(MetricTags.SUPPLIER, SupplierSourceEnum.ELONG.name());
 
     @Resource
     private ElongProperties properties;
@@ -218,11 +217,22 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 products.add(convertPlan(hotel.getHotelId(), room, plan, dayPrices, occupancy, request));
             }
         }
-        // 非常态走向必须可观测（§6.2.1）：跳过的每一类都有落点，排障时能看出报价去哪了
+        // 非常态走向必须可观测（§6.2.1）：跳过的每一类都有落点，排障时能看出报价去哪了。
+        // 日志答「这一家这一天」，指标答「整体丢了多少」（O-1.3：算出来的计数不得只落日志）
         log.info("艺龙查价：转换完成,hotelId={},checkIn={},产品总数={},在售出报={},跳过_停售或无库存={},跳过_缺会话凭据={},跳过_缺每日价={}",
                 hotel.getHotelId(), request.getCheckIn(), totalPlans, products.size(),
                 skippedNotOnSale, skippedNoCredentials, skippedNoPrice);
+        countConvertDropped(DropReason.NOT_ON_SALE, skippedNotOnSale);
+        countConvertDropped(DropReason.NO_SESSION_CREDENTIALS, skippedNoCredentials);
+        countConvertDropped(DropReason.NO_DAY_PRICE, skippedNoPrice);
         return products;
+    }
+
+    private static void countConvertDropped(DropReason reason, int count) {
+        if (count > 0) {
+            Monitor.recordMany(MetricNames.QUOTE_DROPPED,
+                    MetricTags.dropped(SupplierSourceEnum.ELONG, FunnelStage.CONVERT, reason), count);
+        }
     }
 
     private ProductRespDTO convertPlan(String hotelId, ElongHotelDetailResponse.ElongRoom room, ElongRatePlan plan,
@@ -375,7 +385,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         // H001189 自纠正：艺龙在拒绝的同一份响应里回传了它自己认可的 MinRate，用它重打一次。
         // 详见 alignMinRateToSupplier 的注释。Price（Σ Rate）一个字不动，故申报总价不受影响
         if (isPerDayPriceMismatch(data)) {
-            Monitor.recordOne(VALIDATE_DAY_PRICE_MISMATCH, ELONG_TAG);
+            Monitor.recordOne(MetricNames.VALIDATE_DAY_PRICE_ALIGN,
+                    MetricTags.outcomeOf(SupplierSourceEnum.ELONG, MetricNames.ALIGN_MISMATCH));
             List<ElongDataValidateRequest.DayPrice> aligned = alignMinRateToSupplier(dayPrices, data);
             if (aligned == null) {
                 log.warn("艺龙验价：H001189 但响应未回传可用的逐日 MinRate，无法自纠正,sHotelId={},goodsUniqId={}",
@@ -389,8 +400,10 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 if (retried != null) {
                     data = retried;
                     dayPrices = aligned;
-                    Monitor.recordOne(isPerDayPriceMismatch(retried)
-                            ? VALIDATE_DAY_PRICE_RETRY_FAILED : VALIDATE_DAY_PRICE_RETRY_OK, ELONG_TAG);
+                    Monitor.recordOne(MetricNames.VALIDATE_DAY_PRICE_ALIGN,
+                            MetricTags.outcomeOf(SupplierSourceEnum.ELONG,
+                                    isPerDayPriceMismatch(retried)
+                                            ? MetricNames.ALIGN_RETRY_FAILED : MetricNames.ALIGN_RETRY_OK));
                 }
             }
         }

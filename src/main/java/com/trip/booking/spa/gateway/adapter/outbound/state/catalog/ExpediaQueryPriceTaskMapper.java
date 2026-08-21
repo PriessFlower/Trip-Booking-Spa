@@ -6,14 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-/**
- * @BelongsProject: trip-booking-spa
- * @BelongsPackage: com.trip.booking.spa.core.api.ratehawk.mapper
- * @Author: dick_w
- * @CreateTime: 2025-03-17  14:28
- * @Description: expedia查价缓存mapper
- * @Version: 1.0
- */
+/** Expedia 查价缓存 mapper。 */
 @Repository
 public interface ExpediaQueryPriceTaskMapper {
 

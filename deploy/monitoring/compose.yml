@@ -1,0 +1,63 @@
+services:
+  prometheus:
+    image: mirror.ccs.tencentyun.com/prom/prometheus:v2.53.0
+    container_name: mon-prometheus
+    restart: unless-stopped
+    user: "65534:65534"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=10GB
+      - --web.enable-lifecycle
+    ports:
+      - "172.21.32.14:9090:9090"
+    volumes:
+      - /opt/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /opt/monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - /opt/monitoring/data/prometheus:/prometheus
+    mem_limit: 1500m
+
+  node-exporter:
+    image: mirror.ccs.tencentyun.com/prom/node-exporter:v1.8.2
+    container_name: mon-node-exporter
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=172.21.32.14:9100
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|var/lib/docker/.+)($$|/)
+    volumes:
+      - /:/host:ro,rslave
+    mem_limit: 256m
+
+  grafana:
+    image: mirror.ccs.tencentyun.com/grafana/grafana:11.1.4
+    container_name: mon-grafana
+    restart: unless-stopped
+    user: "472:472"
+    env_file:
+      - /opt/monitoring/.env
+    environment:
+      # Served behind the edge Nginx under a sub path; both settings are required,
+      # otherwise Grafana emits absolute links that drop the /grafana prefix.
+      GF_SERVER_ROOT_URL: "https://spa.haowan2000.com/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      # The login page is publicly reachable, so the account itself is the gate.
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    ports:
+      - "172.21.32.14:3000:3000"
+    volumes:
+      - /opt/monitoring/data/grafana:/var/lib/grafana
+      - /opt/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - /opt/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    mem_limit: 700m

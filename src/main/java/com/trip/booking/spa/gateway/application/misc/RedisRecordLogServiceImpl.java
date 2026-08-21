@@ -13,34 +13,10 @@ import java.util.Date;
 @Slf4j
 public class RedisRecordLogServiceImpl implements RecordLogService {
 
-    public static final String DAOLV_QPS_KEY_PREFIX = "record:daolv:qps:";
-    public static final String AICHOTELS_QPS_KEY_PREFIX = "record:aichotels:qps:";
-    public static final String TRAVELCONNECT_QPS_KEY_PREFIX = "record:travelconnect:qps:";
-    public static final String HUITRAVEL_QPS_KEY_PREFIX = "record:huitravel:qps:";
     public static final String EXPEDIA_QPS_KEY_PREFIX = "record:expedia:qps:";
 
     @Autowired
     RedisUtils redisUtils;
-
-    @Override
-    public void recordDaolvQps() {
-        recordQpsByHour(DAOLV_QPS_KEY_PREFIX);
-    }
-
-    @Override
-    public void recordAichotelsQps() {
-        recordQpsByHour(AICHOTELS_QPS_KEY_PREFIX);
-    }
-
-    @Override
-    public void recordTravelconnectQps() {
-        recordQpsByHour(TRAVELCONNECT_QPS_KEY_PREFIX);
-    }
-
-    @Override
-    public void recordHuiTravelQps() {
-        recordQpsByHour(HUITRAVEL_QPS_KEY_PREFIX);
-    }
 
     @Override
     public void recordExpediaQps() {

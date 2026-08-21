@@ -6,6 +6,8 @@ import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProductKeyDeriver;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierIdentityProfile;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
+import com.trip.booking.spa.platform.observability.MetricNames;
+import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -140,10 +142,10 @@ public class ElongCatalogService {
         // 可数的业务指标不许只活在日志里(§3.9.1):建档覆盖的增长本身就是一条趋势曲线,
         // 而 skippedNoKey 突增是 productKey 派生回归的早期警报。日志行照留(§6.1.1)。
         java.util.Map<String, Object> tags = new java.util.HashMap<>(2);
-        tags.put("supplier", "elong");
-        Monitor.recordMany("catalog_upserted", tags, upserted);
-        Monitor.recordMany("catalog_skipped_unknown", tags, skippedUnknown);
-        Monitor.recordMany("catalog_skipped_no_key", tags, skippedNoKey);
+        tags.put(MetricTags.SUPPLIER, SupplierSourceEnum.ELONG.name());
+        Monitor.recordMany(MetricNames.CATALOG_UPSERTED, tags, upserted);
+        Monitor.recordMany(MetricNames.CATALOG_SKIPPED_UNKNOWN, tags, skippedUnknown);
+        Monitor.recordMany(MetricNames.CATALOG_SKIPPED_NO_KEY, tags, skippedNoKey);
         // 每批必打一行成果（§6.2.1）——反面是 Expedia 全量建档 9.7 万家时进度不可观测。
         // 键值对形式便于机读(§6.3.2)
         log.info("艺龙产品建档：sHotelId={},upserted={},skippedUnknown={},skippedNoKey={}",

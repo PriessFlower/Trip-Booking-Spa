@@ -3,7 +3,6 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing.c
 import com.trip.booking.spa.platform.http.BaseHttpAccess;
 import com.trip.booking.spa.platform.http.asynchttp.IParser;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
-import com.trip.booking.spa.platform.http.asynchttp.SupplierApiConstants;
 import com.trip.booking.spa.platform.observability.MonitorNameEnum;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierDataTypeEnum;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
@@ -11,6 +10,8 @@ import com.trip.booking.spa.platform.exception.ParseException;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.request.QueryPriceRequest;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.HotelStaticInfo;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.QueryPriceResponse;
+import com.trip.booking.spa.platform.observability.MetricNames;
+import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.redis.DistributedRateLimiter;
 import com.trip.booking.spa.platform.http.HttpUtils;
@@ -85,8 +86,8 @@ public class QueryProductAccess extends BaseHttpAccess<QueryPriceRequest, QueryP
         String result = HttpUtils.doGet(url, headers, body);
         // supplier 进 tag 不进名字（§3.9.2）；原名 EXPEDIA_ORIGINAL_QUERY 把供应商写死在名字里
         java.util.Map<String, Object> tags = new java.util.HashMap<>(1);
-        tags.put("supplier", "expedia");
-        Monitor.recordOne("supplier_io_original_query", tags, System.currentTimeMillis() - start);
+        tags.put(MetricTags.SUPPLIER, SupplierSourceEnum.EXPEDIA.name());
+        Monitor.recordOne(MetricNames.SUPPLIER_IO_ORIGINAL_QUERY, tags, System.currentTimeMillis() - start);
         List<QueryPriceResponse.HotelPrice> hotelPrices = JsonUtils.decodeJson(result, new TypeReference<List<QueryPriceResponse.HotelPrice>>() {
         });
         QueryPriceResponse queryPriceResponse = new QueryPriceResponse();
