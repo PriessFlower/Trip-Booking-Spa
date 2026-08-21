@@ -11,7 +11,9 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Room;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ElongQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.content.ElongCatalogService;
 import com.trip.booking.spa.gateway.application.pricing.CachePriceService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
@@ -29,11 +31,14 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongNightlyRate;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongRatePlan;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
+import com.trip.booking.spa.gateway.domain.booking.VerifyLevel;
 import com.trip.booking.spa.gateway.domain.product.Occupancy;
 import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.domain.product.ResolveGate;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
+import com.trip.booking.spa.platform.redis.RedisUtils;
+import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -71,6 +76,17 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     /** 验价通过的 ResultCode 原文 */
     private static final String RESULT_CODE_OK = "OK";
 
+    /** 每日价口径不符（H001189）命中数——判断艺龙两个接口的 MinRate 是否已统一的唯一指标 */
+    private static final String VALIDATE_DAY_PRICE_MISMATCH = "elong_validate_day_price_mismatch";
+
+    /** 按艺龙回传 MinRate 重试后通过 */
+    private static final String VALIDATE_DAY_PRICE_RETRY_OK = "elong_validate_day_price_retry_ok";
+
+    /** 重试后仍被判价格异常——成因未明，已随复现报告提报艺龙 */
+    private static final String VALIDATE_DAY_PRICE_RETRY_FAILED = "elong_validate_day_price_retry_failed";
+
+    private static final Map<String, Object> ELONG_TAG = Map.of("supplier", "elong");
+
     @Resource
     private ElongProperties properties;
 
@@ -78,10 +94,10 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     @Resource
     private ElongProductKeyDeriver productKeyDeriver;
     @Resource
-    private com.trip.booking.spa.platform.redis.RedisUtils redisUtils;
+    private RedisUtils redisUtils;
     /** 批次4 反馈环:验价事件升档任务行(直调 mapper,避免与 CPS service 循环依赖)。 */
     @Resource
-    private com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ElongQueryPriceTaskMapper elongQueryPriceTaskMapper;
+    private ElongQueryPriceTaskMapper elongQueryPriceTaskMapper;
 
     @Resource
     private OfferStore offerStore;
@@ -91,7 +107,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     private CachePriceService cachePriceService;
 
     @Resource
-    private com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.content.ElongCatalogService elongCatalogService;
+    private ElongCatalogService elongCatalogService;
 
     /**
      * 查价并落缓存（刷价任务的唯一入口）。查价逻辑复用 {@link #queryPrices}，
@@ -311,6 +327,11 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                     request.getSHotelId(), plan.getGoodsUniqId(), plan.getRatePlanId());
             return outcome(CheckPriceOutcome.INDETERMINATE, "供应商响应缺少验价凭据，未能确认该产品是否可订");
         }
+        if (request.getVerifyLevel() == VerifyLevel.AVAILABILITY) {
+            // 渠道验价档：到此为止，不打 validate（供应商预算 1200ms，完整验价约 4.6s 塞不进）。
+            // 只回"有货"，不回句柄——现货里的马甲与报价码是会话级易腐凭证，到真下单必已过期
+            return availabilityOnlyResp(request, plan);
+        }
         List<ElongDataValidateRequest.DayPrice> dayPrices = buildDayPrices(plan.getNightlyRates());
         if (dayPrices == null) {
             log.error("艺龙验价：现货产品缺每日价,sHotelId={},goodsUniqId={}", request.getSHotelId(), plan.getGoodsUniqId());
@@ -346,13 +367,33 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 .dayPriceList(dayPrices)
                 .build();
         String dataJson = JsonUtils.writeObject2Json(new ElongRequestEnvelope(properties.getVersion(), validateRequest));
-        ResponseResult<ElongDataValidateResponse> result = new DataValidateAccess(properties)
-                .access(new ElongRestCall(METHOD_DATA_VALIDATE, dataJson));
-        if (result == null || result.getData() == null) {
+        ElongDataValidateResponse data = callValidate(dataJson);
+        if (data == null) {
             log.warn("艺龙验价：validate 调用未取得结果,sHotelId={},goodsUniqId={}", hotelId, plan.getGoodsUniqId());
             return outcome(CheckPriceOutcome.INDETERMINATE, "验价调用未取得结果，未能确认该产品是否可订，请稍后重试");
         }
-        ElongDataValidateResponse data = result.getData();
+        // H001189 自纠正：艺龙在拒绝的同一份响应里回传了它自己认可的 MinRate，用它重打一次。
+        // 详见 alignMinRateToSupplier 的注释。Price（Σ Rate）一个字不动，故申报总价不受影响
+        if (isPerDayPriceMismatch(data)) {
+            Monitor.recordOne(VALIDATE_DAY_PRICE_MISMATCH, ELONG_TAG);
+            List<ElongDataValidateRequest.DayPrice> aligned = alignMinRateToSupplier(dayPrices, data);
+            if (aligned == null) {
+                log.warn("艺龙验价：H001189 但响应未回传可用的逐日 MinRate，无法自纠正,sHotelId={},goodsUniqId={}",
+                        hotelId, plan.getGoodsUniqId());
+            } else {
+                log.info("艺龙验价：H001189 按艺龙回传的 MinRate 重试,sHotelId={},goodsUniqId={},原={},纠正后={}",
+                        hotelId, plan.getGoodsUniqId(), minRatesOf(dayPrices), minRatesOf(aligned));
+                validateRequest.setDayPriceList(aligned);
+                ElongDataValidateResponse retried = callValidate(
+                        JsonUtils.writeObject2Json(new ElongRequestEnvelope(properties.getVersion(), validateRequest)));
+                if (retried != null) {
+                    data = retried;
+                    dayPrices = aligned;
+                    Monitor.recordOne(isPerDayPriceMismatch(retried)
+                            ? VALIDATE_DAY_PRICE_RETRY_FAILED : VALIDATE_DAY_PRICE_RETRY_OK, ELONG_TAG);
+                }
+            }
+        }
         if (!data.isSucc()) {
             return classifyValidateError(request, plan, data);
         }
@@ -412,6 +453,21 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                     request.getSHotelId(), plan.getGoodsUniqId(), errorCode, result(data));
             return outcome(CheckPriceOutcome.INDETERMINATE, "验价请求异常(" + errorCode + ")，未能确认该产品是否可订");
         }
+        if (errorCode.startsWith("H001189")) {
+            // 走到这里说明自纠正没救回来，两种成因：①响应未回传可用的逐日 MinRate，无从纠正；
+            // ②按艺龙自己回传的 MinRate 重试后仍被拒（2026-08-21 实测约 3%，成因未明，
+            // 已随复现报告提报艺龙）。二者靠指标区分：mismatch 命中数 − retry_ok − retry_failed。
+            //
+            // 取 INDETERMINATE 而非 RATE_DEAD：该报价本身好得很（Rate 两个接口一致、库存也在），
+            // 拦下它的是 MinRate 口径差，不是票死了。说成 RATE_DEAD 会让上游告诉客人"这份报价
+            // 没了、请重新查价"，那是把不知道的事说成确定的（R-1.6）。而 detail 的 MinRate 实测
+            // 会随时间漂移（同一产品数秒内 82.58→82.53），上游稍后重新查价确有救回可能，
+            // 故"可重试"这个语义是站得住的。
+            log.error("艺龙验价：每日价口径不符且自纠正未生效,sHotelId={},goodsUniqId={},errorCode={},response={}",
+                    request.getSHotelId(), plan.getGoodsUniqId(), errorCode, result(data));
+            return outcome(CheckPriceOutcome.INDETERMINATE,
+                    "验价未通过(" + errorCode + " 每日价口径不符)，未能确认该产品是否可订，请稍后重试");
+        }
         if (errorCode.startsWith("H001084")) {
             // 官方错误码表（2026-08-15 核对）：总价计算错误——我方提交的 TotalPrice 与
             // 供应商现价不符，即该票价格已换代，重试同参数必再失败
@@ -419,7 +475,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                     request.getSHotelId(), plan.getGoodsUniqId(), errorCode);
             return outcome(CheckPriceOutcome.RATE_DEAD, "该产品价格已变化(H001084)，请重新查价后再选择");
         }
-        // 其余（含 H001189 等码义未核实的）一律透传不归并（移植风险④）
+        // 其余码义未核实的一律透传不归并（移植风险④）。H001189 已于 2026-08-21 查清并单列在上，
+        // 不再落到这里——这行注释此前把它举为例子，已过时
         log.warn("艺龙验价：未核实错误码，按不确定处理,sHotelId={},goodsUniqId={},code={}",
                 request.getSHotelId(), plan.getGoodsUniqId(), data.getCode());
         return outcome(CheckPriceOutcome.INDETERMINATE, "验价未通过(" + errorCode + ")，未能确认该产品是否可订");
@@ -479,6 +536,130 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 .cancelPolicy(cancelPolicy)
                 .priceInfos(priceInfos)
                 .build();
+    }
+
+    /**
+     * 渠道验价档的应答：只报"有货"，不报"可订"。
+     *
+     * <p><b>三条纪律</b>：
+     * <ul>
+     *   <li><b>offerId 恒为 null</b>——没打验价就没有任何"此刻可成单"的证据，签句柄等于把
+     *       不确定说成确定（R-1.6）；且现货里的马甲到真下单时必已过期，签出去只会诱导上游
+     *       拿必死的凭据建单</li>
+     *   <li><b>退改取 detail 的 {@code PrepayResult}</b>——艺龙【国际酒店】国际对接指南明文
+     *       「取消政策取 PrepayResult」。解析不出即空列表，不猜（R-5.4）</li>
+     *   <li><b>remainRoomNum 取 {@code CurrentAlloment}</b>——2026-08-21 实测它与验价回传的
+     *       {@code RestInventoryCount} 相等。注意该字段是"房量限额"，0/999/9999 表示不限，
+     *       语义见 {@link ElongRatePlan#getCurrentAlloment()}</li>
+     * </ul>
+     *
+     * <p>价格与税费仍是 detail 口径（{@code Rate} 与 {@code Rate − MinRate}）；它只用于展示，
+     * 真正对账的数在下单前那一档由验价响应给出。
+     */
+    private CheckPriceRespDTO availabilityOnlyResp(CheckPriceReq request, ElongRatePlan plan) {
+        List<ElongDataValidateRequest.DayPrice> dayPrices = buildDayPrices(plan.getNightlyRates());
+        if (dayPrices == null) {
+            log.info("艺龙验价(仅现货)：所点产品缺每日价,sHotelId={},goodsUniqId={}",
+                    request.getSHotelId(), plan.getGoodsUniqId());
+            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未给出每日价，未能确认该产品");
+        }
+        List<PriceInfo> priceInfos = buildPriceInfos(dayPrices);
+        List<CancelPolicy> cancelPolicy =
+                productKeyDeriver.convertCancelPolicy(request.getCheckIn(), plan.getPrepayResult());
+        int totalCents = sumCents(dayPrices);
+        log.info("艺龙验价(仅现货)：有货但未验证可订性,sHotelId={},goodsUniqId={},价格={}分,退改条数={},房量限额={}",
+                request.getSHotelId(), plan.getGoodsUniqId(), totalCents, cancelPolicy.size(),
+                plan.getCurrentAlloment());
+        return CheckPriceRespDTO.builder()
+                .outcome(CheckPriceOutcome.AVAILABLE)
+                .salePrice(totalCents)
+                .subPrice(totalCents)
+                .remainRoomNum(plan.getCurrentAlloment())
+                .cancelPolicy(cancelPolicy)
+                .priceInfos(priceInfos)
+                .build();
+    }
+
+    /** 发一次 validate；调用失败或响应体缺失返回 null（网络类失败由调用方落 INDETERMINATE） */
+    private ElongDataValidateResponse callValidate(String dataJson) {
+        ResponseResult<ElongDataValidateResponse> result = new DataValidateAccess(properties)
+                .access(new ElongRestCall(METHOD_DATA_VALIDATE, dataJson));
+        return result == null ? null : result.getData();
+    }
+
+    /**
+     * 是否为「每日价传参异常」（{@code H001189}）——可自纠正的那一类价格不符。
+     *
+     * <p>与 {@code H001188} 分开：后者是我方请求组装缺陷（缺字段、总价与逐日之和不等），
+     * 属人工介入范畴，不重试。
+     */
+    private static boolean isPerDayPriceMismatch(ElongDataValidateResponse data) {
+        return StringUtils.trimToEmpty(data.errorCode()).startsWith("H001189");
+    }
+
+    /**
+     * 把逐日 {@code MinRate} 换成艺龙在本次响应里回传的值，{@code Price} 一个字不动。
+     *
+     * <p><b>为什么要这么做</b>（2026-08-21 生产实打约 150 次坐实）：{@code hotel.detail} 与
+     * {@code hotel.data.validate} 对同一产品的 {@code MinRate} 会给出不同值（detail 偏高
+     * 0.01~0.33 元，而 {@code Rate} 两边完全一致）。判据是<b>申报税费 {@code Price − MinRate}
+     * 须不低于艺龙自己算的税费</b>，detail 的 MinRate 偏高就让申报税费偏小，正好压在边界下沿，
+     * 实测 14%~39% 被判 {@code H001189}。
+     *
+     * <p>偏差随时间漂移（同一产品同一入参，几分钟前恒拒、几分钟后恒过），故固定容差治不住；
+     * 而艺龙<b>在拒绝的同一份响应里就回传了它认可的 MinRate</b>，用它重试是唯一权威解法。
+     *
+     * <p><b>只在 detail 的值过不去时才换</b>：首次通过就沿用 detail 那份——它已被艺龙接受，
+     * 是唯一有实证的组合，下单原样replay必然同样通过。
+     *
+     * <p><b>不动 {@code Price} 是关键</b>：申报总价（我方应付金额）由它决定，{@code MinRate}
+     * 只影响税费拆分。曾考虑"给 Price 加 0.05 元边际"，那是错的——要多付钱，且实测不可靠。
+     *
+     * @return 纠正后的逐日价；响应未回传、日期对不齐、或值与原来完全相同（重试无意义）时返回 null
+     */
+    private static List<ElongDataValidateRequest.DayPrice> alignMinRateToSupplier(
+            List<ElongDataValidateRequest.DayPrice> dayPrices, ElongDataValidateResponse data) {
+        JsonNode list = validatedNightlyRateList(data);
+        if (list == null || !list.isArray() || list.size() != dayPrices.size()) {
+            return null;
+        }
+        // 按 Date 匹配而非按下标：数组顺序是艺龙的实现细节，不是契约
+        Map<String, BigDecimal> byDate = new HashMap<>();
+        for (JsonNode night : list) {
+            String date = StringUtils.trimToEmpty(night.path("Date").asText());
+            if (date.length() < 10 || !night.hasNonNull("MinRate")) {
+                return null;
+            }
+            byDate.put(date.substring(0, 10), night.get("MinRate").decimalValue());
+        }
+        List<ElongDataValidateRequest.DayPrice> aligned = new ArrayList<>();
+        boolean changed = false;
+        for (ElongDataValidateRequest.DayPrice day : dayPrices) {
+            BigDecimal supplierMinRate = byDate.get(day.getDate());
+            if (supplierMinRate == null || supplierMinRate.signum() <= 0) {
+                return null;
+            }
+            if (supplierMinRate.compareTo(day.getMinRate()) != 0) {
+                changed = true;
+            }
+            aligned.add(ElongDataValidateRequest.DayPrice.builder()
+                    .date(day.getDate()).price(day.getPrice()).minRate(supplierMinRate).build());
+        }
+        return changed ? aligned : null;
+    }
+
+    /** 验价响应里的逐日价（{@code Rate}/{@code MinRate}）；缺任一层级返回 null */
+    private static JsonNode validatedNightlyRateList(ElongDataValidateResponse data) {
+        JsonNode info = data.getResult() == null ? null : data.getResult().getInterValidateInfo();
+        return info == null ? null : info.path("ratePlanInfo").path("RateNightlyRateList");
+    }
+
+    private static String minRatesOf(List<ElongDataValidateRequest.DayPrice> dayPrices) {
+        List<String> out = new ArrayList<>();
+        for (ElongDataValidateRequest.DayPrice day : dayPrices) {
+            out.add(day.getDate() + "=" + day.getMinRate().toPlainString());
+        }
+        return String.join(",", out);
     }
 
     /** 验价响应里的退改分段；缺任一层级返回 null，交调用方回落 */

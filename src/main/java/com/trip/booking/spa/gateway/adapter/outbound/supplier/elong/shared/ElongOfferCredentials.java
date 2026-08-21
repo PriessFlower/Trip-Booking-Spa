@@ -42,7 +42,18 @@ public final class ElongOfferCredentials {
      */
     public static final String DECLARED_TOTAL = "totalPrice";
 
-    /** 验价所用 DayPriceList 的 JSON，下单侧复用同一份每日价 */
+    /**
+     * <b>验价当次被艺龙接受的</b> DayPriceList（JSON），下单侧原样replay。
+     *
+     * <p><b>必须是"被接受的那一份"，不是 hotel.detail 的原值</b>：detail 与 validate 对同一产品的
+     * {@code MinRate} 会给出不同值（2026-08-21 实测 detail 偏高 0.01~0.33 元），原样回传约
+     * 14%~30% 被判 {@code H001189}。验价时若发生过自纠正重试，这里存的是纠正后、
+     * 艺龙点过头的那一份——下单原样replay，就不会在建单环节再撞一次价格异常。
+     *
+     * <p><b>它同时是"已验价"的标记</b>：只有走完 validate 并通过的路径才会写它
+     * （{@code verifyLevel=AVAILABILITY} 那一档根本不签句柄）。故下单侧把它列入必需键，
+     * 等价于"未验价不许下单"，不必另设一个 validated 布尔位。
+     */
     public static final String DAY_PRICE_LIST = "dayPriceList";
 
     /** 验价住期（yyyy-MM-dd）。下单侧以此为准并校验上游传参一致——住期不同则价必不同 */

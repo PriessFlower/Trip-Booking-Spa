@@ -102,12 +102,15 @@ public class ElongBookingSyncServiceImpl
             return BookingOutcomeHolder.failed(req.getOrderId(), "offer_supplier_mismatch",
                     "该报价句柄不属于本供应商，请核对下单请求的供应商");
         }
-        // 七项会话凭证 + 验后价 + 住期缺一不可（cursor 侧任一缺失即拒单）
+        // 七项会话凭证 + 申报价 + 逐日价 + 住期缺一不可（cursor 侧任一缺失即拒单）。
+        // DAY_PRICE_LIST 列入必需键还有第二重作用：只有走完 validate 并通过的路径才会写它，
+        // 故它等价于"已验价"的标记——未验价的句柄（如渠道验价那一档，本就不签句柄）到不了这里
         for (String key : List.of(ElongOfferCredentials.HOTEL_ID, ElongOfferCredentials.HOTEL_CODE,
                 ElongOfferCredentials.ROOM_TYPE_ID, ElongOfferCredentials.RATE_PLAN_ID,
                 ElongOfferCredentials.GOODS_UNIQ_ID, ElongOfferCredentials.LITTLE_MAJIA_ID,
                 ElongOfferCredentials.SUPPLIER_ID, ElongOfferCredentials.SUB_SUPPLIER_ID,
                 ElongOfferCredentials.SHOPPER_PRODUCT_ID, ElongOfferCredentials.DECLARED_TOTAL,
+                ElongOfferCredentials.DAY_PRICE_LIST,
                 ElongOfferCredentials.CHECK_IN, ElongOfferCredentials.CHECK_OUT)) {
             if (StringUtils.isBlank(offer.credential(key))) {
                 log.error("艺龙下单：报价句柄缺少凭据,orderId={},missingKey={}", req.getOrderId(), key);
@@ -214,8 +217,11 @@ public class ElongBookingSyncServiceImpl
                 .paymentType(PAYMENT_TYPE_PREPAY)
                 .numberOfRooms(rooms)
                 .numberOfCustomers(Math.max(customers, rooms))
-                // 验后价（元）：与验价句柄同源，禁止另算——不符艺龙报 H001084
+                // 申报价（元）：与验价句柄同源，禁止另算——不符艺龙报 H001084
                 .declaredTotal(new BigDecimal(offer.credential(ElongOfferCredentials.DECLARED_TOTAL)))
+                // 逐日价：原样replay验价当次被艺龙接受的那一份（可能已按其回传的 MinRate 纠正过）。
+                // 官方要求透传以避免部分退时两边金额不一致；用 detail 原值会把 H001189 引到建单环节
+                .dayPriceList(dayPricesOf(offer, req.getOrderId()))
                 .currencyCode(CURRENCY_RMB)
                 .earliestArrivalTime(checkIn + EARLIEST_ARRIVAL_HMS)
                 .latestArrivalTime(checkIn + LATEST_ARRIVAL_HMS)
@@ -273,6 +279,31 @@ public class ElongBookingSyncServiceImpl
             return builder.name(last + first).lastName(last).firstName(first).build();
         }
         return builder.name(name).build();
+    }
+
+    /**
+     * 从句柄里取回验价当次被艺龙接受的逐日价。
+     *
+     * <p>解析失败返回 null（该节点官方可为空）而不是抛：句柄内容不可解析属我方缺陷，
+     * 但把它变成建单异常反而更糟——建单是不可重试的写操作。落 error 供排障，
+     * 让艺龙按 TotalPrice 校验即可。<b>不允许在此回落到 detail 原值</b>：那正是
+     * {@code H001189} 的来源，会把验价环节已经绕过的问题引到建单环节。
+     */
+    private static List<ElongOrderCreateRequest.DayPrice> dayPricesOf(Offer offer, String orderId) {
+        String json = offer.credential(ElongOfferCredentials.DAY_PRICE_LIST);
+        try {
+            // JsonUtils 只提供 Class<T> 形态，故走数组再转 List（避免为一处反序列化引入 TypeReference）
+            ElongOrderCreateRequest.DayPrice[] parsed =
+                    JsonUtils.readValue(json, ElongOrderCreateRequest.DayPrice[].class);
+            if (parsed == null || parsed.length == 0) {
+                log.error("艺龙下单：句柄里的逐日价为空,orderId={},raw={}", orderId, json);
+                return null;
+            }
+            return List.of(parsed);
+        } catch (Exception e) {
+            log.error("艺龙下单：句柄里的逐日价无法解析,orderId={},raw={}", orderId, json, e);
+            return null;
+        }
     }
 
     private static int parseIntOrDefault(String value, int fallback) {
