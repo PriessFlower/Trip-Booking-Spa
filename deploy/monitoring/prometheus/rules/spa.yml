@@ -1,0 +1,135 @@
+# Thresholds are anchored to measured baselines, not to round numbers:
+# price-refresh failure runs at ~0.17%, and ELONG SPA_SUPPLIER_API_PRODUCT_PRICES
+# averages ~1.3 s. Each alert is therefore set roughly an order of magnitude above
+# normal, so a firing rule means something actually changed.
+groups:
+  - name: availability
+    rules:
+      - alert: TargetDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "抓取目标 {{ $labels.job }} ({{ $labels.instance }}) 已 5 分钟抓不到"
+          description: >-
+            可能是应用挂了、端口变了，或安全组被改动。SPA 的抓取依赖 sg-2bkpoddf
+            放行 8080 from sg-p1ogl5st，且该 ACCEPT 必须排在 deny-all 之前。
+
+      - alert: SpaRestarted
+        expr: process_uptime_seconds{job="trip-booking-spa"} < 300
+        for: 1m
+        labels:
+          severity: info
+        annotations:
+          summary: "SPA 进程在 5 分钟内重启过"
+          description: "若非发版所致，检查 OOM 与崩溃日志。"
+
+  - name: price-refresh
+    rules:
+      - alert: RefreshFailureRatioHigh
+        expr: >-
+          sum(rate(refresh_failed_count_total{job="trip-booking-spa"}[30m]))
+          / sum(rate(refresh_rows_count_total{job="trip-booking-spa"}[30m])) > 0.02
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "刷价失败率 {{ $value | humanizePercentage }}，超过 2%"
+          description: "基线约 0.17%，触发即为十倍以上劣化。先看是否供应商侧限流或频控。"
+
+      - alert: RefreshStalled
+        expr: sum(rate(refresh_rows_count_total{job="trip-booking-spa"}[1h])) == 0
+        for: 3h
+        labels:
+          severity: warning
+        annotations:
+          summary: "刷价连续 3 小时没有产出任何行"
+          description: "调度停摆或任务全量失败；空窗期比失败率更容易被忽略，故单独设一条。"
+
+  - name: supplier-io
+    rules:
+      - alert: SupplierLatencyHigh
+        expr: >-
+          sum by (supplier, interface) (rate(supplier_io_access_time_sum{job="trip-booking-spa"}[15m]))
+          / sum by (supplier, interface) (rate(supplier_io_access_time_count{job="trip-booking-spa"}[15m])) > 5000
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.supplier }} {{ $labels.interface }} 平均耗时 {{ $value | printf \"%.0f\" }} ms"
+          description: "该计时器单位是毫秒。艺龙查价基线约 1300 ms。"
+
+      - alert: SupplierErrorsAppearing
+        expr: >-
+          sum by (supplier, interface, status) (
+            rate(supplier_io_access_count_total{job="trip-booking-spa", status!~"ok|empty"}[15m])
+          ) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.supplier }} {{ $labels.interface }} 出现 status={{ $labels.status }}"
+          description: "ok 与 empty 之外的状态即异常；empty 只是查得通但没房，不算错。"
+
+  - name: application
+    rules:
+      - alert: HttpServerErrors
+        expr: >-
+          sum(rate(http_server_requests_seconds_count{job="trip-booking-spa", status=~"5.."}[10m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "对外接口 5xx 速率 {{ $value | printf \"%.2f\" }}/s"
+
+      - alert: HikariPoolSaturated
+        expr: hikaricp_connections_pending{job="trip-booking-spa"} > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "数据库连接池持续有等待者（pending={{ $value }}）"
+          description: "连接池不够用，或有慢查询占住连接不放。"
+
+      - alert: JvmHeapHigh
+        expr: >-
+          sum(jvm_memory_used_bytes{job="trip-booking-spa", area="heap"})
+          / sum(jvm_memory_max_bytes{job="trip-booking-spa", area="heap"}) > 0.9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "JVM 堆使用率 {{ $value | humanizePercentage }}"
+
+      - alert: GcOverheadHigh
+        expr: jvm_gc_overhead_percent{job="trip-booking-spa"} > 0.3
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GC 开销占比 {{ $value | humanizePercentage }}，应用大部分时间在回收内存"
+
+  - name: capacity
+    rules:
+      - alert: SpaDiskLow
+        expr: >-
+          disk_free_bytes{job="trip-booking-spa"} / disk_total_bytes{job="trip-booking-spa"} < 0.1
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trip-offline 磁盘 {{ $labels.path }} 剩余不足 10%"
+
+      - alert: PlatformDiskLow
+        expr: >-
+          node_filesystem_avail_bytes{job="node", fstype!~"tmpfs|overlay"}
+          / node_filesystem_size_bytes{job="node", fstype!~"tmpfs|overlay"} < 0.15
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "platform 磁盘 {{ $labels.mountpoint }} 剩余不足 15%"
+          description: >-
+            这台同时跑 Nacos、部署 runner 与本监控栈；TSDB 上限 10 GB，
+            盘满通常不是监控数据造成的。
