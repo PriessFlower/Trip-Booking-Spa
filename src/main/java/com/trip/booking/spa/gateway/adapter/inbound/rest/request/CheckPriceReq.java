@@ -25,6 +25,20 @@ public class CheckPriceReq {
      * 自动换等价新票（resolve ②）；不带则维持旧行为（RATE_DEAD）。
      */
     private String productKey;
+
+    /**
+     * 本次要多确定的答案（见 {@link com.trip.booking.spa.gateway.domain.booking.VerifyLevel}）。
+     *
+     * <p>可选，缺省 {@code BOOKABLE}——旧调用方不带该字段时行为与改动前完全一致，
+     * 且默认落在"更确定"的一侧。上游在渠道验价那一档（供应商预算 1200ms）应显式传
+     * {@code AVAILABILITY}：完整验价实测约 4.6s，塞不进那个预算。
+     *
+     * <p>之所以做成入参而不是由本服务推断：两档请求打的是同一个端点、形状完全一样，
+     * cursor 侧区分两档的 {@code orderVerify} 标记不会传过来，猜不出来就只能一律走最重的
+     * 那条，于是轻的那一档必然超时。意图只能由调用方声明。
+     */
+    private com.trip.booking.spa.gateway.domain.booking.VerifyLevel verifyLevel;
+
     @NonNull
     private String checkIn;//入住日期
     @NonNull

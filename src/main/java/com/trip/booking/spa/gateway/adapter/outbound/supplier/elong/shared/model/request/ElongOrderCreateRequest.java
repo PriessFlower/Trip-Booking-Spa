@@ -1,6 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.request;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
@@ -58,8 +59,63 @@ public class ElongOrderCreateRequest {
     /** 入住客人数，须 ≥ 房间数 */
     private Integer numberOfCustomers;
 
-    /** 订单总价（元）；必须与验价口径一致，不符报 H001084 */
-    private BigDecimal totalPrice;
+    /**
+     * <b>申报总价</b>（元）；必须与验价口径一致，不符报 H001084。
+     *
+     * <p><b>结算按本字段走</b>——2026-07 月结对账单实证：艺龙订单 101000106416 的
+     * 「艺龙卖价 / 分销商卖价 / 结算金额」三列均等于我方申报值。所以本字段不是
+     * 「订单总价」这种中性叫法能概括的，它就是<b>我方应付金额</b>，故改名为申报价。
+     *
+     * <p>官方备注原文（cn-api-search-hotel_order_create，2026-08-21 核对）：
+     * 「原币种价格 RatePlan的TotalRate * 房间数, 开通了结算价的分销商，此处应该传入
+     * 结算价。<b>如果是国际分销商需要传入 sum(Rate) * 房间数</b>。」
+     * 我方是国际分销商，故正确取值为 {@code sum(Rate) * 房间数}。
+     *
+     * <p><b>当前实现填的是 sum(Member)（会员价口径），比 sum(Rate) 高 1.4%~10%</b>
+     * ——本次改名未动取值，修正待商务确认合约口径后单独进行。方向是我方多付。
+     *
+     * <p>另：本请求<b>缺 CustomerPrice</b>（销售给客人的最终总价格）。官方该字段必填列
+     * 为 Y，且预付酒店按它开发票（FAQ 220）；对账单里「代理差额佣金」= 分销商卖价 −
+     * 结算金额，正是我方毛利那一列。我方从未传，故 10 笔历史单该列恒为 0。
+     */
+    @JsonProperty("TotalPrice")
+    private BigDecimal declaredTotal;
+
+    /**
+     * 逐日价，原样replay验价当次<b>被艺龙接受的</b>那一份。
+     *
+     * <p>官方说明：「每日价透传：用于每日金额校验，<b>避免出现订单部分退艺龙与合作方退款金额
+     * 不一致现象发生</b>。DayPriceList 节点里每个 DayPrice 里的 Price 之和 * NumberOfRooms
+     * = TotalPrice」。此前我方<b>完全没传</b>——句柄里存了却无人读，本请求类连字段都没有，
+     * 于是部分退时两边金额本就可能对不上。
+     *
+     * <p><b>为什么必须用验价接受过的那一份、而不是 hotel.detail 的原值</b>：detail 与
+     * hotel.data.validate 对同一产品的 {@code MinRate} 会给出不同值（2026-08-21 实测 detail
+     * 偏高 0.01~0.33 元），拿 detail 原值下单等于把验价环节刚绕过的 {@code H001189} 重新引入
+     * 建单环节——而建单是写操作、不可重试、失败态含"不确定"，代价比验价失败高一个量级。
+     */
+    @JsonProperty("DayPriceList")
+    private List<DayPrice> dayPriceList;
+
+    /** 逐日价子项。字段拼写与 hotel.data.validate 的 DayPrice 一致（Date / Price / MinRate） */
+    @Getter
+    @Setter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonNaming(PropertyNamingStrategies.UpperCamelCaseStrategy.class)
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class DayPrice {
+
+        /** yyyy-MM-dd */
+        private String date;
+
+        /** 元 */
+        private BigDecimal price;
+
+        /** 元；国际必传、国内不允许传 */
+        private BigDecimal minRate;
+    }
 
     private String currencyCode;
 
