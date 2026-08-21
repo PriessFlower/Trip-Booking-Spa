@@ -67,7 +67,18 @@ public class ElongRatePlan {
 
     private List<ElongNightlyRate> nightlyRates;
 
-    /** 预付取消规则（阶梯）；hotel.detail 常无此字段，原样接住交规范化钩子解析 */
+    /**
+     * 预付取消规则（阶梯）；原样接住交规范化钩子解析。
+     *
+     * <p>此处原写「hotel.detail 常无此字段」，与生产事实相反，已更正：2026-08-21 按刷价出报
+     * 口径实测（8.4h 建档日志，562 万条次），仅 <b>11.7%</b> 因餐食或退改任一为 UNKNOWN 而
+     * 未入档案，即绝大多数产品在本字段即可解出完整阶梯（截止时间与罚金）。两个成因目前合成
+     * 一个计数，故退改单独的缺失率只能给上界 ≤11.7%。
+     *
+     * <p>解析不出时 {@code CancelClass} 取 UNKNOWN：照常参与实时链路，但不进档案（R-5.4）。
+     * 该口径不可外推到验价——验价另有 {@code interValidateInfo.CancelPolicyList}，两者以
+     * 验价时点为准（见 {@code ElongPriceServiceImpl.buildBookableResp}）。
+     */
     private JsonNode prepayResult;
 
     private String hotelCode;

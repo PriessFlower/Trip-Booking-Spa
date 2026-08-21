@@ -29,8 +29,18 @@ public final class ElongOfferCredentials {
 
     public static final String SHOPPER_PRODUCT_ID = "shopperProductId";
 
-    /** 验价通过时的总价（元，字符串），下单侧核对口径 */
-    public static final String TOTAL_PRICE = "totalPrice";
+    /**
+     * 验价时<b>申报给艺龙</b>的总价（元，字符串），下单侧原样复用。
+     *
+     * <p>叫「申报价」而不是「总价」：它既不是对客售价、也不一定是结算价，而是我方填进
+     * hotel.data.validate / hotel.order.create 的 {@code TotalPrice} 的那个数。
+     * <b>结算按它走</b>（对账单实证见 {@code ElongNightlyRate} 类 javadoc），故这个名字
+     * 必须让人一眼看出「改它等于改我方应付金额」。
+     *
+     * <p>常量<b>值</b>保持 {@code "totalPrice"} 不变：它是 Redis 里 {@code offer:*} 句柄的
+     * JSON 键，改值会让改动前签发、仍在 TTL 内的句柄在下单侧取不到凭据。
+     */
+    public static final String DECLARED_TOTAL = "totalPrice";
 
     /** 验价所用 DayPriceList 的 JSON，下单侧复用同一份每日价 */
     public static final String DAY_PRICE_LIST = "dayPriceList";

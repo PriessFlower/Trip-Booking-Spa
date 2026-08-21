@@ -1,6 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.request;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
@@ -61,8 +62,20 @@ public class ElongDataValidateRequest {
 
     private String supplierId;
 
-    /** 元（艺龙口径），与 DayPriceList 各日 Price 之和一致 */
-    private BigDecimal totalPrice;
+    /**
+     * <b>申报总价</b>（元，艺龙口径），须与 DayPriceList 各日 Price 之和一致。
+     *
+     * <p>Java 字段名刻意不叫 {@code totalPrice}：全仓有五个 {@code totalPrice}，分属
+     * 「对客所见价」「对客展示价」「申报价」三种口径，混用已致两处资损（见
+     * {@code ElongNightlyRate} 类 javadoc）。此处是<b>我方申报给艺龙</b>的那个数。
+     * 线上键名由 {@code @JsonProperty} 钉死为 {@code TotalPrice}，与 wire 契约无关。
+     *
+     * <p>艺龙对本字段<b>只校下限</b>（2026-08-21 实测）：≥ 当日 {@code Cost} 即
+     * {@code ResultCode=OK}，报高不拦（+5% 仍 OK）；低于 {@code Cost} 报
+     * {@code ResultCode=Rate} 与 {@code H001189|每日价传参异常}。
+     */
+    @JsonProperty("TotalPrice")
+    private BigDecimal declaredTotal;
 
     private Integer numberOfRooms;
 

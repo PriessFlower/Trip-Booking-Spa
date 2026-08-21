@@ -107,7 +107,7 @@ public class ElongBookingSyncServiceImpl
                 ElongOfferCredentials.ROOM_TYPE_ID, ElongOfferCredentials.RATE_PLAN_ID,
                 ElongOfferCredentials.GOODS_UNIQ_ID, ElongOfferCredentials.LITTLE_MAJIA_ID,
                 ElongOfferCredentials.SUPPLIER_ID, ElongOfferCredentials.SUB_SUPPLIER_ID,
-                ElongOfferCredentials.SHOPPER_PRODUCT_ID, ElongOfferCredentials.TOTAL_PRICE,
+                ElongOfferCredentials.SHOPPER_PRODUCT_ID, ElongOfferCredentials.DECLARED_TOTAL,
                 ElongOfferCredentials.CHECK_IN, ElongOfferCredentials.CHECK_OUT)) {
             if (StringUtils.isBlank(offer.credential(key))) {
                 log.error("艺龙下单：报价句柄缺少凭据,orderId={},missingKey={}", req.getOrderId(), key);
@@ -215,7 +215,7 @@ public class ElongBookingSyncServiceImpl
                 .numberOfRooms(rooms)
                 .numberOfCustomers(Math.max(customers, rooms))
                 // 验后价（元）：与验价句柄同源，禁止另算——不符艺龙报 H001084
-                .totalPrice(new BigDecimal(offer.credential(ElongOfferCredentials.TOTAL_PRICE)))
+                .declaredTotal(new BigDecimal(offer.credential(ElongOfferCredentials.DECLARED_TOTAL)))
                 .currencyCode(CURRENCY_RMB)
                 .earliestArrivalTime(checkIn + EARLIEST_ARRIVAL_HMS)
                 .latestArrivalTime(checkIn + LATEST_ARRIVAL_HMS)

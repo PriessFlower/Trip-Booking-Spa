@@ -213,7 +213,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                                        List<ElongDataValidateRequest.DayPrice> dayPrices, String occupancy, PriceReq request) {
         Meal meal = productKeyDeriver.convertMeal(plan);
         List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), plan.getPrepayResult());
-        int totalPriceCents = sumCents(dayPrices);
+        int displayTotalCents = sumCents(dayPrices);
         // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍
         ProductIdentity identity = productKeyDeriver.deriveIdentity(
                 hotelId, plan.getRoomTypeId(), meal, cancelPolicy, occupancy);
@@ -229,8 +229,10 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 .productInfo(ProductInfo.builder().inventory(plan.getCurrentAlloment()).productStatus(1)
                         .productName(StringUtils.isNotBlank(plan.getRatePlanName()) ? plan.getRatePlanName() : room.getName()).build())
                 .currencyType(plan.getCurrencyCode())
-                .totalPrice(totalPriceCents)
-                .roomTotalPrice(totalPriceCents)
+                // totalPrice=含税总额（Σ Rate）；roomTotalPrice=税前房费（Σ MinRate）。
+                // 二者之差即税费，与 priceInfos 逐日的 taxes 之和一致（国际对接指南 ①②）
+                .totalPrice(displayTotalCents)
+                .roomTotalPrice(sumRoomCents(dayPrices))
                 .priceInfos(buildPriceInfos(dayPrices))
                 .meal(meal)
                 .cancelPolicy(cancelPolicy)
@@ -320,7 +322,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     /** 二段：以本会话凭据打 hotel.data.validate，并把结果归入确定的分态 */
     private CheckPriceRespDTO validate(CheckPriceReq request, String hotelId, ElongRatePlan plan,
                                        List<ElongDataValidateRequest.DayPrice> dayPrices) {
-        BigDecimal totalPriceYuan = sumYuan(dayPrices);
+        BigDecimal declaredTotalYuan = sumYuan(dayPrices);
         ElongDataValidateRequest validateRequest = ElongDataValidateRequest.builder()
                 .arrivalDate(request.getCheckIn())
                 .departureDate(request.getCheckOut())
@@ -337,7 +339,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 .shopperProductId(plan.getShopperProductId())
                 .subSupplierId(plan.getSubSupplierId())
                 .supplierId(plan.getSupplierId())
-                .totalPrice(totalPriceYuan)
+                .declaredTotal(declaredTotalYuan)
                 .numberOfRooms(request.getRoomNum())
                 .numberOfAdults(request.getAdultCount())
                 .childAges(CollectionUtils.isEmpty(request.getChildAges()) ? List.of() : request.getChildAges())
@@ -359,7 +361,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         // 三个失败态对本次所点报价都是确定性结果，重试同参数不会改变
         String resultCode = StringUtils.trimToEmpty(data.getResult() == null ? null : data.getResult().getResultCode());
         if (RESULT_CODE_OK.equalsIgnoreCase(resultCode)) {
-            return buildBookableResp(request, hotelId, plan, dayPrices, totalPriceYuan, data);
+            return buildBookableResp(request, hotelId, plan, dayPrices, declaredTotalYuan, data);
         }
         if ("Inventory".equalsIgnoreCase(resultCode)) {
             log.info("艺龙验价：供应商明确房量不够,sHotelId={},goodsUniqId={},resultCode={}",
@@ -432,9 +434,9 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      */
     private CheckPriceRespDTO buildBookableResp(CheckPriceReq request, String hotelId, ElongRatePlan plan,
                                                 List<ElongDataValidateRequest.DayPrice> dayPrices,
-                                                BigDecimal totalPriceYuan, ElongDataValidateResponse data) {
+                                                BigDecimal declaredTotalYuan, ElongDataValidateResponse data) {
         int salePriceCents = validatedPriceCents(data, dayPrices.size())
-                .orElse(totalPriceYuan.multiply(BigDecimal.valueOf(100)).intValue());
+                .orElse(declaredTotalYuan.multiply(BigDecimal.valueOf(100)).intValue());
         Map<String, String> credentials = new HashMap<>();
         credentials.put(ElongOfferCredentials.HOTEL_ID, hotelId);
         credentials.put(ElongOfferCredentials.HOTEL_CODE, plan.getHotelCode());
@@ -445,7 +447,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         credentials.put(ElongOfferCredentials.SUPPLIER_ID, plan.getSupplierId());
         credentials.put(ElongOfferCredentials.SUB_SUPPLIER_ID, plan.getSubSupplierId());
         credentials.put(ElongOfferCredentials.SHOPPER_PRODUCT_ID, plan.getShopperProductId());
-        credentials.put(ElongOfferCredentials.TOTAL_PRICE, totalPriceYuan.toPlainString());
+        credentials.put(ElongOfferCredentials.DECLARED_TOTAL, declaredTotalYuan.toPlainString());
         credentials.put(ElongOfferCredentials.DAY_PRICE_LIST, JsonUtils.writeObject2Json(dayPrices));
         credentials.put(ElongOfferCredentials.CHECK_IN, request.getCheckIn());
         credentials.put(ElongOfferCredentials.CHECK_OUT, request.getCheckOut());
@@ -675,35 +677,75 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     }
 
     /**
-     * 每日价：validate 的 DayPriceList 与查价报出的总价同源（Member 售价 / MinRate）。
-     * 任一晚缺 Member 或 MinRate 即整体不可用（validate 必传，缺了必被拒）。
+     * 每日价：取 <b>{@code Rate}</b>（含税结算口径）。查价报给上游的总价与 validate 的
+     * DayPriceList 同源，故此处一改两头都改——上游看到的价与我方向艺龙申报的价从此是同一个数。
+     *
+     * <p><b>依据</b>：艺龙【国际酒店】国际对接指南（open.elong.com/faq/detail?plt=2&amp;id=337）
+     * 对 hotel.detail 返参的原话——「<b>①价格取Rate；②税费=Rate-MinRate</b>；③取消政策取
+     * PrepayResult；④餐食取meals」。同一口径在 hotel.order.create 的 DayPrice 节点被重申：
+     * 「对应于NightRate里MinRate，<b>同时Price为NightRate里Rate</b>」，并由 TotalPrice 备注
+     * 「<b>国际分销商需要传入 sum(Rate) * 房间数</b>」与 H001188 校验项「DayPrice里的Price之和
+     * * 房间数 是否等于TotalPrice」闭合。2026-08-21 艺龙对接人微信答复亦为「对，用 Rate」。
+     *
+     * <p><b>此前取 {@code Member} 的代价</b>：Member 是会员价（官方定义"可直接显示给客人"的
+     * 零售价），实测比 Rate 高 <b>1.4%~10%</b>（837 报价，中位 8.3%）；而结算按申报值走
+     * （2026-07 月结单订单 101000106416「艺龙卖价/分销商卖价/结算金额」三列均等于申报值），
+     * 即每单多付。加价一律交由下游渠道处理，本层只报供应商事实。
+     *
+     * <p><b>缺 Rate 不兜底</b>：整条报价作废，不退回 Member。Rate 是国际产品必然下发的字段
+     * （官方"仅用于国际及港澳台酒店"），拿不到说明数据异常；退回 Member 等于把"每单多付"
+     * 保留成兜底策略。国内酒店无 Rate，接入时须按境内外分流而不是在此加兜底。
      */
-    private static List<ElongDataValidateRequest.DayPrice> buildDayPrices(List<ElongNightlyRate> nightlyRates) {
+    static List<ElongDataValidateRequest.DayPrice> buildDayPrices(List<ElongNightlyRate> nightlyRates) {
         if (CollectionUtils.isEmpty(nightlyRates)) {
             return null;
         }
         List<ElongDataValidateRequest.DayPrice> dayPrices = new ArrayList<>();
         for (ElongNightlyRate nightly : nightlyRates) {
-            if (nightly.getMember() == null || nightly.getMinRate() == null
+            if (nightly.getRate() == null || nightly.getRate().signum() <= 0
+                    || nightly.getMinRate() == null || nightly.getMinRate().signum() <= 0
                     || StringUtils.isBlank(nightly.getDate()) || nightly.getDate().length() < 10) {
                 return null;
             }
             dayPrices.add(ElongDataValidateRequest.DayPrice.builder()
                     .date(nightly.getDate().substring(0, 10))
-                    .price(nightly.getMember())
+                    .price(nightly.getRate())
                     .minRate(nightly.getMinRate())
                     .build());
         }
         return dayPrices;
     }
 
-    private static List<PriceInfo> buildPriceInfos(List<ElongDataValidateRequest.DayPrice> dayPrices) {
+    /**
+     * 逐日价拆成「含税总额 / 房费 / 税费」三项，口径按国际对接指南：{@code price} 取 Rate、
+     * {@code taxes} 取 <b>Rate − MinRate</b>、{@code roomPrice} 取 MinRate（税前房费）。
+     *
+     * <p>此前 {@code taxes} 恒填 0 且 {@code roomPrice} 与 {@code price} 同值——等于告诉上游
+     * "这个价不含税"，而 Rate 官方定义就是<b>含税</b>价。指南把税费算法写明为 Rate−MinRate
+     * （那间房即 185.40−161.97=23.43），据此三项自洽：{@code price = roomPrice + taxes}。
+     */
+    static List<PriceInfo> buildPriceInfos(List<ElongDataValidateRequest.DayPrice> dayPrices) {
         List<PriceInfo> priceInfos = new ArrayList<>();
         for (ElongDataValidateRequest.DayPrice dayPrice : dayPrices) {
-            int cents = dayPrice.getPrice().multiply(BigDecimal.valueOf(100)).intValue();
-            priceInfos.add(PriceInfo.builder().date(dayPrice.getDate()).price(cents).roomPrice(cents).taxes(0).build());
+            int cents = toCents(dayPrice.getPrice());
+            int roomCents = toCents(dayPrice.getMinRate());
+            priceInfos.add(PriceInfo.builder().date(dayPrice.getDate())
+                    .price(cents).roomPrice(roomCents).taxes(cents - roomCents).build());
         }
         return priceInfos;
+    }
+
+    private static int toCents(BigDecimal yuan) {
+        return yuan.multiply(BigDecimal.valueOf(100)).intValue();
+    }
+
+    /** 税前房费合计（分）：逐日 MinRate 之和，供 roomTotalPrice 用 */
+    private static int sumRoomCents(List<ElongDataValidateRequest.DayPrice> dayPrices) {
+        int sum = 0;
+        for (ElongDataValidateRequest.DayPrice dayPrice : dayPrices) {
+            sum += toCents(dayPrice.getMinRate());
+        }
+        return sum;
     }
 
     private static BigDecimal sumYuan(List<ElongDataValidateRequest.DayPrice> dayPrices) {
