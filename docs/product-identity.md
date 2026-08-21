@@ -118,6 +118,12 @@
 | clwy | rateplanId(hash) | **易腐，分代轮换** | 60 天 58 次重放仅 4 成功，93% 撞 `500 No Availability` |
 | 艺龙 | GoodsUniqId | **易腐，会话级** | cursor 代码注释"会话级短时效凭证"；07-19 实测 45/47 全灭 |
 | 飞猪 | rateKey | **易腐，须同 session** | 与 requestTraceId 不同代 → 供应商返 214 |
+| ratehawk | book_hash | **易腐** | 字段名即自白。另：**该家没有房型 ID**——查价响应只有 `room_name`（自由文本）+ `rg_ext`（床型/浴室/容量结构化属性），R-4.3 的现货级降级即以其为样本 |
+| travelconnect | plansid | **易腐（会话级）** | 代码自白：验价时丢弃入参 `planSession`、重发一次 search 现取新 plansid。room_id 稳定性无证据 |
+| aicHotels | room_key | 弱稳定→按易腐起步 | 结构上是确定性合成（`base64(room_type..*rate_plan_code..*hotel_id)`，无时间戳、无 nonce），但无供应商文档背书。room_id 稳定性无证据 |
+| FastpayHotels | — | 未调查→按易腐 | 未做任何腐性调查，接入真实流量前必须补齐证据 |
+
+- **R-4.6** **代码侧只登记在产供应商**。`SupplierIdentityProfile` 自 2026-08-21 起只保留 **expedia、elong** 两家——它有运行时消费方（hint 列准入、OfferStore TTL 上限），在产之外的条目没有消费方。上表是全部预研结论的正本；未接入的供应商不在代码里预留条目，理由即 R-4.5 本身：迁入时必须按 R-4.1 重新申报，提前铺设的代码条目只会与上表漂移（§4.1.1 同理）。
 
 ## 5. 退改规则（三层）
 
