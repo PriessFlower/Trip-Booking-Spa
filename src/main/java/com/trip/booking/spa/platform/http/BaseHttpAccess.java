@@ -3,12 +3,14 @@ package com.trip.booking.spa.platform.http;
 import com.trip.booking.spa.platform.http.asynchttp.BaseResponse;
 import com.trip.booking.spa.platform.http.asynchttp.IParser;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
-import com.trip.booking.spa.platform.http.asynchttp.SupplierApiConstants;
 import com.trip.booking.spa.platform.observability.MonitorNameEnum;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierDataTypeEnum;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.exception.ParseException;
 import com.trip.booking.spa.platform.exception.RedisLimitException;
+import com.trip.booking.spa.platform.observability.CallStatus;
+import com.trip.booking.spa.platform.observability.MetricNames;
+import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.ratelimit.RateLimitHolder;
 import com.trip.booking.spa.platform.util.JsonUtils;
@@ -17,7 +19,6 @@ import org.apache.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 
@@ -60,7 +61,7 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
         // 统一限流：所有供应商 HTTP 调用的唯一闸门。QPS 配在 Nacos，key = 供应商_接口。
         String limitKey = buildGlobalLimitKey();
         if (!RateLimitHolder.get().tryAcquire(limitKey)) {
-            Monitor.recordOne(IO_METRIC, ioTags("limited"));
+            Monitor.recordOne(MetricNames.SUPPLIER_IO_ACCESS, ioTags(CallStatus.THROTTLED));
             throw new RedisLimitException("Request exceeds rate limit, key = " + limitKey);
         }
         beforeAccess(request);
@@ -83,37 +84,34 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
         // query() 在全部重试均抛异常时返回 null（读超时、连接重置、SSL 失败等）。此处兜底为失败态，
         // 而非让调用方在 result.getData() 上空指针——网络超时是常态，不应表现为 NPE。
         // 返回值 httpStatus != 200 且 data == null，isSucc() 为 false，与既有守卫写法一致。
+        // 终态在此处一次判定、一次记录（O-3.1/O-3.3）：四个分支互斥且穷尽，
+        // 故 sum by (status) 等于调用总数，可直接做各类比率的分母。
+        //
+        // 此前有两处失真：① 记了 empty 之后又无条件补记一次 ok，于是 ok 的实际含义是
+        // 「全部调用」而非「非空调用」，空结果占比被系统性低估；② 只要 result 非 null
+        // 就记 ok，HTTP 非 200 与业务错误码也被算成成功。
+        long cost = System.currentTimeMillis() - start;
         if (null == result) {
-            Monitor.recordOne(IO_METRIC, ioTags(SupplierApiConstants.ERROR_TAG));
+            // 重试全部抛异常才会到这儿。超时与连接/解析失败目前混在一处——底层把它们
+            // 都抛成普通 Exception，要分出 TIMEOUT 得先在 request() 里辨别异常类型（欠账）
+            Monitor.recordOne(MetricNames.SUPPLIER_IO_ACCESS, ioTags(CallStatus.ERROR), cost);
             logger.error("access fail, 重试已耗尽, supplier:[{}], interface:[{}], url:[{}]", supplier, monitorKey, url);
             return new ResponseResult<>(HttpStatus.SC_GATEWAY_TIMEOUT, null);
         }
-        if (null != result.getData() && result.getData().isEmptyResult()) {
-            Monitor.recordOne(IO_METRIC, ioTags("empty"), System.currentTimeMillis() - start);
+        if (!result.isSucc()) {
+            Monitor.recordOne(MetricNames.SUPPLIER_IO_ACCESS, ioTags(CallStatus.REJECTED), cost);
+            return result;
         }
-        Monitor.recordOne(IO_METRIC, ioTags("ok"), System.currentTimeMillis() - start);
+        if (null != result.getData() && result.getData().isEmptyResult()) {
+            Monitor.recordOne(MetricNames.SUPPLIER_IO_ACCESS, ioTags(CallStatus.NO_INVENTORY), cost);
+            return result;
+        }
+        Monitor.recordOne(MetricNames.SUPPLIER_IO_ACCESS, ioTags(CallStatus.QUOTED), cost);
         return result;
     }
 
-    /**
-     * 供应商 IO 的指标名。<b>固定一个名字，维度全部进 tag</b>（§3.9.2）。
-     *
-     * <p>原先是 {@code JOINER.join(supplier, 接口, tag, status)} 拼成名字，于是每个
-     * (供应商 × 接口 × 状态) 组合都生成一个独立指标名——接十家供应商、每家五个接口、
-     * 四种状态就是 200 个名字，正是 §3.9.2 要防的名字爆炸（反面即 cursor 的 324 种日志前缀）。
-     * 改为固定名 + tag 后，接多少家供应商都还是这一个名字，按 tag 切片查询。
-     */
-    private static final String IO_METRIC = "supplier_io_access";
-
-    /** 重试单独一个名字：它与"一次调用的结果"不是同一个度量，混在一个 counter 里会把成功率算错 */
-    private static final String IO_RETRY_METRIC = "supplier_io_retry";
-
-    private Map<String, Object> ioTags(String status) {
-        Map<String, Object> tags = new HashMap<>(3);
-        tags.put("supplier", supplier.name());
-        tags.put("interface", monitorKey.name());
-        tags.put("status", status);
-        return tags;
+    private Map<String, Object> ioTags(CallStatus status) {
+        return MetricTags.of(supplier, monitorKey, status);
     }
 
     public boolean isParseError() {
@@ -128,14 +126,17 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
             try {
                 count++;
                 if (count > 1) {
-                    Monitor.recordOne(IO_RETRY_METRIC, ioTags("retry"));
+                    Monitor.recordOne(MetricNames.SUPPLIER_IO_RETRY, MetricTags.of(supplier, monitorKey));
                 }
                 result = this.request(url, request, parser);
                 if (result.isSucc()) {
                     break;
                 }
             } catch (Exception e) {
-                Monitor.recordOne(IO_METRIC, ioTags(SupplierApiConstants.ERROR_TAG));
+                // 这里<b>不</b>记 supplier_io_access：那个指标的语义是「一次调用的终态」，
+                // 一次调用只许记一次（O-3.1）。此前每抛一次异常记一条、末尾 result==null 再记一条，
+                // 一次逻辑调用最多产生 N+1 条，成功率与耗时都被重试次数污染。
+                // 失败尝试的次数由 supplier_io_retry 承载，终态由 access() 统一判定。
                 logger.error("query fail, supplier:[{}], interface:[{}], url:[{}] , request:[{}]",
                         supplier, monitorKey, url, JsonUtils.writeObject2Json(request), e);
             }

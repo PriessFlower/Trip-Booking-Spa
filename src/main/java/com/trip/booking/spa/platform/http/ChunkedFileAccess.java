@@ -1,8 +1,10 @@
 package com.trip.booking.spa.platform.http;
 
-import com.google.common.base.Joiner;
 import com.trip.booking.spa.platform.observability.MonitorNameEnum;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
+import java.util.Map;
+import com.trip.booking.spa.platform.observability.MetricNames;
+import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.ratelimit.RateLimitHolder;
 import lombok.extern.slf4j.Slf4j;
@@ -44,7 +46,6 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 public class ChunkedFileAccess {
 
-    private static final Joiner JOINER = Joiner.on("_").skipNulls();
     private static final String LIMIT_PREFIX = "GLOBAL_LIMIT";
 
     /** 块大小取 1MB：小块使快者多劳，避免等分时慢连接拖出长尾 */
@@ -80,7 +81,7 @@ public class ChunkedFileAccess {
                 downloadInChunks(url, target, total);
             } catch (Exception e) {
                 log.warn("[{}] 分块下载失败，回落单连接: {}", supplier.name(), e.toString());
-                Monitor.recordOne(monitorName("fallback"));
+                Monitor.recordOne(MetricNames.SUPPLIER_FILE_ACCESS, fileTags(MetricNames.FILE_FALLBACK));
                 parallel = false;
             }
         }
@@ -90,8 +91,10 @@ public class ChunkedFileAccess {
 
         long cost = System.currentTimeMillis() - start;
         long size = target.toFile().length();
-        Monitor.recordOne(monitorName(parallel ? "chunked" : "single"), cost);
-        Monitor.recordValue(monitorName("bytes"), (int) Math.min(size / 1024, Integer.MAX_VALUE));
+        Monitor.recordOne(MetricNames.SUPPLIER_FILE_ACCESS,
+                fileTags(parallel ? MetricNames.FILE_CHUNKED : MetricNames.FILE_SINGLE), cost);
+        Monitor.recordValue(MetricNames.SUPPLIER_FILE_BYTES, MetricTags.of(supplier, monitorKey),
+                (int) Math.min(size / 1024, Integer.MAX_VALUE));
         log.info("[{}] 文件下载完成: {} ({} bytes, {} ms, {}, {} KB/s)", supplier.name(), target, size, cost,
                 parallel ? connections + " 连接分块" : "单连接",
                 cost > 0 ? size * 1000 / cost / 1024 : 0);
@@ -170,7 +173,8 @@ public class ChunkedFileAccess {
         }
 
         if (retried.get() > 0) {
-            Monitor.recordMany(monitorName("chunk_retry"), (int) retried.get());
+            Monitor.recordMany(MetricNames.SUPPLIER_FILE_CHUNK_RETRY, MetricTags.of(supplier, monitorKey),
+                    (int) retried.get());
         }
         // 判据是各块实收字节之和，不是文件长度——后者等于最高写入偏移，测不出中间空洞
         if (confirmed.get() != total) {
@@ -231,7 +235,7 @@ public class ChunkedFileAccess {
         try (InputStream in = new URL(url).openStream()) {
             Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
         } catch (Exception e) {
-            Monitor.recordOne(monitorName("error"));
+            Monitor.recordOne(MetricNames.SUPPLIER_FILE_ACCESS, fileTags(MetricNames.FILE_ERROR));
             throw new IllegalStateException("文件下载失败: " + url, e);
         }
     }
@@ -247,7 +251,8 @@ public class ChunkedFileAccess {
         RateLimitHolder.get().acquire(LIMIT_PREFIX + ":" + supplier.name() + ":" + monitorKey.name());
     }
 
-    private String monitorName(String tag) {
-        return JOINER.join(supplier.name(), monitorKey.name(), tag);
+    /** 固定一个指标名，供应商与方式全部进标签（O-2.1）——此前拼名字，最多产生上千个独立名字 */
+    private Map<String, Object> fileTags(String outcome) {
+        return MetricTags.outcomeOf(supplier, monitorKey, outcome);
     }
 }
