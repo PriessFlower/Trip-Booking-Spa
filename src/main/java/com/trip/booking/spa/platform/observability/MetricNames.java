@@ -97,8 +97,25 @@ public final class MetricNames {
     /** 对齐检查：重试后仍不一致 */
     public static final String ALIGN_RETRY_FAILED = "retry_failed";
 
-    /** 对外查价接口的耗时（毫秒）。请求数与出报数尚未埋，见 O-4.2 与 §10 第 9 项 */
+    /** 对外查价接口的耗时（毫秒），每个 HTTP 请求记一次 */
     public static final String QUERY_PRICE_FOR_SPA = "query_price_for_spa";
+
+    /**
+     * 对外查价的一条「请求×供应商」腿。一个 HTTP 请求带 N 家供应商就是 N 条腿，每腿记一次。
+     * 标签 supplier / source（cache|live）/ outcome（available|no_inventory|indeterminate，
+     * 即 PricingOutcome 小写）。出报率 = available 腿 / 全部腿（O-4.2 的请求数与出报率）。
+     */
+    public static final String SPA_PRICE_LEG = "spa_price_leg";
+
+    /** 对外查价实际出报的产品条数。标签 supplier/source。与 spa_price_leg 相除得每腿平均条数 */
+    public static final String SPA_PRICE_QUOTED = "spa_price_quoted";
+
+    /**
+     * 漏斗：一条报价在出报前被丢弃。标签 supplier / stage（{@link FunnelStage}）/
+     * reason（{@link DropReason}）。此前这些分支要么只有日志（艺龙三类跳过）、要么
+     * 什么都没有（缓存读侧五个 return），「丢在哪」只能靠 grep 和猜（O-4.5）。
+     */
+    public static final String QUOTE_DROPPED = "quote_dropped";
 
     private MetricNames() {
     }

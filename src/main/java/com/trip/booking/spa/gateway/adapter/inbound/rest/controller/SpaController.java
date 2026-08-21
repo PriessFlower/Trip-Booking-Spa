@@ -28,7 +28,10 @@ import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.application.pricing.ProductSyncService;
 import com.trip.booking.spa.bootstrap.NacosRuntimeConfig;
 import com.trip.booking.spa.platform.observability.MetricNames;
+import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
+
+import java.util.Locale;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import com.trip.booking.spa.gateway.application.routing.Capability;
 import com.trip.booking.spa.gateway.application.routing.SupplierCapabilityRegistry;
@@ -97,6 +100,7 @@ public class SpaController {
                     respDTOList.addAll(cached.products());
                 }
                 outcomes.add(cached.outcome());
+                recordPriceLeg(supplier, MetricTags.SOURCE_CACHE, cached);
             } else {
                 //实时查询
                 ProductSyncService hotelService = capabilityRegistry.find(supplier.getSupplierId(), Capability.PRICING, ProductSyncService.class);
@@ -106,6 +110,7 @@ public class SpaController {
                 PricingResult result = hotelService.queryPrice(priceReq, supplier);
                 respDTOList.addAll(result.products());
                 outcomes.add(result.outcome());
+                recordPriceLeg(supplier, MetricTags.SOURCE_LIVE, result);
             }
 
         }
@@ -113,6 +118,27 @@ public class SpaController {
         Monitor.recordTime(MetricNames.QUERY_PRICE_FOR_SPA, System.currentTimeMillis() - startTime);
 
         return toPriceResponse(mergeOutcomes(outcomes), respDTOList);
+    }
+
+    /**
+     * 入口四件套里的请求数与出报数（O-4.2）——此前这个入口只有耗时，「出报率 36%」
+     * 这个已知结论没法用指标复现，只能靠 grep 日志现算。
+     *
+     * <p>腿 = 请求 × 供应商，每腿记一次（O-3.4），outcome 直接沿用 {@link PricingOutcome}
+     * 的分态结论，不另造词表。出报条数单独一个名字：它计的是产品条数，和「腿」不是
+     * 同一个度量，混在一个 counter 里会把出报率算错。
+     */
+    private static void recordPriceLeg(Supplier supplier, String source, PricingResult result) {
+        SupplierSourceEnum supplierEnum = SupplierSourceEnum.getEnum(supplier.getSupplierId());
+        if (supplierEnum == null) {
+            return;
+        }
+        Monitor.recordOne(MetricNames.SPA_PRICE_LEG, MetricTags.leg(supplierEnum, source,
+                result.outcome().name().toLowerCase(Locale.ROOT)));
+        if (!result.products().isEmpty()) {
+            Monitor.recordMany(MetricNames.SPA_PRICE_QUOTED,
+                    MetricTags.quoted(supplierEnum, source), result.products().size());
+        }
     }
 
     /**

@@ -35,6 +35,21 @@ public final class MetricTags {
     /** 校验结果，与 {@link #STATUS} 不是同一个概念 */
     public static final String OUTCOME = "outcome";
 
+    /** 漏斗阶段，取值只出自 {@link FunnelStage}（O-4.6：小集合且稳定） */
+    public static final String STAGE = "stage";
+
+    /** 丢弃原因，取值只出自 {@link DropReason}（O-4.4：必须枚举化） */
+    public static final String REASON = "reason";
+
+    /** 查价入口这条腿走了缓存还是实时。取值只有 {@link #SOURCE_CACHE} 与 {@link #SOURCE_LIVE} */
+    public static final String SOURCE = "source";
+
+    /** source 取值：走缓存 */
+    public static final String SOURCE_CACHE = "cache";
+
+    /** source 取值：实时问供应商 */
+    public static final String SOURCE_LIVE = "live";
+
     private MetricTags() {
     }
 
@@ -74,6 +89,29 @@ public final class MetricTags {
     public static Map<String, Object> outcomeOf(SupplierSourceEnum supplier, String outcome) {
         Map<String, Object> tags = of(supplier);
         tags.put(OUTCOME, outcome);
+        return tags;
+    }
+
+    /** 漏斗丢弃（{@code quote_dropped}）：stage 答丢在哪一层，reason 答为什么丢 */
+    public static Map<String, Object> dropped(SupplierSourceEnum supplier, FunnelStage stage, DropReason reason) {
+        Map<String, Object> tags = of(supplier);
+        tags.put(STAGE, stage.tagValue());
+        tags.put(REASON, reason.tagValue());
+        return tags;
+    }
+
+    /** 查价入口的一条「请求×供应商」腿：source 答走了缓存还是实时，outcome 答分态结论 */
+    public static Map<String, Object> leg(SupplierSourceEnum supplier, String source, String outcome) {
+        Map<String, Object> tags = of(supplier);
+        tags.put(SOURCE, source);
+        tags.put(OUTCOME, outcome);
+        return tags;
+    }
+
+    /** 出报条数（{@code spa_price_quoted}）：只带 supplier 与 source 两维 */
+    public static Map<String, Object> quoted(SupplierSourceEnum supplier, String source) {
+        Map<String, Object> tags = of(supplier);
+        tags.put(SOURCE, source);
         return tags;
     }
 

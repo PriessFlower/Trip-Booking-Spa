@@ -38,6 +38,8 @@ import com.trip.booking.spa.gateway.domain.product.ResolveGate;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
 import com.trip.booking.spa.platform.redis.RedisUtils;
+import com.trip.booking.spa.platform.observability.DropReason;
+import com.trip.booking.spa.platform.observability.FunnelStage;
 import com.trip.booking.spa.platform.observability.MetricNames;
 import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
@@ -215,11 +217,22 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 products.add(convertPlan(hotel.getHotelId(), room, plan, dayPrices, occupancy, request));
             }
         }
-        // 非常态走向必须可观测（§6.2.1）：跳过的每一类都有落点，排障时能看出报价去哪了
+        // 非常态走向必须可观测（§6.2.1）：跳过的每一类都有落点，排障时能看出报价去哪了。
+        // 日志答「这一家这一天」，指标答「整体丢了多少」（O-1.3：算出来的计数不得只落日志）
         log.info("艺龙查价：转换完成,hotelId={},checkIn={},产品总数={},在售出报={},跳过_停售或无库存={},跳过_缺会话凭据={},跳过_缺每日价={}",
                 hotel.getHotelId(), request.getCheckIn(), totalPlans, products.size(),
                 skippedNotOnSale, skippedNoCredentials, skippedNoPrice);
+        countConvertDropped(DropReason.NOT_ON_SALE, skippedNotOnSale);
+        countConvertDropped(DropReason.NO_SESSION_CREDENTIALS, skippedNoCredentials);
+        countConvertDropped(DropReason.NO_DAY_PRICE, skippedNoPrice);
         return products;
+    }
+
+    private static void countConvertDropped(DropReason reason, int count) {
+        if (count > 0) {
+            Monitor.recordMany(MetricNames.QUOTE_DROPPED,
+                    MetricTags.dropped(SupplierSourceEnum.ELONG, FunnelStage.CONVERT, reason), count);
+        }
     }
 
     private ProductRespDTO convertPlan(String hotelId, ElongHotelDetailResponse.ElongRoom room, ElongRatePlan plan,
