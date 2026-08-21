@@ -1657,6 +1657,260 @@
         }
       },
       "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
+    },
+    {
+      "id": 28,
+      "type": "row",
+      "title": "查价漏斗（/client/spa/price）",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 82
+      }
+    },
+    {
+      "id": 29,
+      "type": "timeseries",
+      "title": "出报率",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "description": "出报的腿 / 全部腿。腿=请求×供应商。此前「出报率 36%」只能 grep 日志现算，现在是这条曲线。分母含 indeterminate（这一片没刷过/过 TTL），所以它同时吃「没刷到」和「刷了没货」两类损失。",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 83
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (supplier) (rate(spa_price_leg_count_total{job=\"trip-booking-spa\",outcome=\"available\"}[10m])) / sum by (supplier) (rate(spa_price_leg_count_total{job=\"trip-booking-spa\"}[10m]))",
+          "legendFormat": "{{supplier}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "percentunit",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 30,
+      "type": "timeseries",
+      "title": "腿数按分态",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "description": "available=出报；no_inventory=刷过、确定无货；indeterminate=没刷过或已过 TTL——它高说明刷价覆盖不住查询流量；error=处理中抛异常（HTTP 报错出去）。source=cache|live 区分走缓存还是实时问供应商。",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 83
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (supplier, source, outcome) (rate(spa_price_leg_count_total{job=\"trip-booking-spa\"}[10m]))",
+          "legendFormat": "{{supplier}} {{source}} {{outcome}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "出报前被丢弃的报价（按原因）",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "description": "一条线=一个丢弃分支。stage=convert 是供应商响应转换时丢的（停售/缺凭据/缺每日价），stage=cache_read 是缓存组装时丢的（价格不全/缺票据）。day_count_mismatch 高=多晚查询在被整天缺价吃掉。这些分支此前要么只有日志要么全静默。",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 91
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (supplier, stage, reason) (rate(quote_dropped_count_total{job=\"trip-booking-spa\"}[10m]))",
+          "legendFormat": "{{supplier}} {{stage}} {{reason}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "出报条数",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "description": "实际返给上游的产品条数（不是腿数）。与腿数相除得每腿平均出报条数——条数掉而出报率没掉，是单腿变薄。",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 91
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (supplier, source) (rate(spa_price_quoted_count_total{job=\"trip-booking-spa\"}[10m]))",
+          "legendFormat": "{{supplier}} {{source}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
     }
   ]
 }

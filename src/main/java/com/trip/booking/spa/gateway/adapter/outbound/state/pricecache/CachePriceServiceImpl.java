@@ -14,6 +14,12 @@ import com.trip.booking.spa.platform.util.JsonUtils;
 import com.trip.booking.spa.platform.util.ModelConverterUtils;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
 import com.trip.booking.spa.gateway.domain.product.Occupancy;
+import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
+import com.trip.booking.spa.platform.observability.DropReason;
+import com.trip.booking.spa.platform.observability.FunnelStage;
+import com.trip.booking.spa.platform.observability.MetricNames;
+import com.trip.booking.spa.platform.observability.MetricTags;
+import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.util.RedisKeyUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -202,6 +208,10 @@ public class CachePriceServiceImpl implements CachePriceService {
         Map<String, ProductAttributeReader.ProductAttribute> attrMap =
                 productAttributeReader.batchGet(supplier.getSupplierId(), new ArrayList<>(productMap.keySet()));
 
+        // 下面 forEach 里的每个 return 都是丢一条报价。丢可以，静默不行（O-4.5）：
+        // 这五个分支此前既无日志也无指标，出报率的扣分项只能靠 grep 和猜
+        SupplierSourceEnum supplierEnum = SupplierSourceEnum.getEnum(supplier.getSupplierId());
+
         // 使用已经收集的价格信息构建响应对象
         productMap.forEach((key, value) -> {
             ProductRespDTO respDTO = new ProductRespDTO();
@@ -221,15 +231,18 @@ public class CachePriceServiceImpl implements CachePriceService {
             Integer brokerage = value.stream().filter(a -> !Objects.isNull(a.getBrokerage())).mapToInt(PriceInfoCache::getBrokerage).sum();
             //如果缓存的价格为0，则不返回这个产品价格信息
             if (totalPrice == 0) {
+                countDropped(supplierEnum, DropReason.ZERO_TOTAL_PRICE);
                 return;
             }
             //如果List<PriceInfo>的size不等于List<String> keyList的大小，就证明某一天没价格数据，则不返回该产品信息
             if (keyList.size() != value.size()) {
+                countDropped(supplierEnum, DropReason.DAY_COUNT_MISMATCH);
                 return;
             }
             //如果size相同，但某一天价格为0，则不返回该产品信息
             if (keyList.size() == value.size()) {
                 if (value.stream().anyMatch(priceInfo -> 0 == priceInfo.getPrice().intValue())) {
+                    countDropped(supplierEnum, DropReason.ZERO_DAY_PRICE);
                     return;
                 }
             }
@@ -240,6 +253,7 @@ public class CachePriceServiceImpl implements CachePriceService {
             if (StringUtils.isBlank(priceInfoJson)) {
                 // 详情缺席 = 拿不到可下单的票据（productId 只存在于详情里，依 R-2.1 不落库）。
                 // 只有价没有票的报价不可成交，不如不报（R-1.6）
+                countDropped(supplierEnum, DropReason.QUOTE_DETAIL_MISSING);
                 return;
             }
             ProductRespCacheDTO productRespCacheDTO = JsonUtils.decodeJson(priceInfoJson, new TypeReference<>() {
@@ -252,6 +266,7 @@ public class CachePriceServiceImpl implements CachePriceService {
             // 票据取自详情（最近一轮刷价写入的那张），不是缓存字段名——字段名现在是
             // 跨次稳定的 productKey，拿它去下单会被供应商拒（它不是报价码）
             if (StringUtils.isBlank(respDTO.getProductId())) {
+                countDropped(supplierEnum, DropReason.PRODUCT_ID_MISSING);
                 return;
             }
             respDTO.setHotelId(supplier.getSHotelId());
@@ -271,6 +286,18 @@ public class CachePriceServiceImpl implements CachePriceService {
         });
 
         return respDTOList;
+    }
+
+    /**
+     * 属性缺失（{@code attr == null} 照样出报）不在此计数：那是「丢内容」不是「丢货」，
+     * 已由 {@code catalog_attribute_asked/hit} 的差值覆盖（O-4.6）。
+     */
+    private static void countDropped(SupplierSourceEnum supplier, DropReason reason) {
+        if (supplier == null) {
+            return;
+        }
+        Monitor.recordOne(MetricNames.QUOTE_DROPPED,
+                MetricTags.dropped(supplier, FunnelStage.CACHE_READ, reason));
     }
 
     /**

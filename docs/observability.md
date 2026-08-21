@@ -46,7 +46,10 @@
   | 键 | 概念 | 取值出处 |
   |---|---|---|
   | `status` | 一次供应商调用的终态 | `CallStatus` 枚举，六个值，互斥且穷尽 |
-  | `outcome` | 校验类检查结果、下载方式这类非终态的结果 | 由该指标自行定义并在 `MetricNames` 注释里写明 |
+  | `outcome` | 校验类检查结果、下载方式、分态结论这类非终态的结果 | 由该指标自行定义并在 `MetricNames` 注释里写明 |
+  | `stage` | 漏斗阶段：报价丢在哪一环 | `FunnelStage` 枚举（O-4.6：小集合且稳定） |
+  | `reason` | 报价为什么被丢弃 | `DropReason` 枚举（O-4.4） |
+  | `source` | 查价这条腿走缓存还是实时 | `MetricTags.SOURCE_CACHE` / `SOURCE_LIVE` 两个常量 |
 
   反面即改造前：`supplier_io_access` 用 `status`（`ok`/`empty`/`error`/`limited`）、`pricing_supplier_query` 用 `outcome`（`all`/`empty`/`fail`/`success`），两个键都在说“这次调用的终态”，取值集合却不同——于是“全平台调用成功率”没有一条 PromQL 能回答，只能手工拼，而拼法因人而异、结论随之不同。
 
@@ -141,9 +144,9 @@
 | 6 | 指标名/标签键无唯一出处 | O-2.4 | 7 个文件 | 已修（`MetricNames`/`MetricTags`/`CallStatus`） |
 | 7 | 指标无解释 | O-3.2 | 32 个埋点 + 看板 27 面板 | 部分：看板 description 已补全，埋点注释随迁移补在 `MetricNames` |
 | 8 | 覆盖率指标无消费方 | O-5.1 | `catalog_attribute_*` | 未修 |
-| 9 | 入口缺请求数/出报数 | O-4.2 | `SpaController` | 未修（第 2 步） |
+| 9 | 入口缺请求数/出报数 | O-4.2 | `SpaController` | 已修（`spa_price_leg`/`spa_price_quoted`，腿=请求×供应商） |
 | 10 | 已算出的计数只落日志 | O-1.3 | 四处（见 O-1.3） | 未修（第 2 步） |
-| 11 | 静默丢弃无 reason | O-4.5、O-4.6 | 读侧 `CachePriceServiceImpl.getPrice` 的 forEach 五个 `return`（全无落点）；艺龙查价三类跳过（有日志、无指标）；写侧 `productToCache` 两个 `continue` 是异常价拦截，拦截时有 `log.warn`、但无指标 | 未修（第 2 步） |
+| 11 | 静默丢弃无 reason | O-4.5、O-4.6 | 读侧 `CachePriceServiceImpl.getPrice` 的 forEach 五个 `return`（全无落点）；艺龙查价三类跳过（有日志、无指标）；写侧 `productToCache` 两个 `continue` 是异常价拦截，拦截时有 `log.warn`、但无指标 | 读侧与艺龙转换已修（`quote_dropped`，stage/reason 见 `DropReason`）；写侧异常价拦截的指标待做 |
 | 12 | 看板未按业务分块 | O-4.1 | `spa-overview.json`（现按技术层分组） | 未修（第 3 步） |
 | 13 | 日志无落点、无 traceId | O-6.1~O-6.3 | `log4j2.xml`：6 个 RollingFile 无一产生日志（5 个零 `AppenderRef`，第 6 个被 logger `monitor_company` 引用而该 logger 名在代码里零使用者）；根目录硬编码 `/tmp/logs`；`%X{traceId}` 3 处槽位、`MDC.put` 全仓 0 处 | 未修 |
 | 14 | 报文快照表不存在 | O-7.1、O-7.2 | 名字里带 Snapshot 的 `ExpediaPropertySnapshotRow`/`Mapper` 写的是 `expedia_property_content`——主键 `property_id+language`、覆盖写、无状态码无耗时，是内容档案不是报文证据 | 未修 |
