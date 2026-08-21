@@ -61,16 +61,25 @@ groups:
           description: "该计时器单位是毫秒。艺龙查价基线约 1300 ms。"
 
       - alert: SupplierErrorsAppearing
+        # 正列而非反排（status!~...）：新增一个终态时，反排会把它默默算成异常；
+        # 正列最坏是漏报，而漏报有守护测试兜——改 CallStatus 集合会让
+        # MetricVocabularyArchRulesTest.O33 报红，提示同步改本表达式（O-5.3）
         expr: >-
           sum by (supplier, interface, status) (
-            rate(supplier_io_access_count_total{job="trip-booking-spa", status!~"ok|empty"}[15m])
+            rate(supplier_io_access_count_total{job="trip-booking-spa",
+                 status=~"rejected|throttled|timeout|error"}[15m])
           ) > 0
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: "{{ $labels.supplier }} {{ $labels.interface }} 出现 status={{ $labels.status }}"
-          description: "ok 与 empty 之外的状态即异常；empty 只是查得通但没房，不算错。"
+          description: >-
+            rejected=供应商返业务错误码，throttled=被限流，timeout=超时，error=连接或解析失败。
+            quoted 与 no_inventory 都是正常态——no_inventory 只是答了但没房，不算错。
+            取值集合见 CallStatus 枚举（docs/observability.md O-3.1）。
+        # 关闭条件（O-9.6）：若某供应商改用业务错误码表达无房，rejected 会常态化，
+        # 届时须把该取值从本表达式移出，而不是调高阈值。
 
   - name: application
     rules:

@@ -6,7 +6,7 @@
 1. **怎么让图表让人看懂**——分业务分系统，指标做全，每个指标和每个取值都自带解释。看图的人不必问人、不必翻代码。
 2. **怎么让指标准确不乱**——一个概念只有一个说法，一件事只数一次。**指标宁缺毋滥**（与日志相反：日志宁多勿少），目的是出事能顺着数字查到根因，而不是靠 `grep` 和猜。
 
-**为什么现在立**：本仓指标 31 个，尚在“数得清”的窗口内。cursor 的 324 种日志前缀、234 个端点不是某次错误决定的产物，而是每次“顺手加一个”累积而成（PROJECT.md §3.9.2、§3.9.3）；等失控后再补，成本是清理而不是约定。
+**为什么现在立**：本仓埋点 32 处、指标名 28 个，尚在“数得清”的窗口内。cursor 的 324 种日志前缀、234 个端点不是某次错误决定的产物，而是每次“顺手加一个”累积而成（PROJECT.md §3.9.2、§3.9.3）；等失控后再补，成本是清理而不是约定。
 **正本声明**：O 规则正文只存本文一份（PROJECT.md §5.1.3）；PROJECT.md §3.9 是强制条款的短表述，本文是其可执行口径，冲突以 PROJECT.md 为准。
 **前置**：PROJECT.md §3.9（观测与运维端点）、§6（日志规范）。
 **供应商范围**：在产只有 **elong、expedia** 两家。七家遗留供应商已于 2026-08-21 从代码删除（预研结论留在 `product-identity.md` §4）；条款不为未接入的供应商预留设计。
@@ -34,14 +34,21 @@
 
 ## 2. 名字与标签
 
-- **O-2.1 (MUST)** **维度进 tag，不进名字**（PROJECT.md §3.9.2）。证据：`ChunkedFileAccess.monitorName` 把 supplier 与 interface 拼进名字，最多产生 1080 个独立指标名；同包的 `BaseHttpAccess` 注释里写的却是相反约定。同包两种做法并存，是本条必须成文的直接理由。
+- **O-2.1 (MUST)** **维度进 tag，不进名字**（PROJECT.md §3.9.2）。证据两处：① `ChunkedFileAccess.monitorName` 把 supplier 与 interface 拼进名字，最多产生 1080 个独立指标名，而同包的 `BaseHttpAccess` 注释里写的却是相反约定——同包两种做法并存，是本条必须成文的直接理由；② 艺龙验价把**结果**拼进名字，拆成 `elong_validate_day_price_mismatch` / `_retry_ok` / `_retry_failed` 三个指标，于是“对齐失败率”这一个问题要查三个指标才能回答。
 - **O-2.2 (MUST)** 埋点名禁止自带 `_count`/`_time`/`_value`/`_total`——后缀由框架追加，自带会得到 `xxx_count_count`。
 - **O-2.3 (MUST)** `supplier` 标签值一律取 `SupplierSourceEnum.name()`，即**只有 `ELONG` 与 `EXPEDIA` 两个合法值**。禁止字面量（现存小写 `"elong"`/`"expedia"` 硬编码 4 处）、禁止 `getDesc()`、禁止数字 code（现存 `catalog_attribute_*` 用 `"10010"`）。
   后果不是不好看而是**不可用**：`catalog_attribute_hit{supplier="10010"}` 与 `supplier_io_access{supplier="ELONG"}` 在 PromQL 里拼不起来，“无房型映射丢多少”这个问题因此在指标通道上无解。
 - **O-2.4 (MUST)** 指标名与标签键必须有**唯一出处**（常量类或枚举），禁止散落字面量。现存 7 个文件各写一遍 `"supplier"`/`"status"`，改名时无从知道改全了没有。
 - **O-2.5 (MUST NOT)** 高基数字段禁止进标签：`hotelId`、`orderId`、`productKey`、日期、URL、异常消息、任何自由文本。判据：取值集合是否随业务量增长——增长即禁止。
 - **O-2.6 (MUST)** 本仓自建的 `_time` **一律毫秒**；Micrometer 自带的 `*_seconds` 是秒，两者禁止进同一表达式或同一 Y 轴。证据：`supplier_io_access_time` 生产实测 `sum/count ≈ 1269`（艺龙查价约 1.3 秒），当秒读会差三个数量级。
-- **O-2.7 (MUST)** **同一概念只许一个标签键、一套取值**。禁止一处 `status`、一处 `outcome`、一处 `result` 表达同一件事——现状正是这三个键并存，都在说“这次调用的终态”，取值集合各不相同。后果：跨供应商跨接口的成功率没有一条 PromQL 能回答，只能手工拼，而拼法因人而异、结论随之不同。
+- **O-2.7 (MUST)** **同一概念只许一个标签键、一套取值**。键与概念的对应关系固定为两条，不得混用：
+
+  | 键 | 概念 | 取值出处 |
+  |---|---|---|
+  | `status` | 一次供应商调用的终态 | `CallStatus` 枚举，六个值，互斥且穷尽 |
+  | `outcome` | 校验类检查结果、下载方式这类非终态的结果 | 由该指标自行定义并在 `MetricNames` 注释里写明 |
+
+  反面即改造前：`supplier_io_access` 用 `status`（`ok`/`empty`/`error`/`limited`）、`pricing_supplier_query` 用 `outcome`（`all`/`empty`/`fail`/`success`），两个键都在说“这次调用的终态”，取值集合却不同——于是“全平台调用成功率”没有一条 PromQL 能回答，只能手工拼，而拼法因人而异、结论随之不同。
 
 ## 3. 取值必须说人话
 
@@ -80,19 +87,19 @@
 - **O-5.1 (MUST)** **新增指标必须同时给出消费方**（一个看板面板或一条告警规则），否则不许加。证据：`catalog_attribute_asked`/`catalog_attribute_hit` 已在生产采集却不在任何看板、任何告警——它恰是唯一能量化“无房型映射”损失的指标，埋了没人看等于没埋。
 - **O-5.2 (MUST)** **只增不减即为失控**。每个涉及观测的 PR 顺手核对：无消费方的指标下线，描述同一根因的告警合并，阈值已随基线失效的规则按其关闭条件删除。
 - **O-5.3 (MUST)** 指标名与标签键**视同接口**，改名或删除前必须证明无消费方（`deploy/monitoring/grafana/dashboards/*.json`、`deploy/monitoring/prometheus/rules/*.yml`）。理由与 §6.3.1“日志模板即接口”相同。
-- **O-5.4 (MUST)** 埋点通道唯一：只经 `platform/observability/Monitor`，禁止业务代码直接持有 `MeterRegistry`、禁止 `@Timed`。现状已符合（31 个埋点无例外），成文为防退化——`@Timed` 一行就能加，且会绕过本文全部命名与取值规则。
+- **O-5.4 (MUST)** 埋点通道唯一：只经 `platform/observability/Monitor`，禁止业务代码直接持有 `MeterRegistry`、禁止 `@Timed`。现状已符合（32 处埋点无例外），成文为防退化——`@Timed` 一行就能加，且会绕过本文全部命名与取值规则。
 
 ## 6. 现场（日志）
 
 日志写法全依 PROJECT.md §6，此处只管载体。注意方向与指标相反：**日志宁多勿少**。
 
-- **O-6.1 (MUST)** 日志必须有能**活过一次发版**的落点。仅写 stdout 不满足本条。证据：`log4j2.xml` 六个 RollingFile appender 全部无 logger 引用或已注释，根目录硬编码 `/tmp/logs` 在容器内不持久，实际只有 Console 生效——PROJECT.md §6 自述的“44 分钟窗口”正源于此。
+- **O-6.1 (MUST)** 日志必须有能**活过一次发版**的落点。仅写 stdout 不满足本条。证据：`log4j2.xml` 定义了 6 个 RollingFile，无一产生日志——5 个没有任何 `AppenderRef`，第 6 个（`ThirdPartyAppender`）被 logger `monitor_company` 引用，而这个 logger 名在代码里零使用者。根目录还硬编码 `/tmp/logs`，在容器内不持久。实际只有 Console 生效，PROJECT.md §6 自述的“44 分钟窗口”正源于此。
 - **O-6.2 (MUST)** 每条业务日志必须带**请求级关联 ID**，入口 → 供应商 → 数据库全链路一致。证据：模板里已有 `%X{traceId}` 槽位，但全仓零 MDC 写入、无 Filter，永远渲染为空；`Customer-Session-Id` 取自静态配置（进程内所有请求同值），不得充当关联 ID。
 - **O-6.3 (MUST NOT)** 配置里不得留死 appender——无引用的 appender 会让读者以为日志有文件落点，据此做出错误的排障计划。
 
 ## 7. 证据·报文快照
 
-- **O-7.1 (MUST)** **快照表必须先存在，才允许按 §6.1.1.1 对成功路径的大对象采样**。二者是同一笔交易的两面：不建表就采样，等于取证与现场两头落空。现状快照表不存在，而 §6.1.1.1 点名的巨型日志仍在全量直打（占生产一小时日志量 17%）。
+- **O-7.1 (MUST)** **快照表必须先存在，才允许按 §6.1.1.1 对成功路径的大对象采样**。二者是同一笔交易的两面：不建表就采样，等于取证与现场两头落空。现状没有任何「每次调用一行」的表，而 §6.1.1.1 点名的巨型日志仍在全量直打（占生产一小时日志量 17%）。注意别被名字骗了：`ExpediaPropertySnapshotRow` 叫 Snapshot，写的却是覆盖写的内容档案（见 O-7.2）。
 - **O-7.2 (MUST)** 快照形状是**每次调用一行**，含关联 ID、时间、供应商、接口、URL、状态码、耗时、报文原文。**禁止用覆盖写的内容表充当快照**：`expedia_property_content` 主键是 `property_id+language`、每家一行覆盖写、无状态码无耗时，它是内容档案不是报文证据。
 - **O-7.3 (MUST)** 留存期必须明示且有上限，并说明超期后靠什么回答取证问题。
 
@@ -101,7 +108,7 @@
 形状与分置依 PROJECT.md §3.9.3、§3.9.4，不复述。
 
 - **O-8.1 (MUST)** 诊断端点必须能回答“**这一个对象现在为什么没出报价**”：按对象组织，入参为业务标识，返回把该对象在各 stage 的判定一次给全。它与漏斗指标共用同一套 reason 词表——指标答“整体流失在哪一档”，诊断答“这一家为什么”。
-- **O-8.2 (MUST)** 诊断端点只读。会改状态的属运维动作，分置 `ops/`（现状 `ops/BackDoorController` 七个端点都会改状态，分置是对的；缺的是诊断侧）。
+- **O-8.2 (MUST)** 诊断端点只读。会改状态的属运维动作，分置 `ops/`——现状 `ops/BackDoorController` 的 8 个端点都是运维动作，分置本身是对的；缺的是诊断侧，一个都没有。
 
 ## 9. 告警与通知
 
@@ -119,26 +126,33 @@
 
 ## 10. 当前欠账
 
-规则已成文，代码尚未对齐。按依赖排序——前项不做，后项就建在错数上：
+按依赖排序——前项不做，后项就建在错数上。「状态」列记录对齐进度。
 
-| 序 | 事项 | 违反 | 位置 |
-|---|---|---|---|
-| 1 | 空结果双计 | O-3.3、O-3.5 | `BaseHttpAccess.access` |
-| 2 | 取值不说人话（`ok`/`all`） | O-3.1 | `BaseHttpAccess`、`ExpediaPriceServiceImpl` |
-| 3 | `supplier` 标签两种方言 | O-2.3 | `ProductAttributeReader`（数字）、艺龙/Expedia 四处小写字面量 |
-| 4 | 同一概念三个键（`status`/`outcome`/`result`） | O-2.7 | 三处 |
-| 5 | 维度拼进指标名 | O-2.1 | `ChunkedFileAccess.monitorName` |
-| 6 | 指标名/标签键无唯一出处 | O-2.4 | 7 个文件 |
-| 7 | 指标无解释 | O-3.2 | 全部 31 个埋点 + 看板 27 面板 |
-| 8 | 覆盖率指标无消费方 | O-5.1 | `catalog_attribute_*` |
-| 9 | 入口缺请求数/出报数 | O-4.2 | `SpaController` |
-| 10 | 已算出的计数只落日志 | O-1.3 | 四处（见 O-1.3） |
-| 11 | 静默丢弃无 reason | O-4.5、O-4.6 | `CachePriceServiceImpl.getPrice` 的 forEach 五个 `return`；艺龙三类跳过；写侧 `productToCache`/`fetchAndProcessPriceInfo` 的 `continue` |
-| 12 | 看板未按业务分块 | O-4.1 | `spa-overview.json`（现按技术层分组） |
-| 13 | 日志无落点、无 traceId | O-6.1~O-6.3 | `log4j2.xml` |
-| 14 | 报文快照表不存在 | O-7.1、O-7.2 | 无 |
-| 15 | 诊断端点不存在 | O-8.1 | 无 |
-| 16 | 告警不投递、无 `for`、无关闭条件 | O-9.3~O-9.6 | `spa.yml` 12 条规则 |
+| 序 | 事项 | 违反 | 位置 | 状态 |
+|---|---|---|---|---|
+| 1 | 空结果双计：记了 `empty` 又无条件补记 `ok` | O-3.3、O-3.5 | `BaseHttpAccess.access` | 已修 |
+| 1b | 重试双计：每抛一次异常记一条终态，一次调用最多 N+1 条 | O-3.1 | `BaseHttpAccess.query` | 已修 |
+| 1c | `!isSucc()`（HTTP 非 2xx、业务错误码）被算成 `ok` | O-3.3 | `BaseHttpAccess.access` | 已修 |
+| 1d | Expedia 缓存刷价路只记不可加的 `all`，失败分支零落点 | O-3.1、O-3.3 | `ExpediaPriceServiceImpl` | 已修 |
+| 2 | 取值不说人话（`ok`/`all`） | O-3.1 | `BaseHttpAccess`、`ExpediaPriceServiceImpl` | 已修（`CallStatus` 六词表） |
+| 3 | `supplier` 标签两种方言：数字 1 处、小写字面量 5 处 | O-2.3 | `ProductAttributeReader`、`QueryProductAccess`、`ElongCatalogService`、`ElongCPSQueryPriceServiceImpl`、`ElongPriceServiceImpl`、`ExpediaPriceServiceImpl` | 已修 |
+| 4 | 同一概念两个键（`status` / `outcome`） | O-2.7 | 同上 | 已修（键与概念一一对应） |
+| 5 | 维度拼进指标名：两处 | O-2.1 | `ChunkedFileAccess.monitorName`、艺龙验价三个名字 | 已修 |
+| 6 | 指标名/标签键无唯一出处 | O-2.4 | 7 个文件 | 已修（`MetricNames`/`MetricTags`/`CallStatus`） |
+| 7 | 指标无解释 | O-3.2 | 32 个埋点 + 看板 27 面板 | 部分：看板 description 已补全，埋点注释随迁移补在 `MetricNames` |
+| 8 | 覆盖率指标无消费方 | O-5.1 | `catalog_attribute_*` | 未修 |
+| 9 | 入口缺请求数/出报数 | O-4.2 | `SpaController` | 未修（第 2 步） |
+| 10 | 已算出的计数只落日志 | O-1.3 | 四处（见 O-1.3） | 未修（第 2 步） |
+| 11 | 静默丢弃无 reason | O-4.5、O-4.6 | 读侧 `CachePriceServiceImpl.getPrice` 的 forEach 五个 `return`（全无落点）；艺龙查价三类跳过（有日志、无指标）；写侧 `productToCache` 两个 `continue` 是异常价拦截，拦截时有 `log.warn`、但无指标 | 未修（第 2 步） |
+| 12 | 看板未按业务分块 | O-4.1 | `spa-overview.json`（现按技术层分组） | 未修（第 3 步） |
+| 13 | 日志无落点、无 traceId | O-6.1~O-6.3 | `log4j2.xml`：6 个 RollingFile 无一产生日志（5 个零 `AppenderRef`，第 6 个被 logger `monitor_company` 引用而该 logger 名在代码里零使用者）；根目录硬编码 `/tmp/logs`；`%X{traceId}` 3 处槽位、`MDC.put` 全仓 0 处 | 未修 |
+| 14 | 报文快照表不存在 | O-7.1、O-7.2 | 名字里带 Snapshot 的 `ExpediaPropertySnapshotRow`/`Mapper` 写的是 `expedia_property_content`——主键 `property_id+language`、覆盖写、无状态码无耗时，是内容档案不是报文证据 | 未修 |
+| 15 | 诊断端点不存在 | O-8.1 | `ops/BackDoorController` 的 8 个端点全是运维动作（建档、清洗、拉地理数据、手动刷价），没有一个回答“这一家为什么没出报价” | 未修 |
+| 16 | 告警不投递 | O-9.3 | `spa.yml` 12 条规则 | 未修（`for` 与关闭条件已补） |
+
+「已修」指 2026-08-21 的口径统一那批。超时与连接/解析失败目前仍混在 `error` 一态里——
+底层把它们都抛成普通 `Exception`，要分出 `timeout` 得先在 `request()` 里辨别异常类型，
+这笔留在欠账里，不因为词表里有 `timeout` 就假装已经分开了。
 
 两项待评估，暂不立规则：
 

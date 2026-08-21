@@ -27,6 +27,7 @@ import com.trip.booking.spa.gateway.application.order.OrderQuerySyncService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.application.pricing.ProductSyncService;
 import com.trip.booking.spa.bootstrap.NacosRuntimeConfig;
+import com.trip.booking.spa.platform.observability.MetricNames;
 import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import com.trip.booking.spa.gateway.application.routing.Capability;
@@ -109,7 +110,7 @@ public class SpaController {
 
         }
 
-        Monitor.recordTime("query_price_for_spa", System.currentTimeMillis() - startTime);
+        Monitor.recordTime(MetricNames.QUERY_PRICE_FOR_SPA, System.currentTimeMillis() - startTime);
 
         return toPriceResponse(mergeOutcomes(outcomes), respDTOList);
     }
