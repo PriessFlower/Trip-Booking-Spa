@@ -259,26 +259,26 @@ public class ExpediaProductKeyDeriver {
             log.info("时间转换校验异常", e);
         }
         if (StringUtils.isNotBlank(cancelPolicy.getAmount())) {
-            cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(subDateGMT(cancelPolicy.getStart())).before(Math.max(25, beforeStart)).type(RefundType.NO_DEDUCTION).build());
+            cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getStart())).before(Math.max(25, beforeStart)).type(RefundType.NO_DEDUCTION).build());
             if (beforeStart > 25) {
-                cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(subDateGMT(cancelPolicy.getEnd())).before(beforeEnd).type(RefundType.DEDUCT_BY_AMOUNT).value(Double.valueOf(cancelPolicy.getAmount())).build());
+                cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getEnd())).before(beforeEnd).type(RefundType.DEDUCT_BY_AMOUNT).value(Double.valueOf(cancelPolicy.getAmount())).build());
             }
         } else if (StringUtils.isNotBlank(cancelPolicy.getPercent())) {
             if ("100%".equals(cancelPolicy.getPercent())) {
-                cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(subDateGMT(cancelPolicy.getStart())).before(Math.max(25, beforeStart)).type(RefundType.NO_DEDUCTION).build());
+                cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getStart())).before(Math.max(25, beforeStart)).type(RefundType.NO_DEDUCTION).build());
             } else {
-                cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(subDateGMT(cancelPolicy.getStart())).before(Math.max(25, beforeStart)).type(RefundType.NO_DEDUCTION).build());
+                cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getStart())).before(Math.max(25, beforeStart)).type(RefundType.NO_DEDUCTION).build());
                 if (beforeStart > 25) {
-                    cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(subDateGMT(cancelPolicy.getEnd())).before(Math.max(25, beforeEnd)).type(RefundType.DEDUCT_BY_PERCENT).value(Double.valueOf(cancelPolicy.getPercent().replace("%", ""))).build());
+                    cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getEnd())).before(Math.max(25, beforeEnd)).type(RefundType.DEDUCT_BY_PERCENT).value(Double.valueOf(cancelPolicy.getPercent().replace("%", ""))).build());
                 }
             }
         } else if (StringUtils.isNotBlank(cancelPolicy.getNights())) {
             if ("0".equals(cancelPolicy.getNights())) {
-                cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(subDateGMT(cancelPolicy.getEnd())).before(Math.max(25, beforeEnd)).type(RefundType.NO_DEDUCTION).build());
+                cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getEnd())).before(Math.max(25, beforeEnd)).type(RefundType.NO_DEDUCTION).build());
             } else {
-                cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(subDateGMT(cancelPolicy.getStart())).before(Math.max(25, beforeStart)).type(RefundType.NO_DEDUCTION).build());
+                cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getStart())).before(Math.max(25, beforeStart)).type(RefundType.NO_DEDUCTION).build());
                 if (beforeStart > 25) {
-                    cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(subDateGMT(cancelPolicy.getEnd())).before(Math.max(25, beforeEnd)).type(RefundType.DEDUCT_DAY_NIGHT).value(Double.valueOf(cancelPolicy.getNights())).build());
+                    cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getEnd())).before(Math.max(25, beforeEnd)).type(RefundType.DEDUCT_DAY_NIGHT).value(Double.valueOf(cancelPolicy.getNights())).build());
                 }
             }
         } else {
@@ -287,7 +287,7 @@ public class ExpediaProductKeyDeriver {
         return cancelPolicyList;
     }
 
-    private static String subDateGMT(String cancelDate) {
+    private static String timeZoneOf(String cancelDate) {
         return "GMT" + cancelDate.substring(cancelDate.length() - 6, cancelDate.length() - 3);
     }
 }

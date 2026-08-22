@@ -67,7 +67,7 @@ public class ExpediaPropertyContentClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         headers.set(HttpHeaders.ACCEPT_ENCODING, "gzip");
-        headers.set(HttpHeaders.AUTHORIZATION, signer.signGeneration());
+        headers.set(HttpHeaders.AUTHORIZATION, signer.generateSign());
         headers.set("Customer-Ip", properties.getOwnIp());
         headers.set("Customer-Session-Id", properties.getSession());
         headers.set(HttpHeaders.USER_AGENT, properties.getUserAgent());
@@ -116,7 +116,7 @@ public class ExpediaPropertyContentClient {
             }
             return new ExpediaPropertyContentPage(
                     List.copyOf(snapshots),
-                    longHeader(response.getHeaders(), "Pagination-Total-Results"),
+                    headerAsLong(response.getHeaders(), "Pagination-Total-Results"),
                     nextPage(response.getHeaders().getFirst(HttpHeaders.LINK)));
         } catch (Exception e) {
             throw new IllegalStateException("Unable to parse Expedia Property Content response", e);
@@ -129,7 +129,7 @@ public class ExpediaPropertyContentClient {
         }
     }
 
-    private Long longHeader(HttpHeaders headers, String name) {
+    private Long headerAsLong(HttpHeaders headers, String name) {
         String value = headers.getFirst(name);
         if (!StringUtils.hasText(value)) {
             return null;

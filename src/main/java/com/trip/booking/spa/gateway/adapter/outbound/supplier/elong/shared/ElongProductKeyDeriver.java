@@ -135,7 +135,7 @@ public class ElongProductKeyDeriver {
     }
 
     /**
-     * 餐食规范化：以 {@code meals.mealCopyWriting}（艺龙的餐食文案）判定餐食<b>形态</b>，
+     * 餐食规范化：以 {@code meals.mealText}（艺龙的餐食文案）判定餐食<b>形态</b>，
      * 以 {@code meals.dayMealTable[].breakfastShare} 判定<b>份数</b>。
      *
      * <p><b>为什么形态不能只看 breakfastShare</b>（2026-08-19 生产实证，828 家酒店 30,243 条报价）：
@@ -155,8 +155,8 @@ public class ElongProductKeyDeriver {
      * 判据：猜错是<b>卖错</b>，不归类最多<b>少卖</b>（R-1.6 取后者）。
      */
     public Meal convertMeal(ElongRatePlan plan) {
-        String copy = mealCopyWriting(plan);
-        MealShape shape = classifyMealCopy(copy);
+        String copy = mealText(plan);
+        MealShape shape = classifyMealText(copy);
         if (shape == null) {
             log.info("艺龙餐食规范化：餐食文案无法归类，按 UNKNOWN 处理(R-5.4)，copy=[{}],ratePlanId={},goodsUniqId={}",
                     copy, plan.getRatePlanId(), plan.getGoodsUniqId());
@@ -174,7 +174,7 @@ public class ElongProductKeyDeriver {
             share = maxBreakfastCount(plan.getNightlyRates());
         }
         if (share == null) {
-            share = sharesInCopy(copy);
+            share = sharesInText(copy);
         }
         int portions = share == null ? 1 : share;
         return Meal.builder()
@@ -185,10 +185,10 @@ public class ElongProductKeyDeriver {
                 .build();
     }
 
-    private static String mealCopyWriting(ElongRatePlan plan) {
+    private static String mealText(ElongRatePlan plan) {
         JsonNode meals = plan.getMeals();
-        return meals != null && meals.hasNonNull("mealCopyWriting")
-                ? meals.get("mealCopyWriting").asText() : null;
+        return meals != null && meals.hasNonNull("mealText")
+                ? meals.get("mealText").asText() : null;
     }
 
     /**
@@ -197,7 +197,7 @@ public class ElongProductKeyDeriver {
      * <p><b>判定顺序是安全护栏，不得调整</b>：「或/选」必须最先判。任何"到店协商"的措辞
      * 都不允许被后续分支读成确定值——这是本方法唯一会造成<b>卖错</b>的方向。
      */
-    private static MealShape classifyMealCopy(String copy) {
+    private static MealShape classifyMealText(String copy) {
         if (StringUtils.isBlank(copy)) {
             return null;   // 文案缺席：午/晚餐无从判断，不可假定为无
         }
@@ -231,7 +231,7 @@ public class ElongProductKeyDeriver {
     }
 
     /** 从文案里取份数，如「2份早餐」→ 2。取不到返回 null。 */
-    private static Integer sharesInCopy(String copy) {
+    private static Integer sharesInText(String copy) {
         if (copy == null) {
             return null;
         }

@@ -70,7 +70,7 @@ public class ExpediaOrderQuerySyncServiceImpl
         }
 
         ResponseResult<QueryOrderResponse> result = new QueryOrderAccess(
-                host, req.getOrderId(), email, expediaUtils.signGeneration(),
+                host, req.getOrderId(), email, expediaUtils.generateSign(),
                 ownIp, sessionId, rateLimiter).access("");
 
         return result == null ? null : result.getData();

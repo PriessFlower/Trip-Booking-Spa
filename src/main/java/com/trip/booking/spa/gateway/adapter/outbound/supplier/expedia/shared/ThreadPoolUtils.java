@@ -54,7 +54,7 @@ public class ThreadPoolUtils {
      */
     public static void execute(Runnable runnable) {
         ThreadPoolExecutor executor = getThreadPool();
-        spinWaitingMechanism(executor);
+        waitIfBacklogged(executor);
         executor.execute(runnable);
         log.info("任务提交至线程池。当前线程池队列大小: {}", executor.getQueue().size());
     }
@@ -62,7 +62,7 @@ public class ThreadPoolUtils {
     /**
      * 自旋等待机制
      */
-    private static void spinWaitingMechanism(ThreadPoolExecutor executor) {
+    private static void waitIfBacklogged(ThreadPoolExecutor executor) {
         if (executor.getQueue().size() > 200) {
             try {
                 log.info("等待ing");
@@ -70,7 +70,7 @@ public class ThreadPoolUtils {
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
-            spinWaitingMechanism(executor);
+            waitIfBacklogged(executor);
         }
     }
 
