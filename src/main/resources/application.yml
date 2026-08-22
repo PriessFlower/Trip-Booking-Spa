@@ -14,29 +14,14 @@ mybatis:
   mapperLocations: classpath*:mapper/*.xml
   config-location: classpath:/mybatis-config.xml
 
-# 统一限流（core/ratelimit/RateLimitManager）为运维可调配置，一律由 Nacos 下发，
-# 兜底默认值见 RateLimitProperties 的 @Value（见 PROJECT.md §3.3）。此处不得配置。
 
-# Expedia 合同档案参数。归入 supplier 域（§3.7.2 的封闭枚举中无 expedia），
-# 键名三层、kebab-case（§3.7.1、§3.7.4）。
-#
-# 放在本文件而非各环境剖面，是因为它们不是基础设施差异——dev 与 prod 取值本就相同，
-# 分存两处会让取值来源失去唯一性（§3.4.1、§3.3.1）。
-#
-# 四项构成一条合同车道，必须整体切换：混用不会被 Expedia 拒绝，只会静默返回另一条
-# 车道的报价（实测同一报价贵约 18%）。ExpediaContractProfile 在启动期校验，凑不成
-# 已知档案即拒绝启动——属安全护栏，故固定于此，禁止移入 Nacos（§3.2.3）。
-# （rate_plan_count 曾在此处：已写死为代码常量 250——无"不发版即调整"的运维场景，§3.8.1）
 supplier:
   expedia:
     partner-point-of-sale: ${EXPEDIA_PARTNER_POS:B2B_SA_PKG_MOD_AGENT}
     payment-terms: ${EXPEDIA_PAYMENT_TERMS:2}
     billing-terms: ${EXPEDIA_BILLING_TERMS:EAC}
     sales-channel: ${EXPEDIA_SALES_CHANNEL:agent_tool}
-  # 艺龙（elong）。凭证一律经环境变量注入（§3.5.1），变量名登记于 .env.example；
-  # cursor 仓曾把三项明文写进 yml，SPA 侧禁止重演。测试网关与生产网关凭证相同，
-  # 端点兜底取测试网关为安全侧（§3.3.3）。运维可调项（resolve-enabled、
-  # resolve-price-tolerance、限流 QPS）不在此处，见 Nacos。
+
   elong:
     user: ${ELONG_USER:}
     app-key: ${ELONG_APP_KEY:}
@@ -45,35 +30,15 @@ supplier:
     version: "1.62"
 
 elong:
-  # 下单闸口——安全护栏（§3.2.3），固定本文件、禁入 Nacos。
-  #
-  # ⚠️ 艺龙与 Expedia 的关键差异：没有沙箱。api-test 网关已死（2026-08-15 实测全服务 403），
-  # 唯一可用端点即生产网关——本项打开即每一笔下单都是真实订单、真实费用（预付授信扣款）。
-  # 2026-08-21 打开（周涛拍板）。前置验收此前已人工确认：免费取消窗口产品下真单
-  # 45.79 元并立即取消、罚金 0（PR #61 的下单/查单/取消真单闭环）。
-  # 取消（hotel.order.cancel）刻意不读本闸：已存在的真单必须永远可撤。
+
   booking-enabled: true
-  # 下单 CustomerIPAddress 兜底（艺龙风控必填，缺失报 H001012）。
-  # 默认值为 cursor 生产实证过闸的出口 IP，SPA 生产可经环境变量切为腾讯云出口。
   customer-ip-fallback: ${ELONG_CUSTOMER_IP_FALLBACK:47.92.28.195}
 
 expedia:
-  # 下单闸口。开启后仅在测试端点可下单——沙箱行为，不产生费用、不生成真实预订，
-  # 上线验收需要走通下单与取消链路，故打开。
-  #
-  # 生产端点下单由 ExpediaRapidProperties 启动期硬拦，且无开关可绕（§3.2.3：
-  # 安全护栏的变更必须经发版与评审，"改代码才能开"即最强形式）。
-  #
-  # ⚠️ 由此产生一处耦合：本项为 true 时，端点不得再指向生产。若日后把
-  # EXPEDIA_API_HOST 切到 api.ean.com，服务将拒绝启动，须同时关闭本项，
-  # 或等 Expedia 认证通过后另行评审放开生产下单。
   booking-enabled: true
-  # 生产端点仍然关闭：误开将产生真实订单与真实费用。
   production-endpoint-enabled: false
   user-agent: trip-booking-spa/0.0.1
   static-data:
-    # 摄取总开关不在此处：它是运维可调开关，键为 Nacos 的
-    # supplier.expedia.static-data-enabled，兜底默认值见 ExpediaRapidProperties（PROJECT.md §3.2.2、§3.3.3）。
     batch-size: 250
     language: en-US
     languages: ${EXPEDIA_STATIC_DATA_LANGUAGES:en-US,zh-CN}

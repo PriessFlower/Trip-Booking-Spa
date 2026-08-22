@@ -111,7 +111,7 @@ public class ExpediaBookingSyncServiceImpl
         String body = JsonUtils.writeObject2Json(buildRequest(req, contact));
 
         ResponseResult<CreateOrderResponse> result = new CreateOrderAccess(
-                host, bookHref, "zh-CN", expediaUtils.signGeneration(),
+                host, bookHref, "zh-CN", expediaUtils.generateSign(),
                 ownIp, sessionId, rateLimiter).access(body);
 
         int httpStatus = result == null ? 0 : result.getHttpStatus();
@@ -175,7 +175,7 @@ public class ExpediaBookingSyncServiceImpl
     private QueryOrderResponse.Itinerary queryQuietly(BookingReq req, ExpediaBookingContact.Contact contact) {
         try {
             ResponseResult<QueryOrderResponse> qr = new QueryOrderAccess(
-                    host, req.getOrderId(), contact.getEmail(), expediaUtils.signGeneration(),
+                    host, req.getOrderId(), contact.getEmail(), expediaUtils.generateSign(),
                     ownIp, sessionId, rateLimiter).access("");
             QueryOrderResponse qd = qr == null ? null : qr.getData();
             if (qd == null || qd.getPresence() != QueryOrderResponse.Presence.FOUND) {

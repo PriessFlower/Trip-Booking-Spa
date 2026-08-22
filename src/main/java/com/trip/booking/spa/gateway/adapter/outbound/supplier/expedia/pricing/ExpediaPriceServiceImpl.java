@@ -176,35 +176,35 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             if ("hotel_only".equals(request.getPriceFlag())) {
                 //先查询零售价
                 queryPriceRequest.setSales_environment("hotel_only");
-                resultOnly = new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                resultOnly = new QueryProductAccess(host, "en-US", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
             } else if ("hotel_package".equals(request.getPriceFlag())) {
                 //查询打包价
                 queryPriceRequest.setSales_environment("hotel_package");
-                resultPackage = new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                resultPackage = new QueryProductAccess(host, "en-US", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
             } else {
                 //先查询零售价
                 queryPriceRequest.setSales_environment("hotel_only");
-                resultOnly = new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                resultOnly = new QueryProductAccess(host, "en-US", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
                 //查询打包价
                 queryPriceRequest.setSales_environment("hotel_package");
-                resultPackage = new QueryProductAccess(host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                resultPackage = new QueryProductAccess(host, "en-US", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
             }
         } else {
             if ("hotel_only".equals(request.getPriceFlag())) {
                 //先查询零售价
                 queryPriceRequest.setSales_environment("hotel_only");
-                resultOnly = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                resultOnly = new QueryProductAccess(host, "zh-CN", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
             } else if ("hotel_package".equals(request.getPriceFlag())) {
                 //查询打包价
                 queryPriceRequest.setSales_environment("hotel_package");
-                resultPackage = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                resultPackage = new QueryProductAccess(host, "zh-CN", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
             } else {
                 //先查询零售价
                 queryPriceRequest.setSales_environment("hotel_only");
-                resultOnly = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                resultOnly = new QueryProductAccess(host, "zh-CN", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
                 //查询打包价
                 queryPriceRequest.setSales_environment("hotel_package");
-                resultPackage = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+                resultPackage = new QueryProductAccess(host, "zh-CN", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
             }
         }
         if (resultOnly != null && resultOnly.isSucc() && null != resultOnly.getData() && CollectionUtils.isNotEmpty(resultOnly.getData().getHotelPrices())) {
@@ -219,7 +219,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             // 「问到了、答没有」与「压根没问出结果」必须分开（PricingOutcome）：
             // 只要有一趟调用是成功回应的，无报价就是 Expedia 明确说这个住期没有可售；
             // 两趟都没成功回应（超时、非 2xx、限流被拒、响应无法判读）则我们并不知道
-            boolean answered = answered(resultOnly) || answered(resultPackage);
+            boolean answered = isAnswered(resultOnly) || isAnswered(resultPackage);
             if (answered) {
                 log.info("expedia查价：该店该住期无可售报价,property_id={},checkin={}",
                         queryPriceRequest.getProperty_id(), queryPriceRequest.getCheckin());
@@ -243,7 +243,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
      *
      * <p>{@code null} 表示这趟压根没发（按 priceFlag 只查了另一类），同样不构成回答。
      */
-    private static boolean answered(ResponseResult<QueryPriceResponse> result) {
+    private static boolean isAnswered(ResponseResult<QueryPriceResponse> result) {
         return result != null && result.isSucc() && null != result.getData();
     }
 
@@ -377,7 +377,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         request.setOccupancies(occupancies);
         // 缺省优先零售价(hotel_only，常态且无捆绑限制)，第一趟未命中再回退打包价(hotel_package)
         queryPriceRequest.setSales_environment(StringUtils.isBlank(request.getPriceFlag()) ? "hotel_only" : request.getPriceFlag());
-        ResponseResult<QueryPriceResponse> resultPackage = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+        ResponseResult<QueryPriceResponse> resultPackage = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
         boolean isHave = true;
         if (resultPackage != null && resultPackage.isSucc() && null != resultPackage.getData() && CollectionUtils.isNotEmpty(resultPackage.getData().getHotelPrices())) {
             QueryPriceResponse.HotelPrice hotelPrice = resultPackage.getData().getHotelPrices().get(0);
@@ -390,7 +390,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                             QueryPriceResponse.Bed_groups bedGroups = rate.getBed_groups().get(bedId);
                             bedCheckInfos.add(BedCheckInfo.builder().bedId(bedGroups.getId()).bedType(bedGroups.getDescription()).checkHref(bedGroups.getLinks().getPrice_check().getHref()).build());
                         }
-                        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedCheckInfos.get(0).getCheckHref()));
+                        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedCheckInfos.get(0).getCheckHref()));
                         if (!checkPriceResult.isSucc() || null == checkPriceResult.getData() || "sold_out".equals(checkPriceResult.getData().getStatus())) {
                             log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(checkPriceResult));
                             return null;
@@ -413,7 +413,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         }
         if (isHave) {
             queryPriceRequest.setSales_environment(StringUtils.isBlank(request.getPriceFlag()) ? "hotel_package" : request.getPriceFlag());
-            ResponseResult<QueryPriceResponse> onlyResult = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+            ResponseResult<QueryPriceResponse> onlyResult = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
             if (onlyResult != null && onlyResult.isSucc() && null != onlyResult.getData() && CollectionUtils.isNotEmpty(onlyResult.getData().getHotelPrices())) {
                 QueryPriceResponse.HotelPrice hotelPrice = onlyResult.getData().getHotelPrices().get(0);
                 for (QueryPriceResponse.Rooms room : hotelPrice.getRooms()) {
@@ -425,7 +425,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                                 QueryPriceResponse.Bed_groups bedGroups = rate.getBed_groups().get(bedId);
                                 bedCheckInfos.add(BedCheckInfo.builder().bedId(bedGroups.getId()).bedType(bedGroups.getDescription()).checkHref(bedGroups.getLinks().getPrice_check().getHref()).build());
                             }
-                            ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedCheckInfos.get(0).getCheckHref()));
+                            ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedCheckInfos.get(0).getCheckHref()));
                             if (!checkPriceResult.isSucc() || null == checkPriceResult.getData() || "sold_out".equals(checkPriceResult.getData().getStatus())) {
                                 log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(checkPriceResult));
                                 return null;
@@ -499,7 +499,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     private CheckPriceRespDTO attemptCheckPrice(CheckPriceReq request, QueryPriceRequest queryPriceRequest,
                                                 String salesEnvironment) {
         queryPriceRequest.setSales_environment(salesEnvironment);
-        ResponseResult<QueryPriceResponse> result = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+        ResponseResult<QueryPriceResponse> result = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
         if (result == null || !result.isSucc() || null == result.getData()
                 || CollectionUtils.isEmpty(result.getData().getHotelPrices())) {
             log.warn("expedia查价未取得结果,salesEnvironment={},request:{}", salesEnvironment, JsonUtils.writeObject2Json(request));
@@ -526,7 +526,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             return outcome(CheckPriceOutcome.RATE_DEAD, "所选床型已不可选，请重新查价后再选择");
         }
 
-        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedGroups.getLinks().getPrice_check().getHref()));
+        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedGroups.getLinks().getPrice_check().getHref()));
         if (checkPriceResult == null || !checkPriceResult.isSucc() || null == checkPriceResult.getData()) {
             log.warn("expedia验价未取得结果,sProductId={},response:{}", request.getSProductId(), JsonUtils.writeObject2Json(checkPriceResult));
             return outcome(CheckPriceOutcome.INDETERMINATE, "验价调用未取得结果，未能确认该产品是否可订，请稍后重试");
@@ -691,13 +691,13 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         // 无售卖类型维度，同一 rateId 的打包价会覆盖零售价。待渠道开卖打包价时，
         // 需先给缓存键补类型维度，再在此处放开 hotel_package 查询。
         queryPriceRequest.setSales_environment("hotel_only");
-        ResponseResult<QueryPriceResponse> resultOnly = new QueryProductAccess(host, "zh-CN", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
+        ResponseResult<QueryPriceResponse> resultOnly = new QueryProductAccess(host, "zh-CN", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest);
         if (null == resultOnly || !resultOnly.isSucc() || null == resultOnly.getData()
                 || CollectionUtils.isEmpty(resultOnly.getData().getHotelPrices())) {
             // 「答了但没有」与「没问出结果」分开记（O-3.1）：此前这条路只记一条 outcome=all，
             // 失败分支没有任何落点，刷价失败率在指标上无从计算
             Monitor.recordOne(MetricNames.PRICING_SUPPLIER_QUERY,
-                    pricingTags(answered(resultOnly) ? CallStatus.NO_INVENTORY : CallStatus.ERROR));
+                    pricingTags(isAnswered(resultOnly) ? CallStatus.NO_INVENTORY : CallStatus.ERROR));
             log.info("expedia缓存查询零售价失败,request:{}", JsonUtils.writeObject2Json(queryPriceRequest));
             return null;
         }

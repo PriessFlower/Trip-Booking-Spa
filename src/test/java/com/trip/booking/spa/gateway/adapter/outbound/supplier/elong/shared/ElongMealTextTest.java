@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 「到店三选二」并进「无餐食」、「全餐」并进「仅含早」。裁剪会按等价类留最低价把含餐多的
  * 那条裁掉（F-3.2），resolve 会拿无餐票换含餐票（R-3.2）。
  */
-class ElongMealCopyWritingTest {
+class ElongMealTextTest {
 
     private final ElongProductKeyDeriver deriver = new ElongProductKeyDeriver();
     private final ObjectMapper mapper = new ObjectMapper();
@@ -30,7 +30,7 @@ class ElongMealCopyWritingTest {
         plan.setRatePlanId(1L);
         if (copyWriting != null) {
             ObjectNode meals = mapper.createObjectNode();
-            meals.put("mealCopyWriting", copyWriting);
+            meals.put("mealText", copyWriting);
             plan.setMeals(meals);
         }
         return deriver.convertMeal(plan);

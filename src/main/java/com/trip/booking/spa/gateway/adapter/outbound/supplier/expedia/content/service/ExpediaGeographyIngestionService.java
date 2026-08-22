@@ -121,7 +121,7 @@ public class ExpediaGeographyIngestionService {
     /** 照抄旧 pushCountry：zh 名 + en 的省级 descendants，每省一个线程递归 */
     private void pushCountry(List<String> countryIds) {
         countryIds.forEach(countryId -> {
-            spinWaitingMechanism();
+            waitIfBacklogged();
             String nameCn = "";
             RegionsInfoResponse zh = regionsClient.fetchRegion(countryId, LANG_ZH);
             if (zh != null) {
@@ -159,8 +159,8 @@ public class ExpediaGeographyIngestionService {
         });
     }
 
-    /** 照抄旧 spinWaitingMechanism：队列积压超过 10 就等上一个国家跑完 */
-    private void spinWaitingMechanism() {
+    /** 照抄旧 waitIfBacklogged：队列积压超过 10 就等上一个国家跑完 */
+    private void waitIfBacklogged() {
         if (ThreadPoolUtils.getThreadPool().getQueue().size() > 10) {
             try {
                 log.info("等待上一个国家查询完毕");
@@ -169,7 +169,7 @@ public class ExpediaGeographyIngestionService {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException(e);
             }
-            spinWaitingMechanism();
+            waitIfBacklogged();
         }
     }
 

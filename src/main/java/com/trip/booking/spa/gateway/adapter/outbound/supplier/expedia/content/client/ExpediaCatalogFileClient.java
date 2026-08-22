@@ -108,7 +108,7 @@ public class ExpediaCatalogFileClient {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-        headers.set(HttpHeaders.AUTHORIZATION, signer.signGeneration());
+        headers.set(HttpHeaders.AUTHORIZATION, signer.generateSign());
         headers.set("Customer-Ip", properties.getOwnIp());
         headers.set("Customer-Session-Id", properties.getSession());
         headers.set(HttpHeaders.USER_AGENT, properties.getUserAgent());
