@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -28,6 +29,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * 艺龙刷价：消费 {@code elong_query_price_task}，逐店查价并写入价格缓存。
@@ -138,9 +140,15 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
                     + "请到 Nacos 的 ratelimit.qps 补齐该键", REFRESH_LIMIT_KEY, interfaceTotal, qps);
             qps = interfaceTotal / 2;
         }
+        // 每行按这些占用各查一次：高德标准间按 2 人问价，只刷 1 人时 2 人查询如实拿空，
+        // 曝光刷新断粮 16h 后被 RATE_DEAD 整体撤下（2026-08-22 事故）
+        List<Integer> occupancyAdults = Arrays.stream(environment
+                        .getProperty("task.elong-cps.occupancies", "1").split(","))
+                .map(String::trim).filter(v -> !v.isEmpty())
+                .map(Integer::parseInt).collect(Collectors.toList());
         List<ElongQueryPriceTask> list = elongQueryPriceTaskMapper.getQueryPriceTaskList(priority, temporaryUpgrade, batchSize);
-        log.info("elongQueryPriceTask 本轮开始, trigger={}, priority={}, 取到 {} 行, batchSize={}, qps={}, 并发={}",
-                trigger, priority, list.size(), batchSize, qps, concurrency);
+        log.info("elongQueryPriceTask 本轮开始, trigger={}, priority={}, 取到 {} 行 × 占用{}, batchSize={}, qps={}, 并发={}",
+                trigger, priority, list.size(), occupancyAdults, batchSize, qps, concurrency);
         if (CollectionUtils.isEmpty(list)) {
             log.info("elongQueryPriceTask 本轮结束, trigger={}, 无待刷任务, 耗时 {} ms",
                     trigger, System.currentTimeMillis() - roundStart);
@@ -178,24 +186,26 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
 
                 LocalDate checkIn = LocalDate.now().plusDays(task.getDelayCheckIn());
                 LocalDate checkOut = LocalDate.now().plusDays(task.getDelayCheckOut());
-                RateLimitHolder.get().acquire(REFRESH_LIMIT_KEY);
+                for (int adults : occupancyAdults) {
+                    RateLimitHolder.get().acquire(REFRESH_LIMIT_KEY);
 
-                PriceReq request = PriceReq.builder().adultNum(1).childNum(0).guestType(0)
-                        .childAges(new ArrayList<>()).checkIn(checkIn.toString())
-                        .checkout(checkOut.toString()).roomNum(1).build();
-                Supplier supplier = Supplier.builder()
-                        .supplierId(SupplierSourceEnum.ELONG.getCode())
-                        .sHotelId(task.getShId()).build();
+                    PriceReq request = PriceReq.builder().adultNum(adults).childNum(0).guestType(0)
+                            .childAges(new ArrayList<>()).checkIn(checkIn.toString())
+                            .checkout(checkOut.toString()).roomNum(1).build();
+                    Supplier supplier = Supplier.builder()
+                            .supplierId(SupplierSourceEnum.ELONG.getCode())
+                            .sHotelId(task.getShId()).build();
 
-                List<ProductRespDTO> products = elongPriceService.queryPricesCache(request, supplier);
-                if (products == null) {
-                    // 调用未取得结果：绝大多数是账号级频控（与 cursor 抢额度），
-                    // 少数是网络/解析。两者都不该动缓存，计入 failed 供调速参考
-                    failed.incrementAndGet();
-                } else if (products.isEmpty()) {
-                    empty.incrementAndGet();
-                } else {
-                    onSale.incrementAndGet();
+                    List<ProductRespDTO> products = elongPriceService.queryPricesCache(request, supplier);
+                    if (products == null) {
+                        // 调用未取得结果：绝大多数是账号级频控（与 cursor 抢额度），
+                        // 少数是网络/解析。两者都不该动缓存，计入 failed 供调速参考
+                        failed.incrementAndGet();
+                    } else if (products.isEmpty()) {
+                        empty.incrementAndGet();
+                    } else {
+                        onSale.incrementAndGet();
+                    }
                 }
             } catch (Exception e) {
                 failed.incrementAndGet();
@@ -218,7 +228,7 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
         // 调用供应商之前更新，会被当成"刚刷过"排到队尾饿死，要等下一次全量才轮到。
         pool.shutdown();
         try {
-            long expectedSec = Math.max(60, estimateRoundSeconds(list.size(), qps, concurrency));
+            long expectedSec = Math.max(60, estimateRoundSeconds(list.size() * occupancyAdults.size(), qps, concurrency));
             while (!pool.awaitTermination(expectedSec, TimeUnit.SECONDS)) {
                 // 超出预期只报告、不动手。把已处理数打出来，免得"共 N 行"被读成"N 行都处理了"
                 int done = onSale.get() + empty.get() + failed.get();
@@ -243,7 +253,7 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
         Map<String, Object> tags = new HashMap<>(2);
         tags.put(MetricTags.SUPPLIER, SupplierSourceEnum.ELONG.name());
         tags.put("priority", String.valueOf(priority));
-        Monitor.recordMany(MetricNames.REFRESH_ROWS, tags, list.size());
+        Monitor.recordMany(MetricNames.REFRESH_ROWS, tags, list.size() * occupancyAdults.size());
         Monitor.recordMany(MetricNames.REFRESH_ONSALE, tags, onSale.get());
         Monitor.recordMany(MetricNames.REFRESH_EMPTY, tags, empty.get());
         Monitor.recordMany(MetricNames.REFRESH_FAILED, tags, failed.get());

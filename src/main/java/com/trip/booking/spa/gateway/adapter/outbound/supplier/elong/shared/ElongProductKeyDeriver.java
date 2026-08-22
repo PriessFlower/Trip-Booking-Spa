@@ -187,8 +187,11 @@ public class ElongProductKeyDeriver {
 
     private static String mealText(ElongRatePlan plan) {
         JsonNode meals = plan.getMeals();
-        return meals != null && meals.hasNonNull("mealText")
-                ? meals.get("mealText").asText() : null;
+        // "mealCopyWriting" 是艺龙 meals 节点的线上字段名(供应商契约,禁改)——
+        // 2026-08-22 批量改名事故:盲替换把它当本仓词汇改成 mealText,餐食恒 null
+        // → mealSignature 变 → 全量 productKey 轮转 → 档案失联 → 高德无价 3 小时
+        return meals != null && meals.hasNonNull("mealCopyWriting")
+                ? meals.get("mealCopyWriting").asText() : null;
     }
 
     /**
