@@ -28,7 +28,7 @@ import static org.mockito.Mockito.verify;
 /**
  * 验价即刷回写（F-6 即时半边）的判据钉死。
  *
- * <p>三条边界与查价口径同源（复用 classifyInventory），各自的错误方向不同：
+ * <p>三条边界与查价口径同源（复用 toPricingResult），各自的错误方向不同：
  * <ul>
  *   <li>在售 → 必须回写，且占用键必须是<b>验价的</b>占用——写错键即静默错键，
  *       长尾占用按需成盘的价值全无；</li>
@@ -37,7 +37,7 @@ import static org.mockito.Mockito.verify;
  *   <li>确定无货 → 必须以空列表落缓存，否则僵尸价（B7）借回写还魂。</li>
  * </ul>
  */
-class ElongCheckWriteBackTest {
+class ElongFreshPricesToCacheTest {
 
     private ElongPriceServiceImpl service;
     private CachePriceService cachePriceService;
@@ -105,7 +105,7 @@ class ElongCheckWriteBackTest {
     @Test
     @DisplayName("在售 → 回写，且占用键=验价的占用（2大1小9岁 → 2-9）")
     void sellableInventoryIsWrittenBackUnderTheCheckOccupancy() {
-        service.doWriteBackFreshInventory(checkReq(), response("0", hotelWith(sellablePlan())));
+        service.freshPricesToCache(checkReq(), response("0", hotelWith(sellablePlan())));
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<ProductRespDTO>> products = ArgumentCaptor.forClass(List.class);
@@ -123,7 +123,7 @@ class ElongCheckWriteBackTest {
     @Test
     @DisplayName("业务错误 → 不动缓存（F-5.1：没问出结果不清在售价）")
     void businessErrorMustNotTouchCache() {
-        service.doWriteBackFreshInventory(checkReq(), response("E1|throttled", null));
+        service.freshPricesToCache(checkReq(), response("E1|throttled", null));
         verify(cachePriceService, never()).productToCache(any(), any(), any());
     }
 
@@ -132,14 +132,14 @@ class ElongCheckWriteBackTest {
     void allFilteredMustNotTouchCache() {
         ElongRatePlan noCreds = sellablePlan();
         noCreds.setGoodsUniqId(null);
-        service.doWriteBackFreshInventory(checkReq(), response("0", hotelWith(noCreds)));
+        service.freshPricesToCache(checkReq(), response("0", hotelWith(noCreds)));
         verify(cachePriceService, never()).productToCache(any(), any(), any());
     }
 
     @Test
     @DisplayName("确定无货 → 空列表落缓存（不落则僵尸价借回写还魂）")
     void confirmedNoInventoryWritesEmptyList() {
-        service.doWriteBackFreshInventory(checkReq(), response("0", null));
+        service.freshPricesToCache(checkReq(), response("0", null));
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<ProductRespDTO>> products = ArgumentCaptor.forClass(List.class);
         verify(cachePriceService).productToCache(products.capture(), any(PriceReq.class), any(Supplier.class));
@@ -151,7 +151,7 @@ class ElongCheckWriteBackTest {
     void writeBackFailureIsSwallowed() {
         Mockito.doThrow(new RuntimeException("redis down"))
                 .when(cachePriceService).productToCache(any(), any(), any());
-        service.doWriteBackFreshInventory(checkReq(), response("0", hotelWith(sellablePlan())));
+        service.freshPricesToCache(checkReq(), response("0", hotelWith(sellablePlan())));
         // 不抛即过
     }
 }

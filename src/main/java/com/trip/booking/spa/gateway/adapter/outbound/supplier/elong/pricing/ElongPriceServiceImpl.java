@@ -148,14 +148,14 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             log.warn("艺龙查价：调用未取得结果,sHotelId={},checkIn={}", supplier.getSHotelId(), request.getCheckIn());
             return PricingResult.indeterminate();
         }
-        return classifyInventory(result.getData(), request, supplier.getSHotelId());
+        return toPricingResult(result.getData(), request, supplier.getSHotelId());
     }
 
     /**
      * 现货响应 → 分态+产品。查价与验价即刷回写共用这一段——两条路对「无货 / 未能确认 /
      * 在售」的口径必须同源，回写另起口径会把 F-5.1（失败不动缓存）或僵尸价清理（B7）弄丢一头。
      */
-    PricingResult classifyInventory(ElongHotelDetailResponse data, PriceReq request, String sHotelId) {
+    PricingResult toPricingResult(ElongHotelDetailResponse data, PriceReq request, String sHotelId) {
         if (!data.isSucc()) {
             // 错误码透传不归并（移植风险④）：码义未核实的一律原样落日志。
             // 码义未核实就不能断言「确实无房」，故落未能确认
@@ -298,7 +298,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         // 验价即刷（F-6 的即时半边）：手里这份现货就是最新报价，验完即弃等于白白留着
         // 缓存里的陈价继续对外报（实证 2026-08-22 河内 Daewoo：市场价已涨 4.3%，
         // 缓存价换不到票，每次点击都 RATE_DEAD）。异步回写，不占验价预算。
-        writeBackFreshInventory(request, data);
+        freshPricesToCacheAsync(request, data);
         if (!data.isSucc()) {
             log.warn("艺龙验价：现货查询返回业务错误,sHotelId={},sProductId={},code={}",
                     request.getSHotelId(), request.getSProductId(), data.getCode());
@@ -731,10 +731,10 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * 验价即刷回写线程：单线程 + 有界队列 + 满则弃。回写是验价的副产品、尽力而为——
      * 宁可丢一次回写（下轮刷价会补），不许排队积压拖住任何东西。守护线程随进程退出。
      */
-    private static final java.util.concurrent.ExecutorService WRITE_BACK_POOL =
+    private static final java.util.concurrent.ExecutorService FRESH_PRICES_POOL =
             new java.util.concurrent.ThreadPoolExecutor(1, 1, 60L, java.util.concurrent.TimeUnit.SECONDS,
                     new java.util.concurrent.ArrayBlockingQueue<>(64), r -> {
-                Thread t = new Thread(r, "elong-check-writeback");
+                Thread t = new Thread(r, "elong-fresh-prices");
                 t.setDaemon(true);
                 return t;
             });
@@ -744,7 +744,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      *
      * <ul>
      *   <li><b>零额外供应商调用</b>——数据是验价本来就拉的；</li>
-     *   <li><b>口径同源</b>——分态与转换复用 {@link #classifyInventory}，异常价拦截、
+     *   <li><b>口径同源</b>——分态与转换复用 {@link #toPricingResult}，异常价拦截、
      *       TTL 分档、无货落缓存全部继承刷价写路径（{@code productToCache}）；</li>
      *   <li><b>F-5.1 不破</b>——INDETERMINATE（业务错误/全被过滤）不动缓存；</li>
      *   <li><b>占用键随验价走</b>——客人问 2 大 1 小就回写 2-x 键，长尾占用按需成盘
@@ -752,16 +752,16 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * </ul>
      * 任何失败只落日志，绝不影响验价主流程。
      */
-    void writeBackFreshInventory(CheckPriceReq request, ElongHotelDetailResponse data) {
+    void freshPricesToCacheAsync(CheckPriceReq request, ElongHotelDetailResponse data) {
         try {
-            WRITE_BACK_POOL.execute(() -> doWriteBackFreshInventory(request, data));
+            FRESH_PRICES_POOL.execute(() -> freshPricesToCache(request, data));
         } catch (java.util.concurrent.RejectedExecutionException e) {
             log.warn("验价即刷：回写队列满，本次丢弃(下轮刷价会补) sHotelId={}", request.getSHotelId());
         }
     }
 
     /** 回写本体（同步，供测试直接驱动）。 */
-    void doWriteBackFreshInventory(CheckPriceReq request, ElongHotelDetailResponse data) {
+    void freshPricesToCache(CheckPriceReq request, ElongHotelDetailResponse data) {
         try {
             PriceReq priceReq = PriceReq.builder()
                     .checkIn(request.getCheckIn())
@@ -774,7 +774,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                     .build();
             priceReq.setOccupancies(Occupancy.perRoom(priceReq.getRoomNum(), priceReq.getAdultNum(),
                     priceReq.getChildNum(), priceReq.getChildAges()));
-            PricingResult classified = classifyInventory(data, priceReq, request.getSHotelId());
+            PricingResult classified = toPricingResult(data, priceReq, request.getSHotelId());
             if (classified.outcome() == PricingOutcome.INDETERMINATE) {
                 return; // F-5.1：没问出结果不动缓存
             }
