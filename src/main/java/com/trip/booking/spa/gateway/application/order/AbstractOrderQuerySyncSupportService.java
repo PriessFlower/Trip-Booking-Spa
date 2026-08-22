@@ -8,17 +8,6 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 查单模板。
- *
- * <p><b>本类的核心职责是「绝不把查不到说成没有」</b>。原实现把一切异常与空响应统一吞成
- * null，控制层再转成一条错误响应——上游无从区分「确实没有这笔订单」与「这次没查出来」。
- * 而查单恰恰是下单回报 {@code UNKNOWN} 时的唯一确证手段：把「没查出来」当成「订单不存在」
- * 会导致重复下单，反之会让订单永久悬空，两者都是资损。
- *
- * <p>故本类的兜底一律回报 {@link OrderPresence#INDETERMINATE}。判
- * {@link OrderPresence#NOT_FOUND} 的权力只交给各供应商实现——只有它能读懂供应商
- * 「查无此单」的确切表达（如 Expedia 的空数组），而这与「调用失败」在 HTTP 层往往同形。
- *
- * @see AbstractBookingSyncSupportService 下单侧的同类纪律
  */
 @Slf4j
 public abstract class AbstractOrderQuerySyncSupportService<T> implements OrderQuerySyncService {

@@ -386,7 +386,7 @@ public class CachePriceServiceImpl implements CachePriceService {
             }
             // F-3 裁剪：按 productKey 等价类留最低价的前 N 条。放在最前面——
             // 后续的下架判断依赖"谁进了 dataMap"，裁剪必须先于它发生，
-            // 被裁掉的产品才能正确地走下架置 0（与被 F-7 拦截者相反，见 PriceCacheTrimmer 注释）
+            // 被裁掉的产品才能正确地走下架删除（与被 F-7 拦截者相反，见 PriceCacheTrimmer 注释）
             list = priceCacheTrimmer.trim(list);
 
             // 产品信息
@@ -396,10 +396,13 @@ public class CachePriceServiceImpl implements CachePriceService {
             Map<String, Map<String, String>> dataMap = Maps.newHashMap();
             // 缓存报价
             Map<String, Set<String>> cacheProductPriceMap = Maps.newHashMap();
-            // 没有报价要下线集合
-            Map<String, Map<String, String>> downDataMap = Maps.newHashMap();
+            // 本轮没报价、需要从缓存摘掉的 field（priceKey → productId 集合）。
+            // 下架即删字段（HDEL），不再写 {"price":0} 墓碑：读侧两种形态结果等价
+            // （都不出报），而墓碑要被每次查价扫到再丢弃，还把 quote_dropped 的
+            // zero_total_price 变成噪音——生产实测 8.7h 里 5.5 万次丢弃全是墓碑
+            Map<String, Set<String>> downFields = Maps.newHashMap();
             // 被 F-7 拦下的产品（priceKey → productId 集合）。它们不进 dataMap，
-            // 但【绝不能被下架逻辑当成"本轮无价"而置 0】——那等于把"疑似错价"恶化成
+            // 但【绝不能被下架逻辑当成"本轮无价"而摘掉】——那等于把"疑似错价"恶化成
             // "确定无货"，比不拦截更糟。故单独记一份，供下方下架判断排除
             Map<String, Set<String>> interceptedMap = Maps.newHashMap();
 
@@ -461,31 +464,20 @@ public class CachePriceServiceImpl implements CachePriceService {
             }
 
             if (MapUtils.isNotEmpty(cacheProductPriceMap)) {
-                // downDataMap 的一个 key（price:{hotelId}:{date}）下可能有多个产品同时下架，
-                // 故必须【累加】而非整体覆盖——循环维度是 productId，用 put 会让每次迭代
-                // 把该 key 的整张 map 换成只含一条的新 map，只剩最后一条真被置 0，其余保留
+                // downFields 的一个 key（price:{hotelId}:{date}）下可能有多个产品同时下架，
+                // 故必须【累加】而非整体覆盖——循环维度是 productId，整体覆盖会让每次迭代
+                // 把该 key 的集合换成只含一条的新集合，只剩最后一条真被摘掉，其余保留
                 // 旧价直到 TTL 过期（issue #96）。写法与上方 dataMap、interceptedMap 一致
                 cacheProductPriceMap.forEach((key, value) -> {
                     Set<String> intercepted = interceptedMap.getOrDefault(key, Collections.emptySet());
-                    if (MapUtils.isEmpty(dataMap.get(key))) {
-                        for (String productId : value) {
-                            if (intercepted.contains(productId)) {
-                                continue;
-                            }
-                            downDataMap.computeIfAbsent(key, k -> Maps.newHashMap())
-                                    .put(productId, convertPriceJsonStr(null, null));
+                    for (String productId : value) {
+                        if (intercepted.contains(productId)) {
+                            continue;
                         }
-                    } else {
-                        for (String productId : value) {
-                            if (intercepted.contains(productId)) {
-                                continue;
-                            }
-                            if (StringUtils.isBlank(dataMap.get(key).get(productId))) {
-                                downDataMap.computeIfAbsent(key, k -> Maps.newHashMap())
-                                        .put(productId, convertPriceJsonStr(null, null));
-                            }
+                        Map<String, String> fresh = dataMap.get(key);
+                        if (MapUtils.isEmpty(fresh) || StringUtils.isBlank(fresh.get(productId))) {
+                            downFields.computeIfAbsent(key, k -> Sets.newHashSet()).add(productId);
                         }
-
                     }
                 });
             }
@@ -503,9 +495,9 @@ public class CachePriceServiceImpl implements CachePriceService {
                 });
             }
 
-            if (!downDataMap.isEmpty()) {
-                // 下架标记与价格同档：它代表"该产品此刻无价"，同样应随日期远近失效
-                writeWithTieredTtl(downDataMap);
+            if (!downFields.isEmpty()) {
+                // 直接删字段，不续键的 TTL——删除不是刷新，存活期照旧倒数
+                redisUtils.batchHashDelete(downFields);
             }
         } catch (Exception e) {
             log.error("productToCache error:", e);
@@ -620,21 +612,12 @@ public class CachePriceServiceImpl implements CachePriceService {
 
         // 使用 Map 构建 JSON 数据
         Map<String, Integer> jsonMap = new HashMap<>();
-        if (null == priceInfo) {
-            jsonMap.put("price", 0);
-            jsonMap.put("taxes", null);
-            jsonMap.put("roomPrice", null);
-            jsonMap.put("stayPrice", null);
-            jsonMap.put("storePayPrice", null);
-            jsonMap.put("brokerage", 0);
-        } else {
-            jsonMap.put("price", null != priceInfo.getPrice() ? priceInfo.getPrice() : 0);
-            jsonMap.put("taxes", priceInfo.getTaxes());
-            jsonMap.put("roomPrice", priceInfo.getRoomPrice());
-            jsonMap.put("stayPrice", productRespDTO.getStayPrice());
-            jsonMap.put("storePayPrice", productRespDTO.getStorePayPrice());
-            jsonMap.put("brokerage", productRespDTO.getBrokerage());
-        }
+        jsonMap.put("price", null != priceInfo.getPrice() ? priceInfo.getPrice() : 0);
+        jsonMap.put("taxes", priceInfo.getTaxes());
+        jsonMap.put("roomPrice", priceInfo.getRoomPrice());
+        jsonMap.put("stayPrice", productRespDTO.getStayPrice());
+        jsonMap.put("storePayPrice", productRespDTO.getStorePayPrice());
+        jsonMap.put("brokerage", productRespDTO.getBrokerage());
         // 使用 Jackson 将 Map 转换为 JSON 字符串
         ObjectMapper objectMapper = new ObjectMapper();
         String jsonString = null;
