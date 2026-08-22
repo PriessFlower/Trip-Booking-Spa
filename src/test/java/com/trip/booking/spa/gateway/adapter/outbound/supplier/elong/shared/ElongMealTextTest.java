@@ -30,7 +30,9 @@ class ElongMealTextTest {
         plan.setRatePlanId(1L);
         if (copyWriting != null) {
             ObjectNode meals = mapper.createObjectNode();
-            meals.put("mealText", copyWriting);
+            // 夹具必须用艺龙线上的真实字段名——2026-08-22 的事故正是盲替换连同夹具一起改名,
+            // 测试对着假字段照样绿,放走了 productKey 全量轮转
+            meals.put("mealCopyWriting", copyWriting);
             plan.setMeals(meals);
         }
         return deriver.convertMeal(plan);
