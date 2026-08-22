@@ -120,7 +120,9 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
         double qps = rateLimitProperties.qpsOf(REFRESH_LIMIT_KEY);
         // 分档独立键(批次3):不复用旧 batch-size/qps——生产旧值(500/1.0)是单档时代
         // 的节奏,直接继承会让两档总时长超出 10 分钟 cron 而回到跳轮状态
-        int batchSize = priority == 2
+        int batchSize = priority == 3
+                ? environment.getProperty("task.elong-cps.far-batch-size", Integer.class, 200)
+                : priority == 2
                 ? environment.getProperty("task.elong-cps.deal-batch-size", Integer.class, 1500)
                 : priority == 0
                 ? environment.getProperty("task.elong-cps.high-batch-size", Integer.class, 400)
@@ -131,7 +133,9 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
         // 兜底取 1(串行)是安全侧(§3.3.3):并发化是新引入的能力,Nacos 读不到时应退回
         // <b>已知安全的旧行为</b>,而不是静默采用新行为。串行只是慢,而并发在连接池配置同时
         // 未生效的情况下会与出价抢连接——出价是真实客流。生产运行值(高频 6 / 常规 3)在 Nacos。
-        int concurrency = priority == 2
+        int concurrency = priority == 3
+                ? environment.getProperty("task.elong-cps.far-concurrency", Integer.class, 6)
+                : priority == 2
                 ? environment.getProperty("task.elong-cps.deal-concurrency", Integer.class, 6)
                 : priority == 0
                 ? environment.getProperty("task.elong-cps.high-concurrency", Integer.class, 1)
