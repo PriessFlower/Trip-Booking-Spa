@@ -77,7 +77,7 @@ public class ExpediaCancelSyncServiceImpl
         }
 
         ResponseResult<QueryOrderResponse> lookup = new QueryOrderAccess(
-                host, req.getOrderId(), email, expediaUtils.signGeneration(),
+                host, req.getOrderId(), email, expediaUtils.generateSign(),
                 ownIp, sessionId, rateLimiter).access("");
 
         QueryOrderResponse resp = lookup == null ? null : lookup.getData();
@@ -116,7 +116,7 @@ public class ExpediaCancelSyncServiceImpl
                 continue;
             }
             ResponseResult<CancelRoomResponse> result = new CancelRoomAccess(
-                    absolute(href), expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter).access("");
+                    absolute(href), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access("");
             if (result != null && isCancelAccepted(result)) {
                 canceled++;
             } else {

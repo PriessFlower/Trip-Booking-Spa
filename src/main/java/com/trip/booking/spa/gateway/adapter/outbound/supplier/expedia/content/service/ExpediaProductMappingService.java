@@ -129,13 +129,13 @@ public class ExpediaProductMappingService {
                     .build();
             try {
                 ResponseResult<QueryPriceResponse> resultOnly = new QueryProductAccess(
-                        host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter)
+                        host, "en-US", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter)
                         .access(queryPriceRequest);
                 persistProducts(resultOnly, queryPriceRequest);
                 // 查询打包价（照旧：同一请求对象切环境再查一遍）
                 queryPriceRequest.setSales_environment("hotel_package");
                 ResponseResult<QueryPriceResponse> resultPackage = new QueryProductAccess(
-                        host, "en-US", expediaUtils.signGeneration(), ownIp, sessionId, rateLimiter)
+                        host, "en-US", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter)
                         .access(queryPriceRequest);
                 persistProducts(resultPackage, queryPriceRequest);
             } catch (Exception e) {

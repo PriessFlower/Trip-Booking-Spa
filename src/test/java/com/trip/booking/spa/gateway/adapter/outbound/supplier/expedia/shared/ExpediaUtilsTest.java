@@ -13,7 +13,7 @@ class ExpediaUtilsTest {
     void refusesToSignWithoutExternalCredentials() {
         ExpediaUtils signer = new ExpediaUtils(new ExpediaRapidProperties());
 
-        assertThrows(IllegalStateException.class, signer::signGeneration);
+        assertThrows(IllegalStateException.class, signer::generateSign);
     }
 
     @Test
@@ -22,7 +22,7 @@ class ExpediaUtilsTest {
         properties.setApiKey("example-api-key");
         properties.setSharedSecret("example-shared-secret");
 
-        String authorization = new ExpediaUtils(properties).signGeneration(1234567890L);
+        String authorization = new ExpediaUtils(properties).generateSign(1234567890L);
 
         assertTrue(authorization.startsWith("EAN APIKey=example-api-key,Signature="));
         assertTrue(authorization.endsWith(",timestamp=1234567890"));

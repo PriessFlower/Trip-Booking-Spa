@@ -27,11 +27,11 @@ public class ExpediaUtils {
         this.properties = properties;
     }
 
-    public String signGeneration() {
-        return signGeneration(Instant.now().getEpochSecond());
+    public String generateSign() {
+        return generateSign(Instant.now().getEpochSecond());
     }
 
-    public String signGeneration(long timestamp) {
+    public String generateSign(long timestamp) {
         properties.requireCredentials();
         String input = properties.getApiKey() + properties.getSharedSecret() + timestamp;
         String signature = sha512(input);

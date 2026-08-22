@@ -86,7 +86,7 @@ public class RapidGateway {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofSeconds(30))
-                .header("Authorization", expediaUtils.signGeneration())
+                .header("Authorization", expediaUtils.generateSign())
                 .header("Customer-Ip", rapidProperties.getOwnIp())
                 .header("Customer-Session-Id", rapidProperties.getSession())
                 .header("User-Agent", rapidProperties.getUserAgent())
