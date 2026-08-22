@@ -25,6 +25,9 @@ task:
   elong-cps:
     # 每行任务按这些成人数各查一次（逗号分隔）。高德按 2 人问价，缺 2 人片=曝光断粮（2026-08-22 事故）
     occupancies: "1,2"
+    # 成交档：高德出过单的酒店（priority=2 的行，T+0~2）。批量须 ≥ 档内行数，保证一轮扫完
+    deal-batch-size: 1500
+    deal-concurrency: 6
     enabled: false
     cron: '0 0/10 * * * ?'    # 每 10 分钟一轮（cron 仅启动时读取，改后需重启）
     # 批次3 两档优先级（F-2.4）：每轮先高频档(priority=0,T+0~T+2,带借入验价升档行)
