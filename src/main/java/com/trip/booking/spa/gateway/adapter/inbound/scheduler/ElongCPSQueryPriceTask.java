@@ -59,6 +59,9 @@ public class ElongCPSQueryPriceTask {
         // 默认 400@2qps + 200@1qps ≈ 6.7 分钟 < 10 分钟 cron,不再跳轮;
         // 高频档 ~2.6h 轮一遍(原 9.6h),QPS 峰值 2 仍在限流键(5)之内。
         supplierTaskExecutors.submit("elong", "cps-query-price", () -> {
+            // 成交档(priority=2)最先跑：高德出过单的酒店 T+0~2，deal-batch-size 须 ≥ 档内
+            // 行数使一轮扫完——本档的承诺是缓存龄 ≤ 一次执行间隔(约 30 分钟)
+            elongCPSQueryPriceService.queryPriceQueueTask(2, 0, "scheduled-deal");
             elongCPSQueryPriceService.queryPriceQueueTask(0, 1, "scheduled-high");
             elongCPSQueryPriceService.queryPriceQueueTask(1, 0, "scheduled-normal");
         });
