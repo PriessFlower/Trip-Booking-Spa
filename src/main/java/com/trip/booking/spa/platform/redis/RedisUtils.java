@@ -602,6 +602,26 @@ public class RedisUtils {
         });
     }
 
+    /**
+     * 批量删除多个哈希键下的多个 field（管道一次往返）。不触碰键的 TTL——
+     * 删字段不代表这个键被刷新过，存活期照旧倒数。
+     */
+    public void batchHashDelete(Map<String, Set<String>> fieldsByKey) {
+        redisTemplate.executePipelined((RedisConnection connection) -> {
+            fieldsByKey.forEach((hashKey, fields) -> {
+                if (CollectionUtils.isEmpty(fields)) {
+                    return;
+                }
+                byte[] rawHashKey = redisTemplate.getStringSerializer().serialize(hashKey);
+                byte[][] rawFields = fields.stream()
+                        .map(f -> redisTemplate.getStringSerializer().serialize(f))
+                        .toArray(byte[][]::new);
+                connection.hDel(rawHashKey, rawFields);
+            });
+            return null;
+        });
+    }
+
     public void batchSet(Map<String, String> keyValuePairs) {
         redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
             for (Map.Entry<String, String> entry : keyValuePairs.entrySet()) {

@@ -6,13 +6,7 @@ import com.trip.booking.spa.platform.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 查价能力的三态模板。
- *
- * <p><b>本类持有的唯一纪律：不确定的事不许说成确定的。</b>兜底一律落到
- * {@link com.trip.booking.spa.gateway.domain.booking.PricingOutcome#INDETERMINATE}——
- * 判定「确定无在售」的权力只交给适配层（③），只有它读得懂供应商在说什么。
- *
- * <p>本类<b>禁止出现任何一家供应商的字段名、错误码或 supplierId</b>（architecture.md §2）。
+ * 查价模板。
  */
 @Slf4j
 public abstract class AbstractProductSyncSupportService implements ProductSyncService {

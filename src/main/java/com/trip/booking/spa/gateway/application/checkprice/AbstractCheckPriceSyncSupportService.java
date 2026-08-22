@@ -8,17 +8,6 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 验价模板。
- *
- * <p><b>本类的核心职责是「绝不把不知道说成不可订」</b>。原实现把一切异常与空响应统一吞成
- * null，控制层再转成一条接口错误，上游只能笼统理解为「验不过」——于是超时、限流、
- * 供应商故障、产品下架、真满房全都长成同一个样子，而这几种情形的正确处置互不相同。
- *
- * <p>故本类的兜底一律回报 {@link CheckPriceOutcome#INDETERMINATE}。判
- * {@link CheckPriceOutcome#SOLD_OUT} 与 {@link CheckPriceOutcome#RATE_DEAD} 的权力
- * 只交给各供应商实现——只有它能读懂供应商是在说「没房了」还是在说「你要的这份报价没了」。
- *
- * @see AbstractBookingSyncSupportService 下单侧的同类纪律
- * @see AbstractOrderQuerySyncSupportService 查单侧的同类纪律
  */
 @Slf4j
 public abstract class AbstractCheckPriceSyncSupportService<T> implements CheckPriceSyncService {

@@ -12,11 +12,11 @@ import org.mockito.Mockito;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -24,11 +24,18 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 
 /**
- * 下架置 0 的判据钉死（docs/price-refresh.md F-5.2）。
+ * 下架判据钉死：上一轮在售、本轮没报价的产品，其缓存 field 必须被<b>删除</b>（HDEL）。
  *
- * <p>核心命题：同一 {@code price:{hotelId}:{date}} 下<b>多个产品同时下架时必须全部置 0</b>。
- * 曾经因为在 productId 循环里新建 map 再整体覆盖，只有最后一条真被置 0，其余保留旧价
- * 直到 TTL 过期，期间照常对外报价、照常可被下单（issue #96）。
+ * <p>两条历史命题都还在看着：
+ * <ul>
+ *   <li>同一 {@code price:{hotelId}:{date}} 下多个产品同时下架必须<b>全部</b>删掉。
+ *       曾因在 productId 循环里整体覆盖而只有最后一条生效，其余保留旧价直到 TTL 过期，
+ *       期间照常对外报价、照常可被下单（issue #96）；</li>
+ *   <li>2026-08-22 前的实现是写 {@code {"price":0}} 墓碑而非删除。读侧两种形态结果
+ *       等价（都不出报），但墓碑占了生产缓存产品条目的 17.6%（抽样 500 键实测），
+ *       每次查价都要扫到再丢弃，且把 {@code quote_dropped} 的 {@code zero_total_price}
+ *       变成噪音（8.7h 5.5 万次），真错价写 0 反而看不见了。</li>
+ * </ul>
  */
 class CachePriceServiceImplTest {
 
@@ -63,7 +70,7 @@ class CachePriceServiceImplTest {
         ReflectionTestUtils.setField(service, "priceCacheTtlPolicy", ttlPolicy);
     }
 
-    /** 缓存中该日期已有 p1~p3 三条在售 */
+    /** 缓存中该日期已有若干条在售 */
     private void givenCached(String... productIds) {
         Map<String, String> cached = new HashMap<>();
         for (String id : productIds) {
@@ -90,57 +97,73 @@ class CachePriceServiceImplTest {
         return b.build();
     }
 
-    /** 取所有写入批次中该 priceKey 下值为 0（即下架标记）的 productId */
-    private Set<String> zeroedProductIds() {
+    /** 取该 priceKey 下被批量删除的全部 field（可能分多批，全部并集） */
+    private Set<String> deletedProductIds() {
+        ArgumentCaptor<Map<String, Set<String>>> captor = ArgumentCaptor.forClass(Map.class);
+        Mockito.verify(redisUtils, Mockito.atLeastOnce()).batchHashDelete(captor.capture());
+        Set<String> all = new HashSet<>();
+        captor.getAllValues().forEach(batch -> {
+            Set<String> fields = batch.get(PRICE_KEY);
+            if (fields != null) {
+                all.addAll(fields);
+            }
+        });
+        return all;
+    }
+
+    /** 下架绝不许再写墓碑：任何写入批次里都不得出现 price:0 */
+    private void assertNoTombstoneWritten() {
         ArgumentCaptor<Map<String, Map<String, String>>> captor = ArgumentCaptor.forClass(Map.class);
-        Mockito.verify(redisUtils, Mockito.atLeastOnce())
+        Mockito.verify(redisUtils, Mockito.atLeast(0))
                 .batchHashMapSetWithExpire(captor.capture(), anyLong(), any(TimeUnit.class));
-        return captor.getAllValues().stream()
-                .map(batch -> batch.get(PRICE_KEY))
-                .filter(java.util.Objects::nonNull)
-                .flatMap(m -> m.entrySet().stream())
-                .filter(e -> e.getValue().contains("\"price\":0"))
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toSet());
+        long tombstones = captor.getAllValues().stream()
+                .flatMap(batch -> batch.values().stream())
+                .flatMap(m -> m.values().stream())
+                .filter(v -> v.contains("\"price\":0"))
+                .count();
+        assertEquals(0, tombstones, "下架必须 HDEL，不得再写 {\"price\":0} 墓碑");
     }
 
     /**
-     * 本类存在的理由：整店该日期全部下架时，三条都要置 0。
-     * 缺陷版本只会置 0 最后一条，另两条保留旧价至 TTL 过期。
+     * 本类存在的理由：整店该日期全部下架时，三条都要删掉。
+     * 缺陷版本只会删最后一条，另两条保留旧价至 TTL 过期（issue #96 的形状）。
      */
     @Test
-    void zeroesEveryVanishedProductWhenNothingIsOnSale() {
+    void deletesEveryVanishedProductWhenNothingIsOnSale() {
         givenCached("p1", "p2", "p3");
 
         // 入参产品无任何报价 → 该日期本轮零在售
         service.productToCache(List.of(product("p1", null)), oneNight(), sup());
 
-        assertEquals(Set.of("p1", "p2", "p3"), zeroedProductIds());
+        assertEquals(Set.of("p1", "p2", "p3"), deletedProductIds());
+        assertNoTombstoneWritten();
     }
 
-    /** 部分仍在售时，缺席的那些也要全部置 0，而非只置最后一条 */
+    /** 部分仍在售时，缺席的那些也要全部删掉，而非只删最后一条 */
     @Test
-    void zeroesEveryVanishedProductWhenSomeRemainOnSale() {
+    void deletesEveryVanishedProductWhenSomeRemainOnSale() {
         givenCached("p1", "p2", "p3");
 
         service.productToCache(List.of(product("p1", 12345)), oneNight(), sup());
 
-        assertEquals(Set.of("p2", "p3"), zeroedProductIds());
+        assertEquals(Set.of("p2", "p3"), deletedProductIds());
+        assertNoTombstoneWritten();
     }
 
     /**
-     * F-7 拦下的产品不得被当成"本轮无价"置 0——那会把"疑似错价"恶化成"确定无货"。
+     * F-7 拦下的产品不得被当成"本轮无价"删掉——那会把"疑似错价"恶化成"确定无货"。
      * 与上一条一并断言，防止为修下架累加而误伤拦截豁免。
      */
     @Test
-    void doesNotZeroProductsHeldBackByTheAbnormalPriceGuard() {
+    void doesNotDeleteProductsHeldBackByTheAbnormalPriceGuard() {
         givenCached("p1", "p2", "p3");
         AbnormalPriceGuard guard = (AbnormalPriceGuard) ReflectionTestUtils.getField(service, "abnormalPriceGuard");
         Mockito.when(guard.isAbnormalDrop(any(), any())).thenReturn(true);
 
-        // p1 报了新价但被拦下：它既不进 dataMap，也不该被置 0；p2/p3 是真下架
+        // p1 报了新价但被拦下：它既不进 dataMap，也不该被删；p2/p3 是真下架
         service.productToCache(List.of(product("p1", 1)), oneNight(), sup());
 
-        assertEquals(Set.of("p2", "p3"), zeroedProductIds());
+        assertEquals(Set.of("p2", "p3"), deletedProductIds());
+        assertNoTombstoneWritten();
     }
 }
