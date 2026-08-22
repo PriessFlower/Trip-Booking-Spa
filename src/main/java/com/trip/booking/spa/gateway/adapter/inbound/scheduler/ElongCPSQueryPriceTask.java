@@ -64,6 +64,9 @@ public class ElongCPSQueryPriceTask {
             elongCPSQueryPriceService.queryPriceQueueTask(2, 0, "scheduled-deal");
             elongCPSQueryPriceService.queryPriceQueueTask(0, 1, "scheduled-high");
             elongCPSQueryPriceService.queryPriceQueueTask(1, 0, "scheduled-normal");
+            // 远期档(priority=3)最后跑：成交酒店 T+7~29，小批滚动、约一天扫完一遍。
+            // 排最后是为了不侵占成交档的 30 分钟节奏——远期价按天级新鲜度已够用
+            elongCPSQueryPriceService.queryPriceQueueTask(3, 0, "scheduled-far");
         });
     }
 }
