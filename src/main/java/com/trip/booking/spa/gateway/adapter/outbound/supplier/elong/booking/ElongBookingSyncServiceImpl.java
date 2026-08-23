@@ -202,7 +202,14 @@ public class ElongBookingSyncServiceImpl
     }
 
     private ElongOrderCreateRequest buildRequest(BookingReq req, Offer offer) {
-        int rooms = req.getRoomNum() == null || req.getRoomNum() < 1 ? 1 : req.getRoomNum();
+        int reqRooms = req.getRoomNum() == null || req.getRoomNum() < 1 ? 1 : req.getRoomNum();
+        // 间数以验价句柄为准：TotalPrice=Σ每日价×间数是艺龙的校验恒等式（H001188），
+        // 三者必须同源。旧句柄无此键时回落上游间数（改动前签发、TTL 内的存量）
+        int rooms = parseIntOrDefault(offer.credential(ElongOfferCredentials.ROOM_NUM), reqRooms);
+        if (rooms != reqRooms) {
+            log.error("艺龙下单：下单间数与验价句柄不一致，以句柄为准,orderId={},req={},offer={}",
+                    req.getOrderId(), reqRooms, rooms);
+        }
         int adults = parseIntOrDefault(offer.credential(ElongOfferCredentials.ADULT_COUNT), 1);
         List<ElongOrderCreateRequest.OrderRoom> orderRooms = buildOrderRooms(req.getPersonName(), rooms);
         int customers = orderRooms.stream().mapToInt(r -> r.getCustomers().size()).sum();

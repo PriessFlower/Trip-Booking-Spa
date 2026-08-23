@@ -303,14 +303,46 @@ class ElongCheckPriceE2ETest {
                 .doesNotContain(inflated.toPlainString());
     }
 
+    @Test
+    @Order(5)
+    @DisplayName("多间下单前验价：roomNum=2 真打 validate，不得再撞 H001188")
+    void multiRoomBookableDeclaresRoomMultipliedTotal() {
+        assumeTrue(reference != null, "查价未取到参照产品，跳过");
+
+        CheckPriceRespDTO resp = service.checkPrices(req(VerifyLevel.BOOKABLE, 2));
+
+        // 针对 2026-08-23 高德 2 间真单（26082320295835a66d8b13dd）的拒因：TotalPrice
+        // 漏乘间数 → H001188|每日价传参异常。修复后该码不允许复现；SOLD_OUT/RATE_DEAD
+        // 是市场态，属可接受结果，故先断言拒因、再对可订态做条件断言
+        assertThat(StringUtils.defaultString(resp.getMessage()))
+                .as("H001188=申报总价与间数不匹配（本次修复对象）。实际态=%s", resp.getOutcome())
+                .doesNotContain("H001188");
+        assumeTrue(resp.getOutcome() == CheckPriceOutcome.BOOKABLE,
+                "本轮 2 间验价未通过（" + resp.getOutcome() + "：" + resp.getMessage() + "），后续断言跳过");
+
+        assertThat(resp.getOfferId()).isNotBlank();
+        // 句柄里间数与整单申报价绑定；申报价与展示价同为整单口径
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(redis, org.mockito.Mockito.atLeastOnce()).setex(anyString(), body.capture(), anyLong());
+        String json = body.getAllValues().get(body.getAllValues().size() - 1);
+        assertThat(json).contains("\"" + ElongOfferCredentials.ROOM_NUM + "\":\"2\"");
+        assertThat(declaredTotalOf(json).multiply(BigDecimal.valueOf(100)).intValue())
+                .as("申报价（元→分）与展示价必须同为整单口径")
+                .isCloseTo(resp.getSalePrice(), org.assertj.core.data.Percentage.withPercentage(2));
+    }
+
     private static CheckPriceReq req(VerifyLevel level) {
+        return req(level, 1);
+    }
+
+    private static CheckPriceReq req(VerifyLevel level, int roomNum) {
         return CheckPriceReq.builder()
                 .supplierId(10010).sHotelId(HOTEL)
                 .sProductId(reference.getProductId())
                 .productKey(reference.getProductKey())
                 .seenPrice(reference.getTotalPrice())
                 .checkIn(checkIn).checkOut(checkOut)
-                .roomNum(1).adultCount(1).childNum(0).childAges(new ArrayList<>())
+                .roomNum(roomNum).adultCount(1).childNum(0).childAges(new ArrayList<>())
                 .verifyLevel(level)
                 .build();
     }

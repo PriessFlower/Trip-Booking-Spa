@@ -364,29 +364,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     /** 二段：以本会话凭据打 hotel.data.validate，并把结果归入确定的分态 */
     private CheckPriceRespDTO validate(CheckPriceReq request, String hotelId, ElongRatePlan plan,
                                        List<ElongDataValidateRequest.DayPrice> dayPrices) {
-        BigDecimal declaredTotalYuan = sumYuan(dayPrices);
-        ElongDataValidateRequest validateRequest = ElongDataValidateRequest.builder()
-                .arrivalDate(request.getCheckIn())
-                .departureDate(request.getCheckOut())
-                // Earliest 取抓包样例常用值；Latest 固定 23:59:59——上游到店时间（如
-                // amap.EarlyArrivalTime）不得透传到此，会误伤可订性判定（移植风险⑩）
-                .earliestArrivalTime(request.getCheckIn() + " 12:00:00")
-                .latestArrivalTime(request.getCheckIn() + " 23:59:59")
-                .hotelId(hotelId)
-                .hotelCode(plan.getHotelCode())
-                .ratePlanId(plan.getRatePlanId())
-                .roomTypeID(plan.getRoomTypeId())
-                .littleMajiaId(plan.getLittleMajiaId())
-                .goodsUniqId(plan.getGoodsUniqId())
-                .shopperProductId(plan.getShopperProductId())
-                .subSupplierId(plan.getSubSupplierId())
-                .supplierId(plan.getSupplierId())
-                .declaredTotal(declaredTotalYuan)
-                .numberOfRooms(request.getRoomNum())
-                .numberOfAdults(request.getAdultCount())
-                .childAges(CollectionUtils.isEmpty(request.getChildAges()) ? List.of() : request.getChildAges())
-                .dayPriceList(dayPrices)
-                .build();
+        ElongDataValidateRequest validateRequest = buildValidateRequest(request, hotelId, plan, dayPrices);
+        BigDecimal declaredTotalYuan = validateRequest.getDeclaredTotal();
         String dataJson = JsonUtils.writeObject2Json(new ElongRequestEnvelope(properties.getVersion(), validateRequest));
         ElongDataValidateResponse data = callValidate(dataJson);
         if (data == null) {
@@ -516,7 +495,11 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     private CheckPriceRespDTO buildBookableResp(CheckPriceReq request, String hotelId, ElongRatePlan plan,
                                                 List<ElongDataValidateRequest.DayPrice> dayPrices,
                                                 BigDecimal declaredTotalYuan, ElongDataValidateResponse data) {
+        int rooms = roomsOf(request);
+        // salePrice 是整单口径（上游拿它与渠道整单上限比价）：验后价是单间逐晚合计，须乘间数；
+        // 回落值 declaredTotalYuan 在组装时已乘过
         int salePriceCents = validatedPriceCents(data, dayPrices.size())
+                .map(perRoomCents -> perRoomCents * rooms)
                 .orElse(declaredTotalYuan.multiply(BigDecimal.valueOf(100)).intValue());
         Map<String, String> credentials = new HashMap<>();
         credentials.put(ElongOfferCredentials.HOTEL_ID, hotelId);
@@ -529,6 +512,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         credentials.put(ElongOfferCredentials.SUB_SUPPLIER_ID, plan.getSubSupplierId());
         credentials.put(ElongOfferCredentials.SHOPPER_PRODUCT_ID, plan.getShopperProductId());
         credentials.put(ElongOfferCredentials.DECLARED_TOTAL, declaredTotalYuan.toPlainString());
+        // 间数与申报总价绑定入句柄：TotalPrice=Σ每日价×间数，下单侧必须用同一间数回放
+        credentials.put(ElongOfferCredentials.ROOM_NUM, String.valueOf(rooms));
         credentials.put(ElongOfferCredentials.DAY_PRICE_LIST, JsonUtils.writeObject2Json(dayPrices));
         credentials.put(ElongOfferCredentials.CHECK_IN, request.getCheckIn());
         credentials.put(ElongOfferCredentials.CHECK_OUT, request.getCheckOut());
@@ -590,7 +575,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         List<PriceInfo> priceInfos = buildPriceInfos(dayPrices);
         List<CancelPolicy> cancelPolicy =
                 productKeyDeriver.convertCancelPolicy(request.getCheckIn(), plan.getPrepayResult());
-        int totalCents = sumCents(dayPrices);
+        // salePrice 整单口径：每日价是单间的，多间须乘间数（与 BOOKABLE 档一致）
+        int totalCents = sumCents(dayPrices) * roomsOf(request);
         log.info("艺龙验价(仅现货)：有货但未验证可订性,sHotelId={},goodsUniqId={},价格={}分,退改条数={},房量限额={}",
                 request.getSHotelId(), plan.getGoodsUniqId(), totalCents, cancelPolicy.size(),
                 plan.getCurrentAlloment());
@@ -971,6 +957,43 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * （官方"仅用于国际及港澳台酒店"），拿不到说明数据异常；退回 Member 等于把"每单多付"
      * 保留成兜底策略。国内酒店无 Rate，接入时须按境内外分流而不是在此加兜底。
      */
+    /**
+     * 组装 hotel.data.validate 请求。TotalPrice 官方字段名即「多天*多间总价」：
+     * DayPriceList 是单间口径，TotalPrice = ΣDayPrice.Price × NumberOfRooms（官方 H001188
+     * 排查项原文）。此前漏乘间数，多间验价必被拒（2026-08-23 高德 2 间真单坐实）。
+     */
+    static ElongDataValidateRequest buildValidateRequest(CheckPriceReq request, String hotelId, ElongRatePlan plan,
+                                                         List<ElongDataValidateRequest.DayPrice> dayPrices) {
+        int rooms = roomsOf(request);
+        return ElongDataValidateRequest.builder()
+                .arrivalDate(request.getCheckIn())
+                .departureDate(request.getCheckOut())
+                // Earliest 取抓包样例常用值；Latest 固定 23:59:59——上游到店时间（如
+                // amap.EarlyArrivalTime）不得透传到此，会误伤可订性判定（移植风险⑩）
+                .earliestArrivalTime(request.getCheckIn() + " 12:00:00")
+                .latestArrivalTime(request.getCheckIn() + " 23:59:59")
+                .hotelId(hotelId)
+                .hotelCode(plan.getHotelCode())
+                .ratePlanId(plan.getRatePlanId())
+                .roomTypeID(plan.getRoomTypeId())
+                .littleMajiaId(plan.getLittleMajiaId())
+                .goodsUniqId(plan.getGoodsUniqId())
+                .shopperProductId(plan.getShopperProductId())
+                .subSupplierId(plan.getSubSupplierId())
+                .supplierId(plan.getSupplierId())
+                .declaredTotal(sumYuan(dayPrices).multiply(BigDecimal.valueOf(rooms)))
+                .numberOfRooms(rooms)
+                .numberOfAdults(request.getAdultCount())
+                .childAges(CollectionUtils.isEmpty(request.getChildAges()) ? List.of() : request.getChildAges())
+                .dayPriceList(dayPrices)
+                .build();
+    }
+
+    /** 间数：上游未携或非法一律按 1 间（与下单侧 buildRequest 同规） */
+    private static int roomsOf(CheckPriceReq request) {
+        return request.getRoomNum() == null || request.getRoomNum() < 1 ? 1 : request.getRoomNum();
+    }
+
     static List<ElongDataValidateRequest.DayPrice> buildDayPrices(List<ElongNightlyRate> nightlyRates) {
         if (CollectionUtils.isEmpty(nightlyRates)) {
             return null;
