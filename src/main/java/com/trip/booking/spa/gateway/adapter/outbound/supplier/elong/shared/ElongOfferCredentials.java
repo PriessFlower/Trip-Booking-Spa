@@ -64,6 +64,14 @@ public final class ElongOfferCredentials {
     /** 验价占用成人数。下单 NumberOfAdults（国际单必填）取此值，与验价口径同源 */
     public static final String ADULT_COUNT = "adultCount";
 
+    /**
+     * 验价间数。{@code TotalPrice = ΣDayPrice.Price × 间数}（官方 H001188 校验项），
+     * 故间数与 {@link #DECLARED_TOTAL} 绑定入句柄，下单 NumberOfRooms 取此值——
+     * 若用上游下单参数另算，间数一旦与验价不一致，申报总价必与之矛盾。
+     * 改动前签发的旧句柄无此键，下单侧回落上游间数。
+     */
+    public static final String ROOM_NUM = "roomNum";
+
     private ElongOfferCredentials() {
     }
 }
