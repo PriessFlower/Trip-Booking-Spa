@@ -66,6 +66,20 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
     private static final String LOCK_KEY = "lock:elong:cps:query-price";
 
     /**
+     * 换算入住日期用的时区——<b>艺龙的日期按北京时间</b>，故不取 JVM 默认时区。
+     *
+     * <p>任务行存的是相对天数（F-2.1），执行时才换算绝对日期。用 {@code LocalDate.now()} 意味着
+     * "今天"随容器的默认时区变：2026-08-25 01:00 生产实测，容器未设 TZ 走 UTC，我们刷的是
+     * 08-24/25/26，而上游 cursor（启动参数写死 Asia/Shanghai）要的是 08-25/26/27。两头都错——
+     * 08-24 在艺龙口径里已经过去（当日无货率 56%，次日 87%、第三日 90%，约三分之一额度白烧），
+     * 而上游要的第三天我们没有。
+     *
+     * <p>时区是<b>供应商属性</b>：日期口径由谁供货决定。Dockerfile 里也钉了 {@code TZ}，那是给
+     * 日志与其他日期用途兜底；本常量保证的是即便容器时区变了，刷价的日期窗口也不跟着漂。
+     */
+    private static final java.time.ZoneId SUPPLIER_ZONE = java.time.ZoneId.of("Asia/Shanghai");
+
+    /**
      * 刷价的用途桶键。<b>本类不再手写 acquire</b>——用途由 {@link CallPurpose#REFRESH} 声明、
      * 通道层扣格（§3.3 限流一律走统一限流）。这里只读它的生效值打进轮次日志：那行是唯一的
      * 轮次事实来源，而这个值决定本轮时长。
@@ -199,8 +213,9 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
                 task.setUpdateTime(new Date());
                 elongQueryPriceTaskMapper.updateAddCount(task);
 
-                LocalDate checkIn = LocalDate.now().plusDays(task.getDelayCheckIn());
-                LocalDate checkOut = LocalDate.now().plusDays(task.getDelayCheckOut());
+                // 显式给时区，不用 JVM 默认：默认时区随基础镜像变，而这里算的是供应商的入住日期
+                LocalDate checkIn = LocalDate.now(SUPPLIER_ZONE).plusDays(task.getDelayCheckIn());
+                LocalDate checkOut = LocalDate.now(SUPPLIER_ZONE).plusDays(task.getDelayCheckOut());
                 for (int adults : occupancyAdults) {
                     // 限流不在此处：queryPricesCache 这条路声明 CallPurpose.REFRESH，
                     // 通道层按用途扣「用途桶 + 接口桶」各一格并阻塞排队（每个占用各占一次调用）
