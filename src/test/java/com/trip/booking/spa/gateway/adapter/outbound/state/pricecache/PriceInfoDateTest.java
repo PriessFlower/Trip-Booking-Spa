@@ -35,12 +35,12 @@ class PriceInfoDateTest {
     private static final String D1 = "2026-09-01";
     private static final String D2 = "2026-09-02";
 
-    private CachePriceServiceImpl service;
+    private PriceCacheServiceImpl service;
     private RedisUtils redisUtils;
 
     @BeforeEach
     void setUp() {
-        service = new CachePriceServiceImpl();
+        service = new PriceCacheServiceImpl();
         redisUtils = Mockito.mock(RedisUtils.class);
         ReflectionTestUtils.setField(service, "redisUtils", redisUtils);
         ReflectionTestUtils.setField(service, "productAttributeReader",

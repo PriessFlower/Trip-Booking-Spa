@@ -54,7 +54,7 @@ import static org.mockito.Mockito.when;
  * 钉住报文，中间那段只有真跑代码才盖得住。
  *
  * <p><b>挡掉的只有落库与落缓存的副作用</b>：{@code elongQueryPriceTaskMapper}（反馈环升档，
- * 服务内已 try/catch 兜住）与 {@code cachePriceService}（resolve 的容差基准反查，内部
+ * 服务内已 try/catch 兜住）与 {@code priceCacheService}（resolve 的容差基准反查，内部
  * try/catch 返 null）留空；{@link OfferStore} 用真实实现 + 假 {@link RedisUtils}，以便断言
  * 句柄里真正写进去了什么。供应商调用、响应解析、productKey 派生、分态映射、凭据组装
  * <b>全部是真的</b>。

@@ -37,12 +37,12 @@ class NoInventoryMarkTest {
     private static final String D1 = "2026-09-01";
     private static final String D2 = "2026-09-02";
 
-    private CachePriceServiceImpl service;
+    private PriceCacheServiceImpl service;
     private RedisUtils redisUtils;
 
     @BeforeEach
     void setUp() {
-        service = new CachePriceServiceImpl();
+        service = new PriceCacheServiceImpl();
         redisUtils = Mockito.mock(RedisUtils.class);
         ReflectionTestUtils.setField(service, "redisUtils", redisUtils);
         ReflectionTestUtils.setField(service, "productAttributeReader",
@@ -72,7 +72,7 @@ class NoInventoryMarkTest {
         Map<String, Map<String, String>> written = cap.getValue();
 
         assertTrue(written.containsKey("price:H1:1:" + D1), "实际写入: " + written.keySet());
-        assertEquals("1", written.get("price:H1:1:" + D1).get(CachePriceServiceImpl.NO_INVENTORY_FIELD));
+        assertEquals("1", written.get("price:H1:1:" + D1).get(PriceCacheServiceImpl.NO_INVENTORY_FIELD));
     }
 
     /**
@@ -94,7 +94,7 @@ class NoInventoryMarkTest {
     @Test
     @DisplayName("读到标记 → NO_INVENTORY（确定事实，重试无用）")
     void markedShardReadsAsNoInventory() {
-        Mockito.when(redisUtils.hmGet("price:H1:1:" + D1, CachePriceServiceImpl.NO_INVENTORY_FIELD))
+        Mockito.when(redisUtils.hmGet("price:H1:1:" + D1, PriceCacheServiceImpl.NO_INVENTORY_FIELD))
                 .thenReturn("1");
 
         PricingResult r = service.getPriceResult(req(1), sup());
@@ -117,7 +117,7 @@ class NoInventoryMarkTest {
     @Test
     @DisplayName("1 人片的无货标记不会外溢到 2 人片")
     void oneAdultMarkDoesNotAnswerForTwoAdults() {
-        Mockito.when(redisUtils.hmGet("price:H1:1:" + D1, CachePriceServiceImpl.NO_INVENTORY_FIELD))
+        Mockito.when(redisUtils.hmGet("price:H1:1:" + D1, PriceCacheServiceImpl.NO_INVENTORY_FIELD))
                 .thenReturn("1");
 
         assertEquals(PricingOutcome.NO_INVENTORY, service.getPriceResult(req(1), sup()).outcome());
@@ -133,7 +133,7 @@ class NoInventoryMarkTest {
         PriceReq threeNights = PriceReq.builder().checkIn(D1).checkout("2026-09-04")
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).guestType(0)
                 .build();
-        Mockito.when(redisUtils.hmGet("price:H1:1:" + D1, CachePriceServiceImpl.NO_INVENTORY_FIELD))
+        Mockito.when(redisUtils.hmGet("price:H1:1:" + D1, PriceCacheServiceImpl.NO_INVENTORY_FIELD))
                 .thenReturn("1");
         // 第二、三天没标记
 
@@ -152,7 +152,7 @@ class NoInventoryMarkTest {
     void theMarkerIsNotParsedAsAPrice() {
         Mockito.when(redisUtils.hashMapListAndKey(Mockito.anyList()))
                 .thenReturn(Map.of("price:H1:1:" + D1,
-                        Map.of(CachePriceServiceImpl.NO_INVENTORY_FIELD, "1")));
+                        Map.of(PriceCacheServiceImpl.NO_INVENTORY_FIELD, "1")));
 
         PricingResult r = org.junit.jupiter.api.Assertions.assertDoesNotThrow(
                 () -> service.getPriceResult(req(1), sup()));
@@ -167,7 +167,7 @@ class NoInventoryMarkTest {
     void realPricesSurviveAlongsideAStaleMarker() {
         Mockito.when(redisUtils.hashMapListAndKey(Mockito.anyList()))
                 .thenReturn(Map.of("price:H1:1:" + D1, Map.of(
-                        CachePriceServiceImpl.NO_INVENTORY_FIELD, "1",
+                        PriceCacheServiceImpl.NO_INVENTORY_FIELD, "1",
                         "a".repeat(64), "{\"price\":12345}")));
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> service.getPriceResult(req(1), sup()));

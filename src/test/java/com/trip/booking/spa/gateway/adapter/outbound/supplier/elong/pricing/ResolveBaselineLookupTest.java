@@ -4,7 +4,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
-import com.trip.booking.spa.gateway.application.pricing.CachePriceService;
+import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  * 换票容差基准价的两条口径钉死。
  *
  * <p><b>① 区间</b>（2026-08-19 Owner 质疑时发现的量级错误）：基准价必须走与出价
- * <b>完全相同</b>的 {@link CachePriceService#getPrice} 路径——客人看到的价是按其查询区间
+ * <b>完全相同</b>的 {@link PriceCacheService#getPrice} 路径——客人看到的价是按其查询区间
  * 逐日累加的。曾错误地读产品详情缓存的 totalPrice 字段，那是刷价那一次（任务行区间通常
  * 1 晚）的快照，客人查 3 晚时基准会小一个量级。
  *
@@ -41,15 +41,15 @@ class ResolveBaselineLookupTest {
                 .build();
     }
 
-    private static ElongPriceServiceImpl serviceWith(CachePriceService cache) {
+    private static ElongPriceServiceImpl serviceWith(PriceCacheService cache) {
         ElongPriceServiceImpl service = new ElongPriceServiceImpl();
-        ReflectionTestUtils.setField(service, "cachePriceService", cache);
+        ReflectionTestUtils.setField(service, "priceCacheService", cache);
         return service;
     }
 
     @Test
     void baselineUsesSameDateRangeAsPricing() {
-        CachePriceService cache = Mockito.mock(CachePriceService.class);
+        PriceCacheService cache = Mockito.mock(PriceCacheService.class);
         Mockito.when(cache.getPrice(Mockito.any(), Mockito.any(), Mockito.any()))
                 .thenReturn(List.of(ProductRespDTO.builder().productId("P1").totalPrice(90000).build()));
 
@@ -68,7 +68,7 @@ class ResolveBaselineLookupTest {
      */
     @Test
     void baselineIsLookedUpByProductKeyNotByQuoteCode() {
-        CachePriceService cache = Mockito.mock(CachePriceService.class);
+        PriceCacheService cache = Mockito.mock(PriceCacheService.class);
         Mockito.when(cache.getPrice(Mockito.any(), Mockito.any(), Mockito.any()))
                 .thenReturn(List.of(ProductRespDTO.builder().productId("P1").totalPrice(90000).build()));
 
@@ -89,7 +89,7 @@ class ResolveBaselineLookupTest {
     /** 查不到基准就不换票——无锚不猜(R-1.6) */
     @Test
     void missingBaselineYieldsNull() {
-        CachePriceService cache = Mockito.mock(CachePriceService.class);
+        PriceCacheService cache = Mockito.mock(PriceCacheService.class);
         Mockito.when(cache.getPrice(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(List.of());
         assertNull(serviceWith(cache).lookupTotalPriceFromCache(req()));
     }
@@ -97,7 +97,7 @@ class ResolveBaselineLookupTest {
     /** 缓存异常不得打断验价主流程 */
     @Test
     void cacheFailureIsSwallowed() {
-        CachePriceService cache = Mockito.mock(CachePriceService.class);
+        PriceCacheService cache = Mockito.mock(PriceCacheService.class);
         Mockito.when(cache.getPrice(Mockito.any(), Mockito.any(), Mockito.any()))
                 .thenThrow(new RuntimeException("redis down"));
         assertNull(serviceWith(cache).lookupTotalPriceFromCache(req()));

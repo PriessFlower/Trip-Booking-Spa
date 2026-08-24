@@ -1,6 +1,5 @@
-package com.trip.booking.spa.gateway.application.misc;
+package com.trip.booking.spa.platform.observability;
 
-import com.trip.booking.spa.gateway.application.misc.RecordLogService;
 import com.trip.booking.spa.platform.redis.RedisUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;

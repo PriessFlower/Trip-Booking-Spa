@@ -34,13 +34,13 @@ class QuoteDroppedMetricTest {
     private static final String D2 = "2026-09-02";
     private static final String D3 = "2026-09-03";
 
-    private CachePriceServiceImpl service;
+    private PriceCacheServiceImpl service;
     private com.trip.booking.spa.platform.redis.RedisUtils redisUtils;
     private SimpleMeterRegistry registry;
 
     @BeforeEach
     void setUp() {
-        service = new CachePriceServiceImpl();
+        service = new PriceCacheServiceImpl();
         redisUtils = Mockito.mock(com.trip.booking.spa.platform.redis.RedisUtils.class);
         ReflectionTestUtils.setField(service, "redisUtils", redisUtils);
         ReflectionTestUtils.setField(service, "productAttributeReader",

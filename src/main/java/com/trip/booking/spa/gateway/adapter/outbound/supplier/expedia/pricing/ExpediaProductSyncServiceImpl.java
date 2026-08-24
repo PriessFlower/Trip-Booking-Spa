@@ -6,7 +6,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaHelper;
 import com.trip.booking.spa.gateway.application.pricing.AbstractProductSyncSupportService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
-import com.trip.booking.spa.gateway.application.misc.RecordLogService;
+import com.trip.booking.spa.platform.observability.RecordLogService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;

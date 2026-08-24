@@ -9,7 +9,7 @@ import java.util.List;
 /**
  * 艺龙查价预热任务队列的读写口，与 {@link ExpediaQueryPriceTaskMapper} 同构。
  *
- * <p><b>只读任务坐标，不碰价格</b>：刷价产物走 Redis（CachePriceService），
+ * <p><b>只读任务坐标，不碰价格</b>：刷价产物走 Redis（PriceCacheService），
  * 本表只记"该刷哪家、上次何时刷的"。易腐令牌（GoodsUniqId、马甲）一律不入库（R-2.1）。
  */
 @Repository

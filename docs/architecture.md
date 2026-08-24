@@ -56,7 +56,7 @@ com/trip/booking/spa/
 │   ├── domain/                         ② 纯模型:键派生(product/)、申报(supplier/)、
 │   │                                      三态枚举(booking/)、共用件(shared/)
 │   ├── application/                    ② 能力接口+三态模板,按能力分包:
-│   │   │                                  pricing/ checkprice/ booking/ order/ cancellation/ misc/
+│   │   │                                  pricing/ checkprice/ booking/ order/ cancellation/
 │   └── adapter/
 │       ├── inbound/
 │       │   ├── rest/                   ① SpaController · controller/ common/ dto/ request/
@@ -66,7 +66,7 @@ com/trip/booking/spa/
 │           ├── supplier/expedia/       ③ 按能力分子包:pricing/ checkprice/ booking/
 │           │                              order/ cancellation/ content/(原 staticdata)
 │           │                              公共件在 shared/(合同档案、签名、原始 bean)
-│           └── state/                  ⑤ offer/(OfferStore) pricecache/ catalog/(建档
+│           └── state/                  ⑤ offer/(OfferStore) pricecache/(PriceCacheService 及实现) catalog/(建档
 │                                          与刷价任务队列 mapper)
 ├── platform/                           ④+技术设施:http/(BaseHttpAccess=限流唯一闸门、
 │                                       asynchttp) ratelimit/ redis/ observability/
