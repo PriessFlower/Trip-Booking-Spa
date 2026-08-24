@@ -160,6 +160,16 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
             return true;
         }
 
+        // 轮内进度（O-3.9）：其余 refresh_* 都在轮末一次上报，于是一轮 9 分钟里面板是平的，
+        // 短窗口看 rate 会落在两轮之间画成 0，看着像没在跑。这两个 gauge 给出「已处理/共」，
+        // 调速时不必等一轮结束就能看出效果
+        Map<String, Object> roundTags = new HashMap<>(2);
+        roundTags.put(MetricTags.SUPPLIER, SupplierSourceEnum.ELONG.name());
+        roundTags.put("priority", String.valueOf(priority));
+        int totalCalls = list.size() * occupancyAdults.size();
+        Monitor.recordValue(MetricNames.REFRESH_INFLIGHT_SIZE, roundTags, totalCalls);
+        Monitor.recordValue(MetricNames.REFRESH_INFLIGHT_DONE, roundTags, 0);
+
         AtomicInteger onSale = new AtomicInteger();
         AtomicInteger empty = new AtomicInteger();
         AtomicInteger failed = new AtomicInteger();
@@ -209,14 +219,17 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
 
                     List<ProductRespDTO> products = elongPriceService.queryPricesCache(request, supplier);
                     if (products == null) {
-                        // 调用未取得结果：绝大多数是账号级频控（与 cursor 抢额度），
-                        // 少数是网络/解析。两者都不该动缓存，计入 failed 供调速参考
+                        // 调用未取得结果：频控命中或网络/解析失败。
+                        // 两者都不该动缓存（F-5.1），计入 failed 供调速参考
                         failed.incrementAndGet();
                     } else if (products.isEmpty()) {
                         empty.incrementAndGet();
                     } else {
                         onSale.incrementAndGet();
                     }
+                    // 轮内进度：三态计数之和即已处理的调用数，逐次更新（gauge 只覆盖值，不累加）
+                    Monitor.recordValue(MetricNames.REFRESH_INFLIGHT_DONE, roundTags,
+                            onSale.get() + empty.get() + failed.get());
                 }
             } catch (Exception e) {
                 failed.incrementAndGet();
@@ -261,16 +274,16 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
         // 44 分钟)、发版即清空。这些数正是要跨天比的:失败率决定该不该调速、借入/复位的漂移
         // 是孤儿行的信号(issue #95)。日志行照留(§6.1.1 不许因为加了指标就删日志)。
         // 在轮次边界一次上报,不在循环体内逐条打——逐条既放大写入量,也拿不到"这一轮"的口径。
-        Map<String, Object> tags = new HashMap<>(2);
-        tags.put(MetricTags.SUPPLIER, SupplierSourceEnum.ELONG.name());
-        tags.put("priority", String.valueOf(priority));
-        Monitor.recordMany(MetricNames.REFRESH_ROWS, tags, list.size() * occupancyAdults.size());
-        Monitor.recordMany(MetricNames.REFRESH_ONSALE, tags, onSale.get());
-        Monitor.recordMany(MetricNames.REFRESH_EMPTY, tags, empty.get());
-        Monitor.recordMany(MetricNames.REFRESH_FAILED, tags, failed.get());
-        Monitor.recordMany(MetricNames.REFRESH_BORROWED, tags, borrowed.get());
-        Monitor.recordMany(MetricNames.REFRESH_DEMOTED, tags, demoted.get());
-        Monitor.recordTime(MetricNames.REFRESH_ROUND, tags, roundCost);
+        Monitor.recordMany(MetricNames.REFRESH_ROWS, roundTags, totalCalls);
+        Monitor.recordMany(MetricNames.REFRESH_ONSALE, roundTags, onSale.get());
+        Monitor.recordMany(MetricNames.REFRESH_EMPTY, roundTags, empty.get());
+        Monitor.recordMany(MetricNames.REFRESH_FAILED, roundTags, failed.get());
+        Monitor.recordMany(MetricNames.REFRESH_BORROWED, roundTags, borrowed.get());
+        Monitor.recordMany(MetricNames.REFRESH_DEMOTED, roundTags, demoted.get());
+        Monitor.recordTime(MetricNames.REFRESH_ROUND, roundTags, roundCost);
+        // 轮次收尾把进度归零：留着上一轮的终值会让面板在两轮之间显示「已处理=满」，
+        // 看着像一直在跑。归零后「done 从 0 爬到 total」就是一轮的形状
+        Monitor.recordValue(MetricNames.REFRESH_INFLIGHT_DONE, roundTags, 0);
         log.info("elongQueryPriceTask 本轮结束, trigger={}, priority={}, 共 {} 行, 有在售={}, 无在售={}, 失败={}, 借入={}, 复位={}, 并发={}, 实际 {} QPS, 耗时 {} ms",
                 trigger, priority, list.size(), onSale.get(), empty.get(), failed.get(),
                 borrowed.get(), demoted.get(), concurrency,

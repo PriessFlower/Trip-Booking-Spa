@@ -85,6 +85,24 @@ public final class MetricNames {
     /** 刷价一轮的耗时（毫秒，O-2.6） */
     public static final String REFRESH_ROUND = "refresh_round";
 
+    /**
+     * 本轮已处理的调用数（gauge，轮内实时更新）。
+     *
+     * <p>为什么需要它：上面那些 {@code refresh_*} 计数器都在<b>轮末一次上报</b>，于是一轮 9 分钟里
+     * 面板上是一条平线——用 5 分钟窗口去看 rate 大概率落在两个轮次之间，画出来是 0，看着像没在跑
+     * （2026-08-25 实测踩到）。本 gauge 与 {@link #REFRESH_INFLIGHT_SIZE} 配对，给出「已处理/共」
+     * 的轮内进度，调速时不必等一轮结束就能看出效果。
+     */
+    public static final String REFRESH_INFLIGHT_DONE = "refresh_inflight_done";
+
+    /**
+     * 本轮共需处理的调用数（gauge，= 取到的行数 × 占用数）。与 {@link #REFRESH_INFLIGHT_DONE} 配对。
+     *
+     * <p>叫 size 而不是 total：埋点名不得自带 {@code _total} 后缀（O-2.2）——Prometheus 会给
+     * counter 再追加一次，得到 {@code xxx_total_total}。这条有架构测试守着。
+     */
+    public static final String REFRESH_INFLIGHT_SIZE = "refresh_inflight_size";
+
     /** 验价时逐日价与总价的对齐检查。标签 supplier/outcome，取值见 {@link #ALIGN_MISMATCH} 等 */
     public static final String VALIDATE_DAY_PRICE_ALIGN = "validate_day_price_align";
 
