@@ -52,7 +52,7 @@
 | 查价调用与响应解析 | 协议完全不同 | `hotel.detail` vs Expedia `availability` |
 | **productKey 派生** | 键成分取值各家不同（房型 ID 字段名、餐食结构、退改结构） | `ElongProductKeyDeriver` / `ExpediaProductKeyDeriver` |
 | 单次可查酒店数 | 供应商硬约束 | 艺龙**必须逐店**（非大陆 1 家/次，混批返回假空）；Expedia 可批量 |
-| QPS 配额值 | 契约不同 | 艺龙 10（且曾与 cursor 共享）；Expedia 500 |
+| QPS 配额值 | 契约不同 | 艺龙**按方法各自限**（2026-08-24 核对：`hotel.detail` 15、`validate` 10、`order.detail` 50、下单与取消各 3），无账号总额；Expedia 500 |
 | "无货"判定 | 响应形态不同 | 艺龙 `Rooms=[]`；Expedia 空 `rates` |
 | 频控/限流错误码识别 | 码表不同 | 艺龙 `A201010001`；Expedia HTTP 429 |
 | 日期窗口偏好 | 业务与库存特性不同 | 由任务行 `delay_check_in/out` 承载，值按家配 |

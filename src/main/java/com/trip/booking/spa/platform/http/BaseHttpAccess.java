@@ -12,7 +12,8 @@ import com.trip.booking.spa.platform.observability.CallStatus;
 import com.trip.booking.spa.platform.observability.MetricNames;
 import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
-import com.trip.booking.spa.platform.ratelimit.RateLimitHolder;
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
+import com.trip.booking.spa.platform.ratelimit.Permits;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import com.google.common.base.Joiner;
 import org.apache.http.HttpStatus;
@@ -56,13 +57,18 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
         this.retries = retries;
     }
 
-    public ResponseResult<T> access(U request) {
+    public ResponseResult<T> access(U request, CallPurpose purpose) {
         long start = System.currentTimeMillis();
-        // 统一限流：所有供应商 HTTP 调用的唯一闸门。QPS 配在 Nacos，key = 供应商_接口。
-        String limitKey = buildGlobalLimitKey();
-        if (!RateLimitHolder.get().tryAcquire(limitKey)) {
+        // 统一限流：所有供应商 HTTP 调用的唯一闸门（§3.3）。两级各扣一格：
+        //   接口桶 GLOBAL_LIMIT:<供应商>:<接口>          = 对供应商的承诺，硬顶
+        //   用途桶 GLOBAL_LIMIT:<供应商>:<接口>:<用途>   = 我方内部怎么分
+        // 先扣用途桶（较紧的那个），再扣接口桶。用途桶未登记时只扣接口桶（见
+        // RateLimitProperties#isRegistered），故代码可先于配置发布，行为与改动前一致。
+        try {
+            Permits.take(buildGlobalLimitKey(), purpose);
+        } catch (RedisLimitException e) {
             Monitor.recordOne(MetricNames.SUPPLIER_IO_ACCESS, ioTags(CallStatus.THROTTLED));
-            throw new RedisLimitException("Request exceeds rate limit, key = " + limitKey);
+            throw e;
         }
         beforeAccess(request);
         String url = buildRequestUrl();

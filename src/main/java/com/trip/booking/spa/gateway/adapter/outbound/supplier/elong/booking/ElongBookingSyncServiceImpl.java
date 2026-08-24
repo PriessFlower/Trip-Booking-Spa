@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.booking;
 
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.BookingRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.BookingReq;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.Offer;
@@ -132,7 +133,7 @@ public class ElongBookingSyncServiceImpl
         String dataJson = JsonUtils.writeObject2Json(
                 new ElongRequestEnvelope(properties.getVersion(), createRequest));
         ResponseResult<ElongOrderCreateResponse> result = new CreateOrderAccess(properties)
-                .access(new ElongRestCall("hotel.order.create", dataJson));
+                .access(new ElongRestCall("hotel.order.create", dataJson), CallPurpose.ORDER);
 
         ElongOrderCreateResponse data = result == null ? null : result.getData();
         Classification classification = ElongBookingClassifier.classifyCreate(data);
@@ -193,7 +194,7 @@ public class ElongBookingSyncServiceImpl
             String dataJson = JsonUtils.writeObject2Json(new ElongRequestEnvelope(properties.getVersion(),
                     ElongOrderDetailRequest.builder().orderId(0L).affiliateConfirmationId(orderId).build()));
             ResponseResult<ElongOrderDetailResponse> result = new QueryOrderAccess(properties)
-                    .access(new ElongRestCall("hotel.order.detail", dataJson));
+                    .access(new ElongRestCall("hotel.order.detail", dataJson), CallPurpose.ORDER);
             return result == null ? null : result.getData();
         } catch (Exception e) {
             log.error("艺龙下单：反查异常,orderId={}", orderId, e);

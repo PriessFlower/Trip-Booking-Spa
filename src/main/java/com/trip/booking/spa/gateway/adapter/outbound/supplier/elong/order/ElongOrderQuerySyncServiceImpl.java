@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.order;
 
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.OrderRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.OrderQueryReq;
@@ -59,7 +60,7 @@ public class ElongOrderQuerySyncServiceImpl
                 .build();
         String dataJson = JsonUtils.writeObject2Json(new ElongRequestEnvelope(properties.getVersion(), request));
         ResponseResult<ElongOrderDetailResponse> result = new QueryOrderAccess(properties)
-                .access(new ElongRestCall("hotel.order.detail", dataJson));
+                .access(new ElongRestCall("hotel.order.detail", dataJson), CallPurpose.ORDER);
         return result == null ? null : result.getData();
     }
 
