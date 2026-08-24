@@ -37,7 +37,7 @@ import static org.mockito.ArgumentMatchers.anyString;
  *       变成噪音（8.7h 5.5 万次），真错价写 0 反而看不见了。</li>
  * </ul>
  */
-class CachePriceServiceImplTest {
+class PriceCacheServiceImplTest {
 
     private static final String DATE = "2026-09-01";
     /**
@@ -46,12 +46,12 @@ class CachePriceServiceImplTest {
      */
     private static final String PRICE_KEY = "price:H1:1:" + DATE;
 
-    private CachePriceServiceImpl service;
+    private PriceCacheServiceImpl service;
     private RedisUtils redisUtils;
 
     @BeforeEach
     void setUp() {
-        service = new CachePriceServiceImpl();
+        service = new PriceCacheServiceImpl();
         redisUtils = Mockito.mock(RedisUtils.class);
 
         PriceCacheTrimmer trimmer = Mockito.mock(PriceCacheTrimmer.class);

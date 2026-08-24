@@ -85,6 +85,28 @@ class AbstractCheckPriceSyncSupportServiceTest {
                 "折叠成不确定会让上游反复重试一个必定失败的产品标识");
     }
 
+    /**
+     * 称可订却拿不出句柄，属应答自相矛盾：上游拿它无从下单。
+     *
+     * <p>现网两家的可订路径本就必带句柄（拿不到时它们自己就回不确定），这道关卡是给下一家的
+     * ——漏了不报错，只会让上游拿一个空凭据去建单，而建单不可重试。
+     */
+    @Test
+    void bookableWithoutOfferIdIsDemotedToIndeterminate() {
+        CheckPriceRespDTO resp = new StubCheckPriceService(Behaviour.BOOKABLE_WITHOUT_OFFER).checkPrice(req());
+
+        assertEquals(CheckPriceOutcome.INDETERMINATE, resp.getOutcome(),
+                "无句柄的「可订」不是可订：上游据此下单必失败，而彼时旅客已在等结果");
+    }
+
+    /** 句柄没有剩余时效，上游无从判断该直接下单还是先重新验价 */
+    @Test
+    void bookableWithoutOfferTtlIsDemotedToIndeterminate() {
+        CheckPriceRespDTO resp = new StubCheckPriceService(Behaviour.BOOKABLE_WITHOUT_TTL).checkPrice(req());
+
+        assertEquals(CheckPriceOutcome.INDETERMINATE, resp.getOutcome());
+    }
+
     @Test
     void bookableIsPassedThrough() {
         CheckPriceRespDTO resp = new StubCheckPriceService(Behaviour.BOOKABLE).checkPrice(req());
@@ -94,7 +116,8 @@ class AbstractCheckPriceSyncSupportServiceTest {
     }
 
     private enum Behaviour {
-        RETURN_NULL, THROW, CONVERT_TO_NULL, OMIT_OUTCOME, SOLD_OUT, RATE_DEAD, BOOKABLE
+        RETURN_NULL, THROW, CONVERT_TO_NULL, OMIT_OUTCOME, SOLD_OUT, RATE_DEAD, BOOKABLE,
+        BOOKABLE_WITHOUT_OFFER, BOOKABLE_WITHOUT_TTL
     }
 
     private static final class StubCheckPriceService extends AbstractCheckPriceSyncSupportService<String> {
@@ -128,10 +151,21 @@ class AbstractCheckPriceSyncSupportServiceTest {
                     return CheckPriceRespDTO.builder().outcome(CheckPriceOutcome.SOLD_OUT).build();
                 case RATE_DEAD:
                     return CheckPriceRespDTO.builder().outcome(CheckPriceOutcome.RATE_DEAD).build();
+                case BOOKABLE_WITHOUT_OFFER:
+                    return CheckPriceRespDTO.builder()
+                            .outcome(CheckPriceOutcome.BOOKABLE)
+                            .offerTtlSeconds(600L)
+                            .build();
+                case BOOKABLE_WITHOUT_TTL:
+                    return CheckPriceRespDTO.builder()
+                            .outcome(CheckPriceOutcome.BOOKABLE)
+                            .offerId("of_stub")
+                            .build();
                 default:
                     return CheckPriceRespDTO.builder()
                             .outcome(CheckPriceOutcome.BOOKABLE)
                             .offerId("of_stub")
+                            .offerTtlSeconds(600L)
                             .build();
             }
         }

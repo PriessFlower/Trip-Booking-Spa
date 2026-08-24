@@ -77,7 +77,7 @@ class DelistByHdelRealDataE2EManual {
             RedisUtils redisUtils = new RedisUtils();
             ReflectionTestUtils.setField(redisUtils, "redisTemplate", template);
 
-            CachePriceServiceImpl service = new CachePriceServiceImpl();
+            PriceCacheServiceImpl service = new PriceCacheServiceImpl();
             ReflectionTestUtils.setField(service, "redisUtils", redisUtils);
             ReflectionTestUtils.setField(service, "priceCacheTrimmer", new PriceCacheTrimmer());
             ReflectionTestUtils.setField(service, "abnormalPriceGuard", new AbnormalPriceGuard());

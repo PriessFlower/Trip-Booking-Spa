@@ -2,7 +2,7 @@ package com.trip.booking.spa.gateway.adapter.inbound.rest.controller;
 
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
-import com.trip.booking.spa.gateway.application.pricing.CachePriceService;
+import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.bootstrap.NacosRuntimeConfig;
 import com.trip.booking.spa.platform.observability.Monitor;
@@ -30,18 +30,18 @@ import static org.mockito.ArgumentMatchers.any;
 class SpaPriceLegMetricTest {
 
     private SpaController controller;
-    private CachePriceService cachePriceService;
+    private PriceCacheService priceCacheService;
     private SimpleMeterRegistry registry;
 
     @BeforeEach
     void setUp() {
         controller = new SpaController();
-        cachePriceService = Mockito.mock(CachePriceService.class);
+        priceCacheService = Mockito.mock(PriceCacheService.class);
         NacosRuntimeConfig config = Mockito.mock(NacosRuntimeConfig.class);
         // 10010 配置为走缓存、全量酒店
         Mockito.when(config.getCachePriceSuppliers()).thenReturn(List.of(10010));
         Mockito.when(config.getCachePriceHotels()).thenReturn(Map.of());
-        ReflectionTestUtils.setField(controller, "cachePriceService", cachePriceService);
+        ReflectionTestUtils.setField(controller, "priceCacheService", priceCacheService);
         ReflectionTestUtils.setField(controller, "nacosRuntimeConfig", config);
 
         registry = new SimpleMeterRegistry();
@@ -70,7 +70,7 @@ class SpaPriceLegMetricTest {
     @Test
     @DisplayName("缓存腿正常分态 → outcome=no_inventory 计一次")
     void normalLegIsCounted() {
-        Mockito.when(cachePriceService.getPriceResult(any(), any()))
+        Mockito.when(priceCacheService.getPriceResult(any(), any()))
                 .thenReturn(PricingResult.noInventory());
 
         controller.queryPrice(req());
@@ -81,7 +81,7 @@ class SpaPriceLegMetricTest {
     @Test
     @DisplayName("缓存读抛异常 → outcome=error 计一次，异常照常抛出")
     void errorLegIsCounted() {
-        Mockito.when(cachePriceService.getPriceResult(any(), any()))
+        Mockito.when(priceCacheService.getPriceResult(any(), any()))
                 .thenThrow(new IllegalStateException("redis down"));
 
         assertThrows(IllegalStateException.class, () -> controller.queryPrice(req()));

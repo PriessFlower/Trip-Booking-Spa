@@ -35,7 +35,7 @@ import java.util.Map;
  * 从来没有被换票读过。
  *
  * <p>改为 1 条更是<b>正确性要求</b>：价格缓存的字段名已改为 productKey
- * （见 CachePriceServiceImpl#cacheField），同一等价类的多条会写进<b>同一个 field</b>，
+ * （见 PriceCacheServiceImpl#cacheField），同一等价类的多条会写进<b>同一个 field</b>，
  * 后写覆盖先写。本类按价<b>升序</b>保留，于是留 2 条时第二便宜的会覆盖最便宜的——
  * 与"同一卖法给最低价"正好相反。
  *

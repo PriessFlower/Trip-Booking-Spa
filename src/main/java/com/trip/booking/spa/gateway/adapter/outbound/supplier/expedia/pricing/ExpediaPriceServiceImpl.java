@@ -32,7 +32,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.Exp
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaOfferCredentials;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing.ExpediaPriceService;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaUtils;
-import com.trip.booking.spa.gateway.application.pricing.CachePriceService;
+import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.platform.observability.CallStatus;
 import com.trip.booking.spa.platform.observability.MetricNames;
@@ -146,7 +146,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     private DistributedRateLimiter rateLimiter;
 
     @Autowired
-    private CachePriceService cachePriceService;
+    private PriceCacheService priceCacheService;
 
     @Override
     public PricingResult queryPrices(PriceReq request, Supplier supplier) {
@@ -312,7 +312,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
      * 逐晚拆分报价，并把总佣金摊到各晚。
      *
      * <p><b>不变量：{@code Σ priceInfos.price == totalPrice}</b>。走缓存的读路径是逐晚累加
-     * 重算总价（{@code CachePriceServiceImpl.getPrice}），而实时路径扣的是全额佣金；佣金若
+     * 重算总价（{@code PriceCacheServiceImpl.getPrice}），而实时路径扣的是全额佣金；佣金若
      * 按晚整除、余数丢弃，同一产品两条路径就会报出相差 {@code sumCommission mod n} 分的
      * 两个总价（issue #99）。金额极小（最多 n-1 分），但口径不唯一，日后对账会冒出一批
      * 无法解释的分位差。故余数必须摊回去：前 {@code remainder} 晚各多扣 1 分。
@@ -705,7 +705,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         List<ProductRespDTO> productRespDTOList = convertPriceResp(resultOnly.getData().getHotelPrices().get(0), "hotel_only", request);
 
         //插入缓存
-        cachePriceService.productToCache(productRespDTOList, request, supplier);
+        priceCacheService.productToCache(productRespDTOList, request, supplier);
         return productRespDTOList;
     }
 

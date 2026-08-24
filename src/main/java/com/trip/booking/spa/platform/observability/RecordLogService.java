@@ -1,4 +1,4 @@
-package com.trip.booking.spa.gateway.application.misc;
+package com.trip.booking.spa.platform.observability;
 
 /**
  * 按小时把供应商调用数 INCR 进 Redis。

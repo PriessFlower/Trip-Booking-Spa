@@ -37,7 +37,7 @@
 | 任务表结构与轮转语义（相对天数、`ORDER BY update_time`、优先级三档） | 每家一张同构表 + 各自 Mapper |
 | 调度骨架（取批 → 限流 → 逐个刷 → 回写时间 → 三态计数） | `<家>CPSQueryPriceService` 各自实现，但**结构必须一致** |
 | Redisson 锁与"一轮一返回"纪律 | 同上 |
-| 缓存键结构 `price:{hotelId}:{date}` / `priceInfo:{hotelId}:{productId}` | `state/pricecache/CachePriceServiceImpl`（与供应商无关） |
+| 缓存键结构 `price:{hotelId}:{date}` / `priceInfo:{hotelId}:{productId}` | `state/pricecache/PriceCacheServiceImpl`（与供应商无关） |
 | TTL 分档策略（F-4） | 同上 |
 | 失败三层处置（F-5） | 通用判据 + 各家错误码识别 |
 | 裁剪算法（F-3，按 productKey 分组取最低） | 通用：`domain/product` 或 `application/pricing` |
@@ -92,7 +92,7 @@
 
 - **F-4.1 (MUST)** 价格存 Redis Hash `price:{hotelId}:{date}`，**field = productKey**；产品静态信息存 **`product:{hotelId}:{productKey}`**。价格与静态信息分离——前者高频变动、后者稳定，TTL 不同。
   - field 必须是**跨次稳定**的 productKey，不是易腐的 productId：刷价按单晚切片，每个日期是一次独立调用，易腐码逐次轮换，两天的 field 集合交集恒为空——**住 2 晚及以上一个产品都出不来**（2026-08-19 生产实证，PR #132）。productKey 缺席时才退回 productId。
-  - **读取侧必须用同一个 field，禁止各自拼**。反面即本条自身：PR #132 只改了写入侧，艺龙验价的两条反查还按 productId 找，恒 miss 且只有一条 warn；本文这条规则也与代码分叉了一天（2026-08-20 修正）。故 `CachePriceService.getPrice` 的字段限定改为**显式入参**，不再从 `Supplier.sProductId` 顺手取——那个名字说的是报价码、语义却是缓存字段，正是「两端靠约定对齐」的病灶。
+  - **读取侧必须用同一个 field，禁止各自拼**。反面即本条自身：PR #132 只改了写入侧，艺龙验价的两条反查还按 productId 找，恒 miss 且只有一条 warn；本文这条规则也与代码分叉了一天（2026-08-20 修正）。故 `PriceCacheService.getPrice` 的字段限定改为**显式入参**，不再从 `Supplier.sProductId` 顺手取——那个名字说的是报价码、语义却是缓存字段，正是「两端靠约定对齐」的病灶。
 - **F-4.1.1 (MUST)** Redis 里的产品静态信息是**读性能副本，不是事实源**（R-2.6）。事实源是目录/档案表：稳定属性（productKey、房型、餐食、退改类、占用）刷价时 upsert 落库，Redis 那份可随时重建、丢了不影响正确性。
   - 反面是艺龙迁移初期（2026-08-19 前）：建档未接，17.5 万条产品详情只在 Redis，占该实例 **97.4% 的键、1.19G/2G 内存**（仅 2,615 家酒店）；且因缓存被当事实源，换票基准误取刷价快照的单晚价，与客人所见的区间总价差一个量级。
   - 判据同 R-2.6：**「供应商明天换一批报价码，这条信息还对吗？」对 → MySQL；错 → Redis。**

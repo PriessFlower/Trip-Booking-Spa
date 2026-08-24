@@ -56,7 +56,7 @@ com/trip/booking/spa/
 │   ├── domain/                         ② 纯模型:键派生(product/)、申报(supplier/)、
 │   │                                      三态枚举(booking/)、共用件(shared/)
 │   ├── application/                    ② 能力接口+三态模板,按能力分包:
-│   │   │                                  pricing/ checkprice/ booking/ order/ cancellation/ misc/
+│   │   │                                  pricing/ checkprice/ booking/ order/ cancellation/
 │   └── adapter/
 │       ├── inbound/
 │       │   ├── rest/                   ① SpaController · controller/ common/ dto/ request/
@@ -66,7 +66,7 @@ com/trip/booking/spa/
 │           ├── supplier/expedia/       ③ 按能力分子包:pricing/ checkprice/ booking/
 │           │                              order/ cancellation/ content/(原 staticdata)
 │           │                              公共件在 shared/(合同档案、签名、原始 bean)
-│           └── state/                  ⑤ offer/(OfferStore) pricecache/ catalog/(建档
+│           └── state/                  ⑤ offer/(OfferStore) pricecache/(PriceCacheService 及实现) catalog/(建档
 │                                          与刷价任务队列 mapper)
 ├── platform/                           ④+技术设施:http/(BaseHttpAccess=限流唯一闸门、
 │                                       asynchttp) ratelimit/ redis/ observability/
@@ -187,6 +187,12 @@ bean 名对得上就自动进矩阵,无需改动 ①。
 
 各抽象模板（②）的兜底一律落到"不确定"那一态，且**判定"确定"的权力只交给 ③**——
 只有适配层读得懂供应商在说什么。
+
+验价模板另守一条**应答自洽**：回 `BOOKABLE` 必须同时给出 `offerId` 与正的
+`offerTtlSeconds`，缺任一即降为 `INDETERMINATE`。理由是上游拿"无句柄的可订"
+无从下单、拿"无时效的句柄"无从判断该直接下单还是重新验价；而它属于形状约束、
+与供应商无关，故收在 ② 而不是各家实现里。现网两家的可订路径本就必带这两项
+（拿不到句柄时它们自己就回不确定），这道关卡是给下一家接入时用的。
 
 ### 4.2 把易腐令牌关在内部（OfferStore）
 

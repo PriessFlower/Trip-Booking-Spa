@@ -182,7 +182,7 @@ public class ExpediaProductKeyDeriver {
      */
     public Meal convertMeal(Integer adultNum, Map<String, QueryPriceResponse.Amenity> amenities) {
         // 部分 rate 不下发 amenities（实测 2342 行刷价中 30 次），视为无餐食。
-        // count 取 0 而非 null：缓存复用时 CachePriceServiceImpl 会比较 meal.count，null 会空指针
+        // count 取 0 而非 null：缓存复用时 PriceCacheServiceImpl 会比较 meal.count，null 会空指针
         if (null == amenities) {
             return noMeal();
         }

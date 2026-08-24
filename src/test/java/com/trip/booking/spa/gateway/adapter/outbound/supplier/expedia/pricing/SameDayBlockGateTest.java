@@ -3,7 +3,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaHelper;
-import com.trip.booking.spa.gateway.application.misc.RecordLogService;
+import com.trip.booking.spa.platform.observability.RecordLogService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
 import org.junit.jupiter.api.BeforeEach;

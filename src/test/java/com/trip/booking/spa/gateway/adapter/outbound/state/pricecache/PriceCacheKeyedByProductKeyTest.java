@@ -27,7 +27,7 @@ class PriceCacheKeyedByProductKeyTest {
 
     /** 反射调用私有的 cacheField，避免为测试放宽可见性 */
     private static String cacheField(ProductRespDTO product) throws Exception {
-        Method m = CachePriceServiceImpl.class.getDeclaredMethod("cacheField", ProductRespDTO.class);
+        Method m = PriceCacheServiceImpl.class.getDeclaredMethod("cacheField", ProductRespDTO.class);
         m.setAccessible(true);
         return (String) m.invoke(null, product);
     }

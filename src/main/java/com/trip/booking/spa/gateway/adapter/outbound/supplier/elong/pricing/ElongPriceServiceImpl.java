@@ -14,7 +14,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ElongQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.content.ElongCatalogService;
-import com.trip.booking.spa.gateway.application.pricing.CachePriceService;
+import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.checkprice.client.DataValidateAccess;
@@ -103,7 +103,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
 
     /** 刷价落缓存用；与 Expedia 共用同一实现，键结构 price:hotelId:date 与供应商无关 */
     @Resource
-    private CachePriceService cachePriceService;
+    private PriceCacheService priceCacheService;
 
     @Resource
     private ElongCatalogService elongCatalogService;
@@ -124,7 +124,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             return null;
         }
         List<ProductRespDTO> products = result.products();
-        cachePriceService.productToCache(products, request, supplier);
+        priceCacheService.productToCache(products, request, supplier);
         // 建档(R-2.6):稳定事实落库,与写缓存同一处、同一份数据,不额外调供应商。
         // 开关默认关;失败不打断刷价(服务内部已吞异常)
         elongCatalogService.upsert(products);
@@ -765,7 +765,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 return; // F-5.1：没问出结果不动缓存
             }
             Supplier supplier = Supplier.builder().sHotelId(request.getSHotelId()).build();
-            cachePriceService.productToCache(classified.products(), priceReq, supplier);
+            priceCacheService.productToCache(classified.products(), priceReq, supplier);
             log.info("验价即刷：现货已回写缓存,sHotelId={},occupancy={},checkIn={},产品={}",
                     request.getSHotelId(), priceReq.getOccupancies().get(0), request.getCheckIn(),
                     classified.products().size());
@@ -789,7 +789,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * 反查该报价在<b>本次入离日期区间</b>的总价（分），作为 resolve 换票的容差基准。
      * 用于上游未携展示价的场景（见 {@link CheckPriceReq#getSeenPrice()}）。
      *
-     * <p><b>必须走 {@link CachePriceService#getPrice} 这条与出价完全相同的路径</b>，
+     * <p><b>必须走 {@link PriceCacheService#getPrice} 这条与出价完全相同的路径</b>，
      * 不能读产品详情缓存里的 totalPrice 字段：后者是<b>刷价那一次</b>写入的快照
      * （任务行区间通常 1 晚），而客人看到的价是出价时按其查询区间<b>逐日累加</b>
      * 出来的。客人查 3 晚、基准取 1 晚，容差判断会整体失真——那不是精度问题，
@@ -814,7 +814,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                     .supplierId(SupplierSourceEnum.ELONG.getCode())
                     .sHotelId(request.getSHotelId())
                     .build();
-            List<ProductRespDTO> products = cachePriceService.getPrice(priceReq, supplier, request.getProductKey());
+            List<ProductRespDTO> products = priceCacheService.getPrice(priceReq, supplier, request.getProductKey());
             if (products == null || products.isEmpty()) {
                 return null;
             }
