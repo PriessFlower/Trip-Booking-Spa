@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
@@ -117,7 +118,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      */
     @Override
     public List<ProductRespDTO> queryPricesCache(PriceReq request, Supplier supplier) {
-        PricingResult result = queryPrices(request, supplier);
+        // 后台刷价这条路：没人在等，限流上阻塞排队而不是失败（F-5.1 失败不动缓存）
+        PricingResult result = queryPrices(request, supplier, CallPurpose.REFRESH);
         if (result.outcome() == PricingOutcome.INDETERMINATE) {
             // 调用失败与"无在售"必须分开（F-5.1）：没问出结果时不动缓存，
             // 避免一次网络抖动清空在售价
@@ -132,7 +134,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     }
 
     @Override
-    public PricingResult queryPrices(PriceReq request, Supplier supplier) {
+    public PricingResult queryPrices(PriceReq request, Supplier supplier, CallPurpose purpose) {
         if (!properties.isConfigured()) {
             log.error("艺龙查价：凭证未配置（ELONG_USER/ELONG_APP_KEY/ELONG_SECRET），无法调用,sHotelId={}",
                     supplier.getSHotelId());
@@ -143,7 +145,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         request.setOccupancies(occupancies);
 
         ResponseResult<ElongHotelDetailResponse> result = queryHotelDetail(supplier.getSHotelId(), request.getCheckIn(),
-                request.getCheckout(), request.getRoomNum(), request.getAdultNum(), request.getChildNum(), request.getChildAges());
+                request.getCheckout(), request.getRoomNum(), request.getAdultNum(), request.getChildNum(), request.getChildAges(),
+                purpose);
         if (result == null || result.getData() == null) {
             log.warn("艺龙查价：调用未取得结果,sHotelId={},checkIn={}", supplier.getSHotelId(), request.getCheckIn());
             return PricingResult.indeterminate();
@@ -289,7 +292,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
 
         // 现取现验（R-3.1）：重打一次 hotel.detail 取本会话的新马甲与新报价码
         ResponseResult<ElongHotelDetailResponse> result = queryHotelDetail(request.getSHotelId(), request.getCheckIn(),
-                request.getCheckOut(), request.getRoomNum(), request.getAdultCount(), request.getChildNum(), request.getChildAges());
+                request.getCheckOut(), request.getRoomNum(), request.getAdultCount(), request.getChildNum(), request.getChildAges(),
+                CallPurpose.CHECK_PRICE);
         if (result == null || result.getData() == null) {
             log.warn("艺龙验价：现货查询未取得结果,sHotelId={},sProductId={}", request.getSHotelId(), request.getSProductId());
             return outcome(CheckPriceOutcome.INDETERMINATE, "现货查询未取得结果，未能确认该产品是否可订，请稍后重试");
@@ -331,7 +335,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             //
             // 代价：上游不携 productKey 时 resolve 无检索键，一律走 RATE_DEAD 正门。
             // 补法在上游——查价响应里 productKey 与 productId 是分开两个字段发出去的，
-            // 验价时原样带回来即可（cursor 侧 SpaCheckPriceRequest.productKey 目前写死 null）。
+            // 验价时原样带回来即可。上游已回传（2026-08-24 生产实测 21.5h 内 14 次验价
+            // 13 次携带，换票触发 9 次、仅 1 次换不到），故本段已是活路径而非空转。
             found = tryResolveByProductKey(hotel, request, occupancy);
         }
         if (found == null) {
@@ -593,7 +598,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     /** 发一次 validate；调用失败或响应体缺失返回 null（网络类失败由调用方落 INDETERMINATE） */
     private ElongDataValidateResponse callValidate(String dataJson) {
         ResponseResult<ElongDataValidateResponse> result = new DataValidateAccess(properties)
-                .access(new ElongRestCall(METHOD_DATA_VALIDATE, dataJson));
+                .access(new ElongRestCall(METHOD_DATA_VALIDATE, dataJson), CallPurpose.CHECK_PRICE);
         return result == null ? null : result.getData();
     }
 
@@ -888,10 +893,17 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 });
     }
 
-    /** 逐店 hotel.detail（SaveMajiaId=true 取本会话马甲），查价与验价共用同一起手式 */
+    /**
+     * 逐店 hotel.detail（SaveMajiaId=true 取本会话马甲），查价与验价共用同一起手式。
+     *
+     * <p>{@code purpose} 必须由调用方给出：这个接口有三路消费方（后台刷价、点订前的现取现验、
+     * 上游实时查价），共用一个接口桶而各占一个用途桶，且"等还是走"也按用途分。本方法看不出
+     * 自己在为谁服务，不能自行猜。
+     */
     private ResponseResult<ElongHotelDetailResponse> queryHotelDetail(String hotelId, String checkIn, String checkOut,
                                                                       Integer roomNum, Integer adultNum,
-                                                                      Integer childNum, List<Integer> childAges) {
+                                                                      Integer childNum, List<Integer> childAges,
+                                                                      CallPurpose purpose) {
         ElongHotelDetailRequest detailRequest = ElongHotelDetailRequest.builder()
                 .arrivalDate(checkIn)
                 .departureDate(checkOut)
@@ -901,7 +913,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 .childAges(childNum != null && childNum > 0 && CollectionUtils.isNotEmpty(childAges) ? childAges : List.of())
                 .build();
         String dataJson = JsonUtils.writeObject2Json(new ElongRequestEnvelope(properties.getVersion(), detailRequest));
-        return new HotelDetailAccess(properties).access(new ElongRestCall(METHOD_HOTEL_DETAIL, dataJson));
+        return new HotelDetailAccess(properties).access(new ElongRestCall(METHOD_HOTEL_DETAIL, dataJson), purpose);
     }
 
     /** 在现货中按报价码（GoodsUniqId）找所点产品；找不到返回 null */

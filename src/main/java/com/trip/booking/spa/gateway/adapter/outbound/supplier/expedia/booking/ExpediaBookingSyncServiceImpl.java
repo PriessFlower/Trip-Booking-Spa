@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.booking;
 
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
 import com.trip.booking.spa.gateway.domain.booking.BookingOutcome;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
@@ -112,7 +113,7 @@ public class ExpediaBookingSyncServiceImpl
 
         ResponseResult<CreateOrderResponse> result = new CreateOrderAccess(
                 host, bookHref, "zh-CN", expediaUtils.generateSign(),
-                ownIp, sessionId, rateLimiter).access(body);
+                ownIp, sessionId, rateLimiter).access(body, CallPurpose.ORDER);
 
         int httpStatus = result == null ? 0 : result.getHttpStatus();
         CreateOrderResponse data = result == null ? null : result.getData();
@@ -176,7 +177,7 @@ public class ExpediaBookingSyncServiceImpl
         try {
             ResponseResult<QueryOrderResponse> qr = new QueryOrderAccess(
                     host, req.getOrderId(), contact.getEmail(), expediaUtils.generateSign(),
-                    ownIp, sessionId, rateLimiter).access("");
+                    ownIp, sessionId, rateLimiter).access("", CallPurpose.ORDER);
             QueryOrderResponse qd = qr == null ? null : qr.getData();
             if (qd == null || qd.getPresence() != QueryOrderResponse.Presence.FOUND) {
                 log.info("expedia booking 反查未取回订单 orderId={}, presence={}",

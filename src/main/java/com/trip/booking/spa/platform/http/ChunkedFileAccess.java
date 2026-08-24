@@ -6,7 +6,8 @@ import java.util.Map;
 import com.trip.booking.spa.platform.observability.MetricNames;
 import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
-import com.trip.booking.spa.platform.ratelimit.RateLimitHolder;
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
+import com.trip.booking.spa.platform.ratelimit.Permits;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.InputStream;
@@ -241,14 +242,14 @@ public class ChunkedFileAccess {
     }
 
     /**
-     * 过限流闸门。与 {@link BaseHttpAccess} 同一套 key 构造，故运维在 Nacos 调整
+     * 过限流闸门。与 {@link BaseHttpAccess} 同一套键构造与同一套用途语义，故运维在 Nacos 调整
      * {@code ratelimit.qps} 即可同时约束请求与下载，无需发版。
      *
-     * <p>用 acquire 阻塞而非 tryAcquire 快速失败：下载属后台批量作业，等得起，
-     * 而失败要整个重来，代价远高于等待。
+     * <p>用途固定为 {@link CallPurpose#CONTENT}：下载属后台批量作业，故阻塞排队而非快速失败——
+     * 等得起，而失败要整个文件重来，代价远高于等待。用途桶未登记时只扣接口桶（与 BaseHttpAccess 同规）。
      */
     private void acquirePermit() {
-        RateLimitHolder.get().acquire(LIMIT_PREFIX + ":" + supplier.name() + ":" + monitorKey.name());
+        Permits.take(LIMIT_PREFIX + ":" + supplier.name() + ":" + monitorKey.name(), CallPurpose.CONTENT);
     }
 
     /** 固定一个指标名，供应商与方式全部进标签（O-2.1）——此前拼名字，最多产生上千个独立名字 */

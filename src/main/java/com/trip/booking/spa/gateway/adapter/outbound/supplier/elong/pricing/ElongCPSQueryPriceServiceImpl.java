@@ -9,7 +9,7 @@ import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.observability.MetricNames;
 import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
-import com.trip.booking.spa.platform.ratelimit.RateLimitHolder;
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.redisson.api.RLock;
@@ -38,22 +38,20 @@ import java.util.stream.Collectors;
  * 单行 try 隔离坏数据），差异全部来自艺龙的两条硬约束：
  *
  * <ul>
- *   <li><b>额度与 tg-trip-cursor 共享</b>：艺龙 10 QPS 是账号级硬额度，cursor 的刷价
- *       同时在用。2026-08-17 生产实测：0.62 QPS 时查价成功率 73%，降到约 0.4 QPS 后
- *       92%，失败几乎全是 A201010001（访问太频繁）。故默认 QPS 取 0.3 的保守值，
- *       且失败分类计数——频控与真实业务错误必须分开看，否则调速没有依据</li>
  *   <li><b>逐店查询</b>：一行任务 = 一次 hotel.detail 调用，不批量聚合（移植风险⑤）</li>
+ *   <li><b>失败分类计数</b>：频控命中与真实业务错误必须分开看，否则调速没有依据（F-8.2）</li>
  * </ul>
  *
- * <p><b>提速的三条上限</b>（2026-08-19 实测后并发化，缺一条都会踩坑）：
+ * <p><b>速率不在本类</b>：刷价这条路声明 {@link CallPurpose#REFRESH}，通道层据此扣
+ * {@code GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH}（用途桶）与接口桶各一格，
+ * 并按后台语义阻塞排队。取值只在 Nacos 的 {@code ratelimit.qps}。
+ *
+ * <p><b>提速的两条上限</b>（2026-08-19 实测后并发化）：
  * <ol>
- *   <li><b>供应商配额</b>：查价在统一限流里是 5 QPS（{@code GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES}），
- *       但这 5 个额度<b>刷价与验价共用</b>——验价的"现取现验"每次先重打一次查价。刷价吃干会让
- *       客人正在点的验价卡在 acquire 超时上失败，故本轮的 qps 须<b>低于</b>那 5，留头给验价；</li>
- *   <li><b>连接池</b>：并发行会同时占 Redis 与 DB 连接，而<b>出价链路也在读同一个 Redis</b>。
- *       并发度必须留在池容量之内，否则提速的代价是拖慢真实客流；</li>
- *   <li><b>并发度 ≈ 目标 QPS × 单行耗时</b>。给太小则限流器空转、跑不到目标；给太大则线程堆在
- *       {@code acquire()} 上等许可，超过 {@code ratelimit.acquire-timeout-ms} 就变成假失败。</li>
+ *   <li><b>用途桶额度</b>：{@code hotel.detail} 由刷价、点订前的现取现验、上游实时查价三路共用，
+ *       各占一个用途桶，之和不得超过接口桶（后者是对艺龙的承诺）；</li>
+ *   <li><b>并发度 ≈ 目标 QPS × 单行耗时</b>。给太小则限流器空转、跑不到目标；给太大则线程都堆在
+ *       等许可上。上调前看连接池——并发行与出价链路共用 Redis 与 DB，而出价是真实客流。</li>
  * </ol>
  *
  * <p>本类不决定"何时刷"——cron 在 {@code ElongCPSQueryPriceTask}，覆盖全时段；
@@ -68,14 +66,12 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
     private static final String LOCK_KEY = "lock:elong:cps:query-price";
 
     /**
-     * 刷价在查价配额里的<b>子配额</b>键，配在 Nacos 的 {@code ratelimit.qps}（§3.3：限流一律走统一限流）。
+     * 刷价的用途桶键。<b>本类不再手写 acquire</b>——用途由 {@link CallPurpose#REFRESH} 声明、
+     * 通道层扣格（§3.3 限流一律走统一限流）。这里只读它的生效值打进轮次日志：那行是唯一的
+     * 轮次事实来源，而这个值决定本轮时长。
      *
-     * <p>为什么需要子配额而不是直接用接口总额：{@code SPA_SUPPLIER_API_PRODUCT_PRICES} 那 5 QPS
-     * 是刷价与<b>验价</b>共用的——验价"现取现验"每次先重打一次查价。刷价并发化后会持续贴着上限跑，
-     * 若与验价共用同一个键，客人正在点的验价会被刷价挤到 acquire 超时。故给刷价单独一档、留头给验价。
-     *
-     * <p>键名沿用 {@code GLOBAL_LIMIT:<供应商>:<接口>} 再加用途后缀，使它在配置里紧邻父配额，
-     * 一眼能看出"子配额之和不得超过父配额"。
+     * <p>改动前是业务代码手写一行 {@code acquire}，全仓仅此一处——用途桶不是接口维度的键，
+     * 没有任何机制保证新增的 detail 调用路径会记得写那一行，忘写即静默绕过分配。
      */
     private static final String REFRESH_LIMIT_KEY =
             "GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH";
@@ -140,13 +136,14 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
                 : priority == 0
                 ? environment.getProperty("task.elong-cps.high-concurrency", Integer.class, 1)
                 : environment.getProperty("task.elong-cps.normal-concurrency", Integer.class, 1);
-        // 护栏：子配额未登记时 qpsOf 会回落 default-qps（生产 20），刷价会瞬间把账号额度烧穿。
-        // 漂移 CI 只核对配置键路径，管不到 qps 这张 JSON 表里的条目，故在运行期显式喊出来。
-        double interfaceTotal = rateLimitProperties.qpsOf("GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES");
-        if (qps >= interfaceTotal) {
-            log.error("[gate] 刷价子配额 {} 未登记或不小于接口总额({}), 生效值={} —— 按总额的一半保守下调，"
-                    + "请到 Nacos 的 ratelimit.qps 补齐该键", REFRESH_LIMIT_KEY, interfaceTotal, qps);
-            qps = interfaceTotal / 2;
+        // 用途桶未登记时，通道层只扣接口桶（isRegistered 判定），刷价会按接口桶的速率跑——
+        // 那是"刷价可以吃满对艺龙的整个承诺"，客流一格不留。不改速率、只喊出来：
+        // 越界的判定与告警归 RateLimitProperties（子桶之和 ≤ 接口桶），这里管的是"压根没登记"。
+        if (!rateLimitProperties.isRegistered(REFRESH_LIMIT_KEY)) {
+            double interfaceQps = rateLimitProperties.qpsOf("GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES");
+            log.error("[gate] 刷价用途桶 {} 未登记，本轮将按接口桶 {} QPS 跑满，不给客流留头 —— "
+                    + "请到 Nacos 的 ratelimit.qps 补齐该键", REFRESH_LIMIT_KEY, interfaceQps);
+            qps = interfaceQps;
         }
         // 每行按这些占用各查一次：高德标准间按 2 人问价，只刷 1 人时 2 人查询如实拿空，
         // 曝光刷新断粮 16h 后被 RATE_DEAD 整体撤下（2026-08-22 事故）
@@ -195,8 +192,14 @@ public class ElongCPSQueryPriceServiceImpl implements ElongCPSQueryPriceService 
                 LocalDate checkIn = LocalDate.now().plusDays(task.getDelayCheckIn());
                 LocalDate checkOut = LocalDate.now().plusDays(task.getDelayCheckOut());
                 for (int adults : occupancyAdults) {
-                    RateLimitHolder.get().acquire(REFRESH_LIMIT_KEY);
-
+                    // 限流不在此处：queryPricesCache 这条路声明 CallPurpose.REFRESH，
+                    // 通道层按用途扣「用途桶 + 接口桶」各一格并阻塞排队（每个占用各占一次调用）
+                    // roomNum 恒 1 是已验证的选择，不是漏了一维：缓存键不含间数、缓存价也是
+                    // 单间口径，多间在验价与下单侧乘间数（H001188）。2026-08-24 生产 A/B 实测
+                    // hotel.detail 不按 NumberOfRooms 过滤可售集合与单间价（8 家 × 1/2/5 间交替
+                    // 各 2 轮零差异，含 CurrentAlloment=1 的产品问 5 间照样返回）；艺龙【国际酒店】
+                    // 国际对接指南（open.elong.com/faq/detail?plt=2&id=337）亦只要求 NumberOfAdults
+                    // 与 ChildAges 与 detail 保持一致，未提间数。故按间数扩刷是纯额度浪费。
                     PriceReq request = PriceReq.builder().adultNum(adults).childNum(0).guestType(0)
                             .childAges(new ArrayList<>()).checkIn(checkIn.toString())
                             .checkout(checkOut.toString()).roomNum(1).build();

@@ -20,8 +20,12 @@ import java.util.Map;
  * timestamp 为 Unix 秒，与签名入参同一值，故在发出的瞬间生成。data 以 JSON 原文签名、
  * 由 HttpUtils.buildUrl 在拼 query 时编码一次——顺序不能颠倒。
  *
- * <p>限流走 BaseHttpAccess 唯一闸门，键 {@code GLOBAL_LIMIT:ELONG:<接口>}；艺龙全账号
- * 硬额度 10 QPS，各接口配额之和不得超过它（Nacos ratelimit.qps，样例见
+ * <p>限流走 BaseHttpAccess 唯一闸门，两级键 {@code GLOBAL_LIMIT:ELONG:<接口>[:<用途>]}。
+ * <b>艺龙按方法各自限，没有账号总额</b>——2026-08-24 核对开放平台「接口能力」页：
+ * {@code hotel.detail} 15、{@code hotel.data.validate} 10、{@code hotel.order.detail} 50、
+ * 下单与取消各 3。此前注释写的"全账号硬额度 10、各接口之和不得超过它"是错的，那个虚构的
+ * 总额把查价长期锁在能力的 40%。真正要守的不变式是「同一接口的各用途桶之和 ≤ 该接口桶」
+ * （Nacos ratelimit.qps，样例见
  * config/nacos/trip-booking-spa.yaml.example）。
  *
  * <p>重试一律 0：业务错误码（如 H001083）也表现为 isSucc()=false，重试只会烧配额
