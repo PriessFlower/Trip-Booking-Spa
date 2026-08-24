@@ -37,7 +37,7 @@
 | 任务表结构与轮转语义（相对天数、`ORDER BY update_time`、优先级三档） | 每家一张同构表 + 各自 Mapper |
 | 调度骨架（取批 → 限流 → 逐个刷 → 回写时间 → 三态计数） | `<家>CPSQueryPriceService` 各自实现，但**结构必须一致** |
 | Redisson 锁与"一轮一返回"纪律 | 同上 |
-| 缓存键结构 `price:{hotelId}:{date}` / `priceInfo:{hotelId}:{productId}` | `state/pricecache/CachePriceServiceImpl`（与供应商无关） |
+| 缓存键结构 `price:{hotelId}:{date}` / `priceInfo:{hotelId}:{productId}` | `state/pricecache/PriceCacheServiceImpl`（与供应商无关） |
 | TTL 分档策略（F-4） | 同上 |
 | 失败三层处置（F-5） | 通用判据 + 各家错误码识别 |
 | 裁剪算法（F-3，按 productKey 分组取最低） | 通用：`domain/product` 或 `application/pricing` |
@@ -52,7 +52,7 @@
 | 查价调用与响应解析 | 协议完全不同 | `hotel.detail` vs Expedia `availability` |
 | **productKey 派生** | 键成分取值各家不同（房型 ID 字段名、餐食结构、退改结构） | `ElongProductKeyDeriver` / `ExpediaProductKeyDeriver` |
 | 单次可查酒店数 | 供应商硬约束 | 艺龙**必须逐店**（非大陆 1 家/次，混批返回假空）；Expedia 可批量 |
-| QPS 配额值 | 契约不同 | 艺龙 10（且曾与 cursor 共享）；Expedia 500 |
+| QPS 配额值 | 契约不同 | 艺龙**按方法各自限**（2026-08-24 核对：`hotel.detail` 15、`validate` 10、`order.detail` 50、下单与取消各 3），无账号总额；Expedia 500 |
 | "无货"判定 | 响应形态不同 | 艺龙 `Rooms=[]`；Expedia 空 `rates` |
 | 频控/限流错误码识别 | 码表不同 | 艺龙 `A201010001`；Expedia HTTP 429 |
 | 日期窗口偏好 | 业务与库存特性不同 | 由任务行 `delay_check_in/out` 承载，值按家配 |
@@ -62,9 +62,11 @@
 - **F-2.1 (MUST)** 任务行存**相对天数**（`delay_check_in` / `delay_check_out`），执行时才换算绝对日期。任务行因此永不过期，无需每日重建——反面是 hotel-spa 第一代（`*_query_price_queue` 表物化绝对日期，必须每天 23:00 重建，两代设计至今并存未清理）。
 - **F-2.2 (MUST)** 一次调度**消费一轮即返回**，不得常驻 `while(true)`。否则关闸最迟要等进程重启才生效（违反 §3.8.3 关闸即停做功）。
 - **F-2.3 (MUST)** 多实例防重用 Redisson 分布式锁，调度入口与手动入口**共用同一把锁**（§3.8.2 一事一闸）。反面是 hotel-spa：无锁，`updateAddCount` 的 `WHERE id=?` 无 CAS 条件，其 `if (count <= 0) continue` 是永不生效的伪乐观锁，多实例必然重复刷。
-- **F-2.4 (MUST)** 优先级三档（0=高频 / 1=常规 / 2=兜底）各配独立 QPS 与调度周期。`temporary_upgrade=1` 的行由高频档以 `OR` 借入（取批时判 `upgrade_deadline` 未过期），其余档以 `AND` 排除。
+- **F-2.4 (MUST)** 优先级分档各配独立 QPS 与批量。`temporary_upgrade=1` 的行由高频档以 `OR` 借入（取批时判 `upgrade_deadline` 未过期），其余档以 `AND` 排除。
   - **实现现状（2026-08-18 批次3）**：简化为两档启用（0=T+0~T+2、1=T+3~T+6，2 档预留未用）；受 F-2.7 同供应商串行约束，两档在**同一 cron 轮内顺序执行**而非独立周期，各配独立 QPS/批量（`high-*`/`normal-*` 键）。实测每行约 0.7s 串行写开销是吞吐瓶颈（非限流），写侧异步化后方可考虑独立周期。
-- **F-2.5 (MUST)** 取批必须 `ORDER BY update_time` 升序：最久未刷的先刷，靠 `ON UPDATE CURRENT_TIMESTAMP` 自动推到队尾，形成 LRU 式轮转。
+  - **实现现状（批次5，PR #157/#159）**：已扩为四档，且 **2 档不再是「兜底」**——0=高频轮转（T+0~2）、1=常规（T+3~6）、2=成交（高德出过单的 464 家，T+0~2，每轮全扫，缓存龄 ≤ 一次执行间隔约 30 分钟）、3=远期（同一批酒店 T+7~29，滚动约一天一圈）。**档号自此不是快慢序。**
+  - **F-2.4.1 (MUST)** **借入只能来自轮转档（0/1）**，由 `upgradeByShId` 在**写入侧**限定档位。因为借入的语义是「档 0 临时接管」：成交档比档 0 更快，借进来是**降级**，且降的正是刚被验价、最可能马上下单的酒店；远期档每店 23 行，464 家的借入池会挤爆档 0 的 400 批量。限定必须留在写入侧——取批侧加档位过滤会让存量借入行哪档都不匹配，即刻复现 issue #95 的孤儿行。守卫测试 `BorrowNeverDemotesTest`。
+- **F-2.5 (MUST)** 取批必须 `ORDER BY last_time` 升序：最久未刷的先刷，形成 LRU 式轮转。**不得用 `update_time`**（issue #102）——它带 `ON UPDATE CURRENT_TIMESTAMP`，`upgradeByShId` 这类只改优先级、不代表刷过价的写入也会把它推到队尾，等于「升档即排到队尾」。`last_time` 只在真刷时由 `updateAddCount` 写。附带收益：新插入行 `last_time` 为空，MySQL 升序 NULL 优先，新上架酒店自动优先刷第一次。
 - **F-2.6 (SHOULD)** 清单来源取**已验证有货**的酒店集合，而非全量库。证据：cursor 刷 16,998 家仅 12% 有货，其余 88% 是纯粹的额度浪费。
 - **F-2.7 (MUST)** 每家供应商一条**命名的专属执行线程**（`{supplier}-task-1`），`@Scheduled` 调度线程只派发、立即返回。隔离语义：跨供应商并行（一家慢不拖别家）、同供应商串行（同家任务共享 QPS 额度，串行即保护）、**忙则跳过不排队**（慢是要暴露的信号，队列堆积等于把信号藏起来）。证据：Spring 默认调度池单线程，2026-08-18 生产实测艺龙 05:00 的触发被 Expedia 轮次排到 05:07:37 才执行。与 F-2.3 互补：分布式锁防多实例并发，本条防单实例内任务互相排队。实现属**供应商通用**（§1.1）：`SupplierTaskExecutors` 一份，各任务类只声明自家供应商名。
 
@@ -90,7 +92,7 @@
 
 - **F-4.1 (MUST)** 价格存 Redis Hash `price:{hotelId}:{date}`，**field = productKey**；产品静态信息存 **`product:{hotelId}:{productKey}`**。价格与静态信息分离——前者高频变动、后者稳定，TTL 不同。
   - field 必须是**跨次稳定**的 productKey，不是易腐的 productId：刷价按单晚切片，每个日期是一次独立调用，易腐码逐次轮换，两天的 field 集合交集恒为空——**住 2 晚及以上一个产品都出不来**（2026-08-19 生产实证，PR #132）。productKey 缺席时才退回 productId。
-  - **读取侧必须用同一个 field，禁止各自拼**。反面即本条自身：PR #132 只改了写入侧，艺龙验价的两条反查还按 productId 找，恒 miss 且只有一条 warn；本文这条规则也与代码分叉了一天（2026-08-20 修正）。故 `CachePriceService.getPrice` 的字段限定改为**显式入参**，不再从 `Supplier.sProductId` 顺手取——那个名字说的是报价码、语义却是缓存字段，正是「两端靠约定对齐」的病灶。
+  - **读取侧必须用同一个 field，禁止各自拼**。反面即本条自身：PR #132 只改了写入侧，艺龙验价的两条反查还按 productId 找，恒 miss 且只有一条 warn；本文这条规则也与代码分叉了一天（2026-08-20 修正）。故 `PriceCacheService.getPrice` 的字段限定改为**显式入参**，不再从 `Supplier.sProductId` 顺手取——那个名字说的是报价码、语义却是缓存字段，正是「两端靠约定对齐」的病灶。
 - **F-4.1.1 (MUST)** Redis 里的产品静态信息是**读性能副本，不是事实源**（R-2.6）。事实源是目录/档案表：稳定属性（productKey、房型、餐食、退改类、占用）刷价时 upsert 落库，Redis 那份可随时重建、丢了不影响正确性。
   - 反面是艺龙迁移初期（2026-08-19 前）：建档未接，17.5 万条产品详情只在 Redis，占该实例 **97.4% 的键、1.19G/2G 内存**（仅 2,615 家酒店）；且因缓存被当事实源，换票基准误取刷价快照的单晚价，与客人所见的区间总价差一个量级。
   - 判据同 R-2.6：**「供应商明天换一批报价码，这条信息还对吗？」对 → MySQL；错 → Redis。**

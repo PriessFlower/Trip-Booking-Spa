@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.cancellation;
 
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CancelReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.booking.ElongBookingClassifier;
@@ -85,7 +86,7 @@ public class ElongCancelSyncServiceImpl
         String dataJson = JsonUtils.writeObject2Json(
                 new ElongRequestEnvelope(properties.getVersion(), cancelRequest));
         ResponseResult<ElongOrderCancelResponse> result = new CancelOrderAccess(properties)
-                .access(new ElongRestCall("hotel.order.cancel", dataJson));
+                .access(new ElongRestCall("hotel.order.cancel", dataJson), CallPurpose.ORDER);
 
         ElongOrderCancelResponse data = result == null ? null : result.getData();
         CancelClassification classification = ElongBookingClassifier.classifyCancel(data);
@@ -113,7 +114,7 @@ public class ElongCancelSyncServiceImpl
             String dataJson = JsonUtils.writeObject2Json(new ElongRequestEnvelope(properties.getVersion(),
                     ElongOrderDetailRequest.builder().orderId(0L).affiliateConfirmationId(orderId).build()));
             ResponseResult<ElongOrderDetailResponse> result = new QueryOrderAccess(properties)
-                    .access(new ElongRestCall("hotel.order.detail", dataJson));
+                    .access(new ElongRestCall("hotel.order.detail", dataJson), CallPurpose.ORDER);
             return result == null ? null : result.getData();
         } catch (Exception e) {
             log.error("艺龙取消：反查异常,orderId={}", orderId, e);

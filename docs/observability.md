@@ -78,7 +78,7 @@
   证据：`SpaController` 的 `/client/spa/price` 现在只有耗时 `query_price_for_spa`，既无请求数也无出报数，“出报率 36%”这个已知结论目前无法用指标复现。
 - **O-4.3 (MUST)** 漏斗用**一个指标名**覆盖两家供应商，supplier 作标签。禁止各家各造一套：现状艺龙有 `refresh_*` 七个指标而 Expedia 刷价零埋点，两家成功率无法同图对比。
 - **O-4.4 (MUST)** `reason` 取值必须来自**枚举**，禁止自由字符串、禁止异常消息、禁止拼接（同 O-2.5：丢弃分支散布在查价、刷价、入缓存三条链路上，放开自由文本则序列数随代码改动无界增长）。
-- **O-4.5 (MUST)** **静默丢弃分支必须有 reason 落点**。证据：缓存读侧 `CachePriceServiceImpl.getPrice` 在 `productMap.forEach` 的 lambda 里有五个 `return`（即跳过该产品）——总价为 0、逐日价条数≠住期天数、某日价为 0、quote 详情缺席（拿不到票据）、`productId` 为空——五个分支全部既无日志也无指标。其中“逐日价条数≠住期天数”必然吃掉多晚查询，是出报率的直接扣分项。
+- **O-4.5 (MUST)** **静默丢弃分支必须有 reason 落点**。证据：缓存读侧 `PriceCacheServiceImpl.getPrice` 在 `productMap.forEach` 的 lambda 里有五个 `return`（即跳过该产品）——总价为 0、逐日价条数≠住期天数、某日价为 0、quote 详情缺席（拿不到票据）、`productId` 为空——五个分支全部既无日志也无指标。其中“逐日价条数≠住期天数”必然吃掉多晚查询，是出报率的直接扣分项。
 - **O-4.6 (MUST)** **“不丢货、只丢内容”的降级必须单独可数**。证据：房型属性为 null 时照样出报（`if (attr != null)` 无 `else`），SPA 自身不报错，而下游按房型装配整片落空——没有异常可抓，只能靠覆盖率数字暴露。
 
 ---
@@ -146,7 +146,7 @@
 | 8 | 覆盖率指标无消费方 | O-5.1 | `catalog_attribute_*` | 未修 |
 | 9 | 入口缺请求数/出报数 | O-4.2 | `SpaController` | 已修（`spa_price_leg`/`spa_price_quoted`，腿=请求×供应商） |
 | 10 | 已算出的计数只落日志 | O-1.3 | 四处（见 O-1.3） | 未修（第 2 步） |
-| 11 | 静默丢弃无 reason | O-4.5、O-4.6 | 读侧 `CachePriceServiceImpl.getPrice` 的 forEach 五个 `return`（全无落点）；艺龙查价三类跳过（有日志、无指标）；写侧 `productToCache` 两个 `continue` 是异常价拦截，拦截时有 `log.warn`、但无指标 | 读侧与艺龙转换已修（`quote_dropped`，stage/reason 见 `DropReason`）；写侧异常价拦截的指标待做 |
+| 11 | 静默丢弃无 reason | O-4.5、O-4.6 | 读侧 `PriceCacheServiceImpl.getPrice` 的 forEach 五个 `return`（全无落点）；艺龙查价三类跳过（有日志、无指标）；写侧 `productToCache` 两个 `continue` 是异常价拦截，拦截时有 `log.warn`、但无指标 | 读侧与艺龙转换已修（`quote_dropped`，stage/reason 见 `DropReason`）；写侧异常价拦截的指标待做 |
 | 12 | 看板未按业务分块 | O-4.1 | `spa-overview.json`（现按技术层分组） | 未修（第 3 步） |
 | 13 | 日志无落点、无 traceId | O-6.1~O-6.3 | `log4j2.xml`：6 个 RollingFile 无一产生日志（5 个零 `AppenderRef`，第 6 个被 logger `monitor_company` 引用而该 logger 名在代码里零使用者）；根目录硬编码 `/tmp/logs`；`%X{traceId}` 3 处槽位、`MDC.put` 全仓 0 处 | 未修 |
 | 14 | 报文快照表不存在 | O-7.1、O-7.2 | 名字里带 Snapshot 的 `ExpediaPropertySnapshotRow`/`Mapper` 写的是 `expedia_property_content`——主键 `property_id+language`、覆盖写、无状态码无耗时，是内容档案不是报文证据 | 未修 |

@@ -6,7 +6,6 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespCacheDTO;
-import com.trip.booking.spa.gateway.application.pricing.CachePriceService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.platform.redis.RedisUtils;
 import com.trip.booking.spa.platform.util.DateUtil;
@@ -52,7 +51,7 @@ import java.util.concurrent.TimeUnit;
  **/
 @Service
 @Slf4j
-public class CachePriceServiceImpl implements CachePriceService {
+public class PriceCacheServiceImpl implements PriceCacheService {
 
     @Autowired
     private RedisUtils redisUtils;

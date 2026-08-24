@@ -1,0 +1,45 @@
+# 艺龙的接口能力（供应商契约，不是环境配置）
+#
+# 为什么要有这张表：这些数此前只存在于开放平台页面和口头传递里，而代码注释、配置注释、
+# docs 与一个测试断言长期写着「艺龙全账号硬额度 10 QPS，各接口配额之和不得超过它」——
+# 这是错的：艺龙按方法各自限，没有账号总额。那个虚构的总额把查价的实际配额长期压在
+# 能力的 40%（配 6 / 能力 15），验价压在 20%，查单压在 2%。
+#
+# 与 ratelimit.qps 的关系：
+#   接口桶 GLOBAL_LIMIT:ELONG:<接口>        ≤ 本表对应 qps（这是对艺龙的承诺）
+#   用途桶 GLOBAL_LIMIT:ELONG:<接口>:<用途>  之和 ≤ 接口桶（这是我方内部分配）
+# 前者由本表约束，后者由 RateLimitProperties 在加载时校验并告警。
+#
+# 本表不是环境配置：各环境的 ratelimit.qps 取值可以不同（PROJECT.md §3.2.2），
+# 但供应商的能力上限对所有环境都是同一个数。故它单独成文，不进 Nacos。
+
+supplier: ELONG
+source: https://open.elong.com/   # 我方账号 → 接口能力页（"每秒访问限制"一列）
+checked-at: 2026-08-24            # 必填：供应商会改文档与配额，无核对日期的引用无法复核
+
+methods:
+  hotel.detail:
+    qps: 15
+    limit-key: GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES
+    note: 报价与验价共用同一个方法；我方三路消费方（刷价 / 现取现验 / 实时查价）都打它
+  hotel.data.validate:
+    qps: 10
+    limit-key: GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_ORDER_PRICE
+    note: 试下单
+  hotel.order.detail:
+    qps: 50
+    limit-key: GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_QUERY_ORDER
+  hotel.order.create:
+    qps: 3
+    limit-key: GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_CREATE_ORDER
+  hotel.order.cancel:
+    qps: 3
+    limit-key: GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_CANCEL_ORDER
+
+# 未开通（能力页显示 0）：hotel.data.rate / hotel.data.inventory / hotel.data.rp
+#
+# 尚未接入但额度可观，值得查文档确认语义：
+#   hotel.incr.sharding.rate / .inv / .state / .id  各 20
+#   hotel.incr.id / hotel.incr.order                各 10
+#   hotel.static.info 40 / hotel.static.list 30 / hotel.static.city 20 / hotel.static.grade 40
+# 若 incr.* 是"只拉变动"，刷价的新鲜度就不必再受「清单行数 ÷ 轮询速率」这道除法约束。

@@ -56,6 +56,11 @@ public class RateLimitManagerImpl implements RateLimitManager {
         return localLimiter(key, qps).tryAcquire(timeoutMs, TimeUnit.MILLISECONDS);
     }
 
+    @Override
+    public boolean isRegistered(String key) {
+        return properties.isRegistered(key);
+    }
+
     /**
      * 取（或建）本地桶，并把速率校准到最新配置——Nacos 改了 QPS 后下次调用即生效，无需重建。
      */

@@ -4,7 +4,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing.ExpediaPriceService;
 import com.trip.booking.spa.gateway.application.checkprice.AbstractCheckPriceSyncSupportService;
-import com.trip.booking.spa.gateway.application.misc.RecordLogService;
+import com.trip.booking.spa.platform.observability.RecordLogService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 

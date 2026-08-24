@@ -28,12 +28,12 @@ class ProductKeyCacheRoundTripTest {
                 .supplierId(10010).totalPrice(421285)
                 .build();
 
-        // 写侧:CachePriceServiceImpl 240/252 行
+        // 写侧:PriceCacheServiceImpl 240/252 行
         ProductRespCacheDTO cache = new ProductRespCacheDTO();
         BeanUtils.copyProperties(source, cache);
         String json = JsonUtils.writeObject2Json(cache);
 
-        // 读侧:CachePriceServiceImpl 116-118 行
+        // 读侧:PriceCacheServiceImpl 116-118 行
         ProductRespCacheDTO loaded = JsonUtils.decodeJson(json, new TypeReference<>() {});
         ProductRespDTO out = new ProductRespDTO();
         BeanUtils.copyProperties(loaded, out);

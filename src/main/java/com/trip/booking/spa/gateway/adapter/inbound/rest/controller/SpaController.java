@@ -20,7 +20,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.service.ExpediaGeographyIngestionService;
 import com.trip.booking.spa.gateway.application.booking.BookingSyncService;
-import com.trip.booking.spa.gateway.application.pricing.CachePriceService;
+import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.application.cancellation.CancelSyncService;
 import com.trip.booking.spa.gateway.application.checkprice.CheckPriceSyncService;
 import com.trip.booking.spa.gateway.application.order.OrderQuerySyncService;
@@ -66,7 +66,7 @@ public class SpaController {
     private NacosRuntimeConfig nacosRuntimeConfig;
 
     @Autowired
-    private CachePriceService cachePriceService;
+    private PriceCacheService priceCacheService;
 
     @Resource
     private SupplierCapabilityRegistry capabilityRegistry;
@@ -97,7 +97,7 @@ public class SpaController {
                 // 无谓重试，也让「刷价没覆盖到这个占用片」这类缺口在出价侧完全不可见
                 PricingResult cached;
                 try {
-                    cached = cachePriceService.getPriceResult(priceReq, supplier);
+                    cached = priceCacheService.getPriceResult(priceReq, supplier);
                 } catch (RuntimeException e) {
                     recordFailedLeg(supplier, MetricTags.SOURCE_CACHE);
                     throw e;

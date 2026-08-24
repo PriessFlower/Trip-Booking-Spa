@@ -40,13 +40,13 @@ class CacheOccupancyShardTest {
 
     private static final String DATE = "2026-09-01";
 
-    private CachePriceServiceImpl service;
+    private PriceCacheServiceImpl service;
     private RedisUtils redisUtils;
     private ProductAttributeReader attributeReader;
 
     @BeforeEach
     void setUp() {
-        service = new CachePriceServiceImpl();
+        service = new PriceCacheServiceImpl();
         redisUtils = Mockito.mock(RedisUtils.class);
         attributeReader = Mockito.mock(ProductAttributeReader.class);
         ReflectionTestUtils.setField(service, "redisUtils", redisUtils);

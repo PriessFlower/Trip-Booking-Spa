@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 佣金摊派的不变量钉死（issue #99）。
  *
  * <p>核心命题：<b>Σ 各晚报价 == 实时路径的总价</b>。走缓存的读路径逐晚累加重算总价
- * （{@code CachePriceServiceImpl.getPrice}），实时路径扣的是全额佣金；佣金按晚整除、
+ * （{@code PriceCacheServiceImpl.getPrice}），实时路径扣的是全额佣金；佣金按晚整除、
  * 余数丢弃时，同一产品两条路径会报出相差 {@code sumCommission mod n} 分的两个总价。
  * 金额极小，真正的代价是口径不唯一——对账时会冒出一批无法解释的分位差。
  */

@@ -1,9 +1,10 @@
-package com.trip.booking.spa.gateway.application.pricing;
+package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 
+import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
 
 import java.util.List;
@@ -15,7 +16,7 @@ import java.util.List;
  * @param:
  * @return:
  **/
-public interface CachePriceService {
+public interface PriceCacheService {
 
     /** 取该店该住期缓存里的全部产品。不区分「没刷到」与「刷到了但无货」——需要区分时用
      * {@link #getPriceResult}。 */

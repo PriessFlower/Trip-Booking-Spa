@@ -8,7 +8,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.Elong
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongHotelDetailResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongNightlyRate;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongRatePlan;
-import com.trip.booking.spa.gateway.application.pricing.CachePriceService;
+import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -40,19 +40,19 @@ import static org.mockito.Mockito.verify;
 class ElongFreshPricesToCacheTest {
 
     private ElongPriceServiceImpl service;
-    private CachePriceService cachePriceService;
+    private PriceCacheService priceCacheService;
 
     @BeforeEach
     void setUp() {
         service = new ElongPriceServiceImpl();
-        cachePriceService = Mockito.mock(CachePriceService.class);
+        priceCacheService = Mockito.mock(PriceCacheService.class);
         ElongProductKeyDeriver deriver = new ElongProductKeyDeriver();
         ElongProperties properties = new ElongProperties();
         // productKey 的 account 成分取自 ELONG_USER——键随账号隔离,缺失即拒derive
         ReflectionTestUtils.setField(properties, "user", "test-account");
         ReflectionTestUtils.setField(deriver, "properties", properties);
         ReflectionTestUtils.setField(service, "productKeyDeriver", deriver);
-        ReflectionTestUtils.setField(service, "cachePriceService", cachePriceService);
+        ReflectionTestUtils.setField(service, "priceCacheService", priceCacheService);
     }
 
     private static CheckPriceReq checkReq() {
@@ -111,7 +111,7 @@ class ElongFreshPricesToCacheTest {
         ArgumentCaptor<List<ProductRespDTO>> products = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<PriceReq> priceReq = ArgumentCaptor.forClass(PriceReq.class);
         ArgumentCaptor<Supplier> supplier = ArgumentCaptor.forClass(Supplier.class);
-        verify(cachePriceService).productToCache(products.capture(), priceReq.capture(), supplier.capture());
+        verify(priceCacheService).productToCache(products.capture(), priceReq.capture(), supplier.capture());
 
         assertEquals(1, products.getValue().size());
         assertEquals("2-9", priceReq.getValue().getOccupancies().get(0),
@@ -124,7 +124,7 @@ class ElongFreshPricesToCacheTest {
     @DisplayName("业务错误 → 不动缓存（F-5.1：没问出结果不清在售价）")
     void businessErrorMustNotTouchCache() {
         service.freshPricesToCache(checkReq(), response("E1|throttled", null));
-        verify(cachePriceService, never()).productToCache(any(), any(), any());
+        verify(priceCacheService, never()).productToCache(any(), any(), any());
     }
 
     @Test
@@ -133,7 +133,7 @@ class ElongFreshPricesToCacheTest {
         ElongRatePlan noCreds = sellablePlan();
         noCreds.setGoodsUniqId(null);
         service.freshPricesToCache(checkReq(), response("0", hotelWith(noCreds)));
-        verify(cachePriceService, never()).productToCache(any(), any(), any());
+        verify(priceCacheService, never()).productToCache(any(), any(), any());
     }
 
     @Test
@@ -142,7 +142,7 @@ class ElongFreshPricesToCacheTest {
         service.freshPricesToCache(checkReq(), response("0", null));
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<ProductRespDTO>> products = ArgumentCaptor.forClass(List.class);
-        verify(cachePriceService).productToCache(products.capture(), any(PriceReq.class), any(Supplier.class));
+        verify(priceCacheService).productToCache(products.capture(), any(PriceReq.class), any(Supplier.class));
         assertEquals(0, products.getValue().size());
     }
 
@@ -150,7 +150,7 @@ class ElongFreshPricesToCacheTest {
     @DisplayName("回写内部炸了只落日志，绝不外抛（验价主流程不受影响）")
     void writeBackFailureIsSwallowed() {
         Mockito.doThrow(new RuntimeException("redis down"))
-                .when(cachePriceService).productToCache(any(), any(), any());
+                .when(priceCacheService).productToCache(any(), any(), any());
         service.freshPricesToCache(checkReq(), response("0", hotelWith(sellablePlan())));
         // 不抛即过
     }

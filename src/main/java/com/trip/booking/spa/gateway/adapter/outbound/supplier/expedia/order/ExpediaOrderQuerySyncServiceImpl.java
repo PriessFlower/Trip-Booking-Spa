@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.order;
 
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
 import com.trip.booking.spa.gateway.domain.booking.OrderPresence;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.OrderRespDTO;
@@ -71,7 +72,7 @@ public class ExpediaOrderQuerySyncServiceImpl
 
         ResponseResult<QueryOrderResponse> result = new QueryOrderAccess(
                 host, req.getOrderId(), email, expediaUtils.generateSign(),
-                ownIp, sessionId, rateLimiter).access("");
+                ownIp, sessionId, rateLimiter).access("", CallPurpose.ORDER);
 
         return result == null ? null : result.getData();
     }

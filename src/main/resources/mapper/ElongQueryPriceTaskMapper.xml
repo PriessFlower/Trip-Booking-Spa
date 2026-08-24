@@ -22,17 +22,21 @@
     </sql>
 
     <!--
-      两档的取批条件必须互斥且穷尽:任一行在任一时刻恰好命中一档。否则会出现两档都
+      四档的取批条件必须互斥且穷尽:任一行在任一时刻恰好命中一档。否则会出现哪档都
       不匹配的孤儿行,而"升档复位"只在 Java 侧、且只在行被取到时执行
       (ElongCPSQueryPriceServiceImpl)——取不到即永不复位,永不再刷(issue #95)。
 
       有效档的定义(借入即"档 0 临时接管"):
         借入中 = temporary_upgrade = 1 且 (upgrade_deadline 为空 或 尚未到期)
         有效档 0 = priority_level_number = 0 或 借入中
-        有效档 1 = priority_level_number = 1 且 非借入中
+        有效档 N(N=1/2/3) = priority_level_number = N 且 非借入中
 
-      故常规档必须显式接纳"升档已过期"的行:它们已不在借入中,回本档由本档取走,
+      故其余各档必须显式接纳"升档已过期"的行:它们已不在借入中,回本档由本档取走,
       Java 顺势复位。改动此处务必保持两条件互为取反。
+
+      注意档号不是快慢序:档 2 是成交档(最快,每轮全扫),不是"兜底"。故"借入 = 提速"
+      只对档 0/1 成立,写入侧的 upgradeByShId 据此限定可升档的档位——本处不加档位
+      过滤是有意的,理由见该语句注释。
 
       排序键必须是 last_time(上次查价时间),不是 update_time(issue #102)。
       update_time 带 ON UPDATE CURRENT_TIMESTAMP,任何一次写这行都会把它刷成当前
@@ -65,7 +69,21 @@
     </update>
 
     <!--
-      批次4 反馈环:验价事件把该酒店全部日期行临时升档 24h,高频档借入跟刷。
+      批次4 反馈环:验价事件把该酒店的轮转档行临时升档 24h,高频档借入跟刷。
+
+      只升档 0/1,不碰档 2(成交)/档 3(远期)。借入的语义是"档 0 临时接管",而档 0 是
+      LRU 轮转(约 2.6h 一圈),故借入只对比档 0 更慢的档才是提速:
+        档 2 成交档每轮全扫,缓存龄 ≤ 一次执行间隔(约 30 分钟)。借进档 0 是降级,
+          而且降的正是刚被验价、最可能马上下单的那家酒店——与反馈环的初衷相反;
+        档 3 远期档是同一批成交酒店的 T+7~29(每店 23 行)。验价者要订的是近期日,
+          远期行不急;且 464 家 × 26 行远超档 0 的 400 批量,借进来会把真档 0 的行挤饿。
+      加档 2/3 之前本语句不过滤是对的:那时档 2 是"兜底"(最慢),档号越大越不急,借入
+      恒为提速。档 2 改作成交档(F-2.4 注记)后这个前提不再成立,遂在写入侧显式限定。
+
+      为何过滤放在写入侧而不是 getQueryPriceTaskList:那边若加档位过滤,存量的已升档
+      档 2/3 行会哪档都不匹配,即刻变成 issue #95 的孤儿行。放在这里则存量行仍由档 0
+      借走,24h 后 upgrade_deadline 到期,本档取批接纳过期行并由 Java 复位——自愈,
+      无需数据订正。
 
       本语句会顺带把 update_time 刷成当前时刻(ON UPDATE CURRENT_TIMESTAMP),这是
       无害的——取批排序看 last_time 而不看 update_time(见 getQueryPriceTaskList
@@ -75,7 +93,7 @@
     <update id="upgradeByShId">
         update elong_query_price_task
         set temporary_upgrade = 1, upgrade_deadline = timestampadd(hour, 24, now())
-        WHERE sh_id = #{shId}
+        WHERE sh_id = #{shId} and priority_level_number in (0, 1)
     </update>
 
 </mapper>

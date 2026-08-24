@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.service;
 
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierIdentityProfile;
@@ -130,13 +131,13 @@ public class ExpediaProductMappingService {
             try {
                 ResponseResult<QueryPriceResponse> resultOnly = new QueryProductAccess(
                         host, "en-US", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter)
-                        .access(queryPriceRequest);
+                        .access(queryPriceRequest, CallPurpose.CONTENT);
                 persistProducts(resultOnly, queryPriceRequest);
                 // 查询打包价（照旧：同一请求对象切环境再查一遍）
                 queryPriceRequest.setSales_environment("hotel_package");
                 ResponseResult<QueryPriceResponse> resultPackage = new QueryProductAccess(
                         host, "en-US", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter)
-                        .access(queryPriceRequest);
+                        .access(queryPriceRequest, CallPurpose.CONTENT);
                 persistProducts(resultPackage, queryPriceRequest);
             } catch (Exception e) {
                 log.error("产品建档异常：request:{}", JsonUtils.writeObject2Json(queryPriceRequest), e);

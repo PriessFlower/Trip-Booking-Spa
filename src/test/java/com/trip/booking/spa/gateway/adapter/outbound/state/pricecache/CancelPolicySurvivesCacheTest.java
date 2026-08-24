@@ -40,12 +40,12 @@ class CancelPolicySurvivesCacheTest {
 
     private static final String DATE = "2026-09-01";
 
-    private CachePriceServiceImpl service;
+    private PriceCacheServiceImpl service;
     private RedisUtils redisUtils;
 
     @BeforeEach
     void setUp() {
-        service = new CachePriceServiceImpl();
+        service = new PriceCacheServiceImpl();
         redisUtils = Mockito.mock(RedisUtils.class);
         ProductAttributeReader reader = Mockito.mock(ProductAttributeReader.class);
         Mockito.when(reader.batchGet(Mockito.anyInt(), Mockito.anyList())).thenReturn(Map.of());

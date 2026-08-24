@@ -15,6 +15,7 @@ import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
 import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
 import com.trip.booking.spa.gateway.domain.booking.VerifyLevel;
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.platform.ratelimit.RateLimitHolder;
 import com.trip.booking.spa.platform.ratelimit.RateLimitManager;
 import com.trip.booking.spa.platform.redis.RedisUtils;
@@ -54,7 +55,7 @@ import static org.mockito.Mockito.when;
  * 钉住报文，中间那段只有真跑代码才盖得住。
  *
  * <p><b>挡掉的只有落库与落缓存的副作用</b>：{@code elongQueryPriceTaskMapper}（反馈环升档，
- * 服务内已 try/catch 兜住）与 {@code cachePriceService}（resolve 的容差基准反查，内部
+ * 服务内已 try/catch 兜住）与 {@code priceCacheService}（resolve 的容差基准反查，内部
  * try/catch 返 null）留空；{@link OfferStore} 用真实实现 + 假 {@link RedisUtils}，以便断言
  * 句柄里真正写进去了什么。供应商调用、响应解析、productKey 派生、分态映射、凭据组装
  * <b>全部是真的</b>。
@@ -73,6 +74,11 @@ import static org.mockito.Mockito.when;
 @EnabledIfEnvironmentVariable(named = "ELONG_E2E", matches = "1")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ElongCheckPriceE2ETest {
+
+    /** 通道层取过的限流键，按取用顺序。由本类装的假限流中枢填 */
+    private static final java.util.List<String> TAKEN = new java.util.ArrayList<>();
+
+    private static final String DETAIL_BUCKET = "GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES";
 
     /** 越南大叻·沙非大叻酒店：2026-08 期间持续有在售产品，且 Member 与 Rate 明显不等 */
     private static final String HOTEL = "61497910";
@@ -103,16 +109,27 @@ class ElongCheckPriceE2ETest {
 
         // 限流中枢平时由 Spring 启动时抄进静态桥（RateLimitHolder）；这里没起容器，
         // 得手动装一个全放行的实现，否则 BaseHttpAccess 拿到 null 直接 NPE。
-        // 放行而不是真限流：e2e 只跑个位数次调用，且真限流会把测试变成不可复现的等待
+        // 放行而不是真限流：e2e 只跑个位数次调用，且真限流会把测试变成不可复现的等待。
+        // 但它<b>记录取过哪些键</b>——真实调用时通道层到底按什么键扣格，是这套两级桶
+        // 唯一能在真链路上验到的事实（配置与注释都可能与代码分叉）。
+        TAKEN.clear();
         RateLimitHolder holder = new RateLimitHolder();
         ApplicationContext ctx = mock(ApplicationContext.class);
         when(ctx.getBean(RateLimitManager.class)).thenReturn(new RateLimitManager() {
             @Override
             public void acquire(String key) {
+                TAKEN.add(key);
             }
 
             @Override
             public boolean tryAcquire(String key) {
+                TAKEN.add(key);
+                return true;
+            }
+
+            @Override
+            public boolean isRegistered(String key) {
+                // 当作"用途桶已登记"，使两级桶都被取到——否则验不到用途段拼得对不对
                 return true;
             }
         });
@@ -156,7 +173,12 @@ class ElongCheckPriceE2ETest {
         PriceReq req = PriceReq.builder().checkIn(checkIn).checkout(checkOut)
                 .roomNum(1).adultNum(1).childNum(0).childAges(new ArrayList<>()).guestType(0).build();
 
-        PricingResult result = service.queryPrices(req, supplier());
+        PricingResult result = service.queryPrices(req, supplier(), CallPurpose.LIVE);
+
+        // 两级桶：真链路上通道层必须先扣用途桶、再扣接口桶。这条断言放在 assumeTrue 之前——
+        // 扣格发生在调用之前，与艺龙给不给货无关；放在后面会被"无在售就跳过"吞掉
+        assertThat(TAKEN).as("实时查价这条路必须扣 :LIVE 用途桶与接口桶各一格")
+                .containsSubsequence(DETAIL_BUCKET + ":LIVE", DETAIL_BUCKET);
 
         assumeTrue(result.outcome() != PricingOutcome.INDETERMINATE,
                 "艺龙未给出结果（超时/限流），本轮跳过");
@@ -190,7 +212,15 @@ class ElongCheckPriceE2ETest {
     void availabilityLevelIssuesNoHandle() {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
 
+        TAKEN.clear();
         CheckPriceRespDTO resp = service.checkPrices(req(VerifyLevel.AVAILABILITY));
+
+        // 点订前的现取现验走 :CHECK_PRICE 而不是 :REFRESH——同一个 hotel.detail 接口，
+        // 两路各占一个用途桶。这一路是客人在等，与后台刷价必须分开计额
+        assertThat(TAKEN).as("现取现验必须扣 :CHECK_PRICE 用途桶与接口桶各一格")
+                .containsSubsequence(DETAIL_BUCKET + ":CHECK_PRICE", DETAIL_BUCKET);
+        assertThat(TAKEN).as("客流这一路不得扣到刷价的用途桶")
+                .doesNotContain(DETAIL_BUCKET + ":REFRESH");
 
         assumeTrue(resp.getOutcome() != CheckPriceOutcome.INDETERMINATE, "艺龙未给出结果，跳过");
         assertThat(resp.getOutcome()).isEqualTo(CheckPriceOutcome.AVAILABLE);
