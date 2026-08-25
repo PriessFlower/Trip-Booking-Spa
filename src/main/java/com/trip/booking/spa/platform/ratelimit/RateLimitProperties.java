@@ -66,7 +66,7 @@ public class RateLimitProperties {
      * <p>Nacos 转成 YAML map 之后即可删除本字段与 {@link #legacyQpsJson}。
      */
     @org.springframework.beans.factory.annotation.Value("${ratelimit.qps:}")
-    private String legacyQpsJson;
+    private transient String legacyQpsJson;
 
     public void setDefaultQps(double defaultQps) {
         this.defaultQps = defaultQps;

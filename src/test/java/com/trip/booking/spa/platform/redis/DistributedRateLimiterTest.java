@@ -4,10 +4,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.redisson.Redisson;
 import org.redisson.api.RRateLimiter;
 import org.redisson.api.RedissonClient;
-import org.redisson.config.Config;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -19,32 +17,21 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * 用<b>真 Redis</b> 验跨实例限流器的三条语义。不用 mock：被测的正是"Redisson 在 Redis 里怎么
  * 算许可"，把 Redis 换成假的等于什么都没验。
  *
- * <p>连本地 {@code tg-local-redis}（127.0.0.1:6380）。连不上就跳过——CI 上没有 Redis 时不该红。
+ * <p>端点见 {@link TestRedis}。连不上就跳过——但那意味着这几条<b>没有执行</b>，
+ * 所以 CI 的 test job 挂了 Redis 服务容器，别让它退回"静默跳过"。
  *
  * <p>三条语义各对应一个已修的缺陷：改速率要生效（原 {@code trySetRate} 是空操作）、
  * 小数配额不能被截成 0（原 {@code (long) qps}）、超时参数要真的用上（原来被丢掉）。
  */
 class DistributedRateLimiterTest {
 
-    private static final String HOST = "redis://127.0.0.1:6380";
-    private static final String PASSWORD = "local_redis_pw";
-
     private static RedissonClient client;
     private static DistributedRateLimiter limiter;
 
     @BeforeAll
     static void connect() {
-        Config config = new Config();
-        config.useSingleServer().setAddress(HOST).setPassword(PASSWORD)
-                .setConnectTimeout(2000).setTimeout(2000);
-        RedissonClient candidate = null;
-        try {
-            candidate = Redisson.create(config);
-            candidate.getBucket("probe:ratelimit").set("1");
-        } catch (Exception e) {
-            candidate = null;
-        }
-        assumeTrue(candidate != null, "本地 Redis(6380) 不可用，跳过");
+        RedissonClient candidate = TestRedis.connectOrNull();
+        assumeTrue(candidate != null, TestRedis.address() + " 不可用，跳过");
         client = candidate;
         limiter = new DistributedRateLimiter();
         ReflectionTestUtils.setField(limiter, "redissonClient", client);

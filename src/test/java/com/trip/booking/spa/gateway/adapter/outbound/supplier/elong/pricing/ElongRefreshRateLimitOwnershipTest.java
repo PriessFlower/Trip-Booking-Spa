@@ -135,8 +135,9 @@ class ElongRefreshRateLimitOwnershipTest {
 
     /** 从 ratelimit.qps 那行 JSON 里取某个键的配额；取不到返回 0 */
     private static double quotaOf(String yaml, String key) {
-        // 用途桶键是接口键加后缀，正则须锚定右引号，否则查接口键会先命中用途桶
-        Matcher m = Pattern.compile(Pattern.quote("\"" + key + "\"") + "\\s*:\\s*([0-9.]+)").matcher(yaml);
+        // 键在 YAML 里写成 "[GLOBAL_LIMIT:...]"（括号是 Spring 绑定的要求，见 RateLimitKeyBindingTest）。
+        // 正则须锚定右括号+引号，否则查接口键会先命中它的用途桶
+        Matcher m = Pattern.compile(Pattern.quote("\"[" + key + "]\"") + "\\s*:\\s*([0-9.]+)").matcher(yaml);
         return m.find() ? Double.parseDouble(m.group(1)) : 0d;
     }
 }
