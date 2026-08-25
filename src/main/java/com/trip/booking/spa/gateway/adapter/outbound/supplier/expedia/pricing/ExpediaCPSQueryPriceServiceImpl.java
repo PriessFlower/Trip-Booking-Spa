@@ -1,18 +1,14 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing;
 
-import com.alibaba.fastjson.JSON;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ExpediaQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaQueryPriceTask;
-import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing.ExpediaCPSQueryPriceService;
-import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing.ExpediaPriceService;
-import com.trip.booking.spa.platform.observability.Monitor;
-import com.google.common.util.concurrent.RateLimiter;
+import com.trip.booking.spa.gateway.application.pricing.AbstractCPSQueryPriceService;
+import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
-import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
@@ -25,23 +21,30 @@ import java.util.Date;
 import java.util.List;
 
 /**
- * Expedia 刷价缓存：消费 expedia_query_price_task 队列，把查回的价格写入我方 Redis 缓存。
+ * Expedia 刷价：消费 {@code expedia_query_price_task}，把查回的价格写入我方 Redis 缓存。
  *
- * <p>定时入口见 {@code ExpediaCPSQueryPriceTask}，手动入口见 {@code BackDoorController}
- * 的 {@code /hotel/expedia/priceCache}，两者共用 {@link #LOCK_KEY} 互斥。</p>
+ * <p>调度骨架在 {@link AbstractCPSQueryPriceService}；本类只回答 Expedia 专有的四件事。
+ * 搬上骨架后顺带得到此前完全缺失的东西：三态计数、{@code refresh_*} 指标（O-4.3 要求两家同名
+ * 指标、supplier 作标签，此前艺龙有七个指标而 Expedia 零埋点，两家成功率无法同图对比）、
+ * 行级并发、轮内进度、连续消费。
+ *
+ * <p><b>速率已收口到统一限流</b>：声明 {@link CallPurpose#REFRESH}，通道层扣用途桶与接口桶各
+ * 一格。此前是自建 Guava 限流器 + {@code task.expedia-cps.qps}，与统一限流并存。
+ * <b>发布时必须同时在 Nacos 补 {@code EXPEDIA:...:PRODUCT_PRICES:REFRESH}</b>，否则未登记会回落
+ * 接口桶（50）——那比原来的 10 快五倍。
  */
 @Slf4j
 @Service
-public class ExpediaCPSQueryPriceServiceImpl implements ExpediaCPSQueryPriceService {
+public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService<ExpediaQueryPriceTask>
+        implements ExpediaCPSQueryPriceService {
 
-    /** 刷价互斥锁：定时调度与 BackDoor 手动触发共用，保证同一时刻仅一个执行者 */
+    /** 刷价互斥锁：定时调度与 BackDoor 手动触发共用，保证同一时刻仅一个执行者（§3.8.2） */
     private static final String LOCK_KEY = "task:lock:expediaCpsQueryPrice";
 
-    /**
-     * 运维配置的读取入口。task.expedia-cps.{qps,batch-size} 权威取值由 Nacos 下发；
-     * 代码默认值取安全侧（PROJECT.md §3.3.3）——qps 0.5、batch-size 200，
-     * 缺配置时刷价变慢但不会突发大量请求。经 Environment 实时读取，改 Nacos 下一轮即生效。
-     */
+    /** 刷价的用途桶键，与艺龙同构 */
+    private static final String REFRESH_LIMIT_KEY =
+            "GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH";
+
     @Autowired
     private Environment environment;
 
@@ -54,97 +57,121 @@ public class ExpediaCPSQueryPriceServiceImpl implements ExpediaCPSQueryPriceServ
     @Autowired
     private ExpediaPriceService expediaPriceService;
 
-    /**
-     * 单次调用只消费一轮：取一批（SQL 按 update_time 升序，条数为 batch-size）、逐行刷完即返回。
-     *
-     * <p>不再无限循环。原实现的内层 while 永不退出——取任务 SQL 按 update_time 排序，而处理时会
-     * 更新该字段，只要表里有行 list 就不会为空，于是循环长期占锁运行，唯一刹车是启动期绑定的
-     * loop-enabled（改 Nacos 对运行中实例无效）。改为一轮一返回后：刷完由 cron 再次触发，
-     * task.expedia-cps.enabled 关闸最迟在一个调度周期内真正停止做功（PROJECT.md §3.8.2、§3.8.3）。
-     */
+    @Autowired
+    private com.trip.booking.spa.platform.ratelimit.RateLimitProperties rateLimitProperties;
+
     @Override
-    public Boolean queryPriceQueueTask(int priority, int temporaryUpgrade, String trigger) {
-        // 锁在此处而非调用方：定时调度与 BackDoor 手动触发共用同一把锁，
-        // 使两者互斥，避免并发消费同一批任务、重复消耗供应商配额（§3.8.2 一事一闸）
-        RLock lock = redissonClient.getLock(LOCK_KEY);
-        if (!lock.tryLock()) {
-            log.info("[gate] {} 已被其他执行者持有，本次跳过, trigger={}", LOCK_KEY, trigger);
-            return false;
-        }
-        try {
-            return runOneRound(priority, temporaryUpgrade, trigger);
-        } finally {
-            if (lock.isHeldByCurrentThread()) {
-                lock.unlock();
-            }
-        }
+    public Boolean queryPriceQueueTask(String trigger) {
+        return runUntilIdleOrClosed(trigger);
     }
 
-    private Boolean runOneRound(int priority, int temporaryUpgrade, String trigger) {
-        long roundStart = System.currentTimeMillis();
-        // 速率同样在此处解析：两个入口取同一配置，不再各自写死（原 BackDoor 写死 1 QPS）
-        double qps = environment.getProperty("task.expedia-cps.qps", Double.class, 0.5);
-        RateLimiter rateLimiter = RateLimiter.create(qps);
-        int batchSize = environment.getProperty("task.expedia-cps.batch-size", Integer.class, 200);
-        List<ExpediaQueryPriceTask> list = expediaQueryPriceTaskMapper.getQueryPriceTaskList(priority, temporaryUpgrade, batchSize);
-        log.info("expediaQueryPriceTask 本轮开始, trigger={}, priority={}, 取到 {} 行, batchSize={}, qps={}",
-                trigger, priority, list.size(), batchSize, qps);
-        if (CollectionUtils.isEmpty(list)) {
-            log.info("expediaQueryPriceTask 本轮结束, trigger={}, 无待刷任务, 耗时 {} ms",
-                    trigger, System.currentTimeMillis() - roundStart);
-            return true;
-        }
-        int succeeded = 0;
-        int failed = 0;
-        for (ExpediaQueryPriceTask expediaQueryPriceTask : list) {
-            // 单行处理整体入 try：坏数据只跳过本行，不影响同批其余行
-            try {
-                //升级期限为空视为已过期
-                Date upgradeDeadline = expediaQueryPriceTask.getUpgradeDeadline();
-                if (null == upgradeDeadline || !upgradeDeadline.after(new Date())) {
-                    expediaQueryPriceTask.setTemporaryUpgrade(0);
-                }
-                if (!isSameDay(expediaQueryPriceTask.getUpdateTime(), expediaQueryPriceTask.getLastTime())) {
-                    expediaQueryPriceTask.setQueryCount(1);
-                }
-                //更新查询次数
-                expediaQueryPriceTaskMapper.updateAddCount(expediaQueryPriceTask);
+    @Override
+    protected RedissonClient redissonClient() {
+        return redissonClient;
+    }
 
-                long start = System.currentTimeMillis();
-                //checkin和checkin+1每组都进行查询价格 比如:2025-03-01到2025-03-30拆分成2025-03-01到2025-03-02、2025-03-02到2025-03-03等
-                LocalDate currentCheckin = LocalDate.now().plusDays(expediaQueryPriceTask.getDelayCheckIn());
-                LocalDate currentCheckout = LocalDate.now().plusDays(expediaQueryPriceTask.getDelayCheckOut());
-                log.info("expediaQueryPriceTask hId: {},currentCheckin:{},currentCheckout:{}  ", expediaQueryPriceTask.getShId(), currentCheckin.toString(), currentCheckout.toString());
-                rateLimiter.acquire();
-                PriceReq request = PriceReq.builder().adultNum(2).childNum(0).guestType(0).childAges(new ArrayList<>()).checkIn(currentCheckin.toString()).checkout(currentCheckout.toString()).roomNum(1).build();
-                Supplier supplier = Supplier.builder().sHotelId(expediaQueryPriceTask.getShId()).build();
-                List<ProductRespDTO> productRespDTOList = expediaPriceService.queryPricesCache(request, supplier);
-                log.info("expediaQueryPriceTask productRespDTOList:{}", JSON.toJSONString(productRespDTOList));
-                log.info("expediaQueryPriceTask{} query time:{}", priority, System.currentTimeMillis() - start);
-                succeeded++;
-            } catch (Exception e) {
-                failed++;
-                log.error("expediaQueryPriceTask queryPricesCache error, hId={}:", expediaQueryPriceTask.getShId(), e);
-            }
+    @Override
+    protected String lockKey() {
+        return LOCK_KEY;
+    }
+
+    @Override
+    protected SupplierSourceEnum supplier() {
+        return SupplierSourceEnum.EXPEDIA;
+    }
+
+    @Override
+    protected boolean gateOpen() {
+        return environment.getProperty("task.expedia-cps.enabled", Boolean.class, false);
+    }
+
+    /** Expedia 目前单档 */
+    @Override
+    protected List<Integer> tiers() {
+        return List.of(0);
+    }
+
+    @Override
+    protected int batchSize(int priority) {
+        return environment.getProperty("task.expedia-cps.batch-size", Integer.class, 200);
+    }
+
+    /**
+     * 兜底 1（串行）＝改动前的行为。Expedia 此前完全串行，本次搬骨架不顺带并发化——
+     * 并发度要与连接池一起评估，而出价链路共用同一个池（§3.3.3 兜底取已知安全的旧行为）。
+     */
+    @Override
+    protected int concurrency(int priority) {
+        return environment.getProperty("task.expedia-cps.concurrency", Integer.class, 1);
+    }
+
+    /**
+     * 只用于轮次日志与耗时预估；真正的扣格在通道层（用途桶 + 接口桶）。
+     *
+     * <p>2026-08-25 收口：此前 Expedia 刷价自建 Guava 限流器、速率配在 {@code task.expedia-cps.qps}，
+     * 与统一限流并存——同一件事两个开关，运维改了统一限流却不生效（§3.3）。现与艺龙同形。
+     */
+    @Override
+    protected double declaredQps(int priority) {
+        if (!rateLimitProperties.isRegistered(REFRESH_LIMIT_KEY)) {
+            double interfaceQps = rateLimitProperties.qpsOf("GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES");
+            log.error("[gate] 刷价用途桶 {} 未登记，将按接口桶 {} QPS 跑满、不给客流留头 —— "
+                    + "请到 Nacos 的 ratelimit.qps 补齐该键", REFRESH_LIMIT_KEY, interfaceQps);
+            return interfaceQps;
         }
-        // 结束日志：无此行则日志上无法区分「本轮正常跑完」与「中途进程被杀」
-        log.info("expediaQueryPriceTask 本轮结束, trigger={}, 成功 {} 行, 失败 {} 行, 共 {} 行, 耗时 {} ms",
-                trigger, succeeded, failed, list.size(), System.currentTimeMillis() - roundStart);
-        return true;
+        return rateLimitProperties.qpsOf(REFRESH_LIMIT_KEY);
+    }
+
+    @Override
+    protected List<ExpediaQueryPriceTask> nextBatch(int priority, int temporaryUpgrade, int batchSize) {
+        return expediaQueryPriceTaskMapper.getQueryPriceTaskList(priority, temporaryUpgrade, batchSize);
+    }
+
+    /** Expedia 此前按 2 人写死一条，故只有一个维度。改成配置项属行为变更，本次不动 */
+    @Override
+    protected List<String> dimensions() {
+        return List.of("2");
+    }
+
+    @Override
+    protected RefreshOutcome refreshOne(ExpediaQueryPriceTask row, String dimension) {
+        // Expedia 是美国供应商，日期按 JVM 默认时区计——这是改动前的行为，未经核实故保留。
+        // 艺龙那侧已显式指定 Asia/Shanghai（供应商口径），Expedia 的正确口径待与对接方确认
+        LocalDate today = LocalDate.now();
+        PriceReq request = PriceReq.builder()
+                .adultNum(Integer.parseInt(dimension)).childNum(0).guestType(0)
+                .childAges(new ArrayList<>())
+                .checkIn(today.plusDays(row.getDelayCheckIn()).toString())
+                .checkout(today.plusDays(row.getDelayCheckOut()).toString())
+                .roomNum(1).build();
+        Supplier supplier = Supplier.builder().sHotelId(row.getShId()).build();
+
+        List<ProductRespDTO> products = expediaPriceService.queryPricesCache(request, supplier);
+        if (products == null) {
+            return RefreshOutcome.FAILED;
+        }
+        return products.isEmpty() ? RefreshOutcome.EMPTY : RefreshOutcome.ON_SALE;
+    }
+
+    /**
+     * 记账。Expedia 多一步：跨天则把查询次数重置为 1——{@code query_count} 的语义是"今天刷了几次"，
+     * 不重置会累加成历史总次数。
+     */
+    @Override
+    protected void markRefreshed(ExpediaQueryPriceTask row) {
+        if (!isSameDay(row.getUpdateTime(), row.getLastTime())) {
+            row.setQueryCount(1);
+        }
+        expediaQueryPriceTaskMapper.updateAddCount(row);
     }
 
     public static boolean isSameDay(Date updateTime, Date lastTime) {
-        // 新任务行 last_time 为空(从未刷过价)，视为非同一天，走首次/新一天的计数重置
+        // 新任务行 last_time 为空（从未刷过价），视为非同一天，走首次/新一天的计数重置
         if (null == updateTime || null == lastTime) {
             return false;
         }
-        // 将 Date 转换为 LocalDate
-        LocalDate updateLocalDate = updateTime.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-        LocalDate lastLocalDate = lastTime.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-
-        // 判断是否是同一天
-        return updateLocalDate.isEqual(lastLocalDate);
+        LocalDate a = updateTime.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+        LocalDate b = lastTime.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+        return a.isEqual(b);
     }
-
-
 }

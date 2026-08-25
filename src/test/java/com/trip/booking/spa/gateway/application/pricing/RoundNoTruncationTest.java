@@ -1,10 +1,11 @@
-package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
+package com.trip.booking.spa.gateway.application.pricing;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -21,13 +22,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class RoundNoTruncationTest {
 
-    private static final Path SERVICE = Path.of("src/main/java/com/trip/booking/spa/gateway/adapter"
-            + "/outbound/supplier/elong/pricing/ElongCPSQueryPriceServiceImpl.java");
+    /** 2026-08-25 起等待逻辑在骨架里（各家共用一份），故本测试盯骨架而不是艺龙实现 */
+    private static final Path SKELETON = Path.of("src/main/java/com/trip/booking/spa/gateway"
+            + "/application/pricing/AbstractCPSQueryPriceService.java");
 
     @Test
     @DisplayName("轮次不得因超时截断——只有容器关闭那一条路径可以 shutdownNow")
     void mustNotTruncateOnTimeout() throws Exception {
-        String src = Files.readString(SERVICE);
+        String src = Files.readString(SKELETON);
 
         // awaitTermination 的返回值只允许用于「继续等 + 报告」，不允许接 shutdownNow
         assertFalse(src.contains("pool.shutdownNow();\n            }"),
@@ -52,19 +54,19 @@ class RoundNoTruncationTest {
     @DisplayName("估时取 min(配额, 并发能力)，且只用于报告阈值")
     void estimateFollowsTheSlowerOfQuotaAndConcurrency() {
         // 事故当时的取值：400 行、配额 4 QPS、并发 3 → 实测 1.82 QPS，实需约 220s
-        long est = ElongCPSQueryPriceServiceImpl.estimateRoundSeconds(400, 4.0, 3);
+        long est = AbstractCPSQueryPriceService.estimateRoundSeconds(400, 4.0, 3);
         assertTrue(est > 180 && est < 300,
                 "估时 " + est + "s 与实测的 220s 不符；只按配额算会得到 100s，"
                         + "那正是当年把预算算成 220s 的来源");
 
         // 并发富余时瓶颈回到配额
-        long ample = ElongCPSQueryPriceServiceImpl.estimateRoundSeconds(400, 4.0, 60);
+        long ample = AbstractCPSQueryPriceService.estimateRoundSeconds(400, 4.0, 60);
         assertTrue(ample <= 100, "并发富余时估时应由配额决定，实际 " + ample + "s");
 
         // 安全侧兜底（并发 1）只是慢，不该被当成异常处理掉。用相对判据而非绝对秒数：
         // 单行耗时常数将来会随实测调整，写死秒数会让调常数时假红
-        long serial = ElongCPSQueryPriceServiceImpl.estimateRoundSeconds(900, 4.0, 1);
-        long conc6 = ElongCPSQueryPriceServiceImpl.estimateRoundSeconds(900, 4.0, 6);
+        long serial = AbstractCPSQueryPriceService.estimateRoundSeconds(900, 4.0, 1);
+        long conc6 = AbstractCPSQueryPriceService.estimateRoundSeconds(900, 4.0, 6);
         assertTrue(serial >= conc6 * 4,
                 "并发 1 的估时应如实反映串行之慢（用于报告阈值）：串行 " + serial
                         + "s 对并发6 " + conc6 + "s，差距不足 4 倍说明估时没跟着并发走");

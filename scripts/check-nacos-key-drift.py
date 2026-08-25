@@ -34,10 +34,40 @@ import sys
 import urllib.parse
 import urllib.request
 
-KEY_LINE = re.compile(r"^(\s*)([A-Za-z0-9_.\-]+):(.*)$")
+# 键名可能带引号与方括号：限流桶键写成 "[GLOBAL_LIMIT:...]"——括号是 Spring 绑定的要求
+# （裸键的冒号会被宽松绑定吃掉，见 RateLimitKeyBindingTest）。不认它们会让整段被跳过，
+# 2026-08-25 因此漏掉了 21 个限流键、把父键误报成"未登记"。
+KEY_LINE = re.compile(r"^(\s*)(\"?\[?[A-Za-z0-9_.:\-\]]+\"?)\s*:(.*)$")
 # @Value("${a.b.c:default}") 与 environment.getProperty("a.b.c", ...)
 VALUE_REF = re.compile(r"\$\{([a-zA-Z0-9_.\-]+)")
 GET_PROPERTY = re.compile(r"getProperty\(\"([a-zA-Z0-9_.\-]+)")
+# @ConfigurationProperties(prefix = "x") 的字段也是读取点。只认 @Value/getProperty 会把这类类的
+# 键全判成死键——2026-08-25 限流配置改用它之后 CI 就是这么红的。transient 字段跳过：那是过渡期
+# 的兼容字段，读的是别的键。
+CONFIG_PROPS = re.compile(r"@ConfigurationProperties\s*\(\s*prefix\s*=\s*\"([a-zA-Z0-9_.\-]+)\"")
+PRIVATE_FIELD = re.compile(
+    r"^\s*private\s+(?!transient)(?:volatile\s+)?[\w<>,\s\[\]]+?\s+(\w+)\s*[;=]", re.MULTILINE)
+
+
+# 映射型前缀：这些键的"子项"是<b>值</b>而不是键位。ratelimit.qps 下面挂的是限流桶名，
+# 代码把整张 map 一次读进来，不会逐个 @Value 读——若按"每个叶子都要被代码读到"去判，
+# 它们会全部被误报成死键。
+#
+# 这里刻意用白名单而不是通用规则：通用放行会让"漏配一个桶"也检不出来（我 2026-08-25 试过，
+# 删掉一个桶脚本照样说通过）。窄白名单至少让豁免范围是显式的。
+#
+# 这些叶子由别处守：桶之和不超接口桶由 RateLimitProperties 加载时校验并告警，
+# 艺龙三路用途桶是否登记由 ElongRefreshRateLimitOwnershipTest 断言。
+# 残留缺口：其他家的桶漏配只会静默回落 default-qps，暂无自动检查（欠账）。
+MAP_VALUED_PREFIXES = ("ratelimit.qps",)
+
+
+def under_map_valued(key):
+    return any(key == p or key.startswith(p + ".") for p in MAP_VALUED_PREFIXES)
+
+
+def camel_to_kebab(name):
+    return re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", name).lower()
 
 
 def leaf_paths(text):
@@ -75,6 +105,9 @@ def code_keys(source_root):
             text = f.read()
         keys.update(VALUE_REF.findall(text))
         keys.update(GET_PROPERTY.findall(text))
+        for prefix in CONFIG_PROPS.findall(text):
+            for field in PRIVATE_FIELD.findall(text):
+                keys.add(prefix + "." + camel_to_kebab(field))
     return keys
 
 
@@ -118,9 +151,12 @@ def fetch_nacos(addr, namespace, username, password, data_id, group):
 
 def check_example_vs_code(example_keys, source_root, resource_root):
     """检查 1：离线，example 与代码必须一一对应。返回 True 表示通过。"""
+    # 映射型前缀的叶子是值不是键位，两侧都从本检查中排除（见 MAP_VALUED_PREFIXES）
+    example_keys = {k for k in example_keys if not under_map_valued(k)}
     domains = {k.split(".")[0] for k in example_keys}
     in_yml = yml_keys(resource_root)
-    scoped = {k for k in code_keys(source_root) if k.split(".")[0] in domains and k not in in_yml}
+    scoped = {k for k in code_keys(source_root)
+              if k.split(".")[0] in domains and k not in in_yml and not under_map_valued(k)}
 
     dead = sorted(example_keys - scoped)
     missing = sorted(scoped - example_keys)

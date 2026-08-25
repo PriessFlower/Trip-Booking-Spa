@@ -9,10 +9,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * 钉住限流配置解析的兜底。
  *
- * <p>本类覆盖的是一个已发生的缺陷：{@code JsonUtils.decodeJson} 解析失败时吞掉异常返回
- * null，而 {@code init()} 只写了 catch，于是 qpsMap 被赋成 null，此后每次 qpsOf 都空指针。
- * 而 qpsOf 在所有供应商调用的必经路径上——运维在 Nacos 写错一个字符即可让整个网关瘫痪，
- * 且报错是空指针，完全指不向配置。
+ * <p>本类原先覆盖的是「JSON 解析失败 → 整张表变空 → 所有键回落」这个故障模式。2026-08-25
+ * 配置从 JSON 串改成 YAML map 之后，那个故障模式在结构上不存在了：写错一行只影响那一行，
+ * 且启动即报。相应的两个用例已删除——留着会让人以为还有那条路。
+ *
+ * <p>剩下的用例守的是仍然成立的部分：未登记的键回落默认值、空表不抛错。
+ * 键名绑定那个更隐蔽的坑由 {@code RateLimitKeyBindingTest} 守。
  */
 class RateLimitPropertiesTest {
 
@@ -31,35 +33,17 @@ class RateLimitPropertiesTest {
     void fallsBackToDefaultForUnlistedKey() {
         RateLimitProperties p = propertiesWith("{\"OTHER_KEY\":50}");
 
-        assertEquals(10d, p.qpsOf(KEY));
+        assertEquals(1d, p.qpsOf(KEY));
     }
 
-    /**
-     * 非法 JSON 必须回落默认而不是抛错——这正是缺陷所在。
-     * 修复前此处会因 qpsMap 为 null 而空指针。
-     */
-    @Test
-    void fallsBackToDefaultWhenJsonIsMalformed() {
-        RateLimitProperties p = propertiesWith("{这不是合法 JSON");
 
-        assertDoesNotThrow(() -> p.qpsOf(KEY));
-        assertEquals(10d, p.qpsOf(KEY));
-    }
-
-    /** JSON 合法但类型不符（值不是数字）同样不得抛错 */
-    @Test
-    void fallsBackToDefaultWhenValueTypeIsWrong() {
-        RateLimitProperties p = propertiesWith("{\"" + KEY + "\":\"不是数字\"}");
-
-        assertDoesNotThrow(() -> p.qpsOf(KEY));
-    }
 
     /** 未配置该项时回落默认 */
     @Test
     void fallsBackToDefaultWhenJsonIsBlank() {
         RateLimitProperties p = propertiesWith("");
 
-        assertEquals(10d, p.qpsOf(KEY));
+        assertEquals(1d, p.qpsOf(KEY));
     }
 
     /**
@@ -69,17 +53,36 @@ class RateLimitPropertiesTest {
     @Test
     void neverThrowsEvenIfMapIsNull() {
         RateLimitProperties p = propertiesWith("{}");
-        ReflectionTestUtils.setField(p, "qpsMap", null);
+        // 字段名随格式改动从 qpsMap 变成 qps；置 null 模拟绑定异常或并发下的中间态
+        ReflectionTestUtils.setField(p, "qps", null);
 
         assertDoesNotThrow(() -> p.qpsOf(KEY));
-        assertEquals(10d, p.qpsOf(KEY));
+        assertEquals(1d, p.qpsOf(KEY), "default-qps 的兜底值已从 10 改为安全侧的 1");
     }
 
     private RateLimitProperties propertiesWith(String qpsJson) {
         RateLimitProperties p = new RateLimitProperties();
-        ReflectionTestUtils.setField(p, "qpsJson", qpsJson);
-        ReflectionTestUtils.setField(p, "defaultQps", 10d);
+        p.setQps(asQpsMap(qpsJson));
+        ReflectionTestUtils.setField(p, "defaultQps", 1d);
         p.init();
         return p;
     }
+
+    /** 把用例里写的 JSON 字面量转成配置 map。配置已改 YAML，但用例用 JSON 字面量更紧凑 */
+    private static java.util.Map<String, Double> asQpsMap(String json) {
+        java.util.Map<String, Double> m = new java.util.LinkedHashMap<>();
+        for (String part : json.replace("{", "").replace("}", "").split(",")) {
+            int colon = part.lastIndexOf(':');
+            if (colon < 0) {
+                continue;
+            }
+            String key = part.substring(0, colon).trim().replace("\"", "");
+            String val = part.substring(colon + 1).trim().replace("\"", "");
+            if (!key.isEmpty() && !val.isEmpty()) {
+                m.put(key, Double.parseDouble(val));
+            }
+        }
+        return m;
+    }
+
 }

@@ -3,13 +3,7 @@ package com.trip.booking.spa.platform.observability;
 import java.util.Locale;
 
 /**
- * 一条报价在出报前被丢弃的原因。{@code reason} 标签值的唯一出处
- * （docs/observability.md O-4.4：必须枚举化，禁止自由字符串——放开自由文本，
- * 序列数会随代码改动无界增长）。
- *
- * <p>每个值对应一个真实的丢弃分支，新增分支必须先来这里登记（O-4.5：静默丢弃
- * 分支必须有 reason 落点）。这套词表同时是诊断端点的返回口径（O-8.1）——指标答
- * 「整体流失在哪一档」，诊断答「这一家为什么」。
+ * 报价丢弃原因
  */
 public enum DropReason {
 

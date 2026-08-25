@@ -15,13 +15,13 @@ class RateLimitManagerImplTest {
 
     private RateLimitManagerImpl manager(double qps, int timeoutMs) {
         RateLimitProperties props = new RateLimitProperties();
-        ReflectionTestUtils.setField(props, "mode", "local");
         ReflectionTestUtils.setField(props, "defaultQps", qps);
         ReflectionTestUtils.setField(props, "acquireTimeoutMs", timeoutMs);
-        ReflectionTestUtils.setField(props, "qpsJson", "");
+        props.setQps(java.util.Map.of());
         props.init();
         RateLimitManagerImpl m = new RateLimitManagerImpl();
         ReflectionTestUtils.setField(m, "properties", props);
+        ReflectionTestUtils.setField(m, "limiter", newLimiter());
         return m;
     }
 
@@ -60,4 +60,16 @@ class RateLimitManagerImplTest {
         boolean otherKeyStillHasToken = m.tryAcquire("TEST:s2:price");
         assertTrue(otherKeyStillHasToken, "不同 key 应是独立的桶");
     }
+    /** 真限流器 + 真 Redis（端点见 TestRedis）。连不上则跳过——被测的是"许可怎么取"，不能用假桶 */
+    private static com.trip.booking.spa.platform.redis.DistributedRateLimiter newLimiter() {
+        org.redisson.api.RedissonClient client =
+                com.trip.booking.spa.platform.redis.TestRedis.connectOrNull();
+        org.junit.jupiter.api.Assumptions.assumeTrue(client != null,
+                com.trip.booking.spa.platform.redis.TestRedis.address() + " 不可用，跳过");
+        com.trip.booking.spa.platform.redis.DistributedRateLimiter l =
+                new com.trip.booking.spa.platform.redis.DistributedRateLimiter();
+        ReflectionTestUtils.setField(l, "redissonClient", client);
+        return l;
+    }
+
 }

@@ -1,22 +1,36 @@
+# 生产 Nacos：跑在 platform 那台（trip-prod-platform / 172.21.32.14），app 读的就是它
+# （NACOS_SERVER_ADDR=172.21.32.14:8848，namespace=prod）。本文件与机器上
+# /opt/nacos/compose.yml 一致，改动须两边同步。
+#
+# 同目录的 nacos.env（鉴权与数据源）、compose.env（NACOS_BIND_IP）、admin.password
+# 只存在于机器上，禁止入仓（§3.5.1 凭据不入配置仓）。
+#
+# 本文件此前描述的是 trip-offline 上另起的一个 nacos（容器名 trip-offline-nacos、
+# 只绑 127.0.0.1）。那个实例无任何客户端连接，2026-08-24 已下掉——它的存在害人
+# 把限流/开关的生效值读到了错的对象上。别再在 offline 机器上起 nacos。
+name: trip-prod-platform-nacos
 services:
   nacos:
     image: nacos/nacos-server:v2.2.3
-    container_name: trip-offline-nacos
+    pull_policy: never
+    container_name: trip-prod-platform-nacos
     restart: unless-stopped
     env_file:
-      - /opt/nacos/nacos.env
+      - ./nacos.env
     ports:
-      - "127.0.0.1:8848:8848"
-      - "127.0.0.1:9848:9848"
-      - "127.0.0.1:9849:9849"
+      - "${NACOS_BIND_IP:?required}:8848:8848"
+      - "${NACOS_BIND_IP:?required}:9848:9848"
     volumes:
       - nacos-data:/home/nacos/data
       - nacos-logs:/home/nacos/logs
-
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8848/nacos/v1/console/health/readiness | grep -qx OK"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
 volumes:
   nacos-data:
-    name: nacos-data
-    external: true
+    name: trip-prod-platform-nacos-data
   nacos-logs:
-    name: nacos-logs
-    external: true
+    name: trip-prod-platform-nacos-logs

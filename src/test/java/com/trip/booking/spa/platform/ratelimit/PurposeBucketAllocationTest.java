@@ -102,10 +102,28 @@ class PurposeBucketAllocationTest {
 
     private RateLimitProperties propertiesWith(String qpsJson) {
         RateLimitProperties p = new RateLimitProperties();
-        ReflectionTestUtils.setField(p, "qpsJson", qpsJson);
+        p.setQps(asQpsMap(qpsJson));
         ReflectionTestUtils.setField(p, "defaultQps", 20d);
         ReflectionTestUtils.setField(p, "acquireTimeoutMs", 5000);
         p.init();
         return p;
     }
+
+    /** 把用例里写的 JSON 字面量转成配置 map。配置已改 YAML，但用例用 JSON 字面量更紧凑 */
+    private static java.util.Map<String, Double> asQpsMap(String json) {
+        java.util.Map<String, Double> m = new java.util.LinkedHashMap<>();
+        for (String part : json.replace("{", "").replace("}", "").split(",")) {
+            int colon = part.lastIndexOf(':');
+            if (colon < 0) {
+                continue;
+            }
+            String key = part.substring(0, colon).trim().replace("\"", "");
+            String val = part.substring(colon + 1).trim().replace("\"", "");
+            if (!key.isEmpty() && !val.isEmpty()) {
+                m.put(key, Double.parseDouble(val));
+            }
+        }
+        return m;
+    }
+
 }

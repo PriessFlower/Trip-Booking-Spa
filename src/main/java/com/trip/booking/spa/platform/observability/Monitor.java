@@ -131,17 +131,18 @@ public class Monitor {
     }
 
     public static void recordValue(String monitorName, int value) {
-        if (null == monitorService) {
-            return;
-        }
-        gauge(monitorName + GAUGE_METRIC_SUFFIX, value);
+        recordValue(monitorName, ImmutableMap.of(), value);
     }
 
+    /**
+     * 记一个瞬时值（gauge）。反复调用会更新到最新值——此前走 {@code meterRegistry.gauge(name, tags,
+     * Integer)}，第二次起不生效（见 MonitorService#setGauge 的注释），故改经 setGauge。
+     */
     public static void recordValue(String monitorName, Map<String, Object> tags, int value) {
         if (null == monitorService) {
             return;
         }
-        gauge(monitorName + GAUGE_METRIC_SUFFIX, tags, value);
+        monitorService.setGauge(monitorName + GAUGE_METRIC_SUFFIX, tags, value);
     }
 
 

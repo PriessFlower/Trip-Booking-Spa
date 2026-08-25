@@ -1,74 +1,49 @@
 package com.trip.booking.spa.platform.ratelimit;
 
-import com.google.common.util.concurrent.RateLimiter;
 import com.trip.booking.spa.platform.redis.DistributedRateLimiter;
 import lombok.extern.slf4j.Slf4j;
-import org.redisson.api.RRateLimiter;
-import org.redisson.api.RateIntervalUnit;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
-
 /**
- * 限流中枢实现：按 key 懒加载缓存限流器，按配置在本地/分布式间选底层。
+ * 限流中枢：<b>只有一种实现</b>——跨实例的 Redisson 令牌桶，配额来自 Nacos。
  *
- * <ul>
- *   <li>local：Guava 令牌桶，单 JVM 计数，纳秒级；acquire 时按最新配置校准速率（跟随 @RefreshScope 热更新）。</li>
- *   <li>distributed：委托现有 {@link DistributedRateLimiter}（Redisson），跨实例共享配额。</li>
- * </ul>
+ * <p><b>为什么删掉了 local/distributed 这个开关</b>（2026-08-25）：供应商的配额是账号或接口级的，
+ * 与我们部署几个实例无关。Guava 在 JVM 内计数，单实例时"本机"恰好等于"全局"——那是侥幸，
+ * 而不是设计。加第二台实例就是对供应商双倍流量，且这个错误<b>不会有任何报错</b>，只会表现为
+ * 频控变多。
+ *
+ * <p>更直接的证据是同一条刷价路径上的不一致：分布式锁早就是跨实例的（Redisson RLock，F-2.3），
+ * 限流却是单机的。锁的作者考虑了多实例，限流没有。留着 {@code mode} 等于留一个"配错就静默超
+ * 配额"的开关，而这两天一直在消除的正是这种「同一件事两个开关」。
+ *
+ * <p>代价：每次扣格一次 Redis 往返（Lua 脚本，同 VPC 亚毫秒）。刷价无所谓；客流路径加不到 1ms。
+ * Redis 不可用时限流器拿不到许可 → 前台快速失败、后台阻塞等待。这是<b>刻意的</b>：放行意味着
+ * 对供应商无限流，可能招致封号；而拒绝只是这段时间不刷价。价格缓存本就在同一个 Redis 上，
+ * 它挂了刷价与出价都已不可用，故不算新增单点。
  */
 @Slf4j
 @Component
 public class RateLimitManagerImpl implements RateLimitManager {
 
-    private static final RateIntervalUnit UNIT = RateIntervalUnit.SECONDS;
-    private static final long WINDOW = 1L;
-
     @Autowired
     private RateLimitProperties properties;
 
     @Autowired
-    private DistributedRateLimiter distributedRateLimiter;
-
-    /** 本地模式的桶缓存：key -> Guava RateLimiter */
-    private final ConcurrentHashMap<String, RateLimiter> localCache = new ConcurrentHashMap<>();
+    private DistributedRateLimiter limiter;
 
     @Override
     public void acquire(String key) {
-        double qps = properties.qpsOf(key);
-        if (properties.isDistributed()) {
-            RRateLimiter limiter = distributedRateLimiter.getRateLimiter(key, (long) qps, UNIT, WINDOW);
-            limiter.acquire(1);
-            return;
-        }
-        localLimiter(key, qps).acquire();
+        limiter.acquire(key, properties.qpsOf(key));
     }
 
     @Override
     public boolean tryAcquire(String key) {
-        double qps = properties.qpsOf(key);
-        int timeoutMs = properties.getAcquireTimeoutMs();
-        if (properties.isDistributed()) {
-            return distributedRateLimiter.tryAcquire(key, (long) qps, UNIT, WINDOW, timeoutMs / 1000);
-        }
-        return localLimiter(key, qps).tryAcquire(timeoutMs, TimeUnit.MILLISECONDS);
+        return limiter.tryAcquire(key, properties.qpsOf(key), properties.getAcquireTimeoutMs());
     }
 
     @Override
     public boolean isRegistered(String key) {
         return properties.isRegistered(key);
-    }
-
-    /**
-     * 取（或建）本地桶，并把速率校准到最新配置——Nacos 改了 QPS 后下次调用即生效，无需重建。
-     */
-    private RateLimiter localLimiter(String key, double qps) {
-        RateLimiter limiter = localCache.computeIfAbsent(key, k -> RateLimiter.create(qps));
-        if (limiter.getRate() != qps) {
-            limiter.setRate(qps);
-        }
-        return limiter;
     }
 }

@@ -25,6 +25,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # 限流器的守护测试要连真 Redis——被测的正是"Redisson 在 Redis 里怎么算许可"。
+    # 2026-08-25 有个"每次扣格都重写 setRate"的改动会让限流完全失效，评审没看出来，
+    # 是跨实例那条真 Redis 测试逮到的。没有这个服务容器，那 8 条会 assumeTrue 静默跳过，
+    # 于是流水线报绿而限流无人看守；TEST_REDIS_REQUIRED 让"容器坏了"也变成红。
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -43,6 +58,14 @@ jobs:
         run: python3 scripts/check-nacos-key-drift.py
 
       - name: Build and test
+        env:
+          # 与本地 tg-local-redis 一致的端点；密码留空——CI 的 Redis 不设认证，
+          # 测试里对空密码是容错的（生产那台实测也不要求密码）
+          TEST_REDIS_HOST: 127.0.0.1
+          TEST_REDIS_PORT: '6380'
+          TEST_REDIS_PASSWORD: ''
+          # 声明"这里必须有 Redis"：容器起不来时要红，而不是静默跳过 8 条守护测试
+          TEST_REDIS_REQUIRED: 'true'
         run: ./mvnw --batch-mode --activate-profiles test verify
 
   publish:
