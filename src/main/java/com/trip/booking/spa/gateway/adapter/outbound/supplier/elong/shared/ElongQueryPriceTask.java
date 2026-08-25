@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared;
 
+import com.trip.booking.spa.gateway.application.pricing.RefreshTaskRow;
 import lombok.Data;
 
 import java.util.Date;
@@ -12,7 +13,7 @@ import java.util.Date;
  * （移植风险⑤，cursor 混批越南的真实教训）。
  */
 @Data
-public class ElongQueryPriceTask {
+public class ElongQueryPriceTask implements RefreshTaskRow {
 
     private Long id;
 

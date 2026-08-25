@@ -35,12 +35,12 @@ public class ElongCPSQueryPriceTask {
      *       BackDoor 手动触发不受本闸约束，但共用同一把锁</li>
      * </ul>
      *
-     * <p><b>cron 覆盖全时段</b>：{@code 0 0/10 * * * ?} 每 10 分钟一轮。按 cursor 停刷后
-     * 额度独享设计——其艺龙刷价现状为 24h 内 45,235 条 / 16,998 家（平均约 0.52 QPS），
-     * 而艺龙库共 23,584 家；本任务以 1 QPS × 每轮 500 家的节奏，每天可刷约 7.2 万条，
-     * 即全库每天覆盖三轮，优于 cursor 现状。速率与批量见
-     * {@code task.elong-cps.high-qps}/{@code high-batch-size}(高频档)与
-     * {@code normal-qps}/{@code normal-batch-size}(常规档);旧键 qps/batch-size 自批次3弃用。
+     * <p><b>cron 现在是看门狗，不是节拍器</b>（2026-08-25）：刷价服务自己连续消费到关闸或没活
+     * （{@code AbstractCPSQueryPriceService} 的循环），所以正常情况下这里每次触发都会被供应商
+     * 专属执行器拒掉（单线程 + SynchronousQueue，F-2.7 忙则跳过）——那是预期行为，不是故障。
+     * 它存在的唯一理由是<b>自愈</b>：循环若因意外退出，下一个 cron 点把它重新拉起。
+     *
+     * <p>因此 cron 周期不再决定刷价节奏（那由循环和批量决定），只决定"挂了多久会被拉起来"。
      */
     @Resource
     private SupplierTaskExecutors supplierTaskExecutors;
@@ -48,25 +48,15 @@ public class ElongCPSQueryPriceTask {
     @Scheduled(cron = "${task.elong-cps.cron:0 0/10 * * * ?}")
     public void run() {
         // 闸口检查留在调度线程（毫秒级）；任务体派发到 elong 专属线程（F-2.7），
-        // 调度线程立即释放，不再与其他供应商的任务互相排队
+        // 调度线程立即释放，不再与其他供应商的任务互相排队。
+        // 循环内每轮还会再读一次闸——这里这次只是省掉一次无用派发
         if (!environment.getProperty("task.elong-cps.enabled", Boolean.class, false)) {
             log.info("[gate] task.elong-cps.enabled=false，跳过本次调度");
             return;
         }
-        // 批次3 三档优先级(F-2.4,简化两档):同一次派发内顺序跑,受 F-2.7 同供应商
-        // 串行保护。高频档(priority=0,T+0~T+2)带借入(temporaryUpgrade=1:验价升档的
-        // 行一并跟刷);常规档(priority=1,T+3~T+6)排除升档行防双刷。
-        // 默认 400@2qps + 200@1qps ≈ 6.7 分钟 < 10 分钟 cron,不再跳轮;
-        // 高频档 ~2.6h 轮一遍(原 9.6h),QPS 峰值 2 仍在限流键(5)之内。
-        supplierTaskExecutors.submit("elong", "cps-query-price", () -> {
-            // 成交档(priority=2)最先跑：高德出过单的酒店 T+0~2，deal-batch-size 须 ≥ 档内
-            // 行数使一轮扫完——本档的承诺是缓存龄 ≤ 一次执行间隔(约 30 分钟)
-            elongCPSQueryPriceService.queryPriceQueueTask(2, 0, "scheduled-deal");
-            elongCPSQueryPriceService.queryPriceQueueTask(0, 1, "scheduled-high");
-            elongCPSQueryPriceService.queryPriceQueueTask(1, 0, "scheduled-normal");
-            // 远期档(priority=3)最后跑：成交酒店 T+7~29，小批滚动、约一天扫完一遍。
-            // 排最后是为了不侵占成交档的 30 分钟节奏——远期价按天级新鲜度已够用
-            elongCPSQueryPriceService.queryPriceQueueTask(3, 0, "scheduled-far");
-        });
+        // 档位序列（成交→高频→常规→远期）在服务内声明，调度侧不再逐档触发：
+        // 档序是刷价语义（哪档更急），属供应商适配层的知识，不该散在调度类里
+        supplierTaskExecutors.submit("elong", "cps-query-price",
+                () -> elongCPSQueryPriceService.queryPriceQueueTask("scheduled"));
     }
 }

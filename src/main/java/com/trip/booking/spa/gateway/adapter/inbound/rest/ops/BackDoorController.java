@@ -118,7 +118,7 @@ public class BackDoorController {
     @ApiOperation("expedia价格缓存-手动触发一轮")
     public HttpResponse expediaPriceCache() {
         log.warn("[gate] 绕过 task.expedia-cps.enabled：BackDoor 手动触发一轮刷价");
-        expediaCPSQueryPriceService.queryPriceQueueTask(0, 0, "manual");
+        expediaCPSQueryPriceService.queryPriceQueueTask("manual");
         return HttpResponse.getSuccessInstance();
     }
 }

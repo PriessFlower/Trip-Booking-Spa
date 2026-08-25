@@ -33,12 +33,36 @@ import java.util.Map;
  */
 public abstract class AbstractElongRestAccess<T extends BaseResponse> extends BaseHttpAccess<ElongRestCall, T> {
 
+    /** 「访问太频繁」。艺龙按方法各自限，撞到它说明该方法的每秒上限被超过 */
+    private static final String THROTTLE_CODE = "A201010001";
+
     private final ElongProperties properties;
 
     protected AbstractElongRestAccess(SupplierDataTypeEnum dataType, MonitorNameEnum monitorKey,
                                       ElongProperties properties) {
         super(SupplierSourceEnum.ELONG, dataType, monitorKey, 0);
         this.properties = properties;
+    }
+
+    /**
+     * 艺龙的频控码。{@code A201010001} 官方文案是「访问太频繁」——2026-08-17 生产实测速率从
+     * 0.4 升到 0.62 QPS 时，查价成功率从 92% 掉到 73%，掉的部分全是这个码。
+     *
+     * <p>用反射读 {@code errorCode()}：各家响应类各自实现该方法而没有共同基类（它们只共享
+     * {@link BaseResponse}），为一个码去改五个类的继承结构不划算。取不到就当不是频控——
+     * 判错方向是「少报频控」，而少报只会让我们以为还有余量，不会误伤调用。
+     */
+    @Override
+    protected boolean isThrottled(T response) {
+        if (response == null) {
+            return false;
+        }
+        try {
+            Object code = response.getClass().getMethod("errorCode").invoke(response);
+            return THROTTLE_CODE.equals(code);
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     @Override

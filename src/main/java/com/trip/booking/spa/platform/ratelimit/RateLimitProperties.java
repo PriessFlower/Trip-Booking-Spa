@@ -1,74 +1,129 @@
 package com.trip.booking.spa.platform.ratelimit;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.trip.booking.spa.platform.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 限流配置（Nacos 一处配置，@RefreshScope 改配置热生效）。
- * 风格对齐 NacosRuntimeConfig：@Value + JSON 字符串。
+ * 限流配置（Nacos 一处配置，{@code @RefreshScope} 改配置热生效）。
  *
+ * <pre>
  * ratelimit:
- *   mode: local              # local(Guava 单机) | distributed(Redisson 跨实例)
- *   default-qps: 10          # 未在下表配置的 key 用这个
- *   acquire-timeout-ms: 5000 # tryAcquire 等待上限
- *   qps: '{"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES":500}'
+ *   default-qps: 1             # 未登记的键用这个。安全侧取小值——漏登记该被憋死，不该放飞
+ *   acquire-timeout-ms: 5000   # 前台用途的等待上限
+ *   qps:
+ *     "[GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES]": 13
+ *     "[GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH]": 10
+ * </pre>
  *
- * qps 表的 key = BaseHttpAccess.buildGlobalLimitKey() 产出的 供应商_接口 标识。
+ * <p><b>为什么从 JSON 字符串改成 YAML map</b>（2026-08-25）：原先 16 个键挤在一行 899 字符的
+ * JSON 串里，三个后果都真实发生过——
+ * <ol>
+ *   <li>改一个配额只能对那一行 {@code sed}，而「同一接口的各用途桶之和 ≤ 接口桶」这条不变式
+ *       肉眼完全看不出来；</li>
+ *   <li>JSON 写错一个字符 → 整张表解析失败 → <b>所有键一起回落 default-qps</b>。原代码为此专门
+ *       写了两层判空防御，注释里写着"等于整个网关瘫痪"。改成 YAML 后这个故障模式不存在了：
+ *       写错一行只影响那一行，而且启动就报；</li>
+ *   <li>example 与生产反复漂而无法 diff。</li>
+ * </ol>
+ *
+ * <p><b>键仍然是扁平的</b>，这是刻意的：日志里打出来的就是这个字符串（{@code GLOBAL_LIMIT:供应商:
+ * 接口:用途}），能直接拿去 grep 配置。改成嵌套树要在脑子里拼，反而更难对。
+ *
+ * <p><b>键必须用 {@code []} 包起来</b>：Spring 的宽松绑定会把裸 map 键里的冒号当分隔符<b>吃掉</b>——
+ * {@code GLOBAL_LIMIT:ELONG:X} 会绑成 {@code GLOBAL_LIMITELONGX}，于是运行期按原键查表必然 miss、
+ * 所有键静默回落 {@code default-qps}。2026-08-25 改格式时实测踩到：日志显示"已加载 5 个 key"
+ * 一切正常，而限流器实际用的是兜底值。有 {@code RateLimitKeyBindingTest} 守着这条。
  */
 @Slf4j
 @Component
 @RefreshScope
+@ConfigurationProperties(prefix = "ratelimit")
 public class RateLimitProperties {
 
-    @Value("${ratelimit.mode:local}")
-    private String mode;
+    /** 未登记键的兜底。取小值：漏登记应表现为"被憋死"而不是"按 20 QPS 放飞"（§3.3.3 安全侧） */
+    private double defaultQps = 1d;
 
-    @Value("${ratelimit.default-qps:10}")
-    private double defaultQps;
+    private int acquireTimeoutMs = 5000;
 
-    @Value("${ratelimit.acquire-timeout-ms:5000}")
-    private int acquireTimeoutMs;
+    /** 键 = BaseHttpAccess 拼出的 {@code GLOBAL_LIMIT:<供应商>:<接口>[:<用途>]} */
+    private Map<String, Double> qps = new LinkedHashMap<>();
 
-    @Value("${ratelimit.qps:}")
-    private String qpsJson;
+    /**
+     * 过渡期兼容：旧格式是把整张表塞进一个 JSON 字符串（{@code qps: '{"KEY":13,...}'}）。
+     *
+     * <p><b>为什么必须两种都认</b>：直接切格式的两个方向都不安全——先改 Nacos 则旧代码读到空、
+     * 所有键回落 {@code default-qps}（当时是 20，对艺龙即超速）；先发版则新代码把字符串绑到
+     * {@code Map} 会失败、服务起不来。两format并存使「发版」与「改配置」解耦，各自可独立回滚。
+     *
+     * <p>Nacos 转成 YAML map 之后即可删除本字段与 {@link #legacyQpsJson}。
+     */
+    @org.springframework.beans.factory.annotation.Value("${ratelimit.qps:}")
+    private String legacyQpsJson;
 
-    private volatile Map<String, Double> qpsMap = Collections.emptyMap();
+    public void setDefaultQps(double defaultQps) {
+        this.defaultQps = defaultQps;
+    }
+
+    public void setAcquireTimeoutMs(int acquireTimeoutMs) {
+        this.acquireTimeoutMs = acquireTimeoutMs;
+    }
+
+    public void setQps(Map<String, Double> qps) {
+        this.qps = qps == null ? Collections.emptyMap() : qps;
+    }
+
+    public Map<String, Double> getQps() {
+        return qps;
+    }
 
     @PostConstruct
     public void init() {
-        if (StringUtils.isBlank(qpsJson)) {
-            qpsMap = Collections.emptyMap();
+        if ((qps == null || qps.isEmpty()) && org.apache.commons.lang3.StringUtils.isNotBlank(legacyQpsJson)) {
+            qps = parseLegacyJson(legacyQpsJson);
+            log.warn("[gate] ratelimit.qps 仍是旧的 JSON 字符串格式，已按兼容路径解析出 {} 个 key。"
+                    + "请尽快改成 YAML map（键须用 [] 包住），改完可删除本兼容分支", qps.size());
+        }
+        if (qps == null || qps.isEmpty()) {
+            // 空表不是致命的（各键走 default-qps），但一定是配置事故——按安全侧的 default-qps=1
+            // 跑起来会明显变慢，宁可让人立刻看见
+            log.error("[gate] ratelimit.qps 为空，所有键将回落 default-qps={}。请检查 Nacos 配置", defaultQps);
+            qps = Collections.emptyMap();
             return;
         }
-        Map<String, Double> parsed = null;
-        try {
-            parsed = JsonUtils.decodeJson(qpsJson, new TypeReference<Map<String, Double>>() {
-            });
-        } catch (Exception e) {
-            log.error("ratelimit.qps JSON 解析抛错，回落空配置（各 key 走 default-qps）: {}", qpsJson, e);
+        log.info("ratelimit.qps 已加载 {} 个 key，其余走 default-qps={}", qps.size(), defaultQps);
+        checkBucketSums(qps);
+    }
+
+    /**
+     * 解析旧格式：{@code {"KEY":13,"KEY2":10}}。只在过渡期用，故不追求严谨——
+     * 解析不出来的条目跳过并落日志，而不是让整张表变空（那正是旧格式最糟的故障模式）。
+     */
+    private Map<String, Double> parseLegacyJson(String json) {
+        Map<String, Double> parsed = new LinkedHashMap<>();
+        for (String part : json.replace("{", "").replace("}", "").split(",")) {
+            int colon = part.lastIndexOf(':');
+            if (colon < 0) {
+                continue;
+            }
+            String key = part.substring(0, colon).trim().replace("\"", "");
+            String value = part.substring(colon + 1).trim().replace("\"", "");
+            try {
+                if (!key.isEmpty()) {
+                    parsed.put(key, Double.parseDouble(value));
+                }
+            } catch (NumberFormatException e) {
+                log.error("[gate] 旧格式 ratelimit.qps 里这一项解析不出数值，已跳过: {}", part);
+            }
         }
-        // 必须判空而非只接异常：JsonUtils.decodeJson 解析失败时吞掉异常返回 null，
-        // 只写 catch 的话 qpsMap 会被赋成 null，此后每次 qpsOf 都空指针——
-        // 而 qpsOf 在所有限流调用的路径上，等于整个网关瘫痪。
-        if (parsed == null) {
-            log.error("ratelimit.qps 解析结果为空，回落空配置（各 key 走 default-qps={}）: {}",
-                    defaultQps, qpsJson);
-            qpsMap = Collections.emptyMap();
-            return;
-        }
-        qpsMap = parsed;
-        log.info("ratelimit.qps 已加载 {} 个 key，其余走 default-qps={}", parsed.size(), defaultQps);
-        checkBucketSums(parsed);
+        return parsed;
     }
 
     /**
@@ -111,12 +166,8 @@ public class RateLimitProperties {
      * 改动前完全一致（只走接口桶），而不是按默认值放飞。
      */
     public boolean isRegistered(String key) {
-        Map<String, Double> current = qpsMap;
+        Map<String, Double> current = qps;
         return current != null && current.containsKey(key);
-    }
-
-    public boolean isDistributed() {
-        return "distributed".equalsIgnoreCase(mode);
     }
 
     public int getAcquireTimeoutMs() {
@@ -126,11 +177,10 @@ public class RateLimitProperties {
     /**
      * 查某个限流 key 的 QPS，未配置则用全局默认。
      *
-     * <p>此处再判一次空是有意的冗余：本方法在所有供应商调用的必经路径上，
-     * 一旦抛错即全站不可用。宁可多一次判空，也不让一个配置问题变成全站故障。
+     * <p>此处判空是有意的冗余：本方法在所有供应商调用的必经路径上，一旦抛错即全站不可用。
      */
     public double qpsOf(String key) {
-        Map<String, Double> current = qpsMap;
+        Map<String, Double> current = qps;
         return current == null ? defaultQps : current.getOrDefault(key, defaultQps);
     }
 }

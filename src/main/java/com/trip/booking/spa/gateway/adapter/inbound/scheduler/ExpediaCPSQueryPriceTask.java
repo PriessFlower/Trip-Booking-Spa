@@ -38,6 +38,6 @@ public class ExpediaCPSQueryPriceTask {
             return;
         }
         supplierTaskExecutors.submit("expedia", "cps-query-price",
-                () -> expediaCPSQueryPriceService.queryPriceQueueTask(0, 0, "scheduled"));
+                () -> expediaCPSQueryPriceService.queryPriceQueueTask("scheduled"));
     }
 }

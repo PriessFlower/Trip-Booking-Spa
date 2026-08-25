@@ -105,7 +105,14 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
             return new ResponseResult<>(HttpStatus.SC_GATEWAY_TIMEOUT, null);
         }
         if (!result.isSucc()) {
-            Monitor.recordOne(MetricNames.SUPPLIER_IO_ACCESS, ioTags(CallStatus.REJECTED), cost);
+            // 供应商侧频控必须与普通业务错误分开——它是调速的唯一直接指标（F-8.2）。
+            // 混进 REJECTED 就答不了「刷不出价是频控还是真无房」，而这两者的处置相反。
+            boolean throttled = isThrottled(result.getData());
+            Monitor.recordOne(MetricNames.SUPPLIER_IO_ACCESS,
+                    ioTags(throttled ? CallStatus.THROTTLED : CallStatus.REJECTED), cost);
+            if (throttled) {
+                logger.warn("供应商频控命中, supplier:[{}], interface:[{}]", supplier, monitorKey);
+            }
             return result;
         }
         if (null != result.getData() && result.getData().isEmptyResult()) {
@@ -121,6 +128,19 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
     }
 
     public boolean isParseError() {
+        return false;
+    }
+
+    /**
+     * 这个响应是不是<b>供应商侧频控</b>（不是我方限流器拦下的）。默认 false。
+     *
+     * <p>各家的频控码表不同（艺龙 {@code A201010001}、Expedia HTTP 429），但"频控要与普通业务
+     * 错误分开计数"这条是通用的：它是调速的唯一直接指标（F-8.2）。此前艺龙的频控只落日志，
+     * 而日志 40 分钟就被冲掉，于是"提速之后有没有撞墙"这个问题在 Grafana 上答不出来。
+     *
+     * @param response 已解析的响应；调用方保证只在 {@code isSucc()==false} 时问，但仍可能为 null
+     */
+    protected boolean isThrottled(T response) {
         return false;
     }
 

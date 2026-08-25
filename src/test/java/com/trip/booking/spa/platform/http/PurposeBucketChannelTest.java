@@ -29,7 +29,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * 通道层两级桶的<b>行为</b>验证：用真的 {@link RateLimitManagerImpl}（真 Guava 令牌桶）+
+ * 通道层两级桶的<b>行为</b>验证：用真的 {@link RateLimitManagerImpl}（真 Redisson 令牌桶（跨实例））+
  * 生产 Nacos 的真实取值，观察扣了哪些键、拿不到许可时是等还是走。
  *
  * <p>唯一被替掉的是网络那一段（{@link #request} 直接返回一个成功响应）——被测的是"许可怎么取"，
@@ -104,17 +104,26 @@ class PurposeBucketChannelTest {
                         + "没等说明退回了非阻塞语义");
     }
 
-    /** 装一套真限流器：真 RateLimitProperties 解析 + 真 Guava 桶 */
+    /** 装一套真限流器：真 RateLimitProperties 解析 + 真 Redisson 桶 */
     private void install(String qpsJson, int acquireTimeoutMs) {
         RateLimitProperties props = new RateLimitProperties();
-        ReflectionTestUtils.setField(props, "qpsJson", qpsJson);
+        props.setQps(asQpsMap(qpsJson));
         ReflectionTestUtils.setField(props, "defaultQps", 20d);
         ReflectionTestUtils.setField(props, "acquireTimeoutMs", acquireTimeoutMs);
-        ReflectionTestUtils.setField(props, "mode", "local");
         props.init();
 
         RateLimitManagerImpl impl = new RateLimitManagerImpl();
         ReflectionTestUtils.setField(impl, "properties", props);
+        com.trip.booking.spa.platform.redis.DistributedRateLimiter real = newLimiter();
+        ReflectionTestUtils.setField(impl, "limiter", real);
+        // 真 Redis 的限流器状态是持久的，用例之间必须清干净——否则上一个用例消耗掉的格子
+        // 会让下一个用例看到一个"已经空了"的桶，表现为随机失败
+        org.redisson.api.RedissonClient client =
+                (org.redisson.api.RedissonClient) ReflectionTestUtils.getField(real, "redissonClient");
+        for (CallPurpose p : CallPurpose.values()) {
+            client.getRateLimiter(IFACE + ":" + p.name()).delete();
+        }
+        client.getRateLimiter(IFACE).delete();
 
         RateLimitManager recording = new RateLimitManager() {
             @Override
@@ -181,4 +190,41 @@ class PurposeBucketChannelTest {
             return false;
         }
     }
+    /** 真限流器 + 真 Redis（本地 6380）。连不上则跳过——被测的是"许可怎么取"，不能用假桶 */
+    private static com.trip.booking.spa.platform.redis.DistributedRateLimiter newLimiter() {
+        org.redisson.config.Config config = new org.redisson.config.Config();
+        config.useSingleServer().setAddress("redis://127.0.0.1:6380")
+                .setPassword("local_redis_pw").setConnectTimeout(2000).setTimeout(2000);
+        org.redisson.api.RedissonClient client = null;
+        try {
+            client = org.redisson.Redisson.create(config);
+            client.getBucket("probe:ratelimit").set("1");
+        } catch (Exception e) {
+            client = null;
+        }
+        org.junit.jupiter.api.Assumptions.assumeTrue(client != null, "本地 Redis(6380) 不可用，跳过");
+        com.trip.booking.spa.platform.redis.DistributedRateLimiter l =
+                new com.trip.booking.spa.platform.redis.DistributedRateLimiter();
+        ReflectionTestUtils.setField(l, "redissonClient", client);
+        return l;
+    }
+
+
+    /** 把用例里写的 JSON 字面量转成配置 map。配置已改 YAML，但用例用 JSON 字面量更紧凑 */
+    private static java.util.Map<String, Double> asQpsMap(String json) {
+        java.util.Map<String, Double> m = new java.util.LinkedHashMap<>();
+        for (String part : json.replace("{", "").replace("}", "").split(",")) {
+            int colon = part.lastIndexOf(':');
+            if (colon < 0) {
+                continue;
+            }
+            String key = part.substring(0, colon).trim().replace("\"", "");
+            String val = part.substring(colon + 1).trim().replace("\"", "");
+            if (!key.isEmpty() && !val.isEmpty()) {
+                m.put(key, Double.parseDouble(val));
+            }
+        }
+        return m;
+    }
+
 }
