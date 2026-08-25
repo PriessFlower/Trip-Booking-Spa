@@ -17,7 +17,7 @@ class RateLimitManagerImplTest {
         RateLimitProperties props = new RateLimitProperties();
         ReflectionTestUtils.setField(props, "defaultQps", qps);
         ReflectionTestUtils.setField(props, "acquireTimeoutMs", timeoutMs);
-        ReflectionTestUtils.setField(props, "qpsJson", "");
+        props.setQps(java.util.Map.of());
         props.init();
         RateLimitManagerImpl m = new RateLimitManagerImpl();
         ReflectionTestUtils.setField(m, "properties", props);

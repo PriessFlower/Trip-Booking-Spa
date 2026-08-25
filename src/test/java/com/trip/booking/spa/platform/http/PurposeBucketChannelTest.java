@@ -107,7 +107,7 @@ class PurposeBucketChannelTest {
     /** 装一套真限流器：真 RateLimitProperties 解析 + 真 Redisson 桶 */
     private void install(String qpsJson, int acquireTimeoutMs) {
         RateLimitProperties props = new RateLimitProperties();
-        ReflectionTestUtils.setField(props, "qpsJson", qpsJson);
+        props.setQps(asQpsMap(qpsJson));
         ReflectionTestUtils.setField(props, "defaultQps", 20d);
         ReflectionTestUtils.setField(props, "acquireTimeoutMs", acquireTimeoutMs);
         props.init();
@@ -207,6 +207,24 @@ class PurposeBucketChannelTest {
                 new com.trip.booking.spa.platform.redis.DistributedRateLimiter();
         ReflectionTestUtils.setField(l, "redissonClient", client);
         return l;
+    }
+
+
+    /** 把用例里写的 JSON 字面量转成配置 map。配置已改 YAML，但用例用 JSON 字面量更紧凑 */
+    private static java.util.Map<String, Double> asQpsMap(String json) {
+        java.util.Map<String, Double> m = new java.util.LinkedHashMap<>();
+        for (String part : json.replace("{", "").replace("}", "").split(",")) {
+            int colon = part.lastIndexOf(':');
+            if (colon < 0) {
+                continue;
+            }
+            String key = part.substring(0, colon).trim().replace("\"", "");
+            String val = part.substring(colon + 1).trim().replace("\"", "");
+            if (!key.isEmpty() && !val.isEmpty()) {
+                m.put(key, Double.parseDouble(val));
+            }
+        }
+        return m;
     }
 
 }
