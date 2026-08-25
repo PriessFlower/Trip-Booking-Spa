@@ -31,7 +31,7 @@ supplier:
 
 elong:
 
-  booking-enabled: true
+  booking-enabled: false
   customer-ip-fallback: ${ELONG_CUSTOMER_IP_FALLBACK:47.92.28.195}
 
 expedia:
