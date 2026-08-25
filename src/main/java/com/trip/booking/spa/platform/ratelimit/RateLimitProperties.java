@@ -18,8 +18,7 @@ import java.util.Map;
  * 风格对齐 NacosRuntimeConfig：@Value + JSON 字符串。
  *
  * ratelimit:
- *   mode: local              # local(Guava 单机) | distributed(Redisson 跨实例)
- *   default-qps: 10          # 未在下表配置的 key 用这个
+ *   default-qps: 10          # 未在下表配置的 key 用这个（安全侧应取小值）
  *   acquire-timeout-ms: 5000 # tryAcquire 等待上限
  *   qps: '{"GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES":500}'
  *
@@ -29,9 +28,6 @@ import java.util.Map;
 @Component
 @RefreshScope
 public class RateLimitProperties {
-
-    @Value("${ratelimit.mode:local}")
-    private String mode;
 
     @Value("${ratelimit.default-qps:10}")
     private double defaultQps;
@@ -113,10 +109,6 @@ public class RateLimitProperties {
     public boolean isRegistered(String key) {
         Map<String, Double> current = qpsMap;
         return current != null && current.containsKey(key);
-    }
-
-    public boolean isDistributed() {
-        return "distributed".equalsIgnoreCase(mode);
     }
 
     public int getAcquireTimeoutMs() {

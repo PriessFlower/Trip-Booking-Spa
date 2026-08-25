@@ -223,7 +223,13 @@ OfferStore.issue(supplierId, credentials) ──→ OfferStore.resolve(offerId)
 ### 4.3 把配额与重试收在一处
 
 所有供应商 HTTP 调用都经 `BaseHttpAccess.access()`，它是**限流的唯一闸门**：
-key 为 `供应商_接口`，QPS 配在 Nacos `ratelimit.qps`，热生效。重试次数由各 `*Access`
+key 为 `GLOBAL_LIMIT:<供应商>:<接口>[:<用途>]`（两级：接口桶＝对供应商的承诺，用途桶＝我方内部分配），QPS 配在 Nacos `ratelimit.qps`，热生效。
+
+**限流器只有一种实现：跨实例的 Redisson 令牌桶。** 2026-08-25 删掉了 `local`(Guava)/`distributed` 这个开关——供应商配额是账号或接口级的，与我们部署几个实例无关；Guava 在 JVM 内计数，单实例时"本机"恰好等于"全局"是侥幸而非设计，加第二台就是对供应商双倍流量，且不会有任何报错。同一条刷价路径上的分布式锁早就是跨实例的（F-2.3），两处前提本就不一致。代价是每次扣格一次 Redis 往返（Lua，同 VPC 亚毫秒）；Redis 不可用时前台快速失败、后台阻塞等待——这是刻意取舍：放行意味着对供应商无限流，可能招致封号，而拒绝只是这段时间不刷价。价格缓存本就在同一个 Redis 上，故不算新增单点。
+
+速率表达为「每 X 毫秒 1 个许可」而非「每秒 N 个」：Redisson 的 rate 是整数（0.5 QPS 会被截成 0，永久阻塞），且窗口内先到先得——配 `(12,1秒)` 时 12 个请求可能挤在几十毫秒内打出去，而艺龙按秒限、我方实测 11.25 QPS 就已每小时数百次频控。固定 1 许可 + 毫秒级窗口是用 Redisson 逼近匀速放行的办法，也顺带让小数配额不再被截断。
+
+重试次数由各 `*Access`
 在构造时声明——**写操作必须为 0**（`CreateOrderAccess` 即 0），只读接口才允许重试
 （`QueryOrderAccess` 为 1）。
 

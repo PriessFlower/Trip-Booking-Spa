@@ -7,7 +7,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ExpediaQueryP
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaQueryPriceTask;
 import com.trip.booking.spa.gateway.application.pricing.AbstractCPSQueryPriceService;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
-import com.google.common.util.concurrent.RateLimiter;
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,10 +28,10 @@ import java.util.List;
  * 指标、supplier 作标签，此前艺龙有七个指标而 Expedia 零埋点，两家成功率无法同图对比）、
  * 行级并发、轮内进度、连续消费。
  *
- * <p><b>速率仍是自建 Guava 限流器</b>（{@code task.expedia-cps.qps}），与艺龙的"统一限流用途桶"
- * 不同——这是待收口的欠账（§3.3 限流一律走统一限流）。收口要同时在 Nacos 补
- * {@code GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH}，否则未登记时会回落到
- * 接口桶 50 QPS——比现在的 10 快五倍，属于不该顺带发生的行为变更。故本次只搬骨架，速率不动。
+ * <p><b>速率已收口到统一限流</b>：声明 {@link CallPurpose#REFRESH}，通道层扣用途桶与接口桶各
+ * 一格。此前是自建 Guava 限流器 + {@code task.expedia-cps.qps}，与统一限流并存。
+ * <b>发布时必须同时在 Nacos 补 {@code EXPEDIA:...:PRODUCT_PRICES:REFRESH}</b>，否则未登记会回落
+ * 接口桶（50）——那比原来的 10 快五倍。
  */
 @Slf4j
 @Service
@@ -40,6 +40,10 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
 
     /** 刷价互斥锁：定时调度与 BackDoor 手动触发共用，保证同一时刻仅一个执行者（§3.8.2） */
     private static final String LOCK_KEY = "task:lock:expediaCpsQueryPrice";
+
+    /** 刷价的用途桶键，与艺龙同构 */
+    private static final String REFRESH_LIMIT_KEY =
+            "GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH";
 
     @Autowired
     private Environment environment;
@@ -53,12 +57,8 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
     @Autowired
     private ExpediaPriceService expediaPriceService;
 
-    /**
-     * 自建限流器（欠账，见类注释）。放在字段上而不是每轮新建：原实现每轮 {@code RateLimiter.create}，
-     * 于是每轮的令牌桶都是空的、首个许可要等满一个周期，且跨轮不平滑。
-     */
-    private volatile RateLimiter rateLimiter;
-    private volatile double rateLimiterQps;
+    @Autowired
+    private com.trip.booking.spa.platform.ratelimit.RateLimitProperties rateLimitProperties;
 
     @Override
     public Boolean queryPriceQueueTask(String trigger) {
@@ -105,9 +105,21 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
         return environment.getProperty("task.expedia-cps.concurrency", Integer.class, 1);
     }
 
+    /**
+     * 只用于轮次日志与耗时预估；真正的扣格在通道层（用途桶 + 接口桶）。
+     *
+     * <p>2026-08-25 收口：此前 Expedia 刷价自建 Guava 限流器、速率配在 {@code task.expedia-cps.qps}，
+     * 与统一限流并存——同一件事两个开关，运维改了统一限流却不生效（§3.3）。现与艺龙同形。
+     */
     @Override
     protected double declaredQps(int priority) {
-        return environment.getProperty("task.expedia-cps.qps", Double.class, 0.5);
+        if (!rateLimitProperties.isRegistered(REFRESH_LIMIT_KEY)) {
+            double interfaceQps = rateLimitProperties.qpsOf("GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES");
+            log.error("[gate] 刷价用途桶 {} 未登记，将按接口桶 {} QPS 跑满、不给客流留头 —— "
+                    + "请到 Nacos 的 ratelimit.qps 补齐该键", REFRESH_LIMIT_KEY, interfaceQps);
+            return interfaceQps;
+        }
+        return rateLimitProperties.qpsOf(REFRESH_LIMIT_KEY);
     }
 
     @Override
@@ -123,7 +135,6 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
 
     @Override
     protected RefreshOutcome refreshOne(ExpediaQueryPriceTask row, String dimension) {
-        limiter(declaredQps(0)).acquire();
         // Expedia 是美国供应商，日期按 JVM 默认时区计——这是改动前的行为，未经核实故保留。
         // 艺龙那侧已显式指定 Asia/Shanghai（供应商口径），Expedia 的正确口径待与对接方确认
         LocalDate today = LocalDate.now();
@@ -152,21 +163,6 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
             row.setQueryCount(1);
         }
         expediaQueryPriceTaskMapper.updateAddCount(row);
-    }
-
-    /** 速率变了就换桶，否则复用——避免每轮重建导致的冷启动等待 */
-    private RateLimiter limiter(double qps) {
-        RateLimiter current = rateLimiter;
-        if (current == null || rateLimiterQps != qps) {
-            synchronized (this) {
-                if (rateLimiter == null || rateLimiterQps != qps) {
-                    rateLimiter = RateLimiter.create(qps);
-                    rateLimiterQps = qps;
-                }
-                current = rateLimiter;
-            }
-        }
-        return current;
     }
 
     public static boolean isSameDay(Date updateTime, Date lastTime) {
