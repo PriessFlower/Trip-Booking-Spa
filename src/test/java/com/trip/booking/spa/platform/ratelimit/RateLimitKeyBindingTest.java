@@ -82,32 +82,6 @@ class RateLimitKeyBindingTest {
         assertTrue(checked >= 10, "只扫到 " + checked + " 个限流键，示例可能已改格式，本测试需同步");
     }
 
-    @Test
-    @DisplayName("过渡期必须两种格式都认——否则「发版」与「改配置」无法解耦")
-    void legacyJsonStringStillParses() {
-        RateLimitProperties p = new RateLimitProperties();
-        org.springframework.test.util.ReflectionTestUtils.setField(p, "legacyQpsJson",
-                "{\"" + KEY + "\":13,\"" + SUB + "\":10}");
-        p.init();
-
-        assertEquals(13d, p.qpsOf(KEY),
-                "旧 JSON 格式解析不出来。直接切格式的两个方向都不安全：先改 Nacos 则旧代码读到空、"
-                        + "所有键回落 default-qps；先发版则新代码把字符串绑到 Map 会失败、服务起不来");
-        assertTrue(p.isRegistered(SUB), "用途桶也应从旧格式里认出来，否则会被当成未登记");
-    }
-
-    @Test
-    @DisplayName("新格式优先：两者都在时不吃旧的")
-    void mapWinsOverLegacyJson() {
-        RateLimitProperties p = new RateLimitProperties();
-        p.setQps(Map.of(KEY, 20d));
-        org.springframework.test.util.ReflectionTestUtils.setField(p, "legacyQpsJson",
-                "{\"" + KEY + "\":13}");
-        p.init();
-
-        assertEquals(20d, p.qpsOf(KEY), "已有 YAML map 时不该再吃旧 JSON——否则迁移完还会被旧值盖回去");
-    }
-
     private static Map<String, Double> bind(Map<String, Object> source) {
         return new Binder(new MapConfigurationPropertySource(source))
                 .bind("ratelimit.qps", Bindable.mapOf(String.class, Double.class))

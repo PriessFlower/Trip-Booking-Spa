@@ -56,17 +56,6 @@ public class RateLimitProperties {
     /** 键 = BaseHttpAccess 拼出的 {@code GLOBAL_LIMIT:<供应商>:<接口>[:<用途>]} */
     private Map<String, Double> qps = new LinkedHashMap<>();
 
-    /**
-     * 过渡期兼容：旧格式是把整张表塞进一个 JSON 字符串（{@code qps: '{"KEY":13,...}'}）。
-     *
-     * <p><b>为什么必须两种都认</b>：直接切格式的两个方向都不安全——先改 Nacos 则旧代码读到空、
-     * 所有键回落 {@code default-qps}（当时是 20，对艺龙即超速）；先发版则新代码把字符串绑到
-     * {@code Map} 会失败、服务起不来。两format并存使「发版」与「改配置」解耦，各自可独立回滚。
-     *
-     * <p>Nacos 转成 YAML map 之后即可删除本字段与 {@link #legacyQpsJson}。
-     */
-    @org.springframework.beans.factory.annotation.Value("${ratelimit.qps:}")
-    private transient String legacyQpsJson;
 
     public void setDefaultQps(double defaultQps) {
         this.defaultQps = defaultQps;
@@ -86,11 +75,6 @@ public class RateLimitProperties {
 
     @PostConstruct
     public void init() {
-        if ((qps == null || qps.isEmpty()) && org.apache.commons.lang3.StringUtils.isNotBlank(legacyQpsJson)) {
-            qps = parseLegacyJson(legacyQpsJson);
-            log.warn("[gate] ratelimit.qps 仍是旧的 JSON 字符串格式，已按兼容路径解析出 {} 个 key。"
-                    + "请尽快改成 YAML map（键须用 [] 包住），改完可删除本兼容分支", qps.size());
-        }
         if (qps == null || qps.isEmpty()) {
             // 空表不是致命的（各键走 default-qps），但一定是配置事故——按安全侧的 default-qps=1
             // 跑起来会明显变慢，宁可让人立刻看见
@@ -100,30 +84,6 @@ public class RateLimitProperties {
         }
         log.info("ratelimit.qps 已加载 {} 个 key，其余走 default-qps={}", qps.size(), defaultQps);
         checkBucketSums(qps);
-    }
-
-    /**
-     * 解析旧格式：{@code {"KEY":13,"KEY2":10}}。只在过渡期用，故不追求严谨——
-     * 解析不出来的条目跳过并落日志，而不是让整张表变空（那正是旧格式最糟的故障模式）。
-     */
-    private Map<String, Double> parseLegacyJson(String json) {
-        Map<String, Double> parsed = new LinkedHashMap<>();
-        for (String part : json.replace("{", "").replace("}", "").split(",")) {
-            int colon = part.lastIndexOf(':');
-            if (colon < 0) {
-                continue;
-            }
-            String key = part.substring(0, colon).trim().replace("\"", "");
-            String value = part.substring(colon + 1).trim().replace("\"", "");
-            try {
-                if (!key.isEmpty()) {
-                    parsed.put(key, Double.parseDouble(value));
-                }
-            } catch (NumberFormatException e) {
-                log.error("[gate] 旧格式 ratelimit.qps 里这一项解析不出数值，已跳过: {}", part);
-            }
-        }
-        return parsed;
     }
 
     /**
