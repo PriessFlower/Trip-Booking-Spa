@@ -277,13 +277,17 @@ class ElongCheckPriceE2ETest {
         // 验证自纠正的办法（此前该逻辑的唯一证据是白天那批 python 脚本，不是我方代码）
         CheckPriceReq request = req(VerifyLevel.BOOKABLE);
 
+        // 用途须与生产的验价路径一致（CHECK_PRICE）：不一致就扣到了别的桶上，
+        // 这条用例验出来的排队行为便不是点订前那条路的行为
         Method fetch = ElongPriceServiceImpl.class.getDeclaredMethod("queryHotelDetail",
-                String.class, String.class, String.class, Integer.class, Integer.class, Integer.class, List.class);
+                String.class, String.class, String.class, Integer.class, Integer.class, Integer.class, List.class,
+                CallPurpose.class);
         fetch.setAccessible(true);
         @SuppressWarnings("unchecked")
         var detail = (com.trip.booking.spa.platform.http.asynchttp.ResponseResult
                 <com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongHotelDetailResponse>)
-                fetch.invoke(service, HOTEL, checkIn, checkOut, 1, 1, 0, new ArrayList<Integer>());
+                fetch.invoke(service, HOTEL, checkIn, checkOut, 1, 1, 0, new ArrayList<Integer>(),
+                        CallPurpose.CHECK_PRICE);
         assumeTrue(detail != null && detail.getData() != null && detail.getData().isSucc(), "detail 未取到，跳过");
         assumeTrue(!detail.getData().isEmptyResult(), "该店该住期无在售，跳过");
 
