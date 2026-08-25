@@ -89,6 +89,15 @@ ratelimit:
   # 键必须用 [] 包起来：Spring 的宽松绑定会把裸键里的冒号当分隔符吃掉，
   # GLOBAL_LIMIT:ELONG:X 会绑成 GLOBAL_LIMITELONGX，于是查表必然 miss、静默回落 default-qps。
   # 2026-08-25 实测过这个坑，有 RateLimitKeyBindingTest 守着。
+  #
+  # ⚠️ qps 是 map 型：Nacos 里给标量（例如整张表塞成一行 JSON）会让绑定【硬失败】，
+  # 服务起不来——绑定在 @PostConstruct 之前，代码里再写"兼容旧格式"的兜底也执行不到。
+  # 2026-08-25 实证：新镜像上生产后崩溃重启，直到把 Nacos 转成 map 才恢复。
+  # 所以【没有双格式兼容这回事】，形态必须与代码类型一致，有 ScalarQpsFailsToBindTest 守着。
+  #
+  # 那次真正的坑在 default-qps=20：它比艺龙 detail 的 15 还大，于是"先改 Nacos"这条路
+  # 会让旧镜像超速、"先发版"这条路会崩——两个方向都不安全。把 default-qps 压到安全值
+  # 之后，改形态就可以安全地先改配置再发版（漏登记的键宁可被憋死，不该按 20 放飞）。
   qps:
     "[GLOBAL_LIMIT:EXPEDIA:STATIC_CONTENT]": 15
     "[GLOBAL_LIMIT:EXPEDIA:STATIC_REGIONS]": 10
