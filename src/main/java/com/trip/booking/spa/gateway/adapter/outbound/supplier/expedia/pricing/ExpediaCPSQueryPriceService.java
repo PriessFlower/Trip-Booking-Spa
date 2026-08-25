@@ -15,6 +15,6 @@ public interface ExpediaCPSQueryPriceService {
      *
      * @param trigger 触发来源，写入日志用于区分定时调度与人工触发，取值 scheduled / manual
      */
-    Boolean queryPriceQueueTask(int priority, int temporaryUpgrade, String trigger);
+    Boolean queryPriceQueueTask(String trigger);
 
 }

@@ -31,6 +31,10 @@ class BorrowNeverDemotesTest {
 
     private static final Path MAPPER_XML = Path.of("src/main/resources/mapper/ElongQueryPriceTaskMapper.xml");
 
+    private static final Path SERVICE = Path.of("src/main/java/com/trip/booking/spa/gateway/adapter"
+            + "/outbound/supplier/elong/pricing/ElongCPSQueryPriceServiceImpl.java");
+    private static final Path SKELETON = Path.of("src/main/java/com/trip/booking/spa/gateway"
+            + "/application/pricing/AbstractCPSQueryPriceService.java");
     private static final Path SCHEDULER = Path.of("src/main/java/com/trip/booking/spa/gateway/adapter"
             + "/inbound/scheduler/ElongCPSQueryPriceTask.java");
 
@@ -59,18 +63,28 @@ class BorrowNeverDemotesTest {
                         + "限定必须留在写入侧,存量行靠 24h 到期自愈");
     }
 
+    /**
+     * 2026-08-25 起档位序列与借入判定在服务实现里（{@code tiers()} / {@code borrowFor()}），
+     * 不再是调度类里的字面参数——档序是刷价语义，属适配层的知识。守的规则没变，只是位置变了。
+     */
     @Test
-    @DisplayName("成交档与远期档必须以 AND 排除借入行,只有档 0 带借入")
+    @DisplayName("成交档与远期档必须排除借入行,只有档 0 带借入")
     void onlyHighTierTakesBorrowedRows() throws Exception {
-        String src = Files.readString(SCHEDULER);
+        String src = Files.readString(SERVICE);
 
-        assertTrue(src.contains("queryPriceQueueTask(0, 1,"),
-                "档 0 必须带借入(第二参 1),否则升档的行没人跟刷,反馈环空转");
-        assertTrue(src.contains("queryPriceQueueTask(2, 0,"),
-                "成交档必须排除借入行(第二参 0)。若改成 1,它会与档 0 同时命中借入行 → 双刷,"
-                        + "且破坏 mapper 注释里「任一行恰好命中一档」的不变量");
-        assertTrue(src.contains("queryPriceQueueTask(3, 0,"),
-                "远期档必须排除借入行(第二参 0),理由同成交档");
+        assertTrue(src.contains("List.of(2, 0, 1, 3)"),
+                "档位序列变了。成交档(2)须最先——它每轮全扫、承诺缓存龄 ≤ 一次执行间隔；"
+                        + "远期档(3)须最后——按天级新鲜度已够用,排前面会侵占成交档的节奏");
+
+        // 借入判定：默认实现只让档 0 借入。各家若要覆写，必须仍然只有一档借入
+        String skeleton = Files.readString(SKELETON);
+        assertTrue(skeleton.contains("priority == 0 ? 1 : 0"),
+                "借入判定变了。只有档 0 可以借入(F-2.4.1)：成交档比档 0 更快,借进来是降级,"
+                        + "而降的正是刚被验价、最可能马上下单的酒店；远期档每店 23 行,"
+                        + "464 家的借入池会挤爆档 0 的批量");
+        assertFalse(src.contains("borrowFor"),
+                "艺龙覆写了 borrowFor。目前没有理由偏离默认(只有档 0 借入),"
+                        + "若确有理由,请连同 F-2.4.1 一起改并说明");
     }
 
     /** 截出 XML/源码里某个标签块,避免整文件 contains 命中别处的同名片段。 */

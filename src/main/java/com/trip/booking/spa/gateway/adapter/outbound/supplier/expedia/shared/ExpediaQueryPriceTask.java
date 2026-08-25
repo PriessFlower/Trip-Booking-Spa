@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared;
 
+import com.trip.booking.spa.gateway.application.pricing.RefreshTaskRow;
 import lombok.Data;
 
 import java.util.Date;
@@ -12,7 +13,7 @@ import java.util.Date;
  * @return:
  **/
 @Data
-public class ExpediaQueryPriceTask {
+public class ExpediaQueryPriceTask implements RefreshTaskRow {
 
     /**
      * 主键
