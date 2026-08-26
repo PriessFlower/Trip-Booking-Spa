@@ -10,7 +10,6 @@ import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpEntityEnclosingRequest;
-import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
@@ -28,7 +27,6 @@ import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.config.Registry;
 import org.apache.http.config.RegistryBuilder;
 import org.apache.http.conn.ConnectTimeoutException;
-import org.apache.http.conn.routing.HttpRoute;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.apache.http.conn.socket.LayeredConnectionSocketFactory;
 import org.apache.http.conn.socket.PlainConnectionSocketFactory;
@@ -71,8 +69,25 @@ import java.util.Map;
 public class HttpUtils {
 
     private static final int TIME_OUT = 10 * 1000;
-    private static CloseableHttpClient HTTP_CLIENT = null;
-    private final static Object SYNC_LOCK = new Object();
+
+    /**
+     * 每个目标 host 一个连接池，物理隔离（2026-08-26）。
+     *
+     * <p>此前是全局单例：按<b>第一个到达的 url</b> 的 host 建池，此后所有供应商共用
+     * {@code maxTotal=250}——任何一家慢下来（socket 挂满 10s）就吃光全局连接，其余家
+     * 一起被拖死；且当时取 port 默认 80，对 https 是错的，{@code setMaxPerRoute} 打在
+     * 不存在的路由上，per-route 上限实为 no-op。按 host 分池后一家慢只占满自己的池。
+     *
+     * <p>键含端口（url authority 原文），同 host 异端口视作两池——它们本就是两个服务。
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<String, CloseableHttpClient> CLIENTS_BY_HOST =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 单池容量。各家实际并发受限流闸约束（QPS 都在个位/十位数），64 远高于真实在飞数；
+     * 单 host 单路由，故 total 与 per-route 同值。
+     */
+    private static final int MAX_PER_HOST = 64;
 
     private static void config(HttpRequestBase httpRequestBase) {
 //         设置Header等
@@ -106,28 +121,11 @@ public class HttpUtils {
         httpRequestBase.setConfig(requestConfig);
     }
 
-    /**
-     * 获取HttpClient对象
-     *
-     * @param url
-     * @return
-     */
+    /** 取该 url 目标 host 专属的 HttpClient，见 {@link #CLIENTS_BY_HOST} */
     public static CloseableHttpClient getHttpClient(String url) {
-        String hostname = url.split("/")[2];
-        int port = 80;
-        if (hostname.contains(":")) {
-            String[] arr = hostname.split(":");
-            hostname = arr[0];
-            port = Integer.parseInt(arr[1]);
-        }
-        if (HTTP_CLIENT == null) {
-            synchronized (SYNC_LOCK) {
-                if (HTTP_CLIENT == null) {
-                    HTTP_CLIENT = createHttpClient(250, 200, 200, hostname, port);
-                }
-            }
-        }
-        return HTTP_CLIENT;
+        String authority = url.split("/")[2];
+        return CLIENTS_BY_HOST.computeIfAbsent(authority,
+                host -> createHttpClient(MAX_PER_HOST, MAX_PER_HOST));
     }
 
 
@@ -169,10 +167,6 @@ public class HttpUtils {
 
         EntityUtils.consume(entity);
         return result;
-    }
-
-    public static void main(String[] args) {
-
     }
 
     public static <T extends BaseResponse> ResponseResult accessGet(String url, Map<String, String> headers,
@@ -411,21 +405,17 @@ public class HttpUtils {
         return sbUrl.toString();
     }
 
-    public static CloseableHttpClient createHttpClient(int maxTotal, int maxPerRoute, int maxRoute, String hostname,
-                                                       int port) {
+    private static CloseableHttpClient createHttpClient(int maxTotal, int maxPerRoute) {
         ConnectionSocketFactory plainsf = PlainConnectionSocketFactory.getSocketFactory();
         LayeredConnectionSocketFactory sslsf = SSLConnectionSocketFactory.getSocketFactory();
         Registry<ConnectionSocketFactory> registry =
                 RegistryBuilder.<ConnectionSocketFactory>create().register("http", plainsf).register("https", sslsf)
                         .build();
         PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager(registry);
-        //将最大连接数增加
         cm.setMaxTotal(maxTotal);
-        // 将每个路由基础的连接增加
+        // 单 host 客户端只有一条路由；此前那个按 (hostname, port=80) 定制路由的写法对
+        // https 打在不存在的路由上，是 no-op，随分池一并删除
         cm.setDefaultMaxPerRoute(maxPerRoute);
-        HttpHost httpHost = new HttpHost(hostname, port);
-        //将目标主机的最大连接数增加
-        cm.setMaxPerRoute(new HttpRoute(httpHost), maxRoute);
         //请求重试处理
         HttpRequestRetryHandler httpRequestRetryHandler = new HttpRequestRetryHandler() {
             @Override
