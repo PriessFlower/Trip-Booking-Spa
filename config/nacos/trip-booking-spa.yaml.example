@@ -120,6 +120,10 @@ ratelimit:
     "[GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_CREATE_ORDER]": 1
     "[GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_QUERY_ORDER]": 1
     "[GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_CANCEL_ORDER]": 1
+    # 飞猪（TOP）：官方无 QPS 文档，cursor 全账号自设 ~20/s；起步保守，撞频控
+    # （platform code 7）看 supplier_io_access{status=throttled} 再调
+    "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_PRODUCT_PRICES]": 5
+    "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_ORDER_PRICE]": 2
 
 # ── supplier / expedia：静态数据摄取总开关 ──────────────────
 # ── cache：我方自建缓存 ────────────────────────────────────
