@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -304,10 +305,23 @@ public class BffBookingService {
                     result.set("taxesAndFees", taxesAndFees);
                 }
             }
+            // 订单口径：按落库的每间 occupancy 逐间累加，与结账页总额一致
+            if (row.occupancy != null && !row.occupancy.isBlank()) {
+                List<String> occupancies = List.of(row.occupancy.split("\\|"));
+                JsonNode aggregate = PricingMath.orderAggregate(pricing, occupancies);
+                if (aggregate != null) {
+                    result.set("order", aggregate);
+                }
+            }
         }
         JsonNode policy = parseQuietly(row.policyJson);
         if (policy != null) {
             result.set("policy", policy);
+        }
+        // BP2：确认页/凭证同样并列英文原名
+        String propertyNameEn = contentRepo.findNames(List.of(row.propertyId), "en-US").get(row.propertyId);
+        if (propertyNameEn != null && !propertyNameEn.isBlank() && !propertyNameEn.equals(row.propertyName)) {
+            result.put("propertyNameEn", propertyNameEn);
         }
         contentRepo.findById(row.propertyId, props.getLanguage()).ifPresent(property -> {
             if (property.raw == null) {

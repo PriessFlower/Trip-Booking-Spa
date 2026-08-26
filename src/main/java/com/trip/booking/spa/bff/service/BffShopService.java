@@ -36,6 +36,9 @@ public class BffShopService {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    /** 英文原名取自静态摄取的 en-US 行（与 zh-CN 同表不同行），与展示语言无关 */
+    private static final String NAME_LANGUAGE_EN = "en-US";
+
     private final RapidGateway gateway;
     private final PropertyContentRepo contentRepo;
     private final OfferCache offerCache;
@@ -79,22 +82,24 @@ public class BffShopService {
     // ---------- 搜索 ----------
 
     public JsonNode searchHotels(String city, String checkin, String checkout,
-                                 int adults, List<Integer> childAges, int rooms) {
-        return searchHotels(city, checkin, checkout, adults, childAges, rooms, null);
+                                 List<String> occupancy, int adults, List<Integer> childAges, int rooms) {
+        return searchHotels(city, checkin, checkout, occupancy, adults, childAges, rooms, null);
     }
 
     public JsonNode searchHotels(String city, String checkin, String checkout,
-                                 int adults, List<Integer> childAges, int rooms, String testScenario) {
+                                 List<String> occupancy, int adults, List<Integer> childAges,
+                                 int rooms, String testScenario) {
         List<PropertyContentRepo.PropertySummary> properties =
                 contentRepo.searchByCity(city, props.getLanguage(), props.getSearchLimit());
         if (properties.isEmpty()) {
             throw new BffException(404, "该城市暂无已摄取的酒店静态数据: " + city);
         }
 
-        List<String> occupancies = buildOccupancies(adults, childAges, rooms);
+        List<String> occupancies = buildOccupancies(occupancy, adults, childAges, rooms);
+        List<String> propertyIds = properties.stream().map(p -> p.propertyId).toList();
         Map<String, JsonNode> priced = queryAvailability(
-                properties.stream().map(p -> p.propertyId).toList(),
-                checkin, checkout, occupancies, 1, "shopping", testScenario);
+                propertyIds, checkin, checkout, occupancies, 1, "shopping", testScenario);
+        Map<String, String> englishNames = contentRepo.findNames(propertyIds, NAME_LANGUAGE_EN);
 
         ObjectNode result = MAPPER.createObjectNode();
         result.put("city", city);
@@ -110,7 +115,7 @@ public class BffShopService {
                 continue; // 无报价的酒店不展示（满房或未开放）
             }
             ObjectNode hotel = hotels.addObject();
-            fillContentSummary(hotel, property);
+            fillContentSummary(hotel, property, englishNames.get(property.propertyId));
             JsonNode rate = firstRate(hotelPrice);
             if (rate != null) {
                 ObjectNode offer = hotel.putObject("offer");
@@ -122,9 +127,15 @@ public class BffShopService {
                 offer.set("nonrefundableDateRanges", rate.path("nonrefundable_date_ranges"));
                 JsonNode pricing = firstOccupancyPricing(rate);
                 if (pricing != null) {
-                    // 金额节点原样透传
+                    // 金额节点原样透传（单间价）
                     offer.set("totals", pricing.path("totals"));
                     offer.set("nightly", pricing.path("nightly"));
+                }
+                // 列表展示的是订单总价（多间时为各间之和），与详情/结账口径一致
+                ObjectNode aggregate = PricingMath.orderAggregate(rate.path("occupancy_pricing"), occupancies);
+                if (aggregate != null) {
+                    offer.set("orderTotals", aggregate.path("totals"));
+                    offer.put("roomCount", aggregate.path("roomCount").asInt());
                 }
             }
         }
@@ -135,23 +146,25 @@ public class BffShopService {
     // ---------- 详情 ----------
 
     public JsonNode hotelDetail(String propertyId, String checkin, String checkout,
-                                int adults, List<Integer> childAges, int rooms) {
-        return hotelDetail(propertyId, checkin, checkout, adults, childAges, rooms, null);
+                                List<String> occupancy, int adults, List<Integer> childAges, int rooms) {
+        return hotelDetail(propertyId, checkin, checkout, occupancy, adults, childAges, rooms, null);
     }
 
     public JsonNode hotelDetail(String propertyId, String checkin, String checkout,
-                                int adults, List<Integer> childAges, int rooms, String testScenario) {
+                                List<String> occupancy, int adults, List<Integer> childAges,
+                                int rooms, String testScenario) {
         PropertyContentRepo.PropertySummary property = contentRepo
                 .findById(propertyId, props.getLanguage())
                 .orElseThrow(() -> new BffException(404, "酒店不存在或未摄取: " + propertyId));
 
-        List<String> occupancies = buildOccupancies(adults, childAges, rooms);
+        List<String> occupancies = buildOccupancies(occupancy, adults, childAges, rooms);
         Map<String, JsonNode> priced = queryAvailability(
                 List.of(propertyId), checkin, checkout, occupancies, 250, "shopping", testScenario);
         JsonNode hotelPrice = priced.get(propertyId);
 
         ObjectNode result = MAPPER.createObjectNode();
-        fillContentSummary(result, property);
+        fillContentSummary(result, property,
+                contentRepo.findNames(List.of(propertyId), NAME_LANGUAGE_EN).get(propertyId));
         fillContentDetail(result, property);
         result.put("checkin", checkin);
         result.put("checkout", checkout);
@@ -196,6 +209,7 @@ public class BffShopService {
 
         JsonNode pricing = firstOccupancyPricing(rate);
         if (pricing != null) {
+            // 单间口径：nightly/stay/fees/totals 均为一间房的原始十进制字符串
             out.set("nightly", pricing.path("nightly"));
             out.set("stay", pricing.path("stay"));
             out.set("fees", pricing.path("fees"));
@@ -205,6 +219,11 @@ public class BffShopService {
             if (taxesAndFees != null) {
                 out.set("taxesAndFees", taxesAndFees);
             }
+        }
+        // 订单口径：逐间累加（各间人数可不同，价格随之不同）
+        ObjectNode aggregate = PricingMath.orderAggregate(rate.path("occupancy_pricing"), occupancies);
+        if (aggregate != null) {
+            out.set("order", aggregate);
         }
 
         String paymentOptionsHref = rate.path("links").path("payment_options").path("href").asText(null);
@@ -272,10 +291,16 @@ public class BffShopService {
         result.set("occupancyPricing", body.path("occupancy_pricing"));
         JsonNode checkPricing = body.path("occupancy_pricing");
         if (checkPricing.isObject() && checkPricing.fields().hasNext()) {
+            // 单间税费（保留原字段，前端逐间明细用）
             JsonNode taxesAndFees = PricingMath.taxesAndFees(checkPricing.fields().next().getValue());
             if (taxesAndFees != null) {
                 result.set("taxesAndFees", taxesAndFees);
             }
+        }
+        // 订单口径：逐间累加后的总额与总税费（多间时与单间值不同）
+        ObjectNode aggregate = PricingMath.orderAggregate(checkPricing, offer.occupancies);
+        if (aggregate != null) {
+            result.set("order", aggregate);
         }
 
         ObjectNode context = result.putObject("offerContext");
@@ -316,32 +341,73 @@ public class BffShopService {
 
     // ---------- 公共 ----------
 
-    /** 每间客房一个 occupancy 串（成人数-儿童年龄列表），Shopping/Price Check/Booking 三段一致（SP1） */
-    private List<String> buildOccupancies(int adults, List<Integer> childAges, int rooms) {
-        if (adults < 1 || adults > 8) {
-            throw new BffException(400, "成人数必须在 1-8 之间");
+    /**
+     * 每间客房一个 occupancy 串（成人数-儿童年龄列表），Shopping/Price Check/Booking 三段一致（SP1）。
+     *
+     * <p>优先使用前端逐间下发的 {@code occupancy} 参数（各间人数可不同）；未提供时回退到
+     * 旧的 adults/childAges/rooms 扁平参数并复制 N 份，保证老链接仍可用。
+     */
+    private List<String> buildOccupancies(List<String> requested, int adults,
+                                          List<Integer> childAges, int rooms) {
+        if (requested != null && !requested.isEmpty()) {
+            List<String> normalized = new ArrayList<>();
+            for (String occupancy : requested) {
+                normalized.add(normalizeOccupancy(occupancy));
+            }
+            if (normalized.size() > 8) {
+                throw new BffException(400, "标准 API 单次预订不超过 8 间客房（TR6）");
+            }
+            return normalized;
         }
         if (rooms < 1 || rooms > 8) {
             throw new BffException(400, "标准 API 单次预订不超过 8 间客房（TR6）");
         }
-        StringBuilder occupancy = new StringBuilder().append(adults);
-        if (childAges != null && !childAges.isEmpty()) {
-            if (childAges.size() > 6) {
-                throw new BffException(400, "最多支持 6 名儿童");
-            }
-            for (Integer age : childAges) {
-                if (age == null || age < 0 || age > 17) {
-                    throw new BffException(400, "儿童年龄必须在 0-17 之间");
-                }
-            }
-            occupancy.append('-');
-            occupancy.append(String.join(",", childAges.stream().map(String::valueOf).toList()));
-        }
+        String occupancy = normalizeOccupancy(adults + (childAges == null || childAges.isEmpty()
+                ? ""
+                : "-" + String.join(",", childAges.stream().map(String::valueOf).toList())));
         List<String> result = new ArrayList<>();
         for (int i = 0; i < rooms; i++) {
-            result.add(occupancy.toString());
+            result.add(occupancy);
         }
         return result;
+    }
+
+    /** 校验并规整单间 occupancy 串，形如 {@code 2} 或 {@code 2-7,11} */
+    private String normalizeOccupancy(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new BffException(400, "客房人数不能为空");
+        }
+        String[] parts = raw.trim().split("-", 2);
+        int adults;
+        try {
+            adults = Integer.parseInt(parts[0].trim());
+        } catch (NumberFormatException e) {
+            throw new BffException(400, "客房人数格式错误: " + raw);
+        }
+        if (adults < 1 || adults > 8) {
+            throw new BffException(400, "每间成人数必须在 1-8 之间");
+        }
+        if (parts.length == 1 || parts[1].isBlank()) {
+            return String.valueOf(adults);
+        }
+        String[] ages = parts[1].split(",");
+        if (ages.length > 6) {
+            throw new BffException(400, "每间最多支持 6 名儿童");
+        }
+        List<String> normalizedAges = new ArrayList<>();
+        for (String age : ages) {
+            int value;
+            try {
+                value = Integer.parseInt(age.trim());
+            } catch (NumberFormatException e) {
+                throw new BffException(400, "儿童年龄格式错误: " + age);
+            }
+            if (value < 0 || value > 17) {
+                throw new BffException(400, "儿童年龄必须在 0-17 之间");
+            }
+            normalizedAges.add(String.valueOf(value));
+        }
+        return adults + "-" + String.join(",", normalizedAges);
     }
 
     /** availability 查询，返回 property_id → hotelPrice 节点 */
@@ -420,8 +486,19 @@ public class BffShopService {
 
     /** 静态内容摘要：名称、星级、坐标、地址、点评、主图、亮点描述 */
     private void fillContentSummary(ObjectNode out, PropertyContentRepo.PropertySummary property) {
+        fillContentSummary(out, property, null);
+    }
+
+    /**
+     * @param nameEn 英文原名（en-US 行），与中文名并列展示；同名或缺失时不下发
+     */
+    private void fillContentSummary(ObjectNode out, PropertyContentRepo.PropertySummary property,
+                                    String nameEn) {
         out.put("propertyId", property.propertyId);
         out.put("name", property.name);
+        if (nameEn != null && !nameEn.isBlank() && !nameEn.equals(property.name)) {
+            out.put("nameEn", nameEn);
+        }
         out.put("city", property.city);
         out.put("countryCode", property.countryCode);
         if (property.starRating != null) {

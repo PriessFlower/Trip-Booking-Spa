@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -38,14 +39,20 @@ public class BffController {
         return shopService.listCities();
     }
 
+    /**
+     * occupancy 可重复下发，每间一个（如 {@code occupancy=2-7,11&occupancy=3}），各间人数可不同；
+     * 未提供时回退到 adults/childAges/rooms 扁平参数（老链接兼容）。
+     */
     @GetMapping("/hotels/search")
     public JsonNode search(@RequestParam String city,
                            @RequestParam String checkin,
                            @RequestParam String checkout,
                            @RequestParam(defaultValue = "2") int adults,
                            @RequestParam(required = false) String childAges,
-                           @RequestParam(defaultValue = "1") int rooms) {
-        return shopService.searchHotels(city, checkin, checkout, adults, parseAges(childAges), rooms);
+                           @RequestParam(defaultValue = "1") int rooms,
+                           HttpServletRequest request) {
+        return shopService.searchHotels(city, checkin, checkout, occupancies(request),
+                adults, parseAges(childAges), rooms);
     }
 
     @GetMapping("/hotels/{propertyId}")
@@ -55,8 +62,29 @@ public class BffController {
                            @RequestParam(defaultValue = "2") int adults,
                            @RequestParam(required = false) String childAges,
                            @RequestParam(defaultValue = "1") int rooms,
-                           @RequestParam(required = false) String test) {
-        return shopService.hotelDetail(propertyId, checkin, checkout, adults, parseAges(childAges), rooms, test);
+                           @RequestParam(required = false) String test,
+                           HttpServletRequest request) {
+        return shopService.hotelDetail(propertyId, checkin, checkout, occupancies(request), adults,
+                parseAges(childAges), rooms, test);
+    }
+
+    /**
+     * 直接取原始重复参数值。不能用 {@code @RequestParam List<String>}——单个
+     * {@code occupancy=2-7,11} 会被 Spring 的 StringToCollection 转换按逗号拆成
+     * ["2-7", "11"]，把一间 2 大 2 小错当成两间。
+     */
+    private List<String> occupancies(HttpServletRequest request) {
+        String[] values = request.getParameterValues("occupancy");
+        if (values == null || values.length == 0) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>();
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                result.add(value);
+            }
+        }
+        return result;
     }
 
     @PostMapping("/price-check")
