@@ -83,6 +83,10 @@ public class HttpUtils {
     private static final java.util.concurrent.ConcurrentHashMap<String, CloseableHttpClient> CLIENTS_BY_HOST =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** 与 {@link #CLIENTS_BY_HOST} 同键的连接池管理器，留作水位读取（{@link #poolStats()}）用 */
+    private static final java.util.concurrent.ConcurrentHashMap<String, PoolingHttpClientConnectionManager>
+            MANAGERS_BY_HOST = new java.util.concurrent.ConcurrentHashMap<>();
+
     /**
      * 单池容量。各家实际并发受限流闸约束（QPS 都在个位/十位数），64 远高于真实在飞数；
      * 单 host 单路由，故 total 与 per-route 同值。
@@ -125,7 +129,20 @@ public class HttpUtils {
     public static CloseableHttpClient getHttpClient(String url) {
         String authority = url.split("/")[2];
         return CLIENTS_BY_HOST.computeIfAbsent(authority,
-                host -> createHttpClient(MAX_PER_HOST, MAX_PER_HOST));
+                host -> createHttpClient(host, MAX_PER_HOST, MAX_PER_HOST));
+    }
+
+    /**
+     * 各 host 连接池水位：host → [已借出, 等待者, 空闲, 上限]。
+     * 形状同 {@code ThreadPools.stats()}（形式统一，PROJECT.md §4.3），监控接指标只挂这一处。
+     */
+    public static Map<String, int[]> poolStats() {
+        Map<String, int[]> snapshot = new java.util.LinkedHashMap<>();
+        MANAGERS_BY_HOST.forEach((host, cm) -> {
+            org.apache.http.pool.PoolStats s = cm.getTotalStats();
+            snapshot.put(host, new int[]{s.getLeased(), s.getPending(), s.getAvailable(), s.getMax()});
+        });
+        return snapshot;
     }
 
 
@@ -405,7 +422,7 @@ public class HttpUtils {
         return sbUrl.toString();
     }
 
-    private static CloseableHttpClient createHttpClient(int maxTotal, int maxPerRoute) {
+    private static CloseableHttpClient createHttpClient(String host, int maxTotal, int maxPerRoute) {
         ConnectionSocketFactory plainsf = PlainConnectionSocketFactory.getSocketFactory();
         LayeredConnectionSocketFactory sslsf = SSLConnectionSocketFactory.getSocketFactory();
         Registry<ConnectionSocketFactory> registry =
@@ -416,6 +433,7 @@ public class HttpUtils {
         // 单 host 客户端只有一条路由；此前那个按 (hostname, port=80) 定制路由的写法对
         // https 打在不存在的路由上，是 no-op，随分池一并删除
         cm.setDefaultMaxPerRoute(maxPerRoute);
+        MANAGERS_BY_HOST.put(host, cm);
         //请求重试处理
         HttpRequestRetryHandler httpRequestRetryHandler = new HttpRequestRetryHandler() {
             @Override

@@ -1,11 +1,17 @@
 package com.trip.booking.spa.platform.concurrent;
 
+import com.trip.booking.spa.platform.observability.MetricNames;
+import com.trip.booking.spa.platform.observability.MetricTags;
+import com.trip.booking.spa.platform.observability.Monitor;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -41,7 +47,7 @@ public final class ThreadPools {
      */
     public static ExecutorService serialSkipIfBusy(String name, boolean daemon) {
         return register(name, new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-                new SynchronousQueue<>(), namedFactory(name, daemon)));
+                new SynchronousQueue<>(), namedFactory(name, daemon), countingAbort(name)));
     }
 
     /**
@@ -50,13 +56,13 @@ public final class ThreadPools {
      */
     public static ExecutorService serialBounded(String name, int queueCapacity, boolean daemon) {
         return register(name, new ThreadPoolExecutor(1, 1, 60L, TimeUnit.SECONDS,
-                new ArrayBlockingQueue<>(queueCapacity), namedFactory(name, daemon)));
+                new ArrayBlockingQueue<>(queueCapacity), namedFactory(name, daemon), countingAbort(name)));
     }
 
     /** 定容池，无界队列：短命批处理用（刷价每轮、单次下载），用完调用方 shutdown */
     public static ExecutorService fixed(String name, int threads, boolean daemon) {
         return register(name, new ThreadPoolExecutor(threads, threads, 0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(), namedFactory(name, daemon)));
+                new LinkedBlockingQueue<>(), namedFactory(name, daemon), countingAbort(name)));
     }
 
     /**
@@ -73,8 +79,29 @@ public final class ThreadPools {
             }
             return new ThreadPoolExecutor(threads, threads, 0L, TimeUnit.MILLISECONDS,
                     new ArrayBlockingQueue<>(queueCapacity), namedFactory(name, false),
-                    new ThreadPoolExecutor.CallerRunsPolicy());
+                    countingCallerRuns(name));
         });
+    }
+
+    /**
+     * 语义同缺省 AbortPolicy（照抛 {@link RejectedExecutionException}），只是抛前计一笔
+     * {@code thread_pool_rejected}。拒绝是调用方语义的一部分（忙则跳过、满则弃），
+     * 但「弃了多少」必须可见——静默的拒绝和被吞的任务只差一个 catch。
+     */
+    private static RejectedExecutionHandler countingAbort(String name) {
+        return (r, pool) -> {
+            Monitor.recordOne(MetricNames.THREAD_POOL_REJECTED, MetricTags.pool(name));
+            throw new RejectedExecutionException("任务被线程池 " + name + " 拒绝（队列满或已关闭）");
+        };
+    }
+
+    /** 语义同 CallerRunsPolicy，触发时计一笔 {@code thread_pool_caller_runs}：摄取在变慢的直接信号 */
+    private static RejectedExecutionHandler countingCallerRuns(String name) {
+        ThreadPoolExecutor.CallerRunsPolicy delegate = new ThreadPoolExecutor.CallerRunsPolicy();
+        return (r, pool) -> {
+            Monitor.recordOne(MetricNames.THREAD_POOL_CALLER_RUNS, MetricTags.pool(name));
+            delegate.rejectedExecution(r, pool);
+        };
     }
 
     /** 某池当前积压（注册表按名查）；无此池返回 0。静态内容摄取用它做批间限速 */

@@ -153,6 +153,38 @@ class MetricVocabularyArchRulesTest {
                 "调用终态词表变了：看板与告警里的 status 表达式必须同步改（O-5.3）");
     }
 
+    /**
+     * O-4.5：有查价能力的供应商包必须计报价丢弃（{@code QUOTE_DROPPED}）。
+     *
+     * <p>丢弃发生在各家转换循环内部，模板看不见被扔的报价，无法上提——只能查账：
+     * 从包路径推供应商（同 {@code EveryLiveLimitKeyIsRegisteredTest} 的先例），
+     * 该家树下没有任何 {@code QUOTE_DROPPED} 引用即红。新家接入忘了记账，构建过不去。
+     * 若某家的转换确实一条不丢，在其 pricing 包内注释说明并把该家加入豁免清单。
+     */
+    @Test
+    void O45_everyPricingFamilyCountsDrops() throws IOException {
+        Path suppliers = MAIN_JAVA.resolve("com/trip/booking/spa/gateway/adapter/outbound/supplier");
+        List<String> violations = new ArrayList<>();
+        try (Stream<Path> families = Files.list(suppliers)) {
+            families.filter(Files::isDirectory)
+                    .filter(family -> Files.isDirectory(family.resolve("pricing")))
+                    .forEach(family -> {
+                        try (Stream<Path> sources = Files.walk(family)) {
+                            boolean counted = sources.filter(p -> p.toString().endsWith(".java"))
+                                    .anyMatch(p -> read(p).contains("QUOTE_DROPPED"));
+                            if (!counted) {
+                                violations.add(family.getFileName().toString());
+                            }
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    });
+        }
+        assertTrue(violations.isEmpty(),
+                "这些供应商有查价能力却不计报价丢弃（O-4.5）——转换循环里被扔的报价会无声消失，"
+                        + "「丢在哪」只能靠 grep 和猜。在其转换丢弃分支打 QUOTE_DROPPED：" + violations);
+    }
+
     private static List<String> declaredMetricNames() {
         Pattern p = Pattern.compile("public static final String \\w+ = \"([a-z_]+)\";");
         Matcher m = p.matcher(read(MAIN_JAVA.resolve(

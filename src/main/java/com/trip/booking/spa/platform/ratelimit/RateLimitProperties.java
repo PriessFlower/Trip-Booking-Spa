@@ -1,5 +1,8 @@
 package com.trip.booking.spa.platform.ratelimit;
 
+import com.trip.booking.spa.platform.observability.MetricNames;
+import com.trip.booking.spa.platform.observability.MetricTags;
+import com.trip.booking.spa.platform.observability.Monitor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
@@ -138,9 +141,19 @@ public class RateLimitProperties {
      * 查某个限流 key 的 QPS，未配置则用全局默认。
      *
      * <p>此处判空是有意的冗余：本方法在所有供应商调用的必经路径上，一旦抛错即全站不可用。
+     *
+     * <p>回落 default-qps 时计一笔 {@code ratelimit_default_qps_fallback}（带 bucket 标签）：
+     * 桶名是运行期拼出的字符串而非配置键，漏配在两道配置漂移检查上都不可见，此前只能
+     * 表现为该桶静默跑默认额度。用途子桶的「未登记不扣」判定走 {@link #isRegistered}，
+     * 不经本方法，不会被误计进来。
      */
     public double qpsOf(String key) {
         Map<String, Double> current = qps;
-        return current == null ? defaultQps : current.getOrDefault(key, defaultQps);
+        if (current == null || !current.containsKey(key)) {
+            Monitor.recordOne(MetricNames.RATELIMIT_DEFAULT_QPS_FALLBACK, MetricTags.bucket(key));
+            return defaultQps;
+        }
+        Double configured = current.get(key);
+        return configured == null ? defaultQps : configured;
     }
 }

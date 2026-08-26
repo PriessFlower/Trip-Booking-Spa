@@ -37,6 +37,8 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.Exp
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.platform.observability.CallStatus;
+import com.trip.booking.spa.platform.observability.DropReason;
+import com.trip.booking.spa.platform.observability.FunnelStage;
 import com.trip.booking.spa.platform.observability.MetricNames;
 import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
@@ -216,8 +218,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         if (resultPackage != null && resultPackage.isSucc() && null != resultPackage.getData() && CollectionUtils.isNotEmpty(resultPackage.getData().getHotelPrices())) {
             hotelPricePackage = resultPackage.getData().getHotelPrices().get(0);
         }
-        // 此前这里先记一条 outcome=all 再记终态，于是 all != empty+fail+success，
-        // 指标不可加、算不出比率（O-3.3）。总量现在由 sum by (status) 得出
+        // pricing_supplier_query 由查价模板按分态统一打（O-4.3），此处只判分态不再自行计数
         if (null == hotelPriceOnly && null == hotelPricePackage) {
             // 「问到了、答没有」与「压根没问出结果」必须分开（PricingOutcome）：
             // 只要有一趟调用是成功回应的，无报价就是 Expedia 明确说这个住期没有可售；
@@ -226,16 +227,11 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             if (answered) {
                 log.info("expedia查价：该店该住期无可售报价,property_id={},checkin={}",
                         queryPriceRequest.getProperty_id(), queryPriceRequest.getCheckin());
-                Monitor.recordOne(MetricNames.PRICING_SUPPLIER_QUERY, pricingTags(CallStatus.NO_INVENTORY));
                 return PricingResult.noInventory();
             }
             log.info("expedia查询零售价和打包价全部失败,request:{},response:{}", JsonUtils.writeObject2Json(queryPriceRequest), JsonUtils.writeObject2Json(resultOnly));
-            // 两趟都没问出结果：超时、非 2xx、限流被拒、响应无法判读混在一处，
-            // 要分出 THROTTLED/TIMEOUT 需先在通道层辨别成因（欠账，同 BaseHttpAccess）
-            Monitor.recordOne(MetricNames.PRICING_SUPPLIER_QUERY, pricingTags(CallStatus.ERROR));
             return PricingResult.indeterminate();
         }
-        Monitor.recordOne(MetricNames.PRICING_SUPPLIER_QUERY, pricingTags(CallStatus.QUOTED));
         // 零售价(hotel_only)与打包价(hotel_package)是两类不同产品，规则上不可混卖，
         // 各自独立成品返回、各带自己的 priceFlag，不做比价合并
         return PricingResult.of(convertSeparated(hotelPriceOnly, hotelPricePackage, request));
@@ -284,21 +280,29 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         }
     }
 
-    private void convertRateResp(String hotelId, String roomName, String roomId, QueryPriceResponse.Rates rate, String salesType, List<ProductRespDTO> productRespDTOS, PriceReq request) {
-        if (rate.getOccupancy_pricing().containsKey(request.getOccupancies().get(0))) {
-            QueryPriceResponse.Occupancy_pricing occupancyPricing = rate.getOccupancy_pricing().get(request.getOccupancies().get(0));
-            List<QueryPriceResponse.CancelPolicy> cancelPolicies = rate.getCancel_penalties();
-            int sumCommission = calcCommissionCents(occupancyPricing);
-            int totalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()));
-            int roomTotalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()));
-            Meal meal = productKeyDeriver.convertMeal(request.getAdultNum(), rate.getAmenities());
-            List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) : productKeyDeriver.convertCancelPolicy(request.getCheckIn(), cancelPolicies);
-            // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍
-            ProductIdentity identity = productKeyDeriver.deriveIdentity(hotelId, roomId, meal, cancelPolicy, request.getOccupancies().get(0));
-            ProductRespDTO productRespDTO = ProductRespDTO.builder().hotelId(hotelId).productId(rate.getId()).productKey(identity.productKey()).identity(identity).supplierId(SupplierSourceEnum.EXPEDIA.getCode()).room(Room.builder().roomName(roomName).roomId(roomId).build()).productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomName).build()).currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency()).totalPrice(totalPrice - sumCommission).roomTotalPrice(roomTotalPrice - sumCommission).brokerage(sumCommission).stayPrice(buildStayPrice(occupancyPricing.getStay())).priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn(), sumCommission)).meal(meal).cancelPolicy(cancelPolicy).maxOccupancy(request.getAdultNum()).priceFlag(salesType).distribution(rate.getSale_scenario().getDistribution()).build();
-            productRespDTO.setTotalTaxes(productRespDTO.getTotalPrice() - productRespDTO.getRoomTotalPrice());
-            productRespDTOS.add(productRespDTO);
+    // 包私有以便直测丢弃分支（同艺龙 toPricingResult 的先例）
+    void convertRateResp(String hotelId, String roomName, String roomId, QueryPriceResponse.Rates rate, String salesType, List<ProductRespDTO> productRespDTOS, PriceReq request) {
+        if (!rate.getOccupancy_pricing().containsKey(request.getOccupancies().get(0))) {
+            // 供应商给了这条 rate，但没有本次占用档的价——丢弃必须可数（O-4.5）：
+            // 此前这里无日志无计数，Expedia 被过滤的报价无声消失，「丢在哪」只能 grep 和猜
+            log.info("expedia查价：rate 缺所查占用档的价，弃之,hotelId={},rateId={},occupancy={}",
+                    hotelId, rate.getId(), request.getOccupancies().get(0));
+            Monitor.recordOne(MetricNames.QUOTE_DROPPED, MetricTags.dropped(
+                    SupplierSourceEnum.EXPEDIA, FunnelStage.CONVERT, DropReason.NO_OCCUPANCY_PRICING));
+            return;
         }
+        QueryPriceResponse.Occupancy_pricing occupancyPricing = rate.getOccupancy_pricing().get(request.getOccupancies().get(0));
+        List<QueryPriceResponse.CancelPolicy> cancelPolicies = rate.getCancel_penalties();
+        int sumCommission = calcCommissionCents(occupancyPricing);
+        int totalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()));
+        int roomTotalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()));
+        Meal meal = productKeyDeriver.convertMeal(request.getAdultNum(), rate.getAmenities());
+        List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) : productKeyDeriver.convertCancelPolicy(request.getCheckIn(), cancelPolicies);
+        // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍
+        ProductIdentity identity = productKeyDeriver.deriveIdentity(hotelId, roomId, meal, cancelPolicy, request.getOccupancies().get(0));
+        ProductRespDTO productRespDTO = ProductRespDTO.builder().hotelId(hotelId).productId(rate.getId()).productKey(identity.productKey()).identity(identity).supplierId(SupplierSourceEnum.EXPEDIA.getCode()).room(Room.builder().roomName(roomName).roomId(roomId).build()).productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomName).build()).currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency()).totalPrice(totalPrice - sumCommission).roomTotalPrice(roomTotalPrice - sumCommission).brokerage(sumCommission).stayPrice(buildStayPrice(occupancyPricing.getStay())).priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn(), sumCommission)).meal(meal).cancelPolicy(cancelPolicy).maxOccupancy(request.getAdultNum()).priceFlag(salesType).distribution(rate.getSale_scenario().getDistribution()).build();
+        productRespDTO.setTotalTaxes(productRespDTO.getTotalPrice() - productRespDTO.getRoomTotalPrice());
+        productRespDTOS.add(productRespDTO);
     }
 
     private static Integer buildStayPrice(List<QueryPriceResponse.Stay> stayList) {
@@ -698,8 +702,10 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         ResponseResult<QueryPriceResponse> resultOnly = new QueryProductAccess(host, "zh-CN", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest, CallPurpose.REFRESH);
         if (null == resultOnly || !resultOnly.isSucc() || null == resultOnly.getData()
                 || CollectionUtils.isEmpty(resultOnly.getData().getHotelPrices())) {
-            // 「答了但没有」与「没问出结果」分开记（O-3.1）：此前这条路只记一条 outcome=all，
-            // 失败分支没有任何落点，刷价失败率在指标上无从计算
+            // 「答了但没有」与「没问出结果」分开记（O-3.1）。这两笔是刷价腿的<b>留守</b>：
+            // 本方法对两种情形都返回 null，上层 RefreshOutcome 只见 FAILED，refresh_empty
+            // 对 Expedia 恒为 0——在把「答了没货→返回空列表」（对齐艺龙口径，B7 僵尸价
+            // 标记也系于此）修好之前，删这两笔就删掉了该腿唯一的三态信号
             Monitor.recordOne(MetricNames.PRICING_SUPPLIER_QUERY,
                     pricingTags(isAnswered(resultOnly) ? CallStatus.NO_INVENTORY : CallStatus.ERROR));
             log.info("expedia缓存查询零售价失败,request:{}", JsonUtils.writeObject2Json(queryPriceRequest));

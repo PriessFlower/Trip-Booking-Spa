@@ -50,6 +50,15 @@ public final class MetricTags {
     /** source 取值：实时问供应商 */
     public static final String SOURCE_LIVE = "live";
 
+    /** 线程池注册名（{@code ThreadPools} 的池名） */
+    public static final String POOL = "pool";
+
+    /** 连接池目标 host（按 host 分池后每 host 一池） */
+    public static final String HOST = "host";
+
+    /** 限流桶键（{@code GLOBAL_LIMIT:<供应商>:<接口>[:<用途>]} 全键） */
+    public static final String BUCKET = "bucket";
+
     private MetricTags() {
     }
 
@@ -112,6 +121,27 @@ public final class MetricTags {
     public static Map<String, Object> quoted(SupplierSourceEnum supplier, String source) {
         Map<String, Object> tags = of(supplier);
         tags.put(SOURCE, source);
+        return tags;
+    }
+
+    /** 线程池水位与拒绝（{@code thread_pool_*}） */
+    public static Map<String, Object> pool(String poolName) {
+        Map<String, Object> tags = new HashMap<>(2);
+        tags.put(POOL, poolName);
+        return tags;
+    }
+
+    /** 连接池水位（{@code http_pool_*}） */
+    public static Map<String, Object> host(String host) {
+        Map<String, Object> tags = new HashMap<>(2);
+        tags.put(HOST, host);
+        return tags;
+    }
+
+    /** 限流等待与兜底命中（{@code ratelimit_*}）。bucket 集合有界：键随代码发布，不随流量 */
+    public static Map<String, Object> bucket(String key) {
+        Map<String, Object> tags = new HashMap<>(2);
+        tags.put(BUCKET, key);
         return tags;
     }
 

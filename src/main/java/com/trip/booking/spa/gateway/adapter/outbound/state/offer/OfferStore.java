@@ -1,6 +1,10 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.offer;
 
 import com.trip.booking.spa.gateway.domain.supplier.SupplierIdentityProfile;
+import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
+import com.trip.booking.spa.platform.observability.MetricNames;
+import com.trip.booking.spa.platform.observability.MetricTags;
+import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.redis.RedisUtils;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -101,6 +105,7 @@ public class OfferStore {
         }
         log.info("已签发报价句柄 supplierId={}, offerId={}, ttlSeconds={}, credentialKeys={}",
                 supplierId, offerId, effectiveTtl, credentials.keySet());
+        Monitor.recordOne(MetricNames.OFFER_ISSUED, supplierTags(supplierId));
         return offerId;
     }
 
@@ -118,6 +123,7 @@ public class OfferStore {
         String payload = redisUtils.get(REDIS_KEY_PREFIX + offerId);
         if (StringUtils.isBlank(payload)) {
             log.warn("报价句柄不存在或已过期 offerId={}", offerId);
+            Monitor.recordOne(MetricNames.OFFER_RESOLVE_MISS);
             return null;
         }
         try {
@@ -125,11 +131,13 @@ public class OfferStore {
             if (offer == null || offer.getSupplierId() == null
                     || MapUtils.isEmpty(offer.getCredentials())) {
                 log.error("报价句柄内容不完整 offerId={}", offerId);
+                Monitor.recordOne(MetricNames.OFFER_RESOLVE_MISS);
                 return null;
             }
             return offer;
         } catch (Exception e) {
             log.error("报价句柄内容无法解析 offerId={}", offerId, e);
+            Monitor.recordOne(MetricNames.OFFER_RESOLVE_MISS);
             return null;
         }
     }
@@ -156,6 +164,7 @@ public class OfferStore {
         try {
             redisUtils.remove(REDIS_KEY_PREFIX + offerId);
             log.info("报价句柄已核销（下单成功，用完即焚） offerId={}", offerId);
+            Monitor.recordOne(MetricNames.OFFER_CONSUMED);
         } catch (Exception e) {
             log.warn("报价句柄核销失败，句柄将于 TTL 自然过期 offerId={}", offerId, e);
         }
@@ -177,6 +186,12 @@ public class OfferStore {
     public long ttlSecondsOf(int supplierId) {
         Duration cap = SupplierIdentityProfile.forCode(supplierId).tokenTtlCap();
         return cap == null ? ttlSeconds : Math.min(ttlSeconds, cap.getSeconds());
+    }
+
+    /** supplier 标签按 O-2.3 用枚举名；未知编码不带标签，不虚构取值 */
+    private static Map<String, Object> supplierTags(Integer supplierId) {
+        SupplierSourceEnum supplier = SupplierSourceEnum.getEnum(supplierId);
+        return supplier == null ? Map.of() : MetricTags.of(supplier);
     }
 
     private static byte[] randomBytes() {
