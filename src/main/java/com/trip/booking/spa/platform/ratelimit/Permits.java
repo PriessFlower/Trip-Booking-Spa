@@ -1,6 +1,9 @@
 package com.trip.booking.spa.platform.ratelimit;
 
 import com.trip.booking.spa.platform.exception.RedisLimitException;
+import com.trip.booking.spa.platform.observability.MetricNames;
+import com.trip.booking.spa.platform.observability.MetricTags;
+import com.trip.booking.spa.platform.observability.Monitor;
 
 /**
  * 取供应商调用许可的<b>唯一入口</b>。两级桶的规则只在这里实现一份：
@@ -45,8 +48,12 @@ public final class Permits {
     private static void takeOne(RateLimitManager manager, String key, CallPurpose purpose) {
         if (!purpose.failFast()) {
             // 后台：被限流挡掉会计入失败态而不动缓存（F-5.1），等于凭空造一次假失败。
-            // 对没人等的调用，等待永远优于失败
+            // 对没人等的调用，等待永远优于失败——但等了多久必须可见：桶配小了或漏配，
+            // 表现是刷价静默变慢，没有这条 ratelimit_wait 就无从与「任务本身慢」区分
+            long start = System.currentTimeMillis();
             manager.acquire(key);
+            Monitor.recordOne(MetricNames.RATELIMIT_WAIT, MetricTags.bucket(key),
+                    System.currentTimeMillis() - start);
             return;
         }
         if (!manager.tryAcquire(key)) {

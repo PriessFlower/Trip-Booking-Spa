@@ -2,7 +2,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.s
 
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.catalog.ExpediaCatalogTransformService;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.client.ExpediaCatalogFileClient;
-import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ThreadPoolUtils;
+import com.trip.booking.spa.platform.concurrent.ThreadPools;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -80,13 +80,13 @@ public class ExpediaCatalogSeedService {
      */
     private int[] ingestConcurrently(List<String> propertyIds, boolean transform) {
         int numberOfParts = Math.max(1, (propertyIds.size() + PART_SIZE - 1) / PART_SIZE);
-        List<List<String>> parts = ThreadPoolUtils.splitListIntoParts(propertyIds, numberOfParts);
+        List<List<String>> parts = splitListIntoParts(propertyIds, numberOfParts);
         List<Future<int[]>> futures = new ArrayList<>();
         for (List<String> part : parts) {
             if (part.isEmpty()) {
                 continue;
             }
-            futures.add(ThreadPoolUtils.submit(() -> {
+            futures.add(ThreadPools.fixedCallerRuns(ExpediaGeographyIngestionService.CONTENT_POOL_NAME, 20, 1000).submit(() -> {
                 int ingested = ingestionService.ingestByPropertyIds(part, null);
                 int transformed = transform ? transformService.transformByPropertyIds(part) : 0;
                 return new int[]{ingested, transformed};
@@ -104,5 +104,20 @@ public class ExpediaCatalogSeedService {
             }
         }
         return new int[]{ingested, transformed};
+    }
+
+    /** 大集合均分为 N 份（原居 ThreadPoolUtils，唯一调用方是本类，随其退役搬入） */
+    private static <T> java.util.List<java.util.List<T>> splitListIntoParts(java.util.List<T> list, int numberOfParts) {
+        final int size = list.size();
+        final int chunkSize = size / numberOfParts;
+        final int leftOver = size % numberOfParts;
+        java.util.List<java.util.List<T>> parts = new java.util.ArrayList<>(numberOfParts);
+        int start = 0;
+        for (int i = 0; i < numberOfParts; i++) {
+            int end = start + chunkSize + (i < leftOver ? 1 : 0);
+            parts.add(new java.util.ArrayList<>(list.subList(start, end)));
+            start = end;
+        }
+        return parts;
     }
 }

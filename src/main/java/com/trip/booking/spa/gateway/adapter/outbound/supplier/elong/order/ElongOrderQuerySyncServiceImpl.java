@@ -11,6 +11,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.request.ElongRequestEnvelope;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongOrderDetailResponse;
 import com.trip.booking.spa.gateway.application.order.AbstractOrderQuerySyncSupportService;
+import com.trip.booking.spa.gateway.domain.shared.Money;
 import com.trip.booking.spa.gateway.domain.booking.OrderPresence;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
 import com.trip.booking.spa.platform.util.JsonUtils;
@@ -169,8 +170,9 @@ public class ElongOrderQuerySyncServiceImpl
         return null;
     }
 
+    /** 空容忍薄封装：倍数与舍入统一走 Money.toCents，本方法只管 null 透传 */
     private static Integer yuanToCents(BigDecimal yuan) {
-        return yuan == null ? null : yuan.multiply(BigDecimal.valueOf(100)).intValue();
+        return yuan == null ? null : Money.toCents(yuan);
     }
 
     private static Long parseLongQuietly(String value) {

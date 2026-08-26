@@ -171,7 +171,7 @@ class ElongCheckPriceE2ETest {
     @DisplayName("查价：真实调 hotel.detail，价格取结算口径且税费自洽")
     void queryPricesUsesSettlementBasis() {
         PriceReq req = PriceReq.builder().checkIn(checkIn).checkout(checkOut)
-                .roomNum(1).adultNum(1).childNum(0).childAges(new ArrayList<>()).guestType(0).build();
+                .roomNum(1).adultNum(1).childNum(0).childAges(new ArrayList<>()).build();
 
         PricingResult result = service.queryPrices(req, supplier(), CallPurpose.LIVE);
 

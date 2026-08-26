@@ -139,7 +139,7 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
         // 艺龙那侧已显式指定 Asia/Shanghai（供应商口径），Expedia 的正确口径待与对接方确认
         LocalDate today = LocalDate.now();
         PriceReq request = PriceReq.builder()
-                .adultNum(Integer.parseInt(dimension)).childNum(0).guestType(0)
+                .adultNum(Integer.parseInt(dimension)).childNum(0)
                 .childAges(new ArrayList<>())
                 .checkIn(today.plusDays(row.getDelayCheckIn()).toString())
                 .checkout(today.plusDays(row.getDelayCheckOut()).toString())

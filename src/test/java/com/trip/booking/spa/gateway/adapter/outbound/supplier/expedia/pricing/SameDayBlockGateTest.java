@@ -49,7 +49,7 @@ class SameDayBlockGateTest {
         return PriceReq.builder()
                 .checkIn(LocalDate.now().toString())
                 .checkout(LocalDate.now().plusDays(1).toString())
-                .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).guestType(0)
+                .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
                 .suppliers(List.of(Supplier.builder().supplierId(10005).sHotelId(hotelId).build()))
                 .build();
     }
@@ -91,7 +91,7 @@ class SameDayBlockGateTest {
         PriceReq req = PriceReq.builder()
                 .checkIn(LocalDate.now().plusDays(3).toString())
                 .checkout(LocalDate.now().plusDays(4).toString())
-                .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).guestType(0)
+                .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
                 .suppliers(List.of(Supplier.builder().supplierId(10005).sHotelId(hotelId).build()))
                 .build();
 

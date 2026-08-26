@@ -44,7 +44,7 @@ class PriceCacheServiceImplTest {
      * 价格键自 2026-08-20 起带占用分片：{@code price:{hotel}:{occupancy}:{date}}。
      * 本用例的 {@code oneNight()} 是 1 成人 0 儿童，故占用片为 {@code 1}。
      */
-    private static final String PRICE_KEY = "price:H1:1:" + DATE;
+    private static final String PRICE_KEY = "price:10010:H1:1:" + DATE;
 
     private PriceCacheServiceImpl service;
     private RedisUtils redisUtils;
@@ -86,7 +86,7 @@ class PriceCacheServiceImplTest {
     private static PriceReq oneNight() {
         // PriceReq 的这些字段带 @NonNull，缺一个就在 build() 抛 NPE；取值与本用例无关
         return PriceReq.builder().checkIn(DATE).checkout("2026-09-02")
-                .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).guestType(0).build();
+                .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).build();
     }
 
     private static ProductRespDTO product(String productId, Integer price) {

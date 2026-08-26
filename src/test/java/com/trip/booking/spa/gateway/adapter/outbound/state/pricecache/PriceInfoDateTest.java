@@ -54,7 +54,7 @@ class PriceInfoDateTest {
 
     private static PriceReq twoNights(int adults) {
         return PriceReq.builder().checkIn(D1).checkout("2026-09-03")
-                .roomNum(1).adultNum(adults).childNum(0).childAges(List.of()).guestType(0)
+                .roomNum(1).adultNum(adults).childNum(0).childAges(List.of())
                 .build();
     }
 
@@ -66,8 +66,8 @@ class PriceInfoDateTest {
     private void givenTwoNightsCached(String occupancy) {
         String pk = "a".repeat(64);
         Map<String, Map<String, String>> hashes = new LinkedHashMap<>();
-        hashes.put("price:H1:" + occupancy + ":" + D1, Map.of(pk, "{\"price\":65940,\"taxes\":0,\"roomPrice\":65940}"));
-        hashes.put("price:H1:" + occupancy + ":" + D2, Map.of(pk, "{\"price\":59609,\"taxes\":0,\"roomPrice\":59609}"));
+        hashes.put("price:10010:H1:" + occupancy + ":" + D1, Map.of(pk, "{\"price\":65940,\"taxes\":0,\"roomPrice\":65940}"));
+        hashes.put("price:10010:H1:" + occupancy + ":" + D2, Map.of(pk, "{\"price\":59609,\"taxes\":0,\"roomPrice\":59609}"));
         Mockito.when(redisUtils.hashMapListAndKey(Mockito.anyList())).thenReturn(hashes);
         Mockito.when(redisUtils.get(Mockito.startsWith("quote:")))
                 .thenReturn("{\"productId\":\"易腐票\",\"productKey\":\"" + pk + "\"}");
@@ -97,7 +97,7 @@ class PriceInfoDateTest {
     void multiPartOccupancyStillYieldsTheDate() {
         givenTwoNightsCached("2-9,4");
         PriceReq req = PriceReq.builder().checkIn(D1).checkout("2026-09-03")
-                .roomNum(1).adultNum(2).childNum(2).childAges(List.of(9, 4)).guestType(0).build();
+                .roomNum(1).adultNum(2).childNum(2).childAges(List.of(9, 4)).build();
 
         List<ProductRespDTO> products = service.getPrice(req, sup());
 

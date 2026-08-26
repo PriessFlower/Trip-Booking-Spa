@@ -253,6 +253,12 @@ XxxCancelServiceImpl          extends AbstractCancelSyncSupportService
 
 bean 名必须是 `<SupplierSourceEnum.desc><能力后缀>`，否则 ① 路由不到。
 
+查价转换循环里**每个丢弃报价的分支必须计 `QUOTE_DROPPED`**（带 stage/reason），要么注释说明
+为什么不算丢弃——被扔的报价只有转换代码自己看得见，模板无从代劳；不计数它们就无声消失，
+「出报率掉了丢在哪」只能靠 grep 和猜。守护测试从包路径自动查账
+（`MetricVocabularyArchRulesTest.O45`），漏计构建即红。`pricing_supplier_query`（一次实时
+查价一笔）不用管，查价模板统一打（O-4.3），实现方**不得**自行再打。
+
 **第三步 · 定义该家的凭据键名**　参照 `ExpediaOfferCredentials`：把键名集中在一个类里，
 供验价（写入方）与下单（读取方）共同引用，而不是两边各写一个字面量。
 验价时 `offerStore.issue(supplierId, Map.of(键, 值, …))`，下单时 `offer.credential(键)`。

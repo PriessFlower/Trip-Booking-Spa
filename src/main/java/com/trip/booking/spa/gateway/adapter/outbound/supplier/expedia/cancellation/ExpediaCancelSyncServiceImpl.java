@@ -1,18 +1,19 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.cancellation;
 
-import com.trip.booking.spa.platform.ratelimit.CallPurpose;
-import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
-import com.trip.booking.spa.gateway.domain.booking.CancelOutcome;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelRespDTO;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.cancellation.client.CancelRoomAccess;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.order.client.QueryOrderAccess;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaBookingContact;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaUtils;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.CancelRoomResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.CreateOrderResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.QueryOrderResponse;
-import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaBookingContact;
-import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaUtils;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CancelReq;
 import com.trip.booking.spa.gateway.application.cancellation.AbstractCancelSyncSupportService;
+import com.trip.booking.spa.gateway.domain.cancellation.CancelCommand;
+import com.trip.booking.spa.gateway.domain.cancellation.CancelPenalty;
+import com.trip.booking.spa.gateway.domain.cancellation.CancelResult;
+import com.trip.booking.spa.gateway.domain.supplier.FailureKind;
+import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.platform.redis.DistributedRateLimiter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,21 +37,16 @@ import java.util.List;
  * <p><b>部分成功的判读</b>：一笔多房订单可能取消到一半失败。此时既不能判 SUCCESS
  * （还有房间占着），也不能判 FAILED（已有房间被取消，状态已改变，上游若据此认为
  * 订单完好会与实际不符）。故一律判 UNKNOWN，由上游查单确证后再处置。
+ *
+ * <p><b>罚金一律申报"无从得知"</b>：Expedia 的取消接口成功时返回 204 无响应体，
+ * 不给违约金——penaltySource=NONE 是如实转述，不是欠实现。
  */
 @Slf4j
 @Service("expediaCancelSyncService")
-public class ExpediaCancelSyncServiceImpl
-        extends AbstractCancelSyncSupportService<ExpediaCancelSyncServiceImpl.CancelResult> {
+public class ExpediaCancelSyncServiceImpl extends AbstractCancelSyncSupportService {
 
     /** Expedia 房间状态原文：已取消 */
     private static final String STATUS_CANCELED = "canceled";
-
-    /** 对外的取消状态码：0 取消成功 */
-    private static final int S_ORDER_STATUS_CANCELED = 0;
-    /** 对外的取消状态码：1 取消中／结果待确证 */
-    private static final int S_ORDER_STATUS_PENDING = 1;
-    /** 对外的取消状态码：2 取消失败 */
-    private static final int S_ORDER_STATUS_FAILED = 2;
 
     @Value("${expedia.url.host}")
     private String host;
@@ -67,35 +63,36 @@ public class ExpediaCancelSyncServiceImpl
     private ExpediaBookingContact bookingContact;
 
     @Override
-    public CancelResult doCancel(CancelReq req) {
+    protected CancelResult doCancel(CancelCommand command) {
         // 邮箱必须与下单时一致，否则 Expedia 不返回结果；故取同一份配置，不由调用方传入
         String email = bookingContact.getContact().getEmail();
         if (!StringUtils.hasText(email)) {
-            // 配置缺失属我方问题，且重试不会改变——但也不能判 FAILED：
+            // 配置缺失属我方问题（AUTH_CONFIG），且重试不会改变——但也不能判 FAILED：
             // 订单可能好端端存在，只是我们查不到它
-            log.error("expedia 取消缺少 booking-contact 邮箱，无法反查, orderId={}", req.getOrderId());
-            return CancelResult.unknown("取消所需的反查邮箱未配置，无法确认订单状态");
+            log.error("expedia 取消缺少 booking-contact 邮箱，无法反查, orderId={}", command.orderId());
+            return unknown(command, null, "取消所需的反查邮箱未配置，无法确认订单状态；修复配置前重试无效")
+                    .withFailureKind(FailureKind.AUTH_CONFIG);
         }
 
         ResponseResult<QueryOrderResponse> lookup = new QueryOrderAccess(
-                host, req.getOrderId(), email, expediaUtils.generateSign(),
+                host, command.orderId(), email, expediaUtils.generateSign(),
                 ownIp, sessionId, rateLimiter).access("", CallPurpose.ORDER);
 
         QueryOrderResponse resp = lookup == null ? null : lookup.getData();
         if (resp == null || resp.getPresence() == QueryOrderResponse.Presence.INDETERMINATE) {
             // 反查不通，无从得知订单是否存在，更无从取消
-            return CancelResult.unknown("反查订单未取得结果，取消未执行，请稍后重试或查单确证");
+            return unknown(command, null, "反查订单未取得结果，取消未执行，请稍后重试或查单确证");
         }
         if (resp.getPresence() == QueryOrderResponse.Presence.NOT_FOUND) {
             // 确证订单不存在。重试必得同样结果，故判 FAILED 而非 UNKNOWN
-            return CancelResult.failed("供应商侧不存在该订单，无可取消");
+            return CancelResult.failed(command.orderId(), null, null, "供应商侧不存在该订单，无可取消");
         }
 
         QueryOrderResponse.Itinerary itinerary = resp.firstItinerary();
         List<CreateOrderResponse.Room> rooms = itinerary == null ? null : itinerary.getRooms();
         if (rooms == null || rooms.isEmpty()) {
-            log.error("expedia 取消：反查报告订单存在但无房间明细, orderId={}", req.getOrderId());
-            return CancelResult.unknown("反查响应自相矛盾：订单存在但无房间明细");
+            log.error("expedia 取消：反查报告订单存在但无房间明细, orderId={}", command.orderId());
+            return unknown(command, null, "反查响应自相矛盾：订单存在但无房间明细");
         }
 
         String itineraryId = itinerary.getItinerary_id();
@@ -128,27 +125,21 @@ public class ExpediaCancelSyncServiceImpl
         if (!failures.isEmpty()) {
             // 部分成功同样落此分支：已有房间被取消，状态已改变，不能报 FAILED
             log.error("expedia 取消未全部成功, orderId={}, 成功={}, 原已取消={}, 失败={}",
-                    req.getOrderId(), canceled, alreadyCanceled, failures);
-            return CancelResult.unknown(itineraryId,
+                    command.orderId(), canceled, alreadyCanceled, failures);
+            return unknown(command, itineraryId,
                     "部分房间未能取消（成功 " + canceled + " 间，失败 " + failures.size()
                             + " 间），订单状态已改变，请查单确证：" + String.join("；", failures));
         }
         if (canceled == 0 && alreadyCanceled > 0) {
             // 全部本就已取消，等同于取消成功
-            return CancelResult.success(itineraryId, "订单的全部房间此前已取消");
+            return CancelResult.success(command.orderId(), itineraryId,
+                    CancelPenalty.unknown(), "订单的全部房间此前已取消");
         }
-        return CancelResult.success(itineraryId, null);
+        return CancelResult.success(command.orderId(), itineraryId, CancelPenalty.unknown(), null);
     }
 
-    @Override
-    public CancelRespDTO cancelRespConvert(CancelResult result) {
-        return CancelRespDTO.builder()
-                .outcome(result.outcome)
-                .sOrderId(result.itineraryId)
-                .sOrderStatus(statusCodeOf(result.outcome))
-                .message(result.message)
-                .orderDesc(result.message)
-                .build();
+    private static CancelResult unknown(CancelCommand command, String itineraryId, String message) {
+        return CancelResult.unknown(command.orderId(), itineraryId, null, message);
     }
 
     /**
@@ -192,41 +183,5 @@ public class ExpediaCancelSyncServiceImpl
     /** 反查给出的链接可能是相对路径，补全为绝对地址 */
     private String absolute(String href) {
         return href.startsWith("http") ? href : host + href;
-    }
-
-    private Integer statusCodeOf(CancelOutcome outcome) {
-        if (outcome == CancelOutcome.SUCCESS) {
-            return S_ORDER_STATUS_CANCELED;
-        }
-        return outcome == CancelOutcome.FAILED ? S_ORDER_STATUS_FAILED : S_ORDER_STATUS_PENDING;
-    }
-
-    /** 取消编排的中间结果；仅在本实现内部流转，不出网关 */
-    public static final class CancelResult {
-        private final CancelOutcome outcome;
-        private final String itineraryId;
-        private final String message;
-
-        private CancelResult(CancelOutcome outcome, String itineraryId, String message) {
-            this.outcome = outcome;
-            this.itineraryId = itineraryId;
-            this.message = message;
-        }
-
-        static CancelResult success(String itineraryId, String message) {
-            return new CancelResult(CancelOutcome.SUCCESS, itineraryId, message);
-        }
-
-        static CancelResult failed(String message) {
-            return new CancelResult(CancelOutcome.FAILED, null, message);
-        }
-
-        static CancelResult unknown(String message) {
-            return new CancelResult(CancelOutcome.UNKNOWN, null, message);
-        }
-
-        static CancelResult unknown(String itineraryId, String message) {
-            return new CancelResult(CancelOutcome.UNKNOWN, itineraryId, message);
-        }
     }
 }

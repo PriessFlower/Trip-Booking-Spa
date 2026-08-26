@@ -5,7 +5,7 @@ A.2 把 config/nacos/trip-booking-spa.yaml.example 定为唯一核对基准，�
 注释、没有可执行形态。结果该文件的 7 个 cache.price.* 键从引入那天起就少缩进两格
 （挂成了 cache.*），代码一律读不到、也无任何提示，历经三个提交周期无人发现（issue #98）。
 
-两项检查：
+三项检查：
 
 1. 【离线，始终执行，有差异即失败】example ↔ 代码实际读取的键。
    "该登记进 Nacos 的键" = 代码读取的键 ∩ example 的顶层域 − application*.yml 里声明过的键。
@@ -16,6 +16,14 @@ A.2 把 config/nacos/trip-booking-spa.yaml.example 定为唯一核对基准，�
 
 2. 【需要 Nacos 凭证，在部署流水线执行】example ↔ 目标环境 Nacos 的键清单。
    按 A.2 的处置表给出方向。只比键路径，不比取值——值是各环境自有的（§3.2.2）。
+
+3. 【离线，始终执行，有差异即失败】application*.yml 里我方域的键必须绑得上代码。
+   检查 1 把 yml 里声明过的键显式减掉了（第 1 项的减法），于是"yml 里有、代码却绑不上"
+   这一形态无人守。这不是假想病：邻仓 cursor 的 supplier.fliggy.refresh_token 写在 8 份
+   yml 里，而绑定类没有对应字段，Spring 静默忽略——自动续期因此两头断，断了多久没人知道。
+   本仓引入守卫当天就抓到两个同病死键（system.localFilePath、expedia.localFilePath）。
+   比对按 Spring 宽松绑定归一（refresh_token ≡ refreshToken ≡ refresh-token），框架自身
+   消费的域走 FRAMEWORK_DOMAINS 黑名单——新引入框架报误伤时把它的域加进去，加行注释。
 
 用法：
     python3 scripts/check-nacos-key-drift.py                  # 只做检查 1（离线）
@@ -45,8 +53,10 @@ GET_PROPERTY = re.compile(r"getProperty\(\"([a-zA-Z0-9_.\-]+)")
 # 键全判成死键——2026-08-25 限流配置改用它之后 CI 就是这么红的。transient 字段跳过：那是过渡期
 # 的兼容字段，读的是别的键。
 CONFIG_PROPS = re.compile(r"@ConfigurationProperties\s*\(\s*prefix\s*=\s*\"([a-zA-Z0-9_.\-]+)\"")
+# 类型字符类含 "."：字段类型可能写全限定名（如 java.util.List<String> languages），
+# 漏掉点号会让整行匹配失败、该字段被判不存在——检查 3 引入当天即因此误报一例。
 PRIVATE_FIELD = re.compile(
-    r"^\s*private\s+(?!transient)(?:volatile\s+)?[\w<>,\s\[\]]+?\s+(\w+)\s*[;=]", re.MULTILINE)
+    r"^\s*private\s+(?!transient)(?:volatile\s+)?[\w<>,.\s\[\]]+?\s+(\w+)\s*[;=]", re.MULTILINE)
 
 
 # 映射型前缀：这些键的"子项"是<b>值</b>而不是键位。ratelimit.qps 下面挂的是限流桶名，
@@ -61,9 +71,23 @@ PRIVATE_FIELD = re.compile(
 # 残留缺口：其他家的桶漏配只会静默回落 default-qps，暂无自动检查（欠账）。
 MAP_VALUED_PREFIXES = ("ratelimit.qps",)
 
+# 检查 3 的黑名单：这些域由框架自身消费，我方代码不读、也不该读。
+# rocketmq 是已知死配置（pom 无依赖、代码零引用），application-dev.yml 里注明按要求保留，
+# 故一并列入——它的死是登记在案的，不是本检查要抓的静默死。
+FRAMEWORK_DOMAINS = {"server", "spring", "mybatis", "logging", "management", "rocketmq"}
+
 
 def under_map_valued(key):
     return any(key == p or key.startswith(p + ".") for p in MAP_VALUED_PREFIXES)
+
+
+def relaxed(segment):
+    """Spring 宽松绑定的归一形：refresh_token ≡ refreshToken ≡ refresh-token。"""
+    return segment.replace("-", "").replace("_", "").lower()
+
+
+def relaxed_path(key):
+    return ".".join(relaxed(s) for s in key.split("."))
 
 
 def camel_to_kebab(name):
@@ -117,6 +141,70 @@ def yml_keys(resource_root):
         with open(path, encoding="utf-8") as f:
             keys.update(leaf_paths(f.read()))
     return keys
+
+
+def binding_targets(source_root):
+    """检查 3 的"代码能绑到哪"清单。
+
+    返回 (直读键的归一集合, [(prefix, 该文件全部字段名的归一集合), ...])。
+
+    @ConfigurationProperties 的嵌套结构（如 expedia.static-data.batch-size 绑到嵌套类
+    StaticData.batchSize）不做真正的类型求解——正则解析做不到。近似规则：嵌套类与外层类
+    在同一个文件里（本仓惯例），故键的每一段都能在该文件的字段名集合里找到即视为绑上。
+    这个近似只会漏报（同文件恰有同名字段兜住了死键），不会误报。
+    """
+    direct = set()
+    props_files = []
+    for path in glob.glob(os.path.join(source_root, "**", "*.java"), recursive=True):
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        direct.update(relaxed_path(k) for k in VALUE_REF.findall(text))
+        direct.update(relaxed_path(k) for k in GET_PROPERTY.findall(text))
+        prefixes = CONFIG_PROPS.findall(text)
+        if prefixes:
+            fields = {relaxed(f) for f in PRIVATE_FIELD.findall(text)}
+            for prefix in prefixes:
+                props_files.append((prefix, fields))
+    return direct, props_files
+
+
+def is_bound(key, direct, props_files):
+    if relaxed_path(key) in direct:
+        return True
+    for prefix, fields in props_files:
+        if key == prefix:
+            return True
+        if key.startswith(prefix + "."):
+            rest = key[len(prefix) + 1:].split(".")
+            if all(relaxed(seg) in fields for seg in rest):
+                return True
+    return False
+
+
+def check_yml_binds_to_code(source_root, resource_root):
+    """检查 3：application*.yml 里我方域的键，代码里必须有地方绑得上。返回 True 表示通过。"""
+    direct, props_files = binding_targets(source_root)
+    dead = []  # [(file, key)]
+    checked = 0
+    for path in sorted(glob.glob(os.path.join(resource_root, "application*.yml"))):
+        with open(path, encoding="utf-8") as f:
+            keys = leaf_paths(f.read())
+        for key in sorted(keys):
+            if key.split(".")[0] in FRAMEWORK_DOMAINS or under_map_valued(key):
+                continue
+            checked += 1
+            if not is_bound(key, direct, props_files):
+                dead.append((os.path.basename(path), key))
+    print(f"[检查3 yml↔绑定] 受检={checked} 绑不上={len(dead)}")
+    for fname, key in dead:
+        print(f"  ✗ {fname} 的 {key}：代码里没有任何 @Value/getProperty/"
+              f"@ConfigurationProperties 字段绑得上它。要么是键名或层级写错（Spring 静默忽略，"
+              f"cursor 的 supplier.fliggy.refresh_token 即此病），要么是键已废弃该删")
+    # 自检下限：受检数掉到个位数说明解析坏了，不能拿"没查到东西"当通过
+    if checked < 5:
+        print(f"  ✗ 受检键仅 {checked} 个，解析疑似失效，判为不通过")
+        return False
+    return not dead
 
 
 def load_pending_removal(path):
@@ -237,6 +325,7 @@ def main():
         example_keys = leaf_paths(f.read())
 
     ok = check_example_vs_code(example_keys, args.source_root, args.resource_root)
+    ok = check_yml_binds_to_code(args.source_root, args.resource_root) and ok
 
     if args.with_nacos:
         nacos_ok, reachable = check_example_vs_nacos(example_keys, args)

@@ -6,6 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -96,6 +98,35 @@ public class PropertyContentRepo {
                 },
                 propertyId, language);
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
+    /**
+     * 批量取指定语言的酒店名（BP2：中文名旁必须并列英文原名）。静态摄取按
+     * (property_id, language) 逐语言建行，英文名就在同一张表的 en-US 行里，
+     * 无须额外调 Content API。
+     *
+     * @return property_id → name；该语言未摄取的酒店不会出现在结果中
+     */
+    public Map<String, String> findNames(List<String> propertyIds, String language) {
+        Map<String, String> names = new HashMap<>();
+        if (propertyIds == null || propertyIds.isEmpty()) {
+            return names;
+        }
+        String placeholders = String.join(",", Collections.nCopies(propertyIds.size(), "?"));
+        Object[] args = new Object[propertyIds.size() + 1];
+        args[0] = language;
+        for (int i = 0; i < propertyIds.size(); i++) {
+            args[i + 1] = propertyIds.get(i);
+        }
+        // 只取小列，不碰 raw_json——那是大 JSON 列，批量拉会拖垮查询
+        jdbcTemplate.query(
+                "SELECT property_id, name FROM expedia_property_content"
+                        + " WHERE language = ? AND active = 1 AND property_id IN (" + placeholders + ")",
+                rs -> {
+                    names.put(rs.getString("property_id"), rs.getString("name"));
+                },
+                args);
+        return names;
     }
 
     private JsonNode parseQuietly(String json) {

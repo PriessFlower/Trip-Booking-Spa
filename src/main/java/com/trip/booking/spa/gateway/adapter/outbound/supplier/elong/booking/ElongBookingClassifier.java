@@ -82,9 +82,24 @@ public final class ElongBookingClassifier {
         SUCCESS,
         /** 业务性拒绝：订单不存在/罚金不一致/状态暂不允许，供应商侧取消未发生 */
         DETERMINISTIC_FAILURE,
+        /**
+         * 我方凭据/配置病：请求被拒于门禁（出口 IP 不在白名单等），供应商侧未处理业务。
+         * 取消确未发生（同 DETERMINISTIC_FAILURE），但成因在我方——须按
+         * FailureKind.AUTH_CONFIG 三纪律处置（不归因供应商、必须告警、修复前重试无效）。
+         */
+        AUTH_CONFIG,
         /** 结果不确定，可能已生效 */
         INDETERMINATE
     }
+
+    /**
+     * 我方配置病白名单，与业务码同样只登记有实证的：
+     * A101010012 访问IP错误——出口 IP 不在艺龙白名单，错误文案自带它看到的 IP
+     * （2026-08 SPA e2e 与 cursor 生产均实证）。签名错、账号停用等码<b>无实证不入册</b>，
+     * 表外一律走 INDETERMINATE 老路。classifyCreate 暂不识别本档：booking 能力尚未
+     * 解耦、无承载成因档的通道，随其解耦补齐。
+     */
+    private static final Set<String> AUTH_CONFIG_FAILURES = Set.of("A101010012");
 
     /**
      * 取消确定失败白名单（官方文档）：
@@ -108,6 +123,9 @@ public final class ElongBookingClassifier {
         String errorCode = StringUtils.trimToEmpty(response.errorCode());
         if (errorCode.startsWith(CANCEL_ALREADY_CANCELLED)) {
             return CancelClassification.SUCCESS;
+        }
+        if (AUTH_CONFIG_FAILURES.stream().anyMatch(errorCode::startsWith)) {
+            return CancelClassification.AUTH_CONFIG;
         }
         if (CANCEL_DETERMINISTIC_FAILURES.stream().anyMatch(errorCode::startsWith)) {
             return CancelClassification.DETERMINISTIC_FAILURE;

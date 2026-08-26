@@ -17,6 +17,8 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.OrderQueryReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PushProductsReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.mapping.CancelMapping;
+import com.trip.booking.spa.gateway.domain.cancellation.CancelResult;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.service.ExpediaGeographyIngestionService;
 import com.trip.booking.spa.gateway.application.booking.BookingSyncService;
@@ -269,13 +271,14 @@ public class SpaController {
             return unsupportedSupplierOperation(cancelReq.getSupplierId(), "cancel");
         }
 
-        CancelRespDTO cancelRespDTO = cancelSyncService.cancel(cancelReq);
+        // 取消已切领域模型：JSON↔领域的翻译收在 CancelMapping（①持有翻译，②③不识 JSON）
+        CancelResult cancelResult = cancelSyncService.cancel(CancelMapping.toCommand(cancelReq));
 
-        if (cancelRespDTO == null) {
+        if (cancelResult == null) {
             return ResponseDTO.error("result is null");
         }
 
-        return ResponseDTO.success(cancelRespDTO);
+        return ResponseDTO.success(CancelMapping.toDto(cancelResult));
     }
 
     /**

@@ -4,7 +4,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.mod
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ExpediaGeoMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.client.ExpediaRegionsClient;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
-import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ThreadPoolUtils;
+import com.trip.booking.spa.platform.concurrent.ThreadPools;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaContinentEnum;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * 阶段3 Geography 档案：国家/城市（州省递归）双语建档，落 country_info / city_info。
  * 流程照抄旧链路 ExpediaStaticInfoServiceImpl.saveCountryInfo / saveCityInfo：
- * 洲际枚举遍历 → Regions 递归 descendants → en+zh 各请求一遍 → 省级 ThreadPoolUtils 并发 + 自旋等待。
+ * 洲际枚举遍历 → Regions 递归 descendants → en+zh 各请求一遍 → 省级共享内容池并发 + 积压等待。
  * 适配点仅：推中台改为写本地还原表；新增洲际过滤参数（测试/分批用）。
  */
 @Slf4j
@@ -30,6 +30,11 @@ public class ExpediaGeographyIngestionService {
 
     private static final String LANG_EN = "en-US";
     private static final String LANG_ZH = "zh-CN";
+
+    /** 内容摄取共享池：同名即同池（三个摄取服务共用），形状=定容+有界队列+满则打回调用者 */
+    static final String CONTENT_POOL_NAME = "expedia-content";
+    private static final java.util.concurrent.ExecutorService CONTENT_POOL =
+            ThreadPools.fixedCallerRuns(CONTENT_POOL_NAME, 20, 1000);
 
     private final ExpediaRegionsClient regionsClient;
     private final ExpediaGeoMapper geoMapper;
@@ -133,16 +138,16 @@ public class ExpediaGeographyIngestionService {
                 String finalNameCn = nameCn;
                 // 补齐旧链路缺失的类型：都会区（曼谷等在此）优先，其次大区
                 for (String vicinity : safe(descendants.getMulti_city_vicinity())) {
-                    ThreadPoolUtils.execute(() ->
+                    CONTENT_POOL.execute(() ->
                             queryCityInfo(vicinity, countryId, en.getName(), finalNameCn, countryId));
                 }
                 for (String region : safe(descendants.getHigh_level_region())) {
-                    ThreadPoolUtils.execute(() ->
+                    CONTENT_POOL.execute(() ->
                             queryCityInfo(region, countryId, en.getName(), finalNameCn, countryId));
                 }
                 if (CollectionUtils.isNotEmpty(descendants.getProvince_state())) {
                     for (String provinceState : descendants.getProvince_state()) {
-                        ThreadPoolUtils.execute(() -> {
+                        CONTENT_POOL.execute(() -> {
                             queryCityInfo(provinceState, countryId, en.getName(), finalNameCn, countryId);
                             log.info("{} 下省份 {} 建档完毕", finalNameCn, provinceState);
                         });
@@ -151,7 +156,7 @@ public class ExpediaGeographyIngestionService {
                 // 旧代码注释保留的分支：部分国家没有省级，城市直挂国家
                 if (CollectionUtils.isNotEmpty(descendants.getCity())) {
                     for (String city : descendants.getCity()) {
-                        ThreadPoolUtils.execute(() ->
+                        CONTENT_POOL.execute(() ->
                                 queryCityInfo(city, countryId, en.getName(), finalNameCn, countryId));
                     }
                 }
@@ -161,7 +166,7 @@ public class ExpediaGeographyIngestionService {
 
     /** 照抄旧 waitIfBacklogged：队列积压超过 10 就等上一个国家跑完 */
     private void waitIfBacklogged() {
-        if (ThreadPoolUtils.getThreadPool().getQueue().size() > 10) {
+        if (ThreadPools.queueSize(CONTENT_POOL_NAME) > 10) {
             try {
                 log.info("等待上一个国家查询完毕");
                 Thread.sleep(20 * 1000L);

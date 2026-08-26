@@ -91,10 +91,10 @@ class DelistByHdelRealDataE2EManual {
             template.opsForHash().putAll(priceKey, new HashMap<>(hash));
             template.expire(priceKey, 1, TimeUnit.DAYS);
             quotes.forEach((field, json) ->
-                    template.opsForValue().set("quote:" + hotelId + ":" + field, json, 3, TimeUnit.DAYS));
+                    template.opsForValue().set("quote:10010:" + hotelId + ":" + field, json, 3, TimeUnit.DAYS));
 
             PriceReq req = PriceReq.builder().checkIn(date).checkout(checkout)
-                    .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).guestType(0).build();
+                    .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).build();
             Supplier sup = Supplier.builder().supplierId(10010).sHotelId(hotelId).build();
 
             // ── A：墓碑在场时的读侧产出 ──

@@ -18,6 +18,9 @@ public enum DropReason {
     /** 缺每日价：逐日价格拆不出来，无法按住期报价 */
     NO_DAY_PRICE,
 
+    /** 缺所查占用的价：rate 在响应里，但 occupancy_pricing 没有本次查询的占用档（Expedia） */
+    NO_OCCUPANCY_PRICING,
+
     // ── CACHE_READ 阶段（缓存读侧组装出报）──
 
     /** 总价为 0：该产品在缓存里的逐日价合计为 0 */

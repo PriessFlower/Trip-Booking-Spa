@@ -62,7 +62,7 @@ class CancelPolicySurvivesCacheTest {
 
     private static PriceReq req() {
         return PriceReq.builder().checkIn(DATE).checkout("2026-09-02")
-                .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).guestType(0).build();
+                .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).build();
     }
 
     /** 可免费取消：入住前 36 小时前退，不扣款 */
@@ -104,10 +104,10 @@ class CancelPolicySurvivesCacheTest {
     void policyComesBackOnRead() {
         String pk = "k".repeat(64);
         Mockito.when(redisUtils.hashMapListAndKey(Mockito.anyList()))
-                .thenReturn(Map.of("price:H1:1:" + DATE,
+                .thenReturn(Map.of("price:10010:H1:1:" + DATE,
                         Map.of(pk, "{\"price\":29317,\"taxes\":0,\"roomPrice\":29317}")));
         // 缓存里的票据载荷带着条款
-        Mockito.when(redisUtils.get("quote:H1:" + pk)).thenReturn(
+        Mockito.when(redisUtils.get("quote:10010:H1:" + pk)).thenReturn(
                 JsonUtils.writeObject2Json(java.util.Map.of(
                         "productId", "易腐票", "productKey", pk,
                         "cancelPolicy", List.of(java.util.Map.of(

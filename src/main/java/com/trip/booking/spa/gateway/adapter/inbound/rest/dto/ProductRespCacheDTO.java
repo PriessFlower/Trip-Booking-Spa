@@ -49,11 +49,8 @@ public class ProductRespCacheDTO {
      */
     private String storePayCurrency;
 
-    /** 报价币种。同上，读侧无法自行重算 */
+    /** 报价币种。同上，读侧无法自行重算。曾并存一个恒空的 currency，2026-08-26 收敛删除 */
     private String currencyType;
-
-    /** 报价币种（对外字段名）。与 {@link #currencyType} 并存是历史契约，不在本次收敛范围 */
-    public String currency;
 
     /**
      * 完整退改条款。

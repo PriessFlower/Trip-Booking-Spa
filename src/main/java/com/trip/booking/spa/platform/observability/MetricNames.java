@@ -46,7 +46,11 @@ public final class MetricNames {
     /** 下载失败 */
     public static final String FILE_ERROR = "error";
 
-    /** 比价链路向某供应商发起的查价。标签 supplier/status */
+    /**
+     * 向某供应商发起的一次实时查价。标签 supplier/status。
+     * 由查价模板统一打（O-4.3，新接一家自动具备），实现方不得自行再打；
+     * 刷价腿不经模板，其三态看 {@code refresh_onsale/empty/failed}。
+     */
     public static final String PRICING_SUPPLIER_QUERY = "pricing_supplier_query";
 
     /** 出价时向档案表问过属性的产品数（覆盖率的分母） */
@@ -138,6 +142,72 @@ public final class MetricNames {
      * 什么都没有（缓存读侧五个 return），「丢在哪」只能靠 grep 和猜（O-4.5）。
      */
     public static final String QUOTE_DROPPED = "quote_dropped";
+
+    /**
+     * 检出一次我方凭据/配置病（FailureKind.AUTH_CONFIG）。标签 supplier。
+     * <b>任何非零都该有人看</b>：这一档病供应商无辜、重试无效，只有人能修——
+     * cursor 的飞猪 session 病因为无处表达，被当"集成死"晾了两个月（2026-06~08-10）。
+     */
+    public static final String SUPPLIER_AUTH_CONFIG = "supplier_auth_config";
+
+    // ── 设施水位（gauge，由 PoolStatsSampler 周期采样；池名/host 是标签不是名字，O-2.1）──
+
+    /** 线程池活跃线程数。标签 pool（{@code ThreadPools} 的注册名） */
+    public static final String THREAD_POOL_ACTIVE = "thread_pool_active";
+
+    /** 线程池当前线程数。标签 pool */
+    public static final String THREAD_POOL_SIZE = "thread_pool_size";
+
+    /** 线程池队列积压。标签 pool */
+    public static final String THREAD_POOL_QUEUE = "thread_pool_queue";
+
+    /** 线程池拒绝一次（抛 {@code RejectedExecutionException} 前记）。标签 pool */
+    public static final String THREAD_POOL_REJECTED = "thread_pool_rejected";
+
+    /**
+     * CallerRuns 背压触发一次：池满、任务打回提交者线程执行。标签 pool。
+     * 这是「摄取在悄悄变慢」的直接信号——不打它，变慢只能靠感觉发现。
+     */
+    public static final String THREAD_POOL_CALLER_RUNS = "thread_pool_caller_runs";
+
+    /** 某 host 连接池已借出连接数。标签 host（按 host 分池后每家一条曲线） */
+    public static final String HTTP_POOL_LEASED = "http_pool_leased";
+
+    /** 某 host 连接池等待借出的线程数。非零即该家池子打满、调用方在排队。标签 host */
+    public static final String HTTP_POOL_PENDING = "http_pool_pending";
+
+    /** 某 host 连接池空闲连接数。标签 host */
+    public static final String HTTP_POOL_AVAILABLE = "http_pool_available";
+
+    /** 某 host 连接池上限。标签 host。与 leased 相除得占用率 */
+    public static final String HTTP_POOL_MAX = "http_pool_max";
+
+    /**
+     * 后台用途在限流闸门内的等待（count + time）。标签 bucket。
+     * 后台被限流是阻塞等待而非抛错（{@code Permits}），此前零指标——桶配小了或漏配，
+     * 表现就是刷价静默挂起，无从与「任务本身慢」区分。
+     */
+    public static final String RATELIMIT_WAIT = "ratelimit_wait";
+
+    /**
+     * 限流键未登记、回落 default-qps 一次。标签 bucket。
+     * 漏配的桶此前静默跑默认额度——default-qps 压到 1 之后漏配从「悄悄超速」变成
+     * 「明显变慢」，这个计数把「明显变慢」进一步变成「指着名字告诉你哪个桶没配」。
+     */
+    public static final String RATELIMIT_DEFAULT_QPS_FALLBACK = "ratelimit_default_qps_fallback";
+
+    /** 报价句柄签发成功。标签 supplier */
+    public static final String OFFER_ISSUED = "offer_issued";
+
+    /**
+     * 句柄取回落空（不存在/已过期/内容坏），即上游拿着陈句柄来下单的直接信号。
+     * TTL 按家收紧（R-2.2 接线）后，这是观察收紧副作用的指标：miss 率涨=TTL 收得过短。
+     * 落空时手里只有句柄没有供应商，故无 supplier 标签。
+     */
+    public static final String OFFER_RESOLVE_MISS = "offer_resolve_miss";
+
+    /** 句柄核销（下单成功，用完即焚） */
+    public static final String OFFER_CONSUMED = "offer_consumed";
 
     private MetricNames() {
     }

@@ -1,8 +1,5 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.cancellation;
 
-import com.trip.booking.spa.platform.ratelimit.CallPurpose;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CancelReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.booking.ElongBookingClassifier;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.booking.ElongBookingClassifier.CancelClassification;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.cancellation.client.CancelOrderAccess;
@@ -15,8 +12,13 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongOrderCancelResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongOrderDetailResponse;
 import com.trip.booking.spa.gateway.application.cancellation.AbstractCancelSyncSupportService;
-import com.trip.booking.spa.gateway.domain.booking.CancelOutcome;
+import com.trip.booking.spa.gateway.domain.cancellation.CancelCommand;
+import com.trip.booking.spa.gateway.domain.cancellation.CancelPenalty;
+import com.trip.booking.spa.gateway.domain.cancellation.CancelResult;
+import com.trip.booking.spa.gateway.domain.shared.Money;
+import com.trip.booking.spa.gateway.domain.supplier.FailureKind;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -30,18 +32,18 @@ import java.math.BigDecimal;
  * 网关的<b>第一个取消实现</b>（此前五端点里 cancel 零实现）。
  *
  * <p>坐标是我方单号：供应商订单号缺失时先按 AffiliateConfirmationId 反查取回——
- * 最需要取消的场景恰是下单结果不确定时，那时上游没有供应商单号（CancelReq javadoc）。
+ * 最需要取消的场景恰是下单结果不确定时，那时上游没有供应商单号（CancelCommand javadoc）。
  *
  * <p>取消<b>刻意不设 booking-enabled 闸</b>：已存在的真单必须永远可撤，
  * 把"能不能撤单"和"能不能下单"绑在一个开关上，止血时会把善后通道一起关掉。
  *
  * <p>PenaltyAmount=0（不校验罚金，有罚金也取消）：取消由上游发起，罚金已在上游
- * 与旅客确认，网关只管执行；罚金金额随响应透出供对账。
+ * 与旅客确认，网关只管执行；罚金以结构化字段随结果透出供对账（艺龙响应单位是元，
+ * 出口一律换分并带币种 CNY——此前拼在中文 message 里、单位元，上游只能正则取）。
  */
 @Slf4j
 @Service("elongCancelSyncService")
-public class ElongCancelSyncServiceImpl
-        extends AbstractCancelSyncSupportService<ElongCancelSyncServiceImpl.CancelOutcomeHolder> {
+public class ElongCancelSyncServiceImpl extends AbstractCancelSyncSupportService {
 
     /** 取消类型取官方枚举文案；渠道单无更细的取消原因来源 */
     private static final String CANCEL_CODE_DEFAULT = "行程变更";
@@ -50,29 +52,30 @@ public class ElongCancelSyncServiceImpl
     private ElongProperties properties;
 
     @Override
-    public CancelOutcomeHolder doCancel(CancelReq req) {
+    protected CancelResult doCancel(CancelCommand command) {
         if (!properties.isConfigured()) {
-            log.error("艺龙取消：凭证未配置,orderId={}", req.getOrderId());
-            return CancelOutcomeHolder.failed(req.getOrderId(), null, "credentials_missing",
-                    "艺龙凭证未配置，供应商侧未发生任何动作");
+            log.error("艺龙取消：凭证未配置,orderId={}", command.orderId());
+            return CancelResult.failed(command.orderId(), null, "credentials_missing",
+                            "艺龙凭证未配置，供应商侧未发生任何动作；修复配置前重试无效")
+                    .withFailureKind(FailureKind.AUTH_CONFIG);
         }
-        Long supplierOrderId = parseLongQuietly(req.getSupplierOrderId());
+        Long supplierOrderId = parseLongQuietly(command.supplierOrderId());
         if (supplierOrderId == null) {
             // 按我方单号反查供应商单号；确证无单即无可撤，确定失败
-            ElongOrderDetailResponse detail = queryQuietly(req.getOrderId());
+            ElongOrderDetailResponse detail = queryQuietly(command.orderId());
             if (detail != null && detail.isSucc() && detail.getResult() != null
                     && detail.getResult().getOrderId() != null) {
                 supplierOrderId = detail.getResult().getOrderId();
                 log.info("艺龙取消：已按我方单号反查到供应商单号,orderId={},sOrderId={}",
-                        req.getOrderId(), supplierOrderId);
+                        command.orderId(), supplierOrderId);
             } else if (detail != null && !detail.isSucc()
                     && StringUtils.trimToEmpty(detail.errorCode()).startsWith("H001054")) {
-                log.info("艺龙取消：供应商确认订单不存在，无可取消,orderId={}", req.getOrderId());
-                return CancelOutcomeHolder.failed(req.getOrderId(), null, "H001054",
+                log.info("艺龙取消：供应商确认订单不存在，无可取消,orderId={}", command.orderId());
+                return CancelResult.failed(command.orderId(), null, "H001054",
                         "供应商确认该订单不存在，无可取消");
             } else {
-                log.warn("艺龙取消：反查供应商单号未取得确定结果,orderId={}", req.getOrderId());
-                return CancelOutcomeHolder.unknown(req.getOrderId(), null, null,
+                log.warn("艺龙取消：反查供应商单号未取得确定结果,orderId={}", command.orderId());
+                return CancelResult.unknown(command.orderId(), null, null,
                         "无法确定供应商订单号，取消未发出，请稍后重试或先查单");
             }
         }
@@ -91,19 +94,30 @@ public class ElongCancelSyncServiceImpl
         ElongOrderCancelResponse data = result == null ? null : result.getData();
         CancelClassification classification = ElongBookingClassifier.classifyCancel(data);
         log.info("艺龙取消：分类结果,orderId={},sOrderId={},classification={},code={}",
-                req.getOrderId(), supplierOrderId, classification, data == null ? null : data.getCode());
+                command.orderId(), supplierOrderId, classification, data == null ? null : data.getCode());
 
+        String sOrderId = String.valueOf(supplierOrderId);
         switch (classification) {
             case SUCCESS:
-                BigDecimal penalty = data.getResult() == null ? null : data.getResult().getPenaltyAmount();
-                log.info("艺龙取消：已受理,orderId={},sOrderId={},罚金={}元", req.getOrderId(), supplierOrderId, penalty);
-                return CancelOutcomeHolder.success(req.getOrderId(), supplierOrderId, penalty);
+                BigDecimal penaltyYuan = data.getResult() == null ? null : data.getResult().getPenaltyAmount();
+                log.info("艺龙取消：已受理,orderId={},sOrderId={},罚金={}元",
+                        command.orderId(), supplierOrderId, penaltyYuan);
+                // 罚金字段缺失 ≠ 罚金为 0：如实申报"无从得知"，上游以订单详情 refundDetail 为准
+                CancelPenalty penalty = penaltyYuan == null ? CancelPenalty.unknown()
+                        : CancelPenalty.fromField(Money.fromYuan(penaltyYuan, "CNY"));
+                return CancelResult.success(command.orderId(), sOrderId, penalty,
+                        "取消已受理（退款以订单详情 refundDetail 为准）");
             case DETERMINISTIC_FAILURE:
-                return CancelOutcomeHolder.failed(req.getOrderId(), supplierOrderId,
-                        data.errorCode(), data.getCode());
+                return CancelResult.failed(command.orderId(), sOrderId, data.errorCode(), data.getCode());
+            case AUTH_CONFIG:
+                // 请求被拒于门禁（如出口 IP 不在白名单），取消确未发生但病在我方——
+                // 错误文案自带艺龙看到的 IP，原样透出便于修白名单
+                return CancelResult.failed(command.orderId(), sOrderId, data.errorCode(),
+                                "我方凭据/配置被艺龙拒绝，取消未发生；修复配置前重试无效：" + data.getCode())
+                        .withFailureKind(FailureKind.AUTH_CONFIG);
             case INDETERMINATE:
             default:
-                return CancelOutcomeHolder.unknown(req.getOrderId(), supplierOrderId,
+                return CancelResult.unknown(command.orderId(), sOrderId,
                         data == null ? null : data.errorCode(),
                         "取消结果不确定，请查单确证");
         }
@@ -122,19 +136,6 @@ public class ElongCancelSyncServiceImpl
         }
     }
 
-    @Override
-    public CancelRespDTO cancelRespConvert(CancelOutcomeHolder holder) {
-        return CancelRespDTO.builder()
-                .outcome(holder.outcome)
-                .orderId(holder.orderId)
-                .sOrderId(holder.sOrderId == null ? null : String.valueOf(holder.sOrderId))
-                .sOrderStatus(holder.outcome == CancelOutcome.SUCCESS ? 0
-                        : holder.outcome == CancelOutcome.FAILED ? 2 : 1)
-                .message(holder.message)
-                .orderDesc(holder.message)
-                .build();
-    }
-
     private static Long parseLongQuietly(String value) {
         if (StringUtils.isBlank(value)) {
             return null;
@@ -143,45 +144,6 @@ public class ElongCancelSyncServiceImpl
             return Long.parseLong(value.trim());
         } catch (NumberFormatException e) {
             return null;
-        }
-    }
-
-    /** 编排结果的中间载体，仅本类使用 */
-    public static class CancelOutcomeHolder {
-        CancelOutcome outcome;
-        String orderId;
-        Long sOrderId;
-        String errorCode;
-        String message;
-
-        static CancelOutcomeHolder success(String orderId, Long sOrderId, BigDecimal penaltyYuan) {
-            CancelOutcomeHolder h = new CancelOutcomeHolder();
-            h.outcome = CancelOutcome.SUCCESS;
-            h.orderId = orderId;
-            h.sOrderId = sOrderId;
-            h.message = penaltyYuan == null ? "取消已受理（退款以订单详情 refundDetail 为准）"
-                    : "取消已受理，违约金 " + penaltyYuan.toPlainString() + " 元（退款以订单详情 refundDetail 为准）";
-            return h;
-        }
-
-        static CancelOutcomeHolder failed(String orderId, Long sOrderId, String code, String message) {
-            CancelOutcomeHolder h = new CancelOutcomeHolder();
-            h.outcome = CancelOutcome.FAILED;
-            h.orderId = orderId;
-            h.sOrderId = sOrderId;
-            h.errorCode = code;
-            h.message = message;
-            return h;
-        }
-
-        static CancelOutcomeHolder unknown(String orderId, Long sOrderId, String code, String message) {
-            CancelOutcomeHolder h = new CancelOutcomeHolder();
-            h.outcome = CancelOutcome.UNKNOWN;
-            h.orderId = orderId;
-            h.sOrderId = sOrderId;
-            h.errorCode = code;
-            h.message = message;
-            return h;
         }
     }
 }

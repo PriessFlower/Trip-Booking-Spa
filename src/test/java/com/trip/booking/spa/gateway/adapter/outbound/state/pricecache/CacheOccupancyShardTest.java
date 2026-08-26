@@ -63,7 +63,7 @@ class CacheOccupancyShardTest {
                 .roomNum(1).adultNum(adults)
                 .childNum(childNum == null ? 0 : childNum)
                 .childAges(ages == null ? List.of() : ages)
-                .guestType(0).build();
+                .build();
     }
 
     private static ProductRespDTO productFor(String occupancy) {
@@ -102,7 +102,7 @@ class CacheOccupancyShardTest {
     void writeShardsByIdentityOccupancy() {
         service.productToCache(List.of(productFor("2")), req(2, 0, List.of()), sup());
 
-        assertTrue(writtenPriceKeys().contains("price:H1:2:" + DATE),
+        assertTrue(writtenPriceKeys().contains("price:10010:H1:2:" + DATE),
                 "实际写入: " + writtenPriceKeys());
     }
 
@@ -111,7 +111,7 @@ class CacheOccupancyShardTest {
     void twoAdultsNeverReadTheOnePersonShard() {
         service.getPrice(req(2, 0, List.of()), Supplier.builder().supplierId(10010).sHotelId("H1").build());
 
-        assertEquals(List.of("price:H1:2:" + DATE), readKeys(), "2 人查询只许读 2 人片");
+        assertEquals(List.of("price:10010:H1:2:" + DATE), readKeys(), "2 人查询只许读 2 人片");
     }
 
     @Test
@@ -119,7 +119,7 @@ class CacheOccupancyShardTest {
     void childAgesFormTheirOwnShard() {
         service.getPrice(req(2, 1, List.of(9)), Supplier.builder().supplierId(10010).sHotelId("H1").build());
 
-        assertEquals(List.of("price:H1:2-9:" + DATE), readKeys());
+        assertEquals(List.of("price:10010:H1:2-9:" + DATE), readKeys());
     }
 
     @Test

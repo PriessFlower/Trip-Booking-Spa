@@ -18,6 +18,4 @@ public class Supplier {
 
     private String sProductId;//供应商产品Id
 
-    private String sCityCode;
-
 }

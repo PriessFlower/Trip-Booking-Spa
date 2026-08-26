@@ -72,9 +72,6 @@ public class CheckPriceReq {
     @com.fasterxml.jackson.annotation.JsonAlias("totalPrice")
     private Integer seenPrice;
 
-    private String planSession;
-
-    private String sCityCode;
 
     private Integer adultCount;
 

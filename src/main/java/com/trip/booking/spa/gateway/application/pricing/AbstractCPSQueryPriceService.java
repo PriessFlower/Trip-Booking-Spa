@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.application.pricing;
 
+import com.trip.booking.spa.platform.concurrent.ThreadPools;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.observability.MetricNames;
 import com.trip.booking.spa.platform.observability.MetricTags;
@@ -172,14 +173,8 @@ public abstract class AbstractCPSQueryPriceService<T extends RefreshTaskRow> {
         // 借入与复位各自计数（§6.2.1）：借入持续不为 0 而复位长期为 0，即是复位失效的信号（issue #95）
         AtomicInteger borrowed = new AtomicInteger();
         AtomicInteger demoted = new AtomicInteger();
-        AtomicInteger seq = new AtomicInteger();
-
-        ExecutorService pool = Executors.newFixedThreadPool(concurrency, r -> {
-            Thread t = new Thread(r, supplier().name().toLowerCase() + "-refresh-p" + priority + "-"
-                    + seq.incrementAndGet());
-            t.setDaemon(true);
-            return t;
-        });
+        ExecutorService pool = ThreadPools.fixed(
+                supplier().name().toLowerCase() + "-refresh-p" + priority, concurrency, true);
         for (T row : list) {
             pool.execute(() -> {
                 try {
