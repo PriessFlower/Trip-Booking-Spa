@@ -34,6 +34,13 @@ public class CheckPriceRespDTO {
      * 佣金
      */
     private Integer brokerage;
+
+    /**
+     * 报价币种（ISO 4217 大写三字码）：salePrice/subPrice/brokerage/priceInfos 共用它，
+     * 与查价响应的同名字段同义。此前验价金额是裸分值——两家在产都报 CNY 时上游猜得对，
+     * USD 供应商（美团/飞猪/喜玩）进来后"这个数是什么币种"必须由本字段回答。
+     */
+    private String currencyType;
     /**
      * 剩余库存
      */

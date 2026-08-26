@@ -67,7 +67,10 @@ public class ProductRespDTO {
      */
     private Integer brokerage;
     /**
-     * 外币币种
+     * 报价币种（ISO 4217 大写三字码）：totalPrice/roomTotalPrice/totalTaxes/priceInfos
+     * 等全部分值金额共用它。<b>本仓的唯一报价币种字段</b>——曾与恒空的 currency 并存
+     * （写方为零、线上恒 null、cursor 的 SpaProductResp 也未声明），2026-08-26 收敛删除。
+     * 到店付另有 {@link #storePayCurrency}（可与报价币种不同，非冗余）。
      */
     private String currencyType;
     /**
@@ -78,10 +81,6 @@ public class ProductRespDTO {
      * 总价
      */
     public Room room;
-    /**
-     * 外币币种
-     */
-    public String currency;
     /**
      * 规则
      */

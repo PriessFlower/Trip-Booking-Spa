@@ -125,6 +125,8 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                 .offerTtlSeconds(offerStore.ttlSecondsOf(SupplierSourceEnum.EXPEDIA.getCode()))
                 .salePrice(inclusiveCents)
                 .subPrice(inclusiveCents)
+                .currencyType(occupancyPricing.getTotals().getInclusive()
+                        .getRequest_currency().getCurrency())
                 .brokerage(calcCommissionCents(occupancyPricing))
                 .build();
     }

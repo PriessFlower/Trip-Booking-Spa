@@ -547,6 +547,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 .offerTtlSeconds(offerStore.ttlSecondsOf(SupplierSourceEnum.ELONG.getCode()))
                 .salePrice(salePriceCents)
                 .subPrice(salePriceCents)
+                .currencyType(plan.getCurrencyCode())
                 .remainRoomNum(restInventory(data))
                 .cancelPolicy(cancelPolicy)
                 .priceInfos(priceInfos)
