@@ -209,6 +209,14 @@ public final class MetricNames {
     /** 句柄核销（下单成功，用完即焚） */
     public static final String OFFER_CONSUMED = "offer_consumed";
 
+    /**
+     * 供应商凭据剩余天数（gauge，可为负=已过期）。标签 supplier/renewal。
+     * 只有申报了会过期的家（{@code CredentialRenewal.HUMAN_ONLY} 等）才出现——
+     * 飞猪 session 90 天且只能人工续，到期靠人脑记必然重演「被当集成死查两个月」。
+     * 告警规则在 Prometheus 侧盯它。
+     */
+    public static final String SUPPLIER_CREDENTIAL_DAYS_LEFT = "supplier_credential_days_left";
+
     private MetricNames() {
     }
 }

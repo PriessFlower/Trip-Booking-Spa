@@ -59,6 +59,9 @@ public final class MetricTags {
     /** 限流桶键（{@code GLOBAL_LIMIT:<供应商>:<接口>[:<用途>]} 全键） */
     public static final String BUCKET = "bucket";
 
+    /** 凭据续期档位，取值只出自 {@code CredentialRenewal.tagValue()} */
+    public static final String RENEWAL = "renewal";
+
     private MetricTags() {
     }
 

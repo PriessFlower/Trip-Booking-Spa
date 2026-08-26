@@ -16,6 +16,8 @@ import java.time.Duration;
  *   <li>目录层：只有 {@link QuoteCodeStability#STABLE} 的真码才许进 hint 列（R-2.3）；
  *       {@link RoomIdStability#STABLE} 之外的供应商不进房型级目录（R-4.3）</li>
  *   <li>OfferStore：易腐令牌的 TTL 以 {@link #tokenTtlCap()} 为上限（R-2.2）</li>
+ *   <li>凭据到期监控：{@link #credentialRenewal()} 为 {@link CredentialRenewal#HUMAN_ONLY}
+ *       的家必须提供 {@link CredentialExpiry} bean，启动即校验（CredentialExpirySampler）</li>
  * </ul>
  *
  * <p>证据写在各常量的 javadoc 里，改申报必须同步改证据。hotel_id 不稳的供应商直接
@@ -33,8 +35,12 @@ public enum SupplierIdentityProfile {
      * 易腐的是验价 href 的 {@code ?token=} query（每次不同）——Expedia 上游
      * 已自行分离身份与令牌。room_id 同场实测稳定，且内容 API 以其为键发布静态
      * 目录（本仓已入库 35.6 万间）。
+     *
+     * <p>凭据：<b>每请求现签</b>（{@code ExpediaUtils} SHA-512(apiKey+secret+ts)），
+     * 无会话无到期。
      */
-    EXPEDIA(SupplierSourceEnum.EXPEDIA, RoomIdStability.STABLE, QuoteCodeStability.STABLE, null),
+    EXPEDIA(SupplierSourceEnum.EXPEDIA, RoomIdStability.STABLE, QuoteCodeStability.STABLE, null,
+            CredentialRenewal.STATELESS),
 
     /**
      * 房型 RoomTypeId：<b>稳定</b>——cursor 全程以其为房型等价判定锚（等价判定与
@@ -47,9 +53,12 @@ public enum SupplierIdentityProfile {
      * 有效期，过期一律凭 productKey 现取现验（R-3.1）。马甲是产品维促销凭证而非
      * 账号维（单账号），键的账号成分即艺龙账户名。TTL 上限取 10 分钟 = 官方有效期
      * 之三分之一（R-2.2 要求短于轮换周期），与 OfferStore 生产 TTL（600s）对齐。
+     *
+     * <p>凭据：<b>每请求现签</b>（{@code ElongSignUtil} 双层 MD5(ts+md5(data+appKey)+secret)），
+     * 无会话无到期。
      */
     ELONG(SupplierSourceEnum.ELONG, RoomIdStability.STABLE, QuoteCodeStability.PERISHABLE,
-            Duration.ofMinutes(10));
+            Duration.ofMinutes(10), CredentialRenewal.STATELESS);
 
     /** 房型 ID 的申报档位 */
     public enum RoomIdStability {
@@ -73,13 +82,16 @@ public enum SupplierIdentityProfile {
     private final RoomIdStability roomId;
     private final QuoteCodeStability quoteCode;
     private final Duration tokenTtlCap;
+    private final CredentialRenewal credentialRenewal;
 
     SupplierIdentityProfile(SupplierSourceEnum supplier, RoomIdStability roomId,
-                            QuoteCodeStability quoteCode, Duration tokenTtlCap) {
+                            QuoteCodeStability quoteCode, Duration tokenTtlCap,
+                            CredentialRenewal credentialRenewal) {
         this.supplier = supplier;
         this.roomId = roomId;
         this.quoteCode = quoteCode;
         this.tokenTtlCap = tokenTtlCap;
+        this.credentialRenewal = credentialRenewal;
     }
 
     /** 按供应商编码取申报；未申报即抛——R-4.1 是接入的前置门，不给默认值 */
@@ -108,6 +120,11 @@ public enum SupplierIdentityProfile {
     /** 该家令牌在 OfferStore 里的 TTL 上限；申报为稳定的家返回 null（不设上限） */
     public Duration tokenTtlCap() {
         return tokenTtlCap;
+    }
+
+    /** 凭据续期档位；{@link CredentialRenewal#HUMAN_ONLY} 的家必须另供 {@link CredentialExpiry} */
+    public CredentialRenewal credentialRenewal() {
+        return credentialRenewal;
     }
 
     /** 是否许进房型级目录（R-4.3 的判定入口） */

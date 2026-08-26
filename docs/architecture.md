@@ -259,6 +259,11 @@ bean 名必须是 `<SupplierSourceEnum.desc><能力后缀>`，否则 ① 路由�
 （`MetricVocabularyArchRulesTest.O45`），漏计构建即红。`pricing_supplier_query`（一次实时
 查价一笔）不用管，查价模板统一打（O-4.3），实现方**不得**自行再打。
 
+**第二步半 · 申报**　`SupplierIdentityProfile` 补该家三行申报（R-4.1，含证据），外加
+凭据续期档位（`CredentialRenewal`：每请求现签 / 可自续 / 只能人工）。申报 `HUMAN_ONLY`
+的家必须同时注册 `CredentialExpiry` bean 供到期时间——启动即校验，缺了拒绝启动；
+剩余天数指标与 14 天告警（`spa.yml` SupplierCredentialExpiringSoon）自动生效。
+
 **第三步 · 定义该家的凭据键名**　参照 `ExpediaOfferCredentials`：把键名集中在一个类里，
 供验价（写入方）与下单（读取方）共同引用，而不是两边各写一个字面量。
 验价时 `offerStore.issue(supplierId, Map.of(键, 值, …))`，下单时 `offer.credential(键)`。
