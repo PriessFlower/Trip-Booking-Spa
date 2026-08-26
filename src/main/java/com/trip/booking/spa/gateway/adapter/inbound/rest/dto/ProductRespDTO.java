@@ -37,9 +37,7 @@ public class ProductRespDTO {
      */
     @com.fasterxml.jackson.annotation.JsonIgnore
     private com.trip.booking.spa.gateway.domain.product.ProductIdentity identity;
-    private String expediaRoomId;//expedia房型id
     public Integer supplierId;
-    public String planSession;
     /**
      * 总价
      */

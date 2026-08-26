@@ -63,7 +63,7 @@ class CacheOccupancyShardTest {
                 .roomNum(1).adultNum(adults)
                 .childNum(childNum == null ? 0 : childNum)
                 .childAges(ages == null ? List.of() : ages)
-                .guestType(0).build();
+                .build();
     }
 
     private static ProductRespDTO productFor(String occupancy) {

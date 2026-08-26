@@ -62,7 +62,7 @@ class CancelPolicySurvivesCacheTest {
 
     private static PriceReq req() {
         return PriceReq.builder().checkIn(DATE).checkout("2026-09-02")
-                .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).guestType(0).build();
+                .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).build();
     }
 
     /** 可免费取消：入住前 36 小时前退，不扣款 */

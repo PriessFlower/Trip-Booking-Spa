@@ -167,7 +167,7 @@ public class ElongCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService<
         // 乘间数（H001188）。2026-08-24 生产 A/B 实测 hotel.detail 不按 NumberOfRooms 过滤可售
         // 集合与单间价；FAQ 337 亦只要求 NumberOfAdults 与 ChildAges 与 detail 一致，未提间数。
         PriceReq request = PriceReq.builder()
-                .adultNum(Integer.parseInt(dimension)).childNum(0).guestType(0)
+                .adultNum(Integer.parseInt(dimension)).childNum(0)
                 .childAges(new ArrayList<>())
                 .checkIn(today.plusDays(row.getDelayCheckIn()).toString())
                 .checkout(today.plusDays(row.getDelayCheckOut()).toString())

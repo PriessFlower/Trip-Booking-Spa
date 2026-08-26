@@ -24,10 +24,6 @@ public class PriceReq {
     private Integer childNum; //儿童数
     @NonNull
     private List<Integer> childAges; //儿童年龄
-    @NonNull
-    private Integer guestType;//宾客类型
-
-    private String salesType;//售卖类型 expedia专用
 
     private String currency;//币种
 

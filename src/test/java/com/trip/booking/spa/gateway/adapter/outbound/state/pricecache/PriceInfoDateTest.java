@@ -54,7 +54,7 @@ class PriceInfoDateTest {
 
     private static PriceReq twoNights(int adults) {
         return PriceReq.builder().checkIn(D1).checkout("2026-09-03")
-                .roomNum(1).adultNum(adults).childNum(0).childAges(List.of()).guestType(0)
+                .roomNum(1).adultNum(adults).childNum(0).childAges(List.of())
                 .build();
     }
 
@@ -97,7 +97,7 @@ class PriceInfoDateTest {
     void multiPartOccupancyStillYieldsTheDate() {
         givenTwoNightsCached("2-9,4");
         PriceReq req = PriceReq.builder().checkIn(D1).checkout("2026-09-03")
-                .roomNum(1).adultNum(2).childNum(2).childAges(List.of(9, 4)).guestType(0).build();
+                .roomNum(1).adultNum(2).childNum(2).childAges(List.of(9, 4)).build();
 
         List<ProductRespDTO> products = service.getPrice(req, sup());
 

@@ -54,7 +54,7 @@ class NoInventoryMarkTest {
 
     private static PriceReq req(int adults) {
         return PriceReq.builder().checkIn(D1).checkout(D2)
-                .roomNum(1).adultNum(adults).childNum(0).childAges(List.of()).guestType(0)
+                .roomNum(1).adultNum(adults).childNum(0).childAges(List.of())
                 .build();
     }
 
@@ -131,7 +131,7 @@ class NoInventoryMarkTest {
     @DisplayName("住期内只要有一天没标记，就不算确定无货")
     void partialMarkIsNotEnough() {
         PriceReq threeNights = PriceReq.builder().checkIn(D1).checkout("2026-09-04")
-                .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).guestType(0)
+                .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
                 .build();
         Mockito.when(redisUtils.hmGet("price:H1:1:" + D1, PriceCacheServiceImpl.NO_INVENTORY_FIELD))
                 .thenReturn("1");

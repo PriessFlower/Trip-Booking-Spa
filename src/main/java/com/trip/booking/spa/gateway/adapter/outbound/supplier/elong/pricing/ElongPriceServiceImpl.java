@@ -761,7 +761,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                     .adultNum(request.getAdultCount())
                     .childNum(request.getChildNum() == null ? 0 : request.getChildNum())
                     .childAges(request.getChildAges() == null ? new ArrayList<>() : request.getChildAges())
-                    .guestType(0)
+                    
                     .build();
             priceReq.setOccupancies(Occupancy.perRoom(priceReq.getRoomNum(), priceReq.getAdultNum(),
                     priceReq.getChildNum(), priceReq.getChildAges()));
@@ -813,7 +813,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                     .roomNum(request.getRoomNum())
                     .adultNum(request.getAdultCount()).childNum(request.getChildNum())
                     .childAges(request.getChildAges() == null ? new ArrayList<>() : request.getChildAges())
-                    .guestType(0)
+                    
                     .build();
             Supplier supplier = Supplier.builder()
                     .supplierId(SupplierSourceEnum.ELONG.getCode())

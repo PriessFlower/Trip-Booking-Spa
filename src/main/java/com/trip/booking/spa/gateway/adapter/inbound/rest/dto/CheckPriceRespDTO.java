@@ -66,10 +66,6 @@ public class CheckPriceRespDTO {
      */
     private Long offerTtlSeconds;
 
-    private List<String> bedTypeCode;
-
-    private String plansId;
-
     /**
      * 验价时点的退改条款，仅 {@link CheckPriceOutcome#BOOKABLE} 时有值。
      *

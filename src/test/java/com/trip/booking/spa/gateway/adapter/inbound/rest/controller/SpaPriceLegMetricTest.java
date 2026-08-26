@@ -57,7 +57,7 @@ class SpaPriceLegMetricTest {
 
     private static PriceReq req() {
         return PriceReq.builder().checkIn("2026-09-01").checkout("2026-09-02")
-                .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).guestType(0)
+                .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
                 .suppliers(List.of(Supplier.builder().supplierId(10010).sHotelId("H1").build()))
                 .build();
     }

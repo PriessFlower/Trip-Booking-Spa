@@ -67,7 +67,7 @@ class QuoteDroppedMetricTest {
 
     private static PriceReq req(String checkout) {
         return PriceReq.builder().checkIn(D1).checkout(checkout)
-                .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).guestType(0)
+                .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
                 .build();
     }
 

@@ -86,7 +86,7 @@ class PriceCacheServiceImplTest {
     private static PriceReq oneNight() {
         // PriceReq 的这些字段带 @NonNull，缺一个就在 build() 抛 NPE；取值与本用例无关
         return PriceReq.builder().checkIn(DATE).checkout("2026-09-02")
-                .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).guestType(0).build();
+                .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).build();
     }
 
     private static ProductRespDTO product(String productId, Integer price) {
