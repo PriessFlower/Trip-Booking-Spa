@@ -167,7 +167,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
             }
             for (String date : dates) {
                 String v = redisUtils.hmGet(
-                        RedisKeyUtils.buildPriceKey(supplier.getSHotelId(), occupancy, date),
+                        RedisKeyUtils.buildPriceKey(supplier.getSupplierId(), supplier.getSHotelId(), occupancy, date),
                         NO_INVENTORY_FIELD);
                 if (StringUtils.isBlank(v)) {
                     return false;
@@ -194,8 +194,8 @@ public class PriceCacheServiceImpl implements PriceCacheService {
                 priceReq.getChildAges());
         List<String> keyList = new ArrayList<>();
         checkList.forEach(c -> {
-            //price:sHotelId:occupancy:yyyy-MM-dd
-            String priceKey = RedisKeyUtils.buildPriceKey(supplier.getSHotelId(), occupancy, c);
+            //price:supplierCode:sHotelId:occupancy:yyyy-MM-dd
+            String priceKey = RedisKeyUtils.buildPriceKey(supplier.getSupplierId(), supplier.getSHotelId(), occupancy, c);
             keyList.add(priceKey);
         });
         //productMap--缓存字段(productKey),List<PriceInfo>
@@ -246,8 +246,8 @@ public class PriceCacheServiceImpl implements PriceCacheService {
                 }
             }
             // 补充产品其他信息。key 是 productKey（见 cacheField），
-            // 票据键随之为 quote:{sHotelId}:{productKey}
-            String priceInfoKey = RedisKeyUtils.buildQuoteKey(supplier.getSHotelId(), key);
+            // 票据键随之为 quote:{supplierCode}:{sHotelId}:{productKey}
+            String priceInfoKey = RedisKeyUtils.buildQuoteKey(supplier.getSupplierId(), supplier.getSHotelId(), key);
             String priceInfoJson = redisUtils.get(priceInfoKey);
             if (StringUtils.isBlank(priceInfoJson)) {
                 // 详情缺席 = 拿不到可下单的票据（productId 只存在于详情里，依 R-2.1 不落库）。
@@ -329,7 +329,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
         }
         Map<String, Map<String, String>> dataMap = new HashMap<>();
         for (String date : DateUtil.getDatesBetween(request.getCheckIn(), request.getCheckout())) {
-            dataMap.put(RedisKeyUtils.buildPriceKey(hotelId, occupancy, date),
+            dataMap.put(RedisKeyUtils.buildPriceKey(supplier.getSupplierId(), hotelId, occupancy, date),
                     Map.of(NO_INVENTORY_FIELD, "1"));
         }
         writeWithTieredTtl(dataMap);
@@ -411,8 +411,11 @@ public class PriceCacheServiceImpl implements PriceCacheService {
 
                 //获取全部日期报价
                 String occupancy = occupancyOf(productRespDTO, request);
+                // 键的供应商成分取报价自己的 supplierId（谁产的报价算谁的），缺失回落请求方
+                int supplierCode = productRespDTO.getSupplierId() != null
+                        ? productRespDTO.getSupplierId() : supplier.getSupplierId();
                 dateSet.forEach(date -> {
-                    String priceKey = RedisKeyUtils.buildPriceKey(productRespDTO.getHotelId(), occupancy, date); // price:hotelId:occupancy:date
+                    String priceKey = RedisKeyUtils.buildPriceKey(supplierCode, productRespDTO.getHotelId(), occupancy, date); // price:supplierCode:hotelId:occupancy:date
                     //key 是产品Id value是价格
                     Map<String, String> mapGet = redisUtils.hashMapGet(priceKey);
                     if (MapUtils.isNotEmpty(mapGet)) {
@@ -430,7 +433,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
                 });
 
                 String field = cacheField(productRespDTO);
-                String priceInfoKey = RedisKeyUtils.buildQuoteKey(productRespDTO.getHotelId(), field);
+                String priceInfoKey = RedisKeyUtils.buildQuoteKey(supplierCode, productRespDTO.getHotelId(), field);
 
                 if (CollectionUtils.isNotEmpty(productRespDTO.getPriceInfos())) {
 
@@ -446,7 +449,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
 
                     // 这个for用来处理变价的逻辑
                     infos.forEach(i -> {
-                        String priceKey = RedisKeyUtils.buildPriceKey(productRespDTO.getHotelId(), occupancy, i.getDate()); // price:hotelId:occupancy:date
+                        String priceKey = RedisKeyUtils.buildPriceKey(supplierCode, productRespDTO.getHotelId(), occupancy, i.getDate()); // price:supplierCode:hotelId:occupancy:date
                         // F-7 异常价拦截：新价相对缓存中的上一轮价暴跌时拒绝写入、保留旧价。
                         // 放在写 dataMap 之前——一旦进了 dataMap 就会被批量写进 Redis，届时错价已对外可见
                         Integer oldCents = cachedPriceCents(priceKey, field);

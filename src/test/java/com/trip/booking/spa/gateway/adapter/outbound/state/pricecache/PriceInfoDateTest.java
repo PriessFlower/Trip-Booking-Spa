@@ -66,8 +66,8 @@ class PriceInfoDateTest {
     private void givenTwoNightsCached(String occupancy) {
         String pk = "a".repeat(64);
         Map<String, Map<String, String>> hashes = new LinkedHashMap<>();
-        hashes.put("price:H1:" + occupancy + ":" + D1, Map.of(pk, "{\"price\":65940,\"taxes\":0,\"roomPrice\":65940}"));
-        hashes.put("price:H1:" + occupancy + ":" + D2, Map.of(pk, "{\"price\":59609,\"taxes\":0,\"roomPrice\":59609}"));
+        hashes.put("price:10010:H1:" + occupancy + ":" + D1, Map.of(pk, "{\"price\":65940,\"taxes\":0,\"roomPrice\":65940}"));
+        hashes.put("price:10010:H1:" + occupancy + ":" + D2, Map.of(pk, "{\"price\":59609,\"taxes\":0,\"roomPrice\":59609}"));
         Mockito.when(redisUtils.hashMapListAndKey(Mockito.anyList())).thenReturn(hashes);
         Mockito.when(redisUtils.get(Mockito.startsWith("quote:")))
                 .thenReturn("{\"productId\":\"易腐票\",\"productKey\":\"" + pk + "\"}");
