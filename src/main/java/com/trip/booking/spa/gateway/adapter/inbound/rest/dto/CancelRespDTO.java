@@ -77,4 +77,12 @@ public class CancelRespDTO {
     /** 供应商原生错误码，判 FAILED 时供辨识（与 BookingRespDTO.supplierErrorCode 同义） */
     private String supplierErrorCode;
 
+    /**
+     * 失败成因档，可空；目前唯一取值 {@code AUTH_CONFIG}——我方凭据/配置病
+     * （session 过期、签名错、出口 IP 不在白名单、必填配置缺失）。
+     * 上游据此<b>不归因供应商、不拉黑、不判无货</b>，等我方修复后再试；
+     * 网关侧已同步告警（[auth-config] 日志 + supplier_auth_config 指标）。
+     */
+    private String failureKind;
+
 }

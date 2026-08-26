@@ -11,6 +11,7 @@ import com.trip.booking.spa.gateway.application.cancellation.AbstractCancelSyncS
 import com.trip.booking.spa.gateway.domain.cancellation.CancelCommand;
 import com.trip.booking.spa.gateway.domain.cancellation.CancelPenalty;
 import com.trip.booking.spa.gateway.domain.cancellation.CancelResult;
+import com.trip.booking.spa.gateway.domain.supplier.FailureKind;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.platform.redis.DistributedRateLimiter;
@@ -66,10 +67,11 @@ public class ExpediaCancelSyncServiceImpl extends AbstractCancelSyncSupportServi
         // 邮箱必须与下单时一致，否则 Expedia 不返回结果；故取同一份配置，不由调用方传入
         String email = bookingContact.getContact().getEmail();
         if (!StringUtils.hasText(email)) {
-            // 配置缺失属我方问题，且重试不会改变——但也不能判 FAILED：
+            // 配置缺失属我方问题（AUTH_CONFIG），且重试不会改变——但也不能判 FAILED：
             // 订单可能好端端存在，只是我们查不到它
             log.error("expedia 取消缺少 booking-contact 邮箱，无法反查, orderId={}", command.orderId());
-            return unknown(command, null, "取消所需的反查邮箱未配置，无法确认订单状态");
+            return unknown(command, null, "取消所需的反查邮箱未配置，无法确认订单状态；修复配置前重试无效")
+                    .withFailureKind(FailureKind.AUTH_CONFIG);
         }
 
         ResponseResult<QueryOrderResponse> lookup = new QueryOrderAccess(

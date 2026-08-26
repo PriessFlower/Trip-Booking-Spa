@@ -16,6 +16,7 @@ import com.trip.booking.spa.gateway.domain.cancellation.CancelCommand;
 import com.trip.booking.spa.gateway.domain.cancellation.CancelPenalty;
 import com.trip.booking.spa.gateway.domain.cancellation.CancelResult;
 import com.trip.booking.spa.gateway.domain.shared.Money;
+import com.trip.booking.spa.gateway.domain.supplier.FailureKind;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.platform.util.JsonUtils;
@@ -55,7 +56,8 @@ public class ElongCancelSyncServiceImpl extends AbstractCancelSyncSupportService
         if (!properties.isConfigured()) {
             log.error("艺龙取消：凭证未配置,orderId={}", command.orderId());
             return CancelResult.failed(command.orderId(), null, "credentials_missing",
-                    "艺龙凭证未配置，供应商侧未发生任何动作");
+                            "艺龙凭证未配置，供应商侧未发生任何动作；修复配置前重试无效")
+                    .withFailureKind(FailureKind.AUTH_CONFIG);
         }
         Long supplierOrderId = parseLongQuietly(command.supplierOrderId());
         if (supplierOrderId == null) {
@@ -107,6 +109,12 @@ public class ElongCancelSyncServiceImpl extends AbstractCancelSyncSupportService
                         "取消已受理（退款以订单详情 refundDetail 为准）");
             case DETERMINISTIC_FAILURE:
                 return CancelResult.failed(command.orderId(), sOrderId, data.errorCode(), data.getCode());
+            case AUTH_CONFIG:
+                // 请求被拒于门禁（如出口 IP 不在白名单），取消确未发生但病在我方——
+                // 错误文案自带艺龙看到的 IP，原样透出便于修白名单
+                return CancelResult.failed(command.orderId(), sOrderId, data.errorCode(),
+                                "我方凭据/配置被艺龙拒绝，取消未发生；修复配置前重试无效：" + data.getCode())
+                        .withFailureKind(FailureKind.AUTH_CONFIG);
             case INDETERMINATE:
             default:
                 return CancelResult.unknown(command.orderId(), sOrderId,

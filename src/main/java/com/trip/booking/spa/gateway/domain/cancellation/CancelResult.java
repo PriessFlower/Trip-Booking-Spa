@@ -1,6 +1,7 @@
 package com.trip.booking.spa.gateway.domain.cancellation;
 
 import com.trip.booking.spa.gateway.domain.booking.CancelOutcome;
+import com.trip.booking.spa.gateway.domain.supplier.FailureKind;
 
 import java.util.Objects;
 
@@ -21,39 +22,49 @@ public final class CancelResult {
     private final CancelPenalty penalty;
     private final String supplierErrorCode;
     private final String message;
+    /** 失败成因档，可空；目前唯一取值 AUTH_CONFIG（我方配置病），纪律见 {@link FailureKind} */
+    private final FailureKind failureKind;
 
     private CancelResult(CancelOutcome outcome, String orderId, String supplierOrderId,
-                         CancelPenalty penalty, String supplierErrorCode, String message) {
+                         CancelPenalty penalty, String supplierErrorCode, String message,
+                         FailureKind failureKind) {
         this.outcome = Objects.requireNonNull(outcome);
         this.orderId = orderId;
         this.supplierOrderId = supplierOrderId;
         this.penalty = Objects.requireNonNull(penalty, "罚金不明请用 CancelPenalty.unknown()，不是 null");
         this.supplierErrorCode = supplierErrorCode;
         this.message = message;
+        this.failureKind = failureKind;
     }
 
     public static CancelResult success(String orderId, String supplierOrderId,
                                        CancelPenalty penalty, String message) {
-        return new CancelResult(CancelOutcome.SUCCESS, orderId, supplierOrderId, penalty, null, message);
+        return new CancelResult(CancelOutcome.SUCCESS, orderId, supplierOrderId, penalty, null, message, null);
     }
 
     /** 确定失败：供应商明确给出业务性拒绝，重试必再失败。须带该家原生错误码供辨识 */
     public static CancelResult failed(String orderId, String supplierOrderId,
                                       String supplierErrorCode, String message) {
         return new CancelResult(CancelOutcome.FAILED, orderId, supplierOrderId,
-                CancelPenalty.unknown(), supplierErrorCode, message);
+                CancelPenalty.unknown(), supplierErrorCode, message, null);
     }
 
     /** 结果不确定：取消可能已生效。message 必须引导上游查单确证 */
     public static CancelResult unknown(String orderId, String supplierOrderId,
                                        String supplierErrorCode, String message) {
         return new CancelResult(CancelOutcome.UNKNOWN, orderId, supplierOrderId,
-                CancelPenalty.unknown(), supplierErrorCode, message);
+                CancelPenalty.unknown(), supplierErrorCode, message, null);
     }
 
     /** 模板兜底用：实现未回填我方单号时补齐，其余照抄 */
     public CancelResult withOrderId(String orderId) {
-        return new CancelResult(outcome, orderId, supplierOrderId, penalty, supplierErrorCode, message);
+        return new CancelResult(outcome, orderId, supplierOrderId, penalty, supplierErrorCode, message,
+                failureKind);
+    }
+
+    /** 标注失败成因档（如 AUTH_CONFIG）。②模板据此告警与埋点，①原样透出 */
+    public CancelResult withFailureKind(FailureKind kind) {
+        return new CancelResult(outcome, orderId, supplierOrderId, penalty, supplierErrorCode, message, kind);
     }
 
     public CancelOutcome outcome() {
@@ -78,5 +89,10 @@ public final class CancelResult {
 
     public String message() {
         return message;
+    }
+
+    /** 可为 null（多数失败并无特殊成因档） */
+    public FailureKind failureKind() {
+        return failureKind;
     }
 }

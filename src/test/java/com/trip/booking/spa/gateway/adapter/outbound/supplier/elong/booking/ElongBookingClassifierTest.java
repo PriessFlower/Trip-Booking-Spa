@@ -72,6 +72,19 @@ class ElongBookingClassifierTest {
         assertEquals(CancelClassification.INDETERMINATE, ElongBookingClassifier.classifyCancel(null));
     }
 
+    /**
+     * A101010012 访问IP错误 = 我方配置病（AUTH_CONFIG），不归因供应商、须告警。
+     * 白名单同样只登记有实证的码：表外的 A 类码（如频控 A201010001 走通道层、
+     * 其余未实证的门禁码）仍走 INDETERMINATE 老路，不猜。
+     */
+    @Test
+    void cancelIpWhitelistRejectionIsAuthConfig() {
+        assertEquals(CancelClassification.AUTH_CONFIG,
+                ElongBookingClassifier.classifyCancel(cancel("A101010012|访问IP错误,当前IP:1.2.3.4", null)));
+        assertEquals(CancelClassification.INDETERMINATE,
+                ElongBookingClassifier.classifyCancel(cancel("A999999999|表外门禁码", null)));
+    }
+
     private static ElongOrderCreateResponse create(String code, Long orderId) {
         ElongOrderCreateResponse resp = new ElongOrderCreateResponse();
         resp.setCode(code);

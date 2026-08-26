@@ -139,6 +139,13 @@ public final class MetricNames {
      */
     public static final String QUOTE_DROPPED = "quote_dropped";
 
+    /**
+     * 检出一次我方凭据/配置病（FailureKind.AUTH_CONFIG）。标签 supplier。
+     * <b>任何非零都该有人看</b>：这一档病供应商无辜、重试无效，只有人能修——
+     * cursor 的飞猪 session 病因为无处表达，被当"集成死"晾了两个月（2026-06~08-10）。
+     */
+    public static final String SUPPLIER_AUTH_CONFIG = "supplier_auth_config";
+
     private MetricNames() {
     }
 }

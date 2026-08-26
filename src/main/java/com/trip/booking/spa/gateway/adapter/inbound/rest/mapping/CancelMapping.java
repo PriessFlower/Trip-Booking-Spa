@@ -42,6 +42,7 @@ public final class CancelMapping {
                 .cancelFeeCurrency(penalty.amount() == null ? null : penalty.amount().currency())
                 .penaltySource(penalty.source().name())
                 .supplierErrorCode(result.supplierErrorCode())
+                .failureKind(result.failureKind() == null ? null : result.failureKind().name())
                 .build();
     }
 

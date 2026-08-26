@@ -7,6 +7,7 @@ import com.trip.booking.spa.gateway.domain.cancellation.CancelCommand;
 import com.trip.booking.spa.gateway.domain.cancellation.CancelPenalty;
 import com.trip.booking.spa.gateway.domain.cancellation.CancelResult;
 import com.trip.booking.spa.gateway.domain.shared.Money;
+import com.trip.booking.spa.gateway.domain.supplier.FailureKind;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -83,5 +84,15 @@ class CancelMappingTest {
     void outcomePassesThroughUntouched() {
         assertEquals(CancelOutcome.SUCCESS, CancelMapping.toDto(CancelResult.success(
                 "TB1", null, CancelPenalty.unknown(), null)).getOutcome());
+    }
+
+    /** 成因档透出：AUTH_CONFIG 让上游知道"病在我方"，勿归因供应商；无成因时字段为空 */
+    @Test
+    void failureKindSurvivesTranslation() {
+        assertEquals("AUTH_CONFIG", CancelMapping.toDto(
+                CancelResult.failed("TB1", null, "A101010012", "IP 不在白名单")
+                        .withFailureKind(FailureKind.AUTH_CONFIG)).getFailureKind());
+        assertNull(CancelMapping.toDto(
+                CancelResult.failed("TB1", null, "H001054", "订单不存在")).getFailureKind());
     }
 }
