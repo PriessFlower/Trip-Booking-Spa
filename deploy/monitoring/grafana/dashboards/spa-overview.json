@@ -8,7 +8,7 @@
   ],
   "timezone": "Asia/Shanghai",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "editable": true,
   "refresh": "1m",
   "time": {
@@ -1876,6 +1876,439 @@
           "refId": "A",
           "expr": "sum by (supplier, source) (rate(spa_price_quoted_count_total{job=\"trip-booking-spa\"}[10m]))",
           "legendFormat": "{{supplier}} {{source}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 33,
+      "type": "row",
+      "title": "设施水位（线程池 / 连接池 / 限流 / 票据）",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 99
+      },
+      "collapsed": false
+    },
+    {
+      "id": 34,
+      "type": "timeseries",
+      "title": "业务线程池：活跃 / 积压",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 100
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "thread_pool_active_value{job=\"trip-booking-spa\"}",
+          "legendFormat": "{{pool}} 活跃",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "B",
+          "expr": "thread_pool_queue_value{job=\"trip-booking-spa\"}",
+          "legendFormat": "{{pool}} 积压",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 35,
+      "type": "timeseries",
+      "title": "线程池拒绝 / CallerRuns 背压",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 100
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (pool) (rate(thread_pool_rejected_count_total{job=\"trip-booking-spa\"}[5m]))",
+          "legendFormat": "{{pool}} 拒绝",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "B",
+          "expr": "sum by (pool) (rate(thread_pool_caller_runs_count_total{job=\"trip-booking-spa\"}[5m]))",
+          "legendFormat": "{{pool}} 背压(打回提交者)",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 36,
+      "type": "timeseries",
+      "title": "供应商连接池（按 host）：借出 / 排队 / 上限",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 108
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "http_pool_leased_value{job=\"trip-booking-spa\"}",
+          "legendFormat": "{{host}} 借出",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "B",
+          "expr": "http_pool_pending_value{job=\"trip-booking-spa\"}",
+          "legendFormat": "{{host}} 排队",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "C",
+          "expr": "http_pool_max_value{job=\"trip-booking-spa\"}",
+          "legendFormat": "{{host}} 上限",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 37,
+      "type": "timeseries",
+      "title": "限流闸门等待均值（后台用途）",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 108
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (bucket) (rate(ratelimit_wait_time_sum{job=\"trip-booking-spa\"}[5m])) / sum by (bucket) (rate(ratelimit_wait_time_count{job=\"trip-booking-spa\"}[5m]))",
+          "legendFormat": "{{bucket}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 38,
+      "type": "stat",
+      "title": "default-qps 兜底命中（非零=有桶漏配）",
+      "description": "限流键未登记、回落默认额度的累计次数。理想恒为空/零；一旦有值，按 bucket 标签指名去 Nacos ratelimit.qps 补键。",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 116
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum(ratelimit_default_qps_fallback_count_total{job=\"trip-booking-spa\"}) or on() vector(0)",
+          "legendFormat": "兜底命中",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 39,
+      "type": "timeseries",
+      "title": "报价句柄：签发 / 取回落空 / 核销",
+      "gridPos": {
+        "h": 8,
+        "w": 18,
+        "x": 6,
+        "y": 116
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "rate(offer_issued_count_total{job=\"trip-booking-spa\"}[5m])",
+          "legendFormat": "{{supplier}} 签发",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "B",
+          "expr": "rate(offer_resolve_miss_count_total{job=\"trip-booking-spa\"}[5m])",
+          "legendFormat": "取回落空(陈句柄)",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "C",
+          "expr": "rate(offer_consumed_count_total{job=\"trip-booking-spa\"}[5m])",
+          "legendFormat": "核销",
           "editorMode": "code",
           "range": true
         }
