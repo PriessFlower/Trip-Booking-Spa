@@ -100,10 +100,10 @@ EPS `payments.type=affiliate_collect` = **我方代收款**，支付链路在上
 
 | 级别 | 事项 | 状态 |
 |---|---|---|
-| P0 | 查单接口接出；`OrderQueryReq.supplierOrderId` 改可选（我方单号足够反查） | 待做 |
-| P1 | `offerId` 取代 `prebookToken`；收敛 `plansId`／`sProductId` 冗余身份字段 | 待做 |
+| P0 | 查单接口接出；`OrderQueryReq.supplierOrderId` 改可选（我方单号足够反查） | ✅ 已做（2026-08-26 对照代码核实：`supplierOrderId` 已可选，`expediaOrderQuerySyncService` 在册） |
+| P1 | `offerId` 取代 `prebookToken`；收敛 `plansId`／`sProductId` 冗余身份字段 | 前半已做（全仓无 `prebookToken`）；`sProductId` 仍是验价主检索键，收敛待做 |
 | P2 | 占用统一为结构化 per-room；删除未使用却标 `@NonNull` 的死字段 | 待做 |
-| P3 | 取消（含 `cancelFee` + `currency`；政策缺失时报 `UNKNOWN` 而非"可免费取消"） | 待做 |
+| P3 | 取消（含 `cancelFee` + `currency`；政策缺失时报 `UNKNOWN` 而非"可免费取消"） | ✅ 已做（2026-08-26）：`CancelRespDTO` 增 `cancelFee`（分）+ `cancelFeeCurrency` + `penaltySource{FIELD/POLICY_DERIVED/NONE}`，NONE 显式区别于 0；罚金不再拼中文 message。取消同时是②层解耦试点：能力接口改吃领域模型（`CancelCommand`/`CancelResult`），JSON 翻译收口 `CancelMapping`，方向由 `CancellationLayerBoundaryTest` 钉住 |
 | — | 透出 `room_id` 与结构化房型属性（B8） | 待做 |
 
 ### P0 为何列为最高
