@@ -14,11 +14,17 @@ import java.util.Map;
  * 10010，遗留编码零行，故 {@link #getEnum(int)} 不会因此返回 null。
  *
  * <p>{@code code} 是持久化编码（落库、跨系统传递），{@link #name()} 是观测标签值
- * （docs/observability.md O-2.3：合法值只有 ELONG 与 EXPEDIA）。
+ * （docs/observability.md O-2.3：合法值只有本枚举各 name）。
+ *
+ * <p>编码顺延本仓自己的体系（10005/10010/10015…），<b>不沿用 cursor 的 codeInt</b>——
+ * 那边 huizhiB2c 与 tourmind 撞号（都是 10），且编码曾漂移（meituan 6→53）。
+ * 两系统间的对应关系由上游在调用时映射，不进本枚举。
  */
 public enum SupplierSourceEnum {
     EXPEDIA(10005, "expedia"),
     ELONG(10010, "elong"),
+    /** 接入中（2026-08-26 开工）：能力矩阵登记与放量以实现落地为准，编码先行是建档/缓存键需要 */
+    FLIGGY(10015, "fliggy"),
     ;
 
     SupplierSourceEnum(int code, String desc) {

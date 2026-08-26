@@ -18,6 +18,10 @@ public interface CredentialExpiry {
     /** 哪家的凭据 */
     SupplierSourceEnum supplier();
 
-    /** 到期时刻，非空——不知道到期时间的实现是没有意义的，宁可不注册 */
+    /**
+     * 到期时刻。<b>null = 授权信息尚未配置</b>（接入期的正常态）：采样器跳过并打
+     * 告警日志，不出指标——绝不能用假到期时间出数，假数比没数更糟。
+     * 配好授权日期后指标自动出现，接入验收清单以「指标出数」为准。
+     */
     Instant expiresAt();
 }

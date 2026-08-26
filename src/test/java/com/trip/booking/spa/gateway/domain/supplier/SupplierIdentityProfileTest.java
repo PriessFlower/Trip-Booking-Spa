@@ -58,14 +58,18 @@ class SupplierIdentityProfileTest {
         assertTrue(SupplierIdentityProfile.ELONG.catalogEligibleAtRoomLevel());
     }
 
-    /** 凭据续期档位是申报的一部分：每家必填。现网两家均每请求现签（证据见各常量 javadoc） */
+    /**
+     * 凭据续期档位是申报的一部分：每家必填。逐家断言而不是全量同值——飞猪是唯一的
+     * HUMAN_ONLY（TOP OAuth 90 天人工续），它的 CredentialExpiry 供给由启动校验兜底。
+     */
     @Test
     void everySupplierDeclaresCredentialRenewal() {
         for (SupplierIdentityProfile profile : SupplierIdentityProfile.values()) {
             assertNotNull(profile.credentialRenewal(), profile + " 未申报凭据续期档位");
-            assertEquals(CredentialRenewal.STATELESS, profile.credentialRenewal(),
-                    profile + " 若不再是每请求现签，须同步补 CredentialExpiry 供给与本断言");
         }
+        assertEquals(CredentialRenewal.STATELESS, SupplierIdentityProfile.EXPEDIA.credentialRenewal());
+        assertEquals(CredentialRenewal.STATELESS, SupplierIdentityProfile.ELONG.credentialRenewal());
+        assertEquals(CredentialRenewal.HUMAN_ONLY, SupplierIdentityProfile.FLIGGY.credentialRenewal());
     }
 
     /** 稳定名单只有拿得出证据的那家：Expedia（沙箱实测）。艺龙马甲有官方 30 分钟时效，按易腐 */

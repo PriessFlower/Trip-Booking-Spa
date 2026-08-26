@@ -29,6 +29,16 @@ supplier:
     url-host: ${ELONG_API_HOST:https://api-test.elong.com/rest}
     version: "1.62"
 
+  fliggy:
+    app-key: ${FLIGGY_APP_KEY:}
+    secret: ${FLIGGY_SECRET:}
+    session: ${FLIGGY_SESSION:}
+    # 唯一活着的 TOP 网关(gw.api 已死,docs/fliggy/distribution-api.md §1);兜底即生产值,可覆盖以备再迁移
+    url-host: ${FLIGGY_API_HOST:https://eco.taobao.com/router/rest}
+    distributor: ${FLIGGY_DISTRIBUTOR:}
+    # session 上次人工授权日期(yyyy-MM-dd)。重授权后必须同步更新,否则到期监控失真
+    session-authorized-at: ${FLIGGY_SESSION_AUTHORIZED_AT:}
+
 elong:
 
   booking-enabled: false

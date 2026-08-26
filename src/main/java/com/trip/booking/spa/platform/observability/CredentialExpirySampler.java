@@ -74,6 +74,13 @@ public class CredentialExpirySampler {
     @Scheduled(initialDelay = 10_000, fixedDelay = 3_600_000)
     public void sample() {
         expiries.forEach(expiry -> {
+            if (expiry.expiresAt() == null) {
+                // 授权信息未配置（接入期正常态）：跳过不出指标——假到期时间比没数更糟。
+                // 日志保持可见，接入验收以「指标出数」为准
+                log.warn("[credential] 供应商 {} 已申报凭据会过期，但授权日期未配置，"
+                        + "到期监控暂无数据来源", expiry.supplier());
+                return;
+            }
             SupplierIdentityProfile profile = SupplierIdentityProfile.forCode(expiry.supplier().getCode());
             long daysLeft = Duration.between(clock.instant(), expiry.expiresAt()).toDays();
             Map<String, Object> tags = MetricTags.of(expiry.supplier());
