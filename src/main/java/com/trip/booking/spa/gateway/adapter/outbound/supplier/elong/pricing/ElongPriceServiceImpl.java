@@ -543,7 +543,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         return CheckPriceRespDTO.builder()
                 .outcome(CheckPriceOutcome.BOOKABLE)
                 .offerId(offerId)
-                .offerTtlSeconds(offerStore.getTtlSeconds())
+                .offerTtlSeconds(offerStore.ttlSecondsOf(SupplierSourceEnum.ELONG.getCode()))
                 .salePrice(salePriceCents)
                 .subPrice(salePriceCents)
                 .remainRoomNum(restInventory(data))

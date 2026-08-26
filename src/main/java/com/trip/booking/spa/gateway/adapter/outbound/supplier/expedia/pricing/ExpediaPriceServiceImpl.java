@@ -121,7 +121,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         return CheckPriceRespDTO.builder()
                 .outcome(CheckPriceOutcome.BOOKABLE)
                 .offerId(offerId)
-                .offerTtlSeconds(offerStore.getTtlSeconds())
+                .offerTtlSeconds(offerStore.ttlSecondsOf(SupplierSourceEnum.EXPEDIA.getCode()))
                 .salePrice(inclusiveCents)
                 .subPrice(inclusiveCents)
                 .brokerage(calcCommissionCents(occupancyPricing))

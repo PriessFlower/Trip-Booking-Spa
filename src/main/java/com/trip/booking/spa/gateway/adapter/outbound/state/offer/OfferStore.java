@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.offer;
 
+import com.trip.booking.spa.gateway.domain.supplier.SupplierIdentityProfile;
 import com.trip.booking.spa.platform.redis.RedisUtils;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
 
@@ -31,10 +33,12 @@ import java.util.Map;
  *
  * <p><b>过期语义</b>：句柄的存活时间必须短于供应商凭据本身的有效期，否则会取回一个
  * 已失效的凭据去下单。取不到时属确定性失败（供应商侧什么都没发生），上游重新验价即可，
- * 不可判为「结果不确定」。
+ * 不可判为「结果不确定」。各家凭据的有效期不同，故实际 TTL 取全局配置与该家
+ * {@link SupplierIdentityProfile#tokenTtlCap()} 之严者，见 {@link #ttlSecondsOf(int)}。
  *
  * <p><b>本类对供应商无偏</b>：不解释 {@link Offer#getCredentials()} 里的任何键，
- * 也不假设凭据只有一项。后续把其余供应商迁入时无需改动本类。
+ * 也不假设凭据只有一项。按家取 TTL 上限读的是各家自己的腐性申报，不是凭据内容——
+ * 后续把其余供应商迁入时无需改动本类。
  *
  * @see Offer 存放的内容，以及为什么凭据是键值对
  */
@@ -54,7 +58,8 @@ public class OfferStore {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     /**
-     * 句柄存活秒数。权威取值在 Nacos，此处仅为兜底。
+     * 句柄存活秒数的<b>全局上限</b>，各家实际取值再由腐性申报收紧（{@link #ttlSecondsOf(int)}）。
+     * 权威取值在 Nacos，此处仅为兜底。
      *
      * <p>兜底取 300 而非生产的 600：按 §3.3.3，兜底默认值必须取安全侧，禁止以生产
      * 实际值充当。此处两个方向的代价并不对称——过短只是让上游多验一次价，过长则会
@@ -82,19 +87,20 @@ public class OfferStore {
             log.error("签发报价句柄失败：供应商或凭据为空, supplierId={}", supplierId);
             return null;
         }
+        long effectiveTtl = ttlSecondsOf(supplierId);
         String offerId = OFFER_ID_PREFIX + Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(randomBytes());
         Offer offer = Offer.builder()
                 .supplierId(supplierId)
                 .credentials(credentials)
-                .expiresAt(System.currentTimeMillis() + ttlSeconds * 1000L)
+                .expiresAt(System.currentTimeMillis() + effectiveTtl * 1000L)
                 .build();
-        if (!redisUtils.setex(REDIS_KEY_PREFIX + offerId, JsonUtils.writeObject2Json(offer), ttlSeconds)) {
+        if (!redisUtils.setex(REDIS_KEY_PREFIX + offerId, JsonUtils.writeObject2Json(offer), effectiveTtl)) {
             log.error("签发报价句柄失败：写入缓存未成功, supplierId={}, offerId={}", supplierId, offerId);
             return null;
         }
         log.info("已签发报价句柄 supplierId={}, offerId={}, ttlSeconds={}, credentialKeys={}",
-                supplierId, offerId, ttlSeconds, credentials.keySet());
+                supplierId, offerId, effectiveTtl, credentials.keySet());
         return offerId;
     }
 
@@ -155,9 +161,22 @@ public class OfferStore {
         }
     }
 
-    /** 供调用方回报给上游，使上游得知该报价还能撑多久 */
-    public long getTtlSeconds() {
-        return ttlSeconds;
+    /**
+     * 该家句柄的实际存活秒数：全局配置与该家腐性申报的 TTL 上限<b>取严</b>。
+     *
+     * <p>供调用方回报给上游（{@code offerTtlSeconds}），也是签发时真正写进 Redis 的值——
+     * 两者必须同源，否则会出现「存 300 却告诉上游 600」，上游据此判断该直接下单
+     * 还是重新验价，就会在句柄已死的那段时间里去下单。
+     *
+     * <p>取严的方向是刻意的：申报上限来自供应商官方的凭据有效期（如艺龙马甲 30 分钟，
+     * 申报取其三分之一），全局配置调大不应突破它。cursor 的教训是下单复用了验价缓存里
+     * 的死马甲，2026-07-19 隔时重放验价 45/47 全灭。
+     *
+     * @param supplierId 供应商编码；未做腐性申报即抛，接入前置门见 {@link SupplierIdentityProfile#forCode(int)}
+     */
+    public long ttlSecondsOf(int supplierId) {
+        Duration cap = SupplierIdentityProfile.forCode(supplierId).tokenTtlCap();
+        return cap == null ? ttlSeconds : Math.min(ttlSeconds, cap.getSeconds());
     }
 
     private static byte[] randomBytes() {
