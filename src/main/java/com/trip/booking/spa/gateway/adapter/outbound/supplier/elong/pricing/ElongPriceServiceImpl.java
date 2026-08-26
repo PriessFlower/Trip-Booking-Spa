@@ -17,6 +17,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.content.ElongCatalogService;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
+import com.trip.booking.spa.gateway.domain.shared.Money;
 import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.checkprice.client.DataValidateAccess;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing.client.HotelDetailAccess;
@@ -505,7 +506,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         // 回落值 declaredTotalYuan 在组装时已乘过
         int salePriceCents = validatedPriceCents(data, dayPrices.size())
                 .map(perRoomCents -> perRoomCents * rooms)
-                .orElse(declaredTotalYuan.multiply(BigDecimal.valueOf(100)).intValue());
+                .orElse(Money.toCents(declaredTotalYuan));
         Map<String, String> credentials = new HashMap<>();
         credentials.put(ElongOfferCredentials.HOTEL_ID, hotelId);
         credentials.put(ElongOfferCredentials.HOTEL_CODE, plan.getHotelCode());
@@ -698,7 +699,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             if (!night.hasNonNull("Rate") || !night.hasNonNull("Date")) {
                 return Optional.empty();
             }
-            int cents = night.get("Rate").decimalValue().multiply(BigDecimal.valueOf(100)).intValue();
+            int cents = Money.toCents(night.get("Rate").decimalValue());
             String date = StringUtils.substringBefore(night.get("Date").asText(), "T");
             priceInfos.add(PriceInfo.builder().date(date).price(cents).roomPrice(cents).taxes(0).build());
         }
@@ -1037,23 +1038,19 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     static List<PriceInfo> buildPriceInfos(List<ElongDataValidateRequest.DayPrice> dayPrices) {
         List<PriceInfo> priceInfos = new ArrayList<>();
         for (ElongDataValidateRequest.DayPrice dayPrice : dayPrices) {
-            int cents = toCents(dayPrice.getPrice());
-            int roomCents = toCents(dayPrice.getMinRate());
+            int cents = Money.toCents(dayPrice.getPrice());
+            int roomCents = Money.toCents(dayPrice.getMinRate());
             priceInfos.add(PriceInfo.builder().date(dayPrice.getDate())
                     .price(cents).roomPrice(roomCents).taxes(cents - roomCents).build());
         }
         return priceInfos;
     }
 
-    private static int toCents(BigDecimal yuan) {
-        return yuan.multiply(BigDecimal.valueOf(100)).intValue();
-    }
-
     /** 税前房费合计（分）：逐日 MinRate 之和，供 roomTotalPrice 用 */
     private static int sumRoomCents(List<ElongDataValidateRequest.DayPrice> dayPrices) {
         int sum = 0;
         for (ElongDataValidateRequest.DayPrice dayPrice : dayPrices) {
-            sum += toCents(dayPrice.getMinRate());
+            sum += Money.toCents(dayPrice.getMinRate());
         }
         return sum;
     }
@@ -1067,7 +1064,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     }
 
     private static int sumCents(List<ElongDataValidateRequest.DayPrice> dayPrices) {
-        return sumYuan(dayPrices).multiply(BigDecimal.valueOf(100)).intValue();
+        return Money.toCents(sumYuan(dayPrices));
     }
 
     /** 验后价：interValidateInfo.ratePlanInfo.RateNightlyRateList 逐日 Rate 求和（元→分），与住期对不齐即放弃 */
@@ -1084,7 +1081,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             }
             sum = sum.add(night.get("Rate").decimalValue());
         }
-        return Optional.of(sum.multiply(BigDecimal.valueOf(100)).intValue());
+        return Optional.of(Money.toCents(sum));
     }
 
     private static Integer restInventory(ElongDataValidateResponse data) {

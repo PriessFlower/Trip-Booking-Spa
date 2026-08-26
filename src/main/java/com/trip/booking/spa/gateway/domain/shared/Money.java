@@ -35,14 +35,25 @@ public final class Money {
     }
 
     /**
-     * 元 → 分。仓里此前有 3 个私有实现 + 17 处内联做这件事，且舍入语义不一致
-     * （一处 ROUND_DOWN、其余 intValue() 截断）。统一为 HALF_UP：供应商报价保留到分，
-     * 正常输入不触发舍入；真出现半分时四舍五入比静默截断更不意外。
+     * 元 → 分。仓里此前有 3 个私有实现 + 17 处内联做这件事。统一为 HALF_UP：
+     * 供应商报价保留到分，正常输入不触发舍入（旧实现全部向零截断，对两位小数输入
+     * 与 HALF_UP 无差）；真出现半分时四舍五入比静默截断更不意外。
      */
     public static Money fromYuan(BigDecimal yuan, String currency) {
         Objects.requireNonNull(yuan, "金额为空时应表达为「无该项金额」，不是 0 也不是 null Money");
-        return ofCents(yuan.multiply(BigDecimal.valueOf(100))
-                .setScale(0, RoundingMode.HALF_UP).longValueExact(), currency);
+        return ofCents(toCents(yuan), currency);
+    }
+
+    /**
+     * 大单位 → 分（×100，HALF_UP，越界抛出而非静默回绕）。
+     *
+     * <p>本方法只统一倍数与舍入，<b>不承载币种</b>——币种语义由调用方的字段负责
+     * （USD 的"分"是 cent、CNY 是分，倍数一致）。契约字段仍是裸 Integer 分值的存量
+     * 场景用它；新领域模型一律用带币种的 {@link #fromYuan}/{@link #ofCents}。
+     */
+    public static int toCents(BigDecimal majorUnits) {
+        return majorUnits.multiply(BigDecimal.valueOf(100))
+                .setScale(0, RoundingMode.HALF_UP).intValueExact();
     }
 
     public long amountCents() {

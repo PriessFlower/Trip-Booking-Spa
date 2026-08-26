@@ -9,6 +9,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfo;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductInfo;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Room;
+import com.trip.booking.spa.gateway.domain.shared.Money;
 import com.trip.booking.spa.gateway.domain.product.RefundType;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
@@ -116,8 +117,8 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             // 句柄签发不成属我方原因，重试可能成功
             return outcome(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
         }
-        int inclusiveCents = new BigDecimal(occupancyPricing.getTotals().getInclusive()
-                .getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue();
+        int inclusiveCents = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getInclusive()
+                .getRequest_currency().getValue()));
         return CheckPriceRespDTO.builder()
                 .outcome(CheckPriceOutcome.BOOKABLE)
                 .offerId(offerId)
@@ -137,8 +138,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                 || totals.getMarketing_fee().getRequest_currency() == null) {
             return 0;
         }
-        return new BigDecimal(totals.getMarketing_fee().getRequest_currency().getValue())
-                .multiply(new BigDecimal("100")).setScale(0, BigDecimal.ROUND_DOWN).intValue();
+        return Money.toCents(new BigDecimal(totals.getMarketing_fee().getRequest_currency().getValue()));
     }
 
     @Resource
@@ -287,8 +287,8 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             QueryPriceResponse.Occupancy_pricing occupancyPricing = rate.getOccupancy_pricing().get(request.getOccupancies().get(0));
             List<QueryPriceResponse.CancelPolicy> cancelPolicies = rate.getCancel_penalties();
             int sumCommission = calcCommissionCents(occupancyPricing);
-            int totalPrice = new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue();
-            int roomTotalPrice = new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue();
+            int totalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()));
+            int roomTotalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()));
             Meal meal = productKeyDeriver.convertMeal(request.getAdultNum(), rate.getAmenities());
             List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) : productKeyDeriver.convertCancelPolicy(request.getCheckIn(), cancelPolicies);
             // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍
@@ -303,7 +303,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         Integer stayPrice = 0;
         if (CollectionUtils.isNotEmpty(stayList)) {
             for (QueryPriceResponse.Stay stay : stayList) {
-                stayPrice += new BigDecimal(stay.getValue()).multiply(new BigDecimal("100")).intValue();
+                stayPrice += Money.toCents(new BigDecimal(stay.getValue()));
             }
         }
         return stayPrice;
@@ -350,7 +350,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                     taxes = taxes.add(new BigDecimal(nightly.getValue()));
                 }
             }
-            PriceInfo priceInfo = PriceInfo.builder().date(DateUtil.getFutureDay(checkIn, i)).price(sumPrice.multiply(BigDecimal.valueOf(100)).intValue() - commission).roomPrice(roomPrice.multiply(BigDecimal.valueOf(100)).intValue() - commission).taxes(taxes.multiply(BigDecimal.valueOf(100)).intValue()).build();
+            PriceInfo priceInfo = PriceInfo.builder().date(DateUtil.getFutureDay(checkIn, i)).price(Money.toCents(sumPrice) - commission).roomPrice(Money.toCents(roomPrice) - commission).taxes(Money.toCents(taxes)).build();
             priceInfos.add(priceInfo);
         }
         return priceInfos;
@@ -398,14 +398,14 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                         }
                         QueryPriceResponse.Occupancy_pricing occupancyPricing = checkPriceResult.getData().getOccupancy_pricing().get(request.getOccupancies().get(0));
                         int sumCommission = calcCommissionCents(occupancyPricing);
-                        int totalPrice = new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue();
-                        int roomTotalPrice = new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue();
+                        int totalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()));
+                        int roomTotalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()));
                         List<QueryPriceResponse.CancelPolicy> cancelPolicies = rate.getCancel_penalties();
                         Meal meal = productKeyDeriver.convertMeal(request.getAdultNum(), rate.getAmenities());
                         List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) : productKeyDeriver.convertCancelPolicy(request.getCheckIn(), cancelPolicies);
                         // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍
                         ProductIdentity identity = productKeyDeriver.deriveIdentity(hotelPrice.getProperty_id(), room.getId(), meal, cancelPolicy, request.getOccupancies().get(0));
-                        ProductRespDTO productRespDTO = ProductRespDTO.builder().hotelId(hotelPrice.getProperty_id()).productId(rate.getId()).productKey(identity.productKey()).identity(identity).supplierId(SupplierSourceEnum.EXPEDIA.getCode()).room(Room.builder().roomName(room.getRoom_name()).roomId(room.getId()).build()).productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(room.getRoom_name()).build()).currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency()).totalPrice(totalPrice - sumCommission).stayPrice(buildStayPrice(occupancyPricing.getStay())).storePayPrice(null == occupancyPricing.getTotals().getProperty_fees() ? 0 : new BigDecimal(occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getValue()).multiply(new BigDecimal("100")).intValue()).storePayCurrency(null == occupancyPricing.getTotals().getProperty_fees() ? request.getCurrency() : occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getCurrency()).roomTotalPrice(roomTotalPrice - sumCommission).brokerage(sumCommission).priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn(), sumCommission)).meal(meal).cancelPolicy(cancelPolicy).maxOccupancy(request.getAdultNum()).priceFlag(queryPriceRequest.getSales_environment()).distribution(rate.getSale_scenario().getDistribution()).bedCheckInfos(bedCheckInfos).build();
+                        ProductRespDTO productRespDTO = ProductRespDTO.builder().hotelId(hotelPrice.getProperty_id()).productId(rate.getId()).productKey(identity.productKey()).identity(identity).supplierId(SupplierSourceEnum.EXPEDIA.getCode()).room(Room.builder().roomName(room.getRoom_name()).roomId(room.getId()).build()).productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(room.getRoom_name()).build()).currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency()).totalPrice(totalPrice - sumCommission).stayPrice(buildStayPrice(occupancyPricing.getStay())).storePayPrice(null == occupancyPricing.getTotals().getProperty_fees() ? 0 : Money.toCents(new BigDecimal(occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getValue()))).storePayCurrency(null == occupancyPricing.getTotals().getProperty_fees() ? request.getCurrency() : occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getCurrency()).roomTotalPrice(roomTotalPrice - sumCommission).brokerage(sumCommission).priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn(), sumCommission)).meal(meal).cancelPolicy(cancelPolicy).maxOccupancy(request.getAdultNum()).priceFlag(queryPriceRequest.getSales_environment()).distribution(rate.getSale_scenario().getDistribution()).bedCheckInfos(bedCheckInfos).build();
                         productRespDTO.setTotalTaxes(productRespDTO.getTotalPrice() - productRespDTO.getRoomTotalPrice());
                         return Arrays.asList(productRespDTO);
                     }
@@ -433,14 +433,14 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                             }
                             QueryPriceResponse.Occupancy_pricing occupancyPricing = checkPriceResult.getData().getOccupancy_pricing().get(request.getOccupancies().get(0));
                             int sumCommission = calcCommissionCents(occupancyPricing);
-                            int totalPrice = new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue();
-                            int roomTotalPrice = new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()).multiply(new BigDecimal("100")).intValue();
+                            int totalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()));
+                            int roomTotalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()));
                             List<QueryPriceResponse.CancelPolicy> cancelPolicies = rate.getCancel_penalties();
                             Meal meal = productKeyDeriver.convertMeal(request.getAdultNum(), rate.getAmenities());
                             List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) : productKeyDeriver.convertCancelPolicy(request.getCheckIn(), cancelPolicies);
                             // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍
                             ProductIdentity identity = productKeyDeriver.deriveIdentity(hotelPrice.getProperty_id(), room.getId(), meal, cancelPolicy, request.getOccupancies().get(0));
-                            ProductRespDTO productRespDTO = ProductRespDTO.builder().hotelId(hotelPrice.getProperty_id()).productId(rate.getId()).productKey(identity.productKey()).identity(identity).supplierId(SupplierSourceEnum.EXPEDIA.getCode()).room(Room.builder().roomName(room.getRoom_name()).roomId(room.getId()).build()).productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(room.getRoom_name()).build()).currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency()).totalPrice(totalPrice - sumCommission).stayPrice(buildStayPrice(occupancyPricing.getStay())).storePayPrice(null == occupancyPricing.getTotals().getProperty_fees() ? 0 : new BigDecimal(occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getValue()).multiply(new BigDecimal("100")).intValue()).storePayCurrency(null == occupancyPricing.getTotals().getProperty_fees() ? request.getCurrency() : occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getCurrency()).roomTotalPrice(roomTotalPrice - sumCommission).brokerage(sumCommission).priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn(), sumCommission)).meal(meal).cancelPolicy(cancelPolicy).maxOccupancy(request.getAdultNum()).priceFlag(queryPriceRequest.getSales_environment()).distribution(rate.getSale_scenario().getDistribution()).bedCheckInfos(bedCheckInfos).build();
+                            ProductRespDTO productRespDTO = ProductRespDTO.builder().hotelId(hotelPrice.getProperty_id()).productId(rate.getId()).productKey(identity.productKey()).identity(identity).supplierId(SupplierSourceEnum.EXPEDIA.getCode()).room(Room.builder().roomName(room.getRoom_name()).roomId(room.getId()).build()).productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(room.getRoom_name()).build()).currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency()).totalPrice(totalPrice - sumCommission).stayPrice(buildStayPrice(occupancyPricing.getStay())).storePayPrice(null == occupancyPricing.getTotals().getProperty_fees() ? 0 : Money.toCents(new BigDecimal(occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getValue()))).storePayCurrency(null == occupancyPricing.getTotals().getProperty_fees() ? request.getCurrency() : occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getCurrency()).roomTotalPrice(roomTotalPrice - sumCommission).brokerage(sumCommission).priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn(), sumCommission)).meal(meal).cancelPolicy(cancelPolicy).maxOccupancy(request.getAdultNum()).priceFlag(queryPriceRequest.getSales_environment()).distribution(rate.getSale_scenario().getDistribution()).bedCheckInfos(bedCheckInfos).build();
                             productRespDTO.setTotalTaxes(productRespDTO.getTotalPrice() - productRespDTO.getRoomTotalPrice());
                             return Arrays.asList(productRespDTO);
                         }
@@ -598,8 +598,9 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                     continue;
                 }
                 // 上游口径总价（分）：含税价 − 佣金，与查价响应透出的 totalPrice 同一算法
-                int priceCents = new BigDecimal(pricing.getTotals().getInclusive().getRequest_currency().getValue())
-                        .multiply(new BigDecimal("100")).intValue() - calcCommissionCents(pricing);
+                int priceCents = Money.toCents(new BigDecimal(
+                        pricing.getTotals().getInclusive().getRequest_currency().getValue()))
+                        - calcCommissionCents(pricing);
                 equivalents.add(new ResolveCandidate(candidate, priceCents));
             }
         }
