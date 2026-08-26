@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.inbound.scheduler;
 
+import com.trip.booking.spa.platform.concurrent.ThreadPools;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -7,9 +8,6 @@ import javax.annotation.PreDestroy;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -55,7 +53,9 @@ public class SupplierTaskExecutors {
             log.warn("[supplier-task] 容器正在关闭，拒绝派发 supplier={}, task={}", supplier, taskName);
             return;
         }
-        ExecutorService executor = executors.computeIfAbsent(supplier, this::newSingleThreadExecutor);
+        // 池的出生统一走 ThreadPools（PROJECT.md §4.3），本类只持有"忙则跳过"的转译
+        ExecutorService executor = executors.computeIfAbsent(supplier,
+                s -> ThreadPools.serialSkipIfBusy(s + "-task", false));
         try {
             executor.execute(() -> {
                 try {
@@ -69,17 +69,6 @@ public class SupplierTaskExecutors {
             // SynchronousQueue + 单线程：在跑即拒绝。跳过是信号，不是故障——cron 下一轮会再来
             log.warn("[supplier-task] 上一轮未结束，本轮跳过 supplier={}, task={}", supplier, taskName);
         }
-    }
-
-    private ExecutorService newSingleThreadExecutor(String supplier) {
-        // SynchronousQueue（容量 0）+ 单线程 = 忙则拒绝；拒绝路径在 submit 里转成跳过日志
-        return new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-                new SynchronousQueue<>(),
-                r -> {
-                    Thread t = new Thread(r, supplier + "-task-1");
-                    t.setDaemon(false);
-                    return t;
-                });
     }
 
     @PreDestroy

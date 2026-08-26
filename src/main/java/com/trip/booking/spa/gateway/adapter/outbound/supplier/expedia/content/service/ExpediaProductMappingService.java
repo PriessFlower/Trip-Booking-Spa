@@ -14,7 +14,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.Exp
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ExpediaCatalogMapper;
 import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaUtils;
-import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ThreadPoolUtils;
+import com.trip.booking.spa.platform.concurrent.ThreadPools;
 import com.trip.booking.spa.platform.redis.DistributedRateLimiter;
 import com.trip.booking.spa.platform.util.DateUtil;
 import com.trip.booking.spa.platform.util.JsonUtils;
@@ -119,7 +119,7 @@ public class ExpediaProductMappingService {
 
     /** 照抄旧 pushProductInfo：每酒店一个线程，零售价+打包价各建档一遍 */
     private void pushProductInfo(String checkInDate, String checkOutDate, List<String> supplierHotelIds) {
-        supplierHotelIds.forEach(supplierHotelId -> ThreadPoolUtils.execute(() -> {
+        supplierHotelIds.forEach(supplierHotelId -> ThreadPools.fixedCallerRuns(ExpediaGeographyIngestionService.CONTENT_POOL_NAME, 20, 1000).execute(() -> {
             QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder()
                     .property_id(supplierHotelId)
                     .checkin(checkInDate)

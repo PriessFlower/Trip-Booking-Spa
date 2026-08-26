@@ -1,5 +1,6 @@
 package com.trip.booking.spa.platform.http;
 
+import com.trip.booking.spa.platform.concurrent.ThreadPools;
 import com.trip.booking.spa.platform.observability.MonitorNameEnum;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import java.util.Map;
@@ -150,7 +151,8 @@ public class ChunkedFileAccess {
         AtomicLong retried = new AtomicLong();
         long deadline = System.currentTimeMillis() + deadlineMillis;
 
-        ExecutorService pool = Executors.newFixedThreadPool(connections);
+        ExecutorService pool = ThreadPools.fixed(
+                supplier.name().toLowerCase() + "-file-download", connections, false);
         try (FileChannel channel = FileChannel.open(target,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
             List<Future<?>> futures = new ArrayList<>();

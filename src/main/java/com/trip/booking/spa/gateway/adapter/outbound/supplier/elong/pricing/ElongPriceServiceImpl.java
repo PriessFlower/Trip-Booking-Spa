@@ -724,12 +724,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * 宁可丢一次回写（下轮刷价会补），不许排队积压拖住任何东西。守护线程随进程退出。
      */
     private static final java.util.concurrent.ExecutorService FRESH_PRICES_POOL =
-            new java.util.concurrent.ThreadPoolExecutor(1, 1, 60L, java.util.concurrent.TimeUnit.SECONDS,
-                    new java.util.concurrent.ArrayBlockingQueue<>(64), r -> {
-                Thread t = new Thread(r, "elong-fresh-prices");
-                t.setDaemon(true);
-                return t;
-            });
+            com.trip.booking.spa.platform.concurrent.ThreadPools.serialBounded("elong-fresh-prices", 64, true);
 
     /**
      * 验价即刷（F-6 即时半边）：把验价现取的这份现货异步回写价格缓存。
