@@ -101,10 +101,7 @@ expedia:
   sharedSecret: ${EXPEDIA_SHARED_SECRET:}
   session: ${EXPEDIA_CUSTOMER_SESSION_ID:trip-booking-spa-dev}
   ownIp: ${EXPEDIA_CUSTOMER_IP:127.0.0.1}
-  localFilePath: /home/webrun/spa/logs/file
   # 合同档案参数不在此处：它们与剖面无关，统一置于 application.yml 的
   # supplier.expedia.*（PROJECT.md §3.4.1）。
   url:
     host: ${EXPEDIA_API_HOST:https://test.ean.com}
-system:
-  localFilePath: /home/webrun/spa/logs/file/
