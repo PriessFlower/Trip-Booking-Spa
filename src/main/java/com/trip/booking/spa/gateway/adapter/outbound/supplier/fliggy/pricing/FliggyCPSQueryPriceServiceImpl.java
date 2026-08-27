@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 
 /**
  * 飞猪刷价：消费 {@code fliggy_query_price_task}，逐店 ari.availability 写入价格缓存。
- * 调度骨架在 {@link AbstractCPSQueryPriceService}；飞猪起步<b>单档 0</b>（无历史分档包袱），
+ * 调度骨架在 {@link AbstractCPSQueryPriceService}；档位编码见 {@link #SOLD_OUT_OFFSET}，
  * 速率由 Nacos 的 REFRESH 用途桶约束，通道层扣格。
  */
 @Slf4j
@@ -77,17 +77,20 @@ public class FliggyCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService
     }
 
     /**
-     * 双档：0=有货快档（每轮全力刷），1=无货慢档（小批长周期，只为探测回归与重新上架）。
-     * 档位流转是"最后一次结果即档位"（{@link #adjustPriority}），无需计数列。
+     * 档位编码：业务档 N（0=当前全量档,将来加远期/成交档即 1/2/…），其无货态 = N+{@link #SOLD_OUT_OFFSET}。
+     * 无货是与业务档<b>正交</b>的状态——成交店也会暂时满房,压进同一序列会丢原档；
+     * +10 偏移让原档藏在数值里：降档 +10、刷出有货 -10 回到自己的业务档,无需记忆列。
      */
+    static final int SOLD_OUT_OFFSET = 10;
+
     @Override
     protected List<Integer> tiers() {
-        return List.of(0, 1);
+        return List.of(0, SOLD_OUT_OFFSET);
     }
 
     @Override
     protected int batchSize(int priority) {
-        return priority == 1
+        return priority >= SOLD_OUT_OFFSET
                 ? environment.getProperty("task.fliggy-cps.slow-batch-size", Integer.class, 100)
                 : environment.getProperty("task.fliggy-cps.batch-size", Integer.class, 200);
     }
@@ -95,7 +98,7 @@ public class FliggyCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService
     /** 兜底串行是安全侧（§3.3.3）：并发是能力，Nacos 读不到时退回已知安全的慢 */
     @Override
     protected int concurrency(int priority) {
-        return priority == 1
+        return priority >= SOLD_OUT_OFFSET
                 ? environment.getProperty("task.fliggy-cps.slow-concurrency", Integer.class, 1)
                 : environment.getProperty("task.fliggy-cps.concurrency", Integer.class, 1);
     }
@@ -149,14 +152,17 @@ public class FliggyCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService
         fliggyQueryPriceTaskMapper.updateAddCount(row);
     }
 
-    /** 无货→慢档、有货→快档;FAILED 不调（模板已保证聚合口径,这里再守一道） */
+    /** 无货→+10 沉入本档的无货位、有货→-10 回自己的业务档;FAILED 不调 */
     @Override
     protected void adjustPriority(FliggyQueryPriceTask row, RefreshOutcome outcome) {
         if (outcome == RefreshOutcome.FAILED) {
             return;
         }
-        int target = outcome == RefreshOutcome.ON_SALE ? 0 : 1;
-        if (row.getPriorityLevelNumber() != target) {
+        int current = row.getPriorityLevelNumber();
+        int target = outcome == RefreshOutcome.ON_SALE
+                ? (current >= SOLD_OUT_OFFSET ? current - SOLD_OUT_OFFSET : current)
+                : (current < SOLD_OUT_OFFSET ? current + SOLD_OUT_OFFSET : current);
+        if (current != target) {
             fliggyQueryPriceTaskMapper.updatePriority(row.getId(), target);
         }
     }

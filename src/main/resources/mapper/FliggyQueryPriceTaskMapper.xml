@@ -38,7 +38,7 @@
         LIMIT #{batchSize}
     </select>
 
-    <!-- 调档:最后一次结果即档位(无货→慢档,有货→快档)。不动 last_time——
+    <!-- 调档:无货=业务档+10(原档藏在数值里,有货 -10 回原档)。不动 last_time——
          调档不代表刷过价,动了会打乱"最久未刷优先"(issue #102 同理) -->
     <update id="updatePriority">
         UPDATE fliggy_query_price_task
