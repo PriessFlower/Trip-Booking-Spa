@@ -1,0 +1,126 @@
+{
+ "data": {
+  "language": "zh_CN",
+  "properties": [
+   {
+    "hotel_id": "50363404",
+    "hotel_name": "Shinjuku Washington Hotel",
+    "rates": [
+     {
+      "cancel_policy": {
+       "code": "4",
+       "rules": [
+        {
+         "before": "2026-09-11 00:00:00",
+         "currency": "USD",
+         "inclusive_amount": "10524",
+         "onward": "2026-09-09 23:00:00"
+        },
+        {
+         "before": "2026-09-09 23:00:00",
+         "currency": "USD",
+         "inclusive_amount": "2105",
+         "onward": "2026-09-08 23:00:00"
+        },
+        {
+         "before": "2026-09-08 23:00:00",
+         "currency": "USD",
+         "inclusive_amount": "0",
+         "onward": "2026-08-27 13:48:44"
+        }
+       ]
+      },
+      "check_in": "Thu Sep 10 00:00:00 CST 2026",
+      "check_out": "Fri Sep 11 00:00:00 CST 2026",
+      "daily_rates": [
+       {
+        "currency": "USD",
+        "date": "2026-09-10",
+        "exclusive": "10524",
+        "fees": "0",
+        "inclusive": "10524",
+        "tax": "0"
+       }
+      ],
+      "meals": {
+       "type": 0
+      },
+      "rate_key": "16930772149862-15370615499862-4019559865862-829203378862-962638436682",
+      "rate_plan_name": "素泊りプラン",
+      "room_id": "143328954",
+      "room_name": "经济双人房-禁烟",
+      "total_rate": {
+       "currency": "USD",
+       "exclusive": "10524",
+       "fees": "0",
+       "inclusive": "10524",
+       "tax": "0"
+      }
+     },
+     {
+      "cancel_policy": {
+       "code": "9",
+       "rules": [
+        {
+         "before": "2026-09-11 00:00:00",
+         "currency": "USD",
+         "inclusive_amount": "10524",
+         "onward": "2026-09-09 22:00:00"
+        },
+        {
+         "before": "2026-09-09 22:00:00",
+         "currency": "USD",
+         "inclusive_amount": "8822",
+         "onward": "2026-09-09 12:00:00"
+        },
+        {
+         "before": "2026-09-09 12:00:00",
+         "currency": "USD",
+         "inclusive_amount": "2217",
+         "onward": "2026-09-08 12:00:00"
+        },
+        {
+         "before": "2026-09-08 12:00:00",
+         "currency": "USD",
+         "inclusive_amount": "0",
+         "onward": "2026-08-27 13:48:44"
+        }
+       ]
+      },
+      "check_in": "Thu Sep 10 00:00:00 CST 2026",
+      "check_out": "Fri Sep 11 00:00:00 CST 2026",
+      "daily_rates": [
+       {
+        "currency": "USD",
+        "date": "2026-09-10",
+        "exclusive": "7767",
+        "fees": "0",
+        "inclusive": "10524",
+        "tax": "2757"
+       }
+      ],
+      "meals": {
+       "type": 0
+      },
+      "rate_key": "V3|865f79e53b78932b9a0bfc94ccde58a4e58bab9cf84586b933b46601a8ba1dba_FR111881050001",
+      "rate_plan_name": "经济双人房, 无烟房(内宾)+无早",
+      "room_id": "143328954",
+      "room_name": "经济双人房-禁烟",
+      "total_rate": {
+       "currency": "USD",
+       "exclusive": "7767",
+       "fees": "0",
+       "inclusive": "10524",
+       "tax": "2757"
+      }
+     }
+    ]
+   }
+  ],
+  "request_trace_id": "213e04ee17878097227985526e0c0a",
+  "search_id": "fef211c9-e0d7-415c-aff6-3dcb3d8e8a95",
+  "time": 1787809724324
+ },
+ "trace_id": "213e04ee17878097227985526e0c0a",
+ "request_id": "16knlj5zkvwkt"
+}

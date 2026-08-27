@@ -44,7 +44,11 @@ public abstract class FliggyTopResponse implements BaseResponse {
                 platformMsg = text(error, "msg") + "/" + text(error, "sub_msg");
                 return;
             }
-            payload = tree.get(rootKey());
+            // 2026-08-27 真实报文实证：simplify=true 把 <method>_response 包裹层也去掉了，
+            // 成功响应顶层直接是业务体（{data, trace_id, request_id}）——文档示例展示的是
+            // 非 simplify 形态。两种都认：有包裹取包裹（防对方哪天改口），无包裹取顶层。
+            // 这个坑正是"显式路径宁可响亮失败"的收益：22 条真实报价曾被误看成空。
+            payload = tree.has(rootKey()) ? tree.get(rootKey()) : tree;
         } catch (Exception e) {
             throw new ParseException(e);
         }
