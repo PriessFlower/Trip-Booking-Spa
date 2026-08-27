@@ -59,4 +59,16 @@ public class FliggyAriResponse extends FliggyTopResponse {
     public boolean isEmptyResult() {
         return isSucc() && rates().isEmpty();
     }
+
+    /**
+     * 该酒店已被飞猪下架（不在我们账号的可售清单）。形态是平台层
+     * {@code FAIL_BIZ_DEPENDENCY_ERROR + "hids is empty"}——语义来自 cursor 生产实证
+     * （FliggyPriceFetchService「供应商已将资源下架」按空结果处理，跑了数月），
+     * 本仓 2026-08-26 首笔真实调用同形复现。这是「明确无货」不是「没问出来」，
+     * 折进不确定会让下架店被无限重试。
+     */
+    public boolean isHotelDelisted() {
+        String error = platformError();
+        return error != null && error.contains("hids is empty");
+    }
 }

@@ -89,6 +89,11 @@ public class FliggyPriceServiceImpl {
             log.warn("飞猪查价：调用未取得结果,sHotelId={},checkIn={}", supplier.getSHotelId(), request.getCheckIn());
             return PricingResult.indeterminate();
         }
+        if (resp.isHotelDelisted()) {
+            // 资源已下架=明确无货(cursor 生产实证语义),折进不确定会无限重试下架店
+            log.info("飞猪查价：酒店已下架,sHotelId={}", supplier.getSHotelId());
+            return PricingResult.noInventory();
+        }
         if (resp.isPlatformError()) {
             reportPlatformError("查价", resp, supplier.getSHotelId());
             return PricingResult.indeterminate();
@@ -162,6 +167,9 @@ public class FliggyPriceServiceImpl {
         FliggyAriResponse ari = ariResult == null ? null : ariResult.getData();
         if (ari == null) {
             return outcome(CheckPriceOutcome.INDETERMINATE, "查价未取得结果，请稍后重试");
+        }
+        if (ari.isHotelDelisted()) {
+            return outcome(CheckPriceOutcome.SOLD_OUT, "该酒店已被供应商下架");
         }
         if (ari.isPlatformError()) {
             reportPlatformError("验价·现取", ari, request.getSHotelId());

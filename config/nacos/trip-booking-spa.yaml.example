@@ -124,6 +124,9 @@ ratelimit:
     # （platform code 7）看 supplier_io_access{status=throttled} 再调
     "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_PRODUCT_PRICES]": 5
     "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_ORDER_PRICE]": 2
+    "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_CREATE_ORDER]": 1
+    "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_QUERY_ORDER]": 2
+    "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_CANCEL_ORDER]": 1
 
 # ── supplier / expedia：静态数据摄取总开关 ──────────────────
 # ── cache：我方自建缓存 ────────────────────────────────────
