@@ -102,21 +102,24 @@ public class ElongCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService<
     }
 
     /**
-     * 档位序列（F-2.4，批次5 四档）：成交档最先——它每轮全扫，承诺缓存龄 ≤ 一次执行间隔；
-     * 远期档最后——按天级新鲜度已够用，排最后是为了不侵占成交档的节奏。
+     * 档位=住期远近(与飞猪统一):0=T0-2 / 1=T3-7 / 2=T8-30,无货态=N+10(模板偏移算法)。
+     * 档 9 是人工停用位,不进本序列故永不消费、不受调档触及。
+     * 旧四档(成交/高频/常规/远期)已随 2026-08-28 统一档位退役,旧键 deal/high/normal-* 弃用。
      */
     @Override
     protected List<Integer> tiers() {
-        return List.of(2, 0, 1, 3);
+        return List.of(0, 1, 2, SOLD_OUT_OFFSET, SOLD_OUT_OFFSET + 1, SOLD_OUT_OFFSET + 2);
     }
 
     @Override
     protected int batchSize(int priority) {
+        if (priority >= SOLD_OUT_OFFSET) {
+            return environment.getProperty("task.elong-cps.slow-batch-size", Integer.class, 100);
+        }
         return switch (priority) {
-            case 3 -> environment.getProperty("task.elong-cps.far-batch-size", Integer.class, 200);
-            case 2 -> environment.getProperty("task.elong-cps.deal-batch-size", Integer.class, 1500);
-            case 0 -> environment.getProperty("task.elong-cps.high-batch-size", Integer.class, 400);
-            default -> environment.getProperty("task.elong-cps.normal-batch-size", Integer.class, 200);
+            case 1 -> environment.getProperty("task.elong-cps.mid-batch-size", Integer.class, 200);
+            case 2 -> environment.getProperty("task.elong-cps.far-batch-size", Integer.class, 200);
+            default -> environment.getProperty("task.elong-cps.batch-size", Integer.class, 400);
         };
     }
 
@@ -126,11 +129,13 @@ public class ElongCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService<
      */
     @Override
     protected int concurrency(int priority) {
+        if (priority >= SOLD_OUT_OFFSET) {
+            return environment.getProperty("task.elong-cps.slow-concurrency", Integer.class, 1);
+        }
         return switch (priority) {
-            case 3 -> environment.getProperty("task.elong-cps.far-concurrency", Integer.class, 6);
-            case 2 -> environment.getProperty("task.elong-cps.deal-concurrency", Integer.class, 6);
-            case 0 -> environment.getProperty("task.elong-cps.high-concurrency", Integer.class, 1);
-            default -> environment.getProperty("task.elong-cps.normal-concurrency", Integer.class, 1);
+            case 1 -> environment.getProperty("task.elong-cps.mid-concurrency", Integer.class, 1);
+            case 2 -> environment.getProperty("task.elong-cps.far-concurrency", Integer.class, 6);
+            default -> environment.getProperty("task.elong-cps.concurrency", Integer.class, 1);
         };
     }
 
@@ -188,5 +193,13 @@ public class ElongCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService<
     protected void markRefreshed(ElongQueryPriceTask row) {
         row.setUpdateTime(new Date());
         elongQueryPriceTaskMapper.updateAddCount(row);
+    }
+
+    @Override
+    protected void adjustPriority(ElongQueryPriceTask row, RefreshOutcome outcome) {
+        int target = soldOutOffsetTarget(row.getPriorityLevelNumber(), outcome);
+        if (target != row.getPriorityLevelNumber()) {
+            elongQueryPriceTaskMapper.updatePriority(row.getId(), target);
+        }
     }
 }

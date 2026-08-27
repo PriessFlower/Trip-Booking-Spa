@@ -96,4 +96,12 @@
         WHERE sh_id = #{shId} and priority_level_number in (0, 1)
     </update>
 
+    <!-- 调档:无货=业务档+10(原档藏在数值里,有货 -10 回原档)。不动 last_time——
+         调档不代表刷过价,动了会打乱"最久未刷优先"(issue #102 同理) -->
+    <update id="updatePriority">
+        UPDATE elong_query_price_task
+        SET priority_level_number = #{priority}
+        WHERE id = #{id} AND priority_level_number != #{priority}
+    </update>
+
 </mapper>

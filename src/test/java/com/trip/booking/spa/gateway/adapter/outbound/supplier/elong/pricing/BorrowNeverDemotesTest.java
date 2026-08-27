@@ -66,15 +66,16 @@ class BorrowNeverDemotesTest {
     /**
      * 2026-08-25 起档位序列与借入判定在服务实现里（{@code tiers()} / {@code borrowFor()}），
      * 不再是调度类里的字面参数——档序是刷价语义，属适配层的知识。守的规则没变，只是位置变了。
+     * 2026-08-28 起档位=住期远近(与飞猪统一,模板偏移算法)，近档先消费、无货位殿后。
      */
     @Test
-    @DisplayName("成交档与远期档必须排除借入行,只有档 0 带借入")
+    @DisplayName("近档最先、无货位殿后,且只有档 0 带借入")
     void onlyHighTierTakesBorrowedRows() throws Exception {
         String src = Files.readString(SERVICE);
 
-        assertTrue(src.contains("List.of(2, 0, 1, 3)"),
-                "档位序列变了。成交档(2)须最先——它每轮全扫、承诺缓存龄 ≤ 一次执行间隔；"
-                        + "远期档(3)须最后——按天级新鲜度已够用,排前面会侵占成交档的节奏");
+        assertTrue(src.contains("List.of(0, 1, 2, SOLD_OUT_OFFSET, SOLD_OUT_OFFSET + 1, SOLD_OUT_OFFSET + 2)"),
+                "档位序列变了。近档(0=T0-2)须最先——卖得最急；无货位(10/11/12)须殿后——"
+                        + "只为低频探活,排前面会侵占有货店的节奏");
 
         // 借入判定：默认实现只让档 0 借入。各家若要覆写，必须仍然只有一档借入
         String skeleton = Files.readString(SKELETON);
