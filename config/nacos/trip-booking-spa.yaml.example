@@ -252,3 +252,10 @@ supplier:
     # resolve 换票价格容差（R-3.3 双门取严，语义同 supplier.expedia 同名两键）
     resolve-price-tolerance: 0.02
     resolve-price-cap-cents: 2000
+
+  fliggy:
+    # session 有效期天数，到期监控用（FliggyCredentialExpiry：授权日+本值=到期日）。
+    # TOP 授权响应的 expires_in 为 90 天；飞猪若调整授权策略在此改，不必发版。
+    # 凭据本身（appKey/secret/session/网关/授权日期）经 FLIGGY_* 环境变量注入（§3.5.1），
+    # 禁止移入本文件。
+    session-ttl-days: 90
