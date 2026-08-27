@@ -47,19 +47,19 @@ task:
   elong-cps:
     # 每行任务按这些成人数各查一次（逗号分隔）。高德按 2 人问价，缺 2 人片=曝光断粮（2026-08-22 事故）
     occupancies: "1,2"
-    # 成交档：高德出过单的酒店（priority=2 的行，T+0~2）。批量须 ≥ 档内行数，保证一轮扫完
-    deal-batch-size: 1500
-    deal-concurrency: 6
-    # 远期档：成交酒店 T+7~29（priority=3 的行），小批滚动，约一天扫完一遍
-    far-batch-size: 200
-    far-concurrency: 6
     enabled: false
     cron: '0 0/10 * * * ?'    # 每 10 分钟一轮（cron 仅启动时读取，改后需重启）
-    # 批次3 两档优先级（F-2.4）：每轮先高频档(priority=0,T+0~T+2,带借入验价升档行)
-    # 再常规档(priority=1,T+3~T+6)。默认 400@2qps + 200@1qps ≈ 6.7 分钟 < cron 周期，
-    # 高频档 ~2.6h 轮一遍。旧键 qps/batch-size 自批次3起弃用（避免继承单档时代旧值）。
-    high-batch-size: 400
-    normal-batch-size: 200
+    # 住期档(2026-08-28 与飞猪统一,模板偏移算法):0=T0-2(batch/concurrency)、
+    # 1=T3-7(mid)、2=T8-30(far)、无货位 10/11/12(slow,数天级探活)。
+    # 档 9=人工停用位,不进 tiers。旧四档键 deal/high/normal-* 已弃用。
+    batch-size: 400
+    concurrency: 6
+    mid-batch-size: 200
+    mid-concurrency: 3
+    far-batch-size: 200
+    far-concurrency: 6
+    slow-batch-size: 100
+    slow-concurrency: 2
     # 刷价速率不在本域——它是统一限流的子配额，见下方 ratelimit.qps 的
     # GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH（§3.3：限流一律走统一限流）。
     # 曾在此处配 high-qps/normal-qps 并在代码里自建 Guava RateLimiter，是对该条的违反：
@@ -69,8 +69,6 @@ task:
     #   高频档 4 QPS × 1.45s ≈ 6，常规档 1 QPS × 1.45s ≈ 2（给 3 留富余）
     # 上调前先看两处：① Redis 连接池（出价链路读同一个池，抢连接会拖慢真实客流）；
     # ② 线程若堆在 acquire() 上超过 ratelimit.acquire-timeout-ms 会变成假失败。
-    high-concurrency: 6
-    normal-concurrency: 3
 
   # Expedia 静态酒店同步
   expedia-hotel-sync:

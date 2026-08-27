@@ -76,12 +76,7 @@ public class FliggyCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService
         return environment.getProperty("task.fliggy-cps.enabled", Boolean.class, false);
     }
 
-    /**
-     * 档位编码：业务档=住期远近（0=T0-2 / 1=T3-7 / 2=T8-30），其无货态=N+{@link #SOLD_OUT_OFFSET}。
-     * 无货是与业务档<b>正交</b>的状态,+10 偏移让原档藏在数值里：降档 +10、
-     * 刷出有货 -10 回自己的业务档,无需记忆列。近档先消费,无货位殿后低频探活。
-     */
-    static final int SOLD_OUT_OFFSET = 10;
+    // 档位编码=模板的无货偏移算法(soldOutOffsetTarget):业务档=住期远近(0=T0-2/1=T3-7/2=T8-30)
 
     @Override
     protected List<Integer> tiers() {
@@ -162,17 +157,10 @@ public class FliggyCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService
         fliggyQueryPriceTaskMapper.updateAddCount(row);
     }
 
-    /** 无货→+10 沉入本档的无货位、有货→-10 回自己的业务档;FAILED 不调 */
     @Override
     protected void adjustPriority(FliggyQueryPriceTask row, RefreshOutcome outcome) {
-        if (outcome == RefreshOutcome.FAILED) {
-            return;
-        }
-        int current = row.getPriorityLevelNumber();
-        int target = outcome == RefreshOutcome.ON_SALE
-                ? (current >= SOLD_OUT_OFFSET ? current - SOLD_OUT_OFFSET : current)
-                : (current < SOLD_OUT_OFFSET ? current + SOLD_OUT_OFFSET : current);
-        if (current != target) {
+        int target = soldOutOffsetTarget(row.getPriorityLevelNumber(), outcome);
+        if (target != row.getPriorityLevelNumber()) {
             fliggyQueryPriceTaskMapper.updatePriority(row.getId(), target);
         }
     }

@@ -98,6 +98,26 @@ public abstract class AbstractCPSQueryPriceService<T extends RefreshTaskRow> {
     protected void adjustPriority(T row, RefreshOutcome outcome) {
     }
 
+    /**
+     * 无货偏移编码的统一档位算法（艺龙/飞猪共用，"形式统一分配差异"）：
+     * 业务档 N（0..9，如住期远近 0=T0-2/1=T3-7/2=T8-30），其无货态=N+{@link #SOLD_OUT_OFFSET}。
+     * 无货与业务档<b>正交</b>——成交/近期店也会暂时满房，压进同一序列会丢原档；
+     * 偏移让原档藏在数值里：无货 +10 沉入本档无货位，刷出有货 -10 回自己的业务档，
+     * 无需记忆列。FAILED 返回原档（不动）。调用方对返回值 != 当前档时写库。
+     */
+    protected static int soldOutOffsetTarget(int current, RefreshOutcome outcome) {
+        if (outcome == RefreshOutcome.FAILED) {
+            return current;
+        }
+        if (outcome == RefreshOutcome.ON_SALE) {
+            return current >= SOLD_OUT_OFFSET ? current - SOLD_OUT_OFFSET : current;
+        }
+        return current < SOLD_OUT_OFFSET ? current + SOLD_OUT_OFFSET : current;
+    }
+
+    /** 无货位偏移。0-9 留给业务档（含艺龙的人工停用位 9,它不进 tiers 故不受调档触及） */
+    protected static final int SOLD_OUT_OFFSET = 10;
+
     /** 三态。与 PricingOutcome 同义，但刷价只关心这三种，不引入契约层的枚举 */
     public enum RefreshOutcome {
         /** 有在售产品，已落缓存 */
