@@ -30,8 +30,12 @@ task:
     # 不资损（下单前必经现取现验）。
     enabled: false
     cron: '0 5/10 * * * ?'    # 与艺龙错开 5 分钟,仅启动时读取
-    batch-size: 200
-    concurrency: 2
+    batch-size: 600
+    concurrency: 8
+    # 慢档(无货档):小批长周期,只为探测满房回归与重新上架。档位流转=最后一次结果
+    # (无货→慢档,刷出有货→自动回快档,失败不动档)
+    slow-batch-size: 100
+    slow-concurrency: 2
     # 每行按这些成人数各查一次。飞猪价格与人数相关(rate_key 按占用签发),默认主流 2 人
     occupancies: "2"
 
@@ -133,10 +137,10 @@ ratelimit:
     "[GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_CANCEL_ORDER]": 1
     # 飞猪（TOP）：官方无 QPS 文档，cursor 全账号自设 ~20/s；起步保守，撞频控
     # （platform code 7）看 supplier_io_access{status=throttled} 再调
-    "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_PRODUCT_PRICES]": 5
+    "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_PRODUCT_PRICES]": 12
     # 刷价用途桶：给 LIVE/CHECK_PRICE 留头。cursor keeper 常驻 ~8.5,两边合计仍在
     # 自律 20 内;撞平台 code 7 看 throttled 指标再调
-    "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH]": 3
+    "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH]": 10
     "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_ORDER_PRICE]": 2
     "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_CREATE_ORDER]": 1
     "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_QUERY_ORDER]": 2

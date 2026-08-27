@@ -38,6 +38,14 @@
         LIMIT #{batchSize}
     </select>
 
+    <!-- 调档:最后一次结果即档位(无货→慢档,有货→快档)。不动 last_time——
+         调档不代表刷过价,动了会打乱"最久未刷优先"(issue #102 同理) -->
+    <update id="updatePriority">
+        UPDATE fliggy_query_price_task
+        SET priority_level_number = #{priority}
+        WHERE id = #{id} AND priority_level_number != #{priority}
+    </update>
+
     <!-- last_time 只在真刷时写;同时把过期的临时升级复位(取到即复位,与艺龙同构) -->
     <update id="updateAddCount">
         UPDATE fliggy_query_price_task
