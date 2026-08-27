@@ -45,16 +45,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 飞猪查价与验价的协议本体。契约依据 docs/fliggy/distribution-api.md。
- *
- * <p><b>验价=现取现验</b>：上游点击的 rate_key 可能已陈（腐性申报按易腐），故验价先
- * 重新查价拿<b>同一响应</b>里的新 rate_key 与 request_trace_id（票据是配对的，
- * 跨响应混用即错），再调 validate 换 create_key。双钥与验价确认的总价/币种一起进
- * OfferStore，下单侧凭句柄取回，不存在两端拼 key 对不齐的余地。
- *
- * <p><b>错误分层纪律</b>：平台层凭据病（code 27 / Invalid session）→ AUTH_CONFIG
- * （指标+日志锚 [auth-config]，供应商无辜、重试无效、必须告警到人）；业务层错误码
- * 官方码表空白，码义未核实一律回不确定，绝不判无房。
+ * 飞猪查价与验价的协议本体（契约见 docs/fliggy/distribution-api.md）。
+ * 验价=现取现验：重新查价取<b>同一响应</b>里的新 rate_key 与 request_trace_id
+ * （票据配对，跨响应混用即错），validate 换 create_key，双钥与验价总价/币种进 OfferStore。
+ * 平台层凭据病走 AUTH_CONFIG；业务层码义未核实一律不确定，绝不判无房。
  */
 @Slf4j
 @Service
@@ -69,6 +63,23 @@ public class FliggyPriceServiceImpl {
     private FliggyProductKeyDeriver productKeyDeriver;
     @Resource
     private OfferStore offerStore;
+    @Resource
+    private com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService priceCacheService;
+
+    /**
+     * 刷价入口（口径同艺龙 {@code queryPricesCache}）：没问出结果返回 null 不动缓存
+     * （F-5.1，一次网络抖动不许清在售价）；明确无货（含下架）返回空列表并照走
+     * {@code productToCache}——空列表打无货标记，僵尸价随之清掉（B7）。
+     */
+    public List<ProductRespDTO> queryPricesCache(PriceReq request, Supplier supplier) {
+        PricingResult result = queryPrices(request, supplier, CallPurpose.REFRESH);
+        if (result.outcome() == com.trip.booking.spa.gateway.domain.booking.PricingOutcome.INDETERMINATE) {
+            return null;
+        }
+        List<ProductRespDTO> products = result.products();
+        priceCacheService.productToCache(products, request, supplier);
+        return products;
+    }
 
     // ---------- 查价 ----------
 

@@ -12,14 +12,8 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 
 /**
- * 飞猪 session 的到期时间供给：上次人工授权日期 + 有效期天数。
- *
- * <p>这是 {@code SupplierIdentityProfile.FLIGGY} 申报 HUMAN_ONLY 的兑现（启动校验
- * 要求本 bean 存在）。cursor 的教训：session 过期无人知晓，被当「供应商集成死」
- * 查了两个月——到期是确定会发生的事，必须有剩余天数指标（<14 天告警）。
- *
- * <p>到期时刻按授权日 00:00 UTC + 天数计——比真实到期时刻（授权当天的某个时分）
- * 早最多一天，方向刻意保守：宁可早一天喊人，不可晚一天断线。
+ * 飞猪 session 的到期供给（HUMAN_ONLY 申报的兑现，启动校验要求本 bean 在场）。
+ * 到期时刻按授权日 00:00 UTC + 天数计，比真实到期早最多一天——宁可早喊人，不可晚断线。
  */
 @Slf4j
 @Component

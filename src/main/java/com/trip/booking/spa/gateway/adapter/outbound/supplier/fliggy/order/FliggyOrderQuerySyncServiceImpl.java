@@ -23,12 +23,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 飞猪查单。官方明示 {@code dis_order_id}（我方单号）足以定位（B5），
- * 这正是 UNKNOWN 下单后反查确证那条资损防线的入参。
- *
- * <p>三态纪律：拿到订单详情才是 FOUND；<b>NOT_FOUND 现阶段永不判</b>——
- * 官方错误码表空白，「订单不存在」的确定性码未核实前，把「没查出来」说成
- * 「没有」会招重复下单。沙箱实测拿到确定性不存在码后再放开。
+ * 飞猪查单：{@code dis_order_id}（我方单号）足以定位（B5）。
+ * <b>NOT_FOUND 现阶段永不判</b>——「订单不存在」的确定性码未实证前，
+ * 把没查出来说成没有会招重复下单。
  */
 @Slf4j
 @Service("fliggyOrderQuerySyncService")

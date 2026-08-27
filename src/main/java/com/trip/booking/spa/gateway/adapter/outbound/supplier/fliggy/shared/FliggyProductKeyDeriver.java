@@ -16,12 +16,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 飞猪的餐食/退改归一化与身份派生。取值语义来自 docs/fliggy/distribution-api.md §2：
- * {@code meals{number,type}}，type 0=无餐/1=含早/2=两餐/3=三餐；
- * {@code cancel_policy.rules[]{onward,before,inclusive_amount(分),currency}}。
- *
- * <p>纪律同两家先例：解析不出的一律 UNKNOWN（可售不进目录，R-5.4/R-1.6 赌错只许少卖），
- * 绝不把「没看懂」说成「已知不含早/已知不可退」。
+ * 飞猪的餐食/退改归一化与身份派生（取值语义见 docs/fliggy/distribution-api.md §2）。
+ * 解析不出的一律 UNKNOWN——可售不进目录（R-5.4/R-1.6），不把「没看懂」说成已知。
  */
 @Slf4j
 @Component
@@ -33,10 +29,7 @@ public class FliggyProductKeyDeriver {
         this.properties = properties;
     }
 
-    /**
-     * type 2（两餐）返回 null（餐食未知）：官方没说是哪两餐，猜「早+晚」错配成本
-     * 是 49046202 那类含早错配单——沙箱实测确认后再放进已知集。
-     */
+    /** type 2（两餐）返回 null（餐食未知）：官方没说是哪两餐，实测确认前不猜 */
     public Meal convertMeal(JsonNode meals) {
         if (meals == null || meals.isNull()) {
             return null;
@@ -66,10 +59,8 @@ public class FliggyProductKeyDeriver {
     }
 
     /**
-     * rules 里罚金为 0 的段视作免费取消窗口，非零段按扣固定金额（单位分）。
-     * 时间字段的格式与时区官方未给样例（快照 §9 必测清单），MVP 只消费金额语义——
-     * 免费窗的存在性足以判 {@link CancelClass}；时间细节待真实报文后补。
-     * 解析不出任何段返回空列表（=UNKNOWN）。
+     * 罚金为 0 的段=免费取消窗，非零段=扣固定金额（分）。时间字段格式官方未给样例
+     * （快照 §9 必测第 5 项），当前只消费金额语义；解析不出任何段返回空列表（=UNKNOWN）。
      */
     public List<CancelPolicy> convertCancelPolicy(JsonNode cancelPolicy) {
         List<CancelPolicy> out = new ArrayList<>();

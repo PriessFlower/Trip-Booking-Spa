@@ -24,6 +24,17 @@ task:
   # qps=1.0 × batch-size=500 × 每 10 分钟一轮 ≈ 每天 7.2 万条，
   # 对艺龙库 23,584 家即每天全量覆盖三轮（cursor 现状为 24h 刷 45,235 条 / 16,998 家）。
   # 调整前先看刷价日志的"失败="计数：那是频控命中的直接指标。
+  fliggy-cps:
+    # 飞猪刷价（消费 fliggy_query_price_task,起步单档）。误开=与 cursor 侧 keeper
+    # (~8.5 QPS)叠加打同一 appKey 的平台流控池,看 throttled 指标;误关=缓存价陈旧,
+    # 不资损（下单前必经现取现验）。
+    enabled: false
+    cron: '0 5/10 * * * ?'    # 与艺龙错开 5 分钟,仅启动时读取
+    batch-size: 200
+    concurrency: 2
+    # 每行按这些成人数各查一次。飞猪价格与人数相关(rate_key 按占用签发),默认主流 2 人
+    occupancies: "2"
+
   elong-cps:
     # 每行任务按这些成人数各查一次（逗号分隔）。高德按 2 人问价，缺 2 人片=曝光断粮（2026-08-22 事故）
     occupancies: "1,2"
@@ -123,6 +134,9 @@ ratelimit:
     # 飞猪（TOP）：官方无 QPS 文档，cursor 全账号自设 ~20/s；起步保守，撞频控
     # （platform code 7）看 supplier_io_access{status=throttled} 再调
     "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_PRODUCT_PRICES]": 5
+    # 刷价用途桶：给 LIVE/CHECK_PRICE 留头。cursor keeper 常驻 ~8.5,两边合计仍在
+    # 自律 20 内;撞平台 code 7 看 throttled 指标再调
+    "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH]": 3
     "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_ORDER_PRICE]": 2
     "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_CREATE_ORDER]": 1
     "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_QUERY_ORDER]": 2

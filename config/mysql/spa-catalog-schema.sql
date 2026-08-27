@@ -279,3 +279,24 @@ CREATE TABLE IF NOT EXISTS supplier_product_base (
     UNIQUE KEY uqx_spb_product_key (supplier_id, product_key),
     KEY idx_spb_supplier_hotel (supplier_id, supplier_hotel_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='供应商产品档案：一行=一个卖法(productKey 粒度)';
+
+-- 飞猪查价预热任务队列（与 elong_query_price_task 同构;那份 DDL 在 legacy-schema.sql
+-- 是历史原因,新表落本文件）。速率不由本表控制,由 Nacos ratelimit.qps 的
+-- GLOBAL_LIMIT:FLIGGY:*:REFRESH 约束。播种口径:艺龙在售名单 ∩ 飞猪映射(比价交集)
+-- + 飞猪独家增量,住期 T+0..2 各 1 晚(照 cursor keeper 口径,扩住期改 delay 列即可)。
+CREATE TABLE IF NOT EXISTS fliggy_query_price_task (
+    id                    BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    sh_id                 VARCHAR(64)  NOT NULL COMMENT '飞猪酒店id（shid）',
+    delay_check_in        INT          NOT NULL DEFAULT 0 COMMENT '入住日期偏移(天)',
+    delay_check_out       INT          NOT NULL DEFAULT 1 COMMENT '离店日期偏移(天)',
+    query_count           INT          NOT NULL DEFAULT 0 COMMENT '已查价次数',
+    create_time           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    last_time             DATETIME     NULL COMMENT '最近一次查价时间',
+    priority_level_number INT          NOT NULL DEFAULT 0 COMMENT '优先级(起步单档0)',
+    temporary_upgrade     INT          NOT NULL DEFAULT 0 COMMENT '临时提升优先级 0否 1是',
+    upgrade_deadline      DATETIME     NULL COMMENT '临时优先级截止时间',
+    PRIMARY KEY (id),
+    KEY idx_priority_update (priority_level_number, last_time),
+    KEY idx_sh_id (sh_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='飞猪查价预热任务队列';
