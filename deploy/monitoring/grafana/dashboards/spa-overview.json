@@ -8,7 +8,7 @@
   ],
   "timezone": "Asia/Shanghai",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "editable": true,
   "refresh": "1m",
   "time": {
@@ -225,7 +225,7 @@
     {
       "id": 5,
       "type": "row",
-      "title": "供应商 IO（艺龙 / Expedia）",
+      "title": "供应商 IO",
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -521,8 +521,8 @@
             "uid": "spa-prom"
           },
           "refId": "A",
-          "expr": "rate(refresh_onsale_count_total{job=\"trip-booking-spa\"}[10m]) * 60",
-          "legendFormat": "onsale 现货",
+          "expr": "sum by (supplier) (rate(refresh_onsale_count_total{job=\"trip-booking-spa\"}[10m]))* 60",
+          "legendFormat": "{{supplier}} onsale 现货",
           "editorMode": "code",
           "range": true
         },
@@ -532,8 +532,8 @@
             "uid": "spa-prom"
           },
           "refId": "B",
-          "expr": "rate(refresh_borrowed_count_total{job=\"trip-booking-spa\"}[10m]) * 60",
-          "legendFormat": "borrowed 借用",
+          "expr": "sum by (supplier) (rate(refresh_borrowed_count_total{job=\"trip-booking-spa\"}[10m]))* 60",
+          "legendFormat": "{{supplier}} borrowed 借用",
           "editorMode": "code",
           "range": true
         },
@@ -543,8 +543,8 @@
             "uid": "spa-prom"
           },
           "refId": "C",
-          "expr": "rate(refresh_demoted_count_total{job=\"trip-booking-spa\"}[10m]) * 60",
-          "legendFormat": "demoted 降级",
+          "expr": "sum by (supplier) (rate(refresh_demoted_count_total{job=\"trip-booking-spa\"}[10m]))* 60",
+          "legendFormat": "{{supplier}} demoted 降级",
           "editorMode": "code",
           "range": true
         },
@@ -554,8 +554,8 @@
             "uid": "spa-prom"
           },
           "refId": "D",
-          "expr": "rate(refresh_empty_count_total{job=\"trip-booking-spa\"}[10m]) * 60",
-          "legendFormat": "empty 空",
+          "expr": "sum by (supplier) (rate(refresh_empty_count_total{job=\"trip-booking-spa\"}[10m]))* 60",
+          "legendFormat": "{{supplier}} empty 空",
           "editorMode": "code",
           "range": true
         },
@@ -565,8 +565,8 @@
             "uid": "spa-prom"
           },
           "refId": "E",
-          "expr": "rate(refresh_failed_count_total{job=\"trip-booking-spa\"}[10m]) * 60",
-          "legendFormat": "failed 失败",
+          "expr": "sum by (supplier) (rate(refresh_failed_count_total{job=\"trip-booking-spa\"}[10m]))* 60",
+          "legendFormat": "{{supplier}} failed 失败",
           "editorMode": "code",
           "range": true
         },
@@ -576,8 +576,8 @@
             "uid": "spa-prom"
           },
           "refId": "F",
-          "expr": "rate(refresh_rows_count_total{job=\"trip-booking-spa\"}[10m]) * 60",
-          "legendFormat": "rows 总行",
+          "expr": "sum by (supplier) (rate(refresh_rows_count_total{job=\"trip-booking-spa\"}[10m]))* 60",
+          "legendFormat": "{{supplier}} rows 总行",
           "editorMode": "code",
           "range": true
         }
@@ -635,8 +635,8 @@
             "uid": "spa-prom"
           },
           "refId": "A",
-          "expr": "rate(refresh_round_time_sum{job=\"trip-booking-spa\"}[10m]) / rate(refresh_round_time_count{job=\"trip-booking-spa\"}[10m])",
-          "legendFormat": "平均",
+          "expr": "sum by (supplier) (rate(refresh_round_time_sum{job=\"trip-booking-spa\"}[10m])) / sum by (supplier) (rate(refresh_round_time_count{job=\"trip-booking-spa\"}[10m]))",
+          "legendFormat": "{{supplier}} 平均",
           "editorMode": "code",
           "range": true
         },
@@ -646,8 +646,8 @@
             "uid": "spa-prom"
           },
           "refId": "B",
-          "expr": "refresh_round_time_max{job=\"trip-booking-spa\"}",
-          "legendFormat": "窗口最大",
+          "expr": "max by (supplier) (refresh_round_time_max{job=\"trip-booking-spa\"})",
+          "legendFormat": "{{supplier}} 窗口最大",
           "editorMode": "code",
           "range": true
         }
@@ -707,8 +707,8 @@
             "uid": "spa-prom"
           },
           "refId": "A",
-          "expr": "rate(catalog_upserted_count_total{job=\"trip-booking-spa\"}[10m]) * 60",
-          "legendFormat": "upserted",
+          "expr": "sum by (supplier) (rate(catalog_upserted_count_total{job=\"trip-booking-spa\"}[10m]))* 60",
+          "legendFormat": "{{supplier}} upserted",
           "editorMode": "code",
           "range": true
         },
@@ -718,8 +718,8 @@
             "uid": "spa-prom"
           },
           "refId": "B",
-          "expr": "rate(catalog_skipped_no_key_count_total{job=\"trip-booking-spa\"}[10m]) * 60",
-          "legendFormat": "skipped: no key",
+          "expr": "sum by (supplier) (rate(catalog_skipped_no_key_count_total{job=\"trip-booking-spa\"}[10m]))* 60",
+          "legendFormat": "{{supplier}} skipped: no key",
           "editorMode": "code",
           "range": true
         },
@@ -729,8 +729,8 @@
             "uid": "spa-prom"
           },
           "refId": "C",
-          "expr": "rate(catalog_skipped_unknown_count_total{job=\"trip-booking-spa\"}[10m]) * 60",
-          "legendFormat": "skipped: unknown",
+          "expr": "sum by (supplier) (rate(catalog_skipped_unknown_count_total{job=\"trip-booking-spa\"}[10m]))* 60",
+          "legendFormat": "{{supplier}} skipped: unknown",
           "editorMode": "code",
           "range": true
         }
