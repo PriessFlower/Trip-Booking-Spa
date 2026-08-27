@@ -90,6 +90,14 @@ public abstract class AbstractCPSQueryPriceService<T extends RefreshTaskRow> {
     /** 记账：写回刷价时间与次数（各家 mapper 不同，且 Expedia 还要按天重置计数） */
     protected abstract void markRefreshed(T row);
 
+    /**
+     * 行刷完后的调档钩子，默认不动档。入参是该行全维度的聚合结果：任一维度在售
+     * 即 ON_SALE；全空即 EMPTY；有失败且无在售即 FAILED——<b>失败不许当无货调档</b>
+     * （F-5.1 同款纪律：一次网络抖动不该把店打进慢车道）。
+     */
+    protected void adjustPriority(T row, RefreshOutcome outcome) {
+    }
+
     /** 三态。与 PricingOutcome 同义，但刷价只关心这三种，不引入契约层的枚举 */
     public enum RefreshOutcome {
         /** 有在售产品，已落缓存 */
@@ -189,8 +197,13 @@ public abstract class AbstractCPSQueryPriceService<T extends RefreshTaskRow> {
                         row.setTemporaryUpgrade(0);
                     }
                     markRefreshed(row);
+                    boolean anyOnSale = false;
+                    boolean anyFailed = false;
                     for (String dim : dims) {
-                        switch (refreshOne(row, dim)) {
+                        RefreshOutcome one = refreshOne(row, dim);
+                        anyOnSale |= one == RefreshOutcome.ON_SALE;
+                        anyFailed |= one == RefreshOutcome.FAILED;
+                        switch (one) {
                             case ON_SALE -> onSale.incrementAndGet();
                             case EMPTY -> empty.incrementAndGet();
                             case FAILED -> failed.incrementAndGet();
@@ -199,6 +212,8 @@ public abstract class AbstractCPSQueryPriceService<T extends RefreshTaskRow> {
                         Monitor.recordValue(MetricNames.REFRESH_INFLIGHT_DONE, tags,
                                 onSale.get() + empty.get() + failed.get());
                     }
+                    adjustPriority(row, anyOnSale ? RefreshOutcome.ON_SALE
+                            : anyFailed ? RefreshOutcome.FAILED : RefreshOutcome.EMPTY);
                 } catch (Exception e) {
                     failed.incrementAndGet();
                     log.error("{} 单行异常, shId={}", logPrefix(), row.getShId(), e);

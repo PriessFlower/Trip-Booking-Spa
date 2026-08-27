@@ -32,6 +32,10 @@ task:
     cron: '0 5/10 * * * ?'    # 与艺龙错开 5 分钟,仅启动时读取
     batch-size: 600
     concurrency: 8
+    # 慢档(无货档):小批长周期,只为探测满房回归与重新上架。档位流转=最后一次结果
+    # (无货→慢档,刷出有货→自动回快档,失败不动档)
+    slow-batch-size: 100
+    slow-concurrency: 2
     # 每行按这些成人数各查一次。飞猪价格与人数相关(rate_key 按占用签发),默认主流 2 人
     occupancies: "2"
 

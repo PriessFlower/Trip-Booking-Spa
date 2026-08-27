@@ -76,20 +76,28 @@ public class FliggyCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService
         return environment.getProperty("task.fliggy-cps.enabled", Boolean.class, false);
     }
 
+    /**
+     * 双档：0=有货快档（每轮全力刷），1=无货慢档（小批长周期，只为探测回归与重新上架）。
+     * 档位流转是"最后一次结果即档位"（{@link #adjustPriority}），无需计数列。
+     */
     @Override
     protected List<Integer> tiers() {
-        return List.of(0);
+        return List.of(0, 1);
     }
 
     @Override
     protected int batchSize(int priority) {
-        return environment.getProperty("task.fliggy-cps.batch-size", Integer.class, 200);
+        return priority == 1
+                ? environment.getProperty("task.fliggy-cps.slow-batch-size", Integer.class, 100)
+                : environment.getProperty("task.fliggy-cps.batch-size", Integer.class, 200);
     }
 
     /** 兜底串行是安全侧（§3.3.3）：并发是能力，Nacos 读不到时退回已知安全的慢 */
     @Override
     protected int concurrency(int priority) {
-        return environment.getProperty("task.fliggy-cps.concurrency", Integer.class, 1);
+        return priority == 1
+                ? environment.getProperty("task.fliggy-cps.slow-concurrency", Integer.class, 1)
+                : environment.getProperty("task.fliggy-cps.concurrency", Integer.class, 1);
     }
 
     @Override
@@ -139,5 +147,17 @@ public class FliggyCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService
     protected void markRefreshed(FliggyQueryPriceTask row) {
         row.setUpdateTime(new Date());
         fliggyQueryPriceTaskMapper.updateAddCount(row);
+    }
+
+    /** 无货→慢档、有货→快档;FAILED 不调（模板已保证聚合口径,这里再守一道） */
+    @Override
+    protected void adjustPriority(FliggyQueryPriceTask row, RefreshOutcome outcome) {
+        if (outcome == RefreshOutcome.FAILED) {
+            return;
+        }
+        int target = outcome == RefreshOutcome.ON_SALE ? 0 : 1;
+        if (row.getPriorityLevelNumber() != target) {
+            fliggyQueryPriceTaskMapper.updatePriority(row.getId(), target);
+        }
     }
 }

@@ -20,4 +20,10 @@ public interface FliggyQueryPriceTaskMapper {
 
     /** 刷完一家后累加次数并记录时间 */
     int updateAddCount(FliggyQueryPriceTask task);
+
+    /**
+     * 调档（最后一次结果即档位）：无货→慢档(1)长周期探测回归，刷出有货→回快档(0)。
+     * 失败不调（调用方保证）。
+     */
+    int updatePriority(@Param("id") Long id, @Param("priority") int priority);
 }
