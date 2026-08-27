@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS bff_order (
     checkout        VARCHAR(10)  NOT NULL COMMENT '离店日期 yyyy-MM-dd',
     occupancy       VARCHAR(255) NULL     COMMENT '占用串，格式「成人数-儿童年龄,儿童年龄」',
     bed_description VARCHAR(255) NULL,
+    -- 下单时该房价是否提供多床型选择：ER3 的「床型不保证」提示只在多床型时展示
+    bed_choice TINYINT(1) NOT NULL DEFAULT 0,
     traveler_name   VARCHAR(255) NULL     COMMENT '旅客真实姓名，仅存本地不出境',
     traveler_email  VARCHAR(255) NULL     COMMENT '旅客邮箱，仅存本地不出境',
     traveler_phone  VARCHAR(64)  NULL     COMMENT '旅客电话，仅存本地不出境',

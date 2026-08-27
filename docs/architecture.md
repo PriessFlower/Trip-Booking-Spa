@@ -135,18 +135,25 @@ LEGACY_mustStayDeleted 守"不复活":新供应商一律走 gateway 六边形结
 
 | 端点 | 能力接口 | 已实现的供应商 |
 |---|---|---|
-| `POST /client/spa/price` | `ProductSyncService` | expedia、elong |
-| `POST /client/spa/check` | `CheckPriceSyncService` | expedia、elong |
-| `POST /client/spa/booking` | `BookingSyncService` | expedia、elong |
-| `POST /client/spa/order` | `OrderQuerySyncService` | expedia、elong |
-| `POST /client/spa/cancel` | `CancelSyncService` | expedia、elong |
+| `POST /client/spa/price` | `ProductSyncService` | expedia、elong、fliggy |
+| `POST /client/spa/check` | `CheckPriceSyncService` | expedia、elong、fliggy |
+| `POST /client/spa/booking` | `BookingSyncService` | expedia、elong、fliggy |
+| `POST /client/spa/order` | `OrderQuerySyncService` | expedia、elong、fliggy |
+| `POST /client/spa/cancel` | `CancelSyncService` | expedia、elong、fliggy |
 
-即：两家供应商五个能力全齐。启动日志的能力矩阵可核对（2026-08-19 本地实跑）：
+即：三家供应商五个能力全在册。启动日志的能力矩阵可核对（2026-08-26 本地实跑）：
 
 ```
 能力注册: supplier=expedia(10005) capabilities=[PRICING, CHECK_PRICE, BOOKING, ORDER_QUERY, CANCELLATION]
 能力注册: supplier=elong(10010)   capabilities=[PRICING, CHECK_PRICE, BOOKING, ORDER_QUERY, CANCELLATION]
+能力注册: supplier=fliggy(10015)  capabilities=[PRICING, CHECK_PRICE, BOOKING, ORDER_QUERY, CANCELLATION]
 ```
+
+> 飞猪状态（2026-08-26）：五能力在册但**未放量**——查价段已从真实入口穿透验证
+> （本机直连 eco.taobao.com，签名/session/信封真验，"hids is empty"=下架语义闭环），
+> 验价/下单/查单/取消四段仅有单测与手写报文样本作证，真单验证与必测清单见
+> [fliggy/distribution-api.md](fliggy/distribution-api.md) §9。生产 Nacos 的
+> FLIGGY 限流键与 GitHub secrets 的 FLIGGY_* 均未配置，放量前须补齐。
 
 `SupplierSourceEnum` 中其余 7 家（travelConnect、aicHotels、didatravel、huitravel、
 FastpayHotels、ratehawk、meituan）只保留供应商编码，无任何实现——它们的适配代码已随
@@ -258,6 +265,11 @@ bean 名必须是 `<SupplierSourceEnum.desc><能力后缀>`，否则 ① 路由�
 「出报率掉了丢在哪」只能靠 grep 和猜。守护测试从包路径自动查账
 （`MetricVocabularyArchRulesTest.O45`），漏计构建即红。`pricing_supplier_query`（一次实时
 查价一笔）不用管，查价模板统一打（O-4.3），实现方**不得**自行再打。
+
+**第二步半 · 申报**　`SupplierIdentityProfile` 补该家三行申报（R-4.1，含证据），外加
+凭据续期档位（`CredentialRenewal`：每请求现签 / 可自续 / 只能人工）。申报 `HUMAN_ONLY`
+的家必须同时注册 `CredentialExpiry` bean 供到期时间——启动即校验，缺了拒绝启动；
+剩余天数指标与 14 天告警（`spa.yml` SupplierCredentialExpiringSoon）自动生效。
 
 **第三步 · 定义该家的凭据键名**　参照 `ExpediaOfferCredentials`：把键名集中在一个类里，
 供验价（写入方）与下单（读取方）共同引用，而不是两边各写一个字面量。

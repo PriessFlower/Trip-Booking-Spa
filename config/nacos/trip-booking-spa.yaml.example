@@ -120,6 +120,13 @@ ratelimit:
     "[GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_CREATE_ORDER]": 1
     "[GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_QUERY_ORDER]": 1
     "[GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_CANCEL_ORDER]": 1
+    # 飞猪（TOP）：官方无 QPS 文档，cursor 全账号自设 ~20/s；起步保守，撞频控
+    # （platform code 7）看 supplier_io_access{status=throttled} 再调
+    "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_PRODUCT_PRICES]": 5
+    "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_ORDER_PRICE]": 2
+    "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_CREATE_ORDER]": 1
+    "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_QUERY_ORDER]": 2
+    "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_CANCEL_ORDER]": 1
 
 # ── supplier / expedia：静态数据摄取总开关 ──────────────────
 # ── cache：我方自建缓存 ────────────────────────────────────
@@ -245,3 +252,10 @@ supplier:
     # resolve 换票价格容差（R-3.3 双门取严，语义同 supplier.expedia 同名两键）
     resolve-price-tolerance: 0.02
     resolve-price-cap-cents: 2000
+
+  fliggy:
+    # session 有效期天数，到期监控用（FliggyCredentialExpiry：授权日+本值=到期日）。
+    # TOP 授权响应的 expires_in 为 90 天；飞猪若调整授权策略在此改，不必发版。
+    # 凭据本身（appKey/secret/session/网关/授权日期）经 FLIGGY_* 环境变量注入（§3.5.1），
+    # 禁止移入本文件。
+    session-ttl-days: 90

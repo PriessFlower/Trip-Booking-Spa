@@ -22,6 +22,15 @@ public final class MetricNames {
     /** 供应商调用的重试次数。与「一次调用的结果」不是同一个度量，混在一起会把成功率算错 */
     public static final String SUPPLIER_IO_RETRY = "supplier_io_retry";
 
+    /**
+     * 供应商侧业务失败的<b>原生错误码</b>分布。标签 supplier/interface/code。
+     * {@code supplier_io_access} 的 status 只答「败了」，这里答「败成什么样」——
+     * H001083 与 A101010012 的处置完全不同，而此前具体码只在日志里（40 分钟即冲掉），
+     * 「上周 rejected 涨的那一坨是什么码」在指标通道上无解。码取供应商原生值不归并
+     * （码义未核实不猜，先可见后判定）；响应类给不出码时归 {@code http_<status>}。
+     */
+    public static final String SUPPLIER_IO_ERROR_CODE = "supplier_io_error_code";
+
     /** 供应商原始查询（未经本仓转换的那一跳）耗时与次数 */
     public static final String SUPPLIER_IO_ORIGINAL_QUERY = "supplier_io_original_query";
 
@@ -208,6 +217,14 @@ public final class MetricNames {
 
     /** 句柄核销（下单成功，用完即焚） */
     public static final String OFFER_CONSUMED = "offer_consumed";
+
+    /**
+     * 供应商凭据剩余天数（gauge，可为负=已过期）。标签 supplier/renewal。
+     * 只有申报了会过期的家（{@code CredentialRenewal.HUMAN_ONLY} 等）才出现——
+     * 飞猪 session 90 天且只能人工续，到期靠人脑记必然重演「被当集成死查两个月」。
+     * 告警规则在 Prometheus 侧盯它。
+     */
+    public static final String SUPPLIER_CREDENTIAL_DAYS_LEFT = "supplier_credential_days_left";
 
     private MetricNames() {
     }

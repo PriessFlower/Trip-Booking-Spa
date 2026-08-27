@@ -39,6 +39,12 @@ public class BffController {
         return shopService.listCities();
     }
 
+    /** 搜索框联想：按关键词同时返回匹配的城市与酒店 */
+    @GetMapping("/suggest")
+    public JsonNode suggest(@RequestParam(name = "q", required = false) String keyword) {
+        return shopService.suggest(keyword);
+    }
+
     /**
      * occupancy 可重复下发，每间一个（如 {@code occupancy=2-7,11&occupancy=3}），各间人数可不同；
      * 未提供时回退到 adults/childAges/rooms 扁平参数（老链接兼容）。

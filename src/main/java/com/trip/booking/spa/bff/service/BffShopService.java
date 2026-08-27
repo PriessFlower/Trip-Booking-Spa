@@ -19,6 +19,8 @@ import javax.annotation.Resource;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -77,6 +79,39 @@ public class BffShopService {
             node.put("propertyCount", ((Number) row.get("propertyCount")).intValue());
         }
         return cities;
+    }
+
+    /**
+     * 搜索框联想：同时给出城市与酒店两组结果（对齐 Expedia 目的地搜索的行为）。
+     * 关键词里的 SQL LIKE 通配符先转义，否则用户输入 % 会把整库拉出来。
+     */
+    public JsonNode suggest(String keyword) {
+        ObjectNode result = MAPPER.createObjectNode();
+        ArrayNode cities = result.putArray("cities");
+        ArrayNode hotels = result.putArray("hotels");
+        String trimmed = keyword == null ? "" : keyword.trim();
+        if (trimmed.isEmpty()) {
+            return result;
+        }
+        String escaped = trimmed.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+        for (Map<String, Object> row : contentRepo.suggestCities(props.getLanguage(), escaped, 6)) {
+            ObjectNode node = cities.addObject();
+            node.put("city", String.valueOf(row.get("city")));
+            node.put("countryCode", String.valueOf(row.get("countryCode")));
+            node.put("propertyCount", ((Number) row.get("propertyCount")).intValue());
+        }
+        for (Map<String, Object> row : contentRepo.suggestProperties(props.getLanguage(), escaped, 8)) {
+            ObjectNode node = hotels.addObject();
+            node.put("propertyId", String.valueOf(row.get("propertyId")));
+            node.put("name", String.valueOf(row.get("name")));
+            node.put("city", row.get("city") == null ? null : String.valueOf(row.get("city")));
+            node.put("countryCode", row.get("countryCode") == null ? null : String.valueOf(row.get("countryCode")));
+            Object star = row.get("starRating");
+            if (star instanceof Number) {
+                node.put("starRating", ((Number) star).doubleValue());
+            }
+        }
+        return result;
     }
 
     // ---------- 搜索 ----------
@@ -246,6 +281,7 @@ public class BffShopService {
                 offer.rateId = rate.path("id").asText();
                 offer.bedGroupId = bedGroup.path("id").asText();
                 offer.bedDescription = bedGroup.path("description").asText(null);
+                offer.bedChoice = rate.path("bed_groups").size() > 1;
                 offer.checkin = checkin;
                 offer.checkout = checkout;
                 offer.occupancies = occupancies;
@@ -281,7 +317,10 @@ public class BffShopService {
             if (reply.getStatus() == 410 || reply.getStatus() == 404) {
                 throw new BffException(410, "该房价已失效（sold out / rate dead），请重新选择");
             }
-            throw new BffException(502, "验价未能确认，请稍后重试");
+            log.warn("price-check 失败 status={} body={}", reply.getStatus(),
+                    reply.getRaw() != null && reply.getRaw().length() > 500
+                            ? reply.getRaw().substring(0, 500) : reply.getRaw());
+            throw shoppingFailure("验价", reply);
         }
         JsonNode body = reply.getBody();
 
@@ -411,10 +450,37 @@ public class BffShopService {
     }
 
     /** availability 查询，返回 property_id → hotelPrice 节点 */
+    /** Rapid 单次查询的住宿上限；与前端 MAX_NIGHTS 保持一致 */
+    private static final int MAX_NIGHTS = 28;
+
+    /**
+     * 住宿区间校验。房间数上限在 normalizeOccupancies 里，这里只管天数——
+     * 放在 queryAvailability 是因为搜索、详情、验价前的所有查房价路径都走它，
+     * 只在 controller 校验会被其他入口绕过。
+     */
+    private void validateStay(String checkin, String checkout) {
+        LocalDate in;
+        LocalDate out;
+        try {
+            in = LocalDate.parse(checkin);
+            out = LocalDate.parse(checkout);
+        } catch (RuntimeException e) {
+            throw new BffException(400, "入住或退房日期格式不正确（应为 yyyy-MM-dd）");
+        }
+        long nights = ChronoUnit.DAYS.between(in, out);
+        if (nights <= 0) {
+            throw new BffException(400, "退房日期必须晚于入住日期");
+        }
+        if (nights > MAX_NIGHTS) {
+            throw new BffException(400, "单次预订最多 " + MAX_NIGHTS + " 晚，当前为 " + nights + " 晚");
+        }
+    }
+
     private Map<String, JsonNode> queryAvailability(List<String> propertyIds, String checkin,
                                                     String checkout, List<String> occupancies,
                                                     int ratePlanCount, String evidenceTag,
                                                     String testScenario) {
+        validateStay(checkin, checkout);
         StringBuilder query = new StringBuilder("/v3/properties/availability?");
         query.append("checkin=").append(encode(checkin));
         query.append("&checkout=").append(encode(checkout));
@@ -451,9 +517,34 @@ public class BffShopService {
             log.warn("availability 查询失败 status={} body={}", reply.getStatus(),
                     reply.getRaw() != null && reply.getRaw().length() > 500
                             ? reply.getRaw().substring(0, 500) : reply.getRaw());
-            throw new BffException(502, "房价查询未能完成，请稍后重试");
+            throw shoppingFailure("房价查询", reply);
         }
         return result;
+    }
+
+    /**
+     * TR7 错误分级。查询类接口不会产生订单，所以只需分两档，不需要「不确定→反查」
+     * （那一档是下单专有的，见 {@code BffBookingService}）：
+     *
+     * <ul>
+     *   <li><b>确定性失败</b>（4xx）：请求或授权本身不对，重试没有意义，必须明确告知并停止；</li>
+     *   <li><b>临时故障</b>（5xx / 无响应）：供应商侧问题，可以稍后重试。</li>
+     * </ul>
+     *
+     * 两档用不同的 HTTP 状态与文案下发，前端据此决定是否提供「重试」。
+     */
+    private BffException shoppingFailure(String action, RapidReply reply) {
+        int status = reply.getStatus();
+        if (status == 401 || status == 403) {
+            return new BffException(403, action + "被供应商拒绝（授权或合同条款不符），请联系技术支持——重试无效");
+        }
+        if (status >= 400 && status < 500) {
+            return new BffException(400, action + "的请求参数被供应商拒绝（" + status + "），请调整条件后重试");
+        }
+        if (status >= 500) {
+            return new BffException(503, action + "暂时不可用（供应商 " + status + "），请稍后重试");
+        }
+        return new BffException(503, action + "未收到供应商响应，请稍后重试");
     }
 
     /**

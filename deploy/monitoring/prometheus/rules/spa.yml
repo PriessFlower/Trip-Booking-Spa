@@ -142,3 +142,17 @@ groups:
           description: >-
             这台同时跑 Nacos、部署 runner 与本监控栈；TSDB 上限 10 GB，
             盘满通常不是监控数据造成的。
+
+  - name: credentials
+    rules:
+      - alert: SupplierCredentialExpiringSoon
+        expr: supplier_credential_days_left_value < 14
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "供应商 {{ $labels.supplier }} 凭据剩余 {{ $value }} 天（renewal={{ $labels.renewal }}）"
+          description: >-
+            HUMAN_ONLY 档没有自动续期，必须有人去供应商侧重新授权并更新环境变量。
+            cursor 的飞猪 session 过期曾被当「集成死」查了两个月（2026-06~08-10）——
+            这条规则存在的意义就是不再靠人脑记 90 天。负数=已过期。

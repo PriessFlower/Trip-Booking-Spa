@@ -39,6 +39,8 @@ public class OfferCache {
         public String rateId;
         public String bedGroupId;
         public String bedDescription;
+        /** 该房价的 bed_groups 数量 > 1，即旅客确实在多床型之间做过选择 */
+        public boolean bedChoice;
         public String checkin;
         public String checkout;
         /** Rapid occupancy 原文，如 2-7,11；每间一项 */
