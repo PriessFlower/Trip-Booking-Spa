@@ -33,8 +33,8 @@ supplier:
     app-key: ${FLIGGY_APP_KEY:}
     secret: ${FLIGGY_SECRET:}
     session: ${FLIGGY_SESSION:}
-    # 唯一活着的 TOP 网关(gw.api 已死,docs/fliggy/distribution-api.md §1);兜底即生产值,可覆盖以备再迁移
-    url-host: ${FLIGGY_API_HOST:https://eco.taobao.com/router/rest}
+    # 网关无兜底(§3.3.3 禁以生产值作兜底;飞猪无沙箱网关,漏配须响亮失败)。生产值见 .env.example
+    url-host: ${FLIGGY_API_HOST:}
     distributor: ${FLIGGY_DISTRIBUTOR:}
     # session 上次人工授权日期(yyyy-MM-dd)。重授权后必须同步更新,否则到期监控失真
     session-authorized-at: ${FLIGGY_SESSION_AUTHORIZED_AT:}

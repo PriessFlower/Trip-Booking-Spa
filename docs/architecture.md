@@ -135,18 +135,25 @@ LEGACY_mustStayDeleted 守"不复活":新供应商一律走 gateway 六边形结
 
 | 端点 | 能力接口 | 已实现的供应商 |
 |---|---|---|
-| `POST /client/spa/price` | `ProductSyncService` | expedia、elong |
-| `POST /client/spa/check` | `CheckPriceSyncService` | expedia、elong |
-| `POST /client/spa/booking` | `BookingSyncService` | expedia、elong |
-| `POST /client/spa/order` | `OrderQuerySyncService` | expedia、elong |
-| `POST /client/spa/cancel` | `CancelSyncService` | expedia、elong |
+| `POST /client/spa/price` | `ProductSyncService` | expedia、elong、fliggy |
+| `POST /client/spa/check` | `CheckPriceSyncService` | expedia、elong、fliggy |
+| `POST /client/spa/booking` | `BookingSyncService` | expedia、elong、fliggy |
+| `POST /client/spa/order` | `OrderQuerySyncService` | expedia、elong、fliggy |
+| `POST /client/spa/cancel` | `CancelSyncService` | expedia、elong、fliggy |
 
-即：两家供应商五个能力全齐。启动日志的能力矩阵可核对（2026-08-19 本地实跑）：
+即：三家供应商五个能力全在册。启动日志的能力矩阵可核对（2026-08-26 本地实跑）：
 
 ```
 能力注册: supplier=expedia(10005) capabilities=[PRICING, CHECK_PRICE, BOOKING, ORDER_QUERY, CANCELLATION]
 能力注册: supplier=elong(10010)   capabilities=[PRICING, CHECK_PRICE, BOOKING, ORDER_QUERY, CANCELLATION]
+能力注册: supplier=fliggy(10015)  capabilities=[PRICING, CHECK_PRICE, BOOKING, ORDER_QUERY, CANCELLATION]
 ```
+
+> 飞猪状态（2026-08-26）：五能力在册但**未放量**——查价段已从真实入口穿透验证
+> （本机直连 eco.taobao.com，签名/session/信封真验，"hids is empty"=下架语义闭环），
+> 验价/下单/查单/取消四段仅有单测与手写报文样本作证，真单验证与必测清单见
+> [fliggy/distribution-api.md](fliggy/distribution-api.md) §9。生产 Nacos 的
+> FLIGGY 限流键与 GitHub secrets 的 FLIGGY_* 均未配置，放量前须补齐。
 
 `SupplierSourceEnum` 中其余 7 家（travelConnect、aicHotels、didatravel、huitravel、
 FastpayHotels、ratehawk、meituan）只保留供应商编码，无任何实现——它们的适配代码已随

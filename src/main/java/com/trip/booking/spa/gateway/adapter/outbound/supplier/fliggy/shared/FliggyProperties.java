@@ -38,8 +38,12 @@ public class FliggyProperties {
     /** OAuth session（access_token）。过期表现为全线 error_response（如 code 27） */
     private String session;
 
-    /** TOP 网关。默认即唯一活着的网关，可经环境变量覆盖以备再迁移 */
-    private String urlHost = "https://eco.taobao.com/router/rest";
+    /**
+     * TOP 网关。无兜底（§3.3.3：禁止以生产实际值作兜底）——飞猪没有已知的沙箱网关，
+     * 漏配就该表现为「凭据未配置」而不是悄悄打生产。取值见 .env.example
+     * （生产=https://eco.taobao.com/router/rest，gw.api 已死）。
+     */
+    private String urlHost;
 
     /** 分销渠道标识，查价/验价/下单/查单/取消全链路必带 */
     private String distributor;
@@ -50,9 +54,9 @@ public class FliggyProperties {
     /** session 有效期天数。TOP 授权响应的 expires_in（cursor 实证 90 天） */
     private int sessionTtlDays = 90;
 
-    /** 三样缺一即不可调用；接入期未配置是正常态，调用方按「凭据未配置→确定失败」处理 */
+    /** 四样缺一即不可调用（网关无兜底）；接入期未配置是正常态，调用方按「凭据未配置→确定失败」处理 */
     public boolean isConfigured() {
-        return StringUtils.isNoneBlank(appKey, secret, session);
+        return StringUtils.isNoneBlank(appKey, secret, session, urlHost);
     }
 
     @PostConstruct
