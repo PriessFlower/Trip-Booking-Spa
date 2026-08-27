@@ -179,6 +179,9 @@ public class FliggyPriceServiceImpl {
         if (ari == null) {
             return outcome(CheckPriceOutcome.INDETERMINATE, "查价未取得结果，请稍后重试");
         }
+        // 验价即刷(F-6 即时半边):现取的这份全店现货验完即弃等于白白留着缓存陈价对外报,
+        // 异步回写、不占验价预算(艺龙同名机制的实证:河内 Daewoo 陈价每次点击 RATE_DEAD)
+        freshPricesToCacheAsync(request, ari);
         if (ari.isHotelDelisted()) {
             return outcome(CheckPriceOutcome.SOLD_OUT, "该酒店已被供应商下架");
         }
@@ -246,6 +249,52 @@ public class FliggyPriceServiceImpl {
                 .cancelPolicy(productKeyDeriver.convertCancelPolicy(fresh.get("cancel_policy")))
                 .message("验价通过")
                 .build();
+    }
+
+    // ---------- 验价即刷回写 ----------
+
+    /** 回写线程:单线程+有界队列+满则弃——宁可丢一次回写(下轮刷价会补),不许积压拖验价 */
+    private static final java.util.concurrent.ExecutorService FRESH_PRICES_POOL =
+            com.trip.booking.spa.platform.concurrent.ThreadPools.serialBounded("fliggy-fresh-prices", 64, true);
+
+    void freshPricesToCacheAsync(CheckPriceReq request, FliggyAriResponse ari) {
+        try {
+            FRESH_PRICES_POOL.execute(() -> freshPricesToCache(request, ari));
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            log.warn("验价即刷：回写队列满，本次丢弃(下轮刷价会补) sHotelId={}", request.getSHotelId());
+        }
+    }
+
+    /**
+     * 回写本体（同步，供测试直接驱动）。口径与查价同源：下架/明确无货回写空列表
+     * （打无货标记清僵尸价 B7）；平台/业务错误不动缓存（F-5.1）;占用键随验价走。
+     */
+    void freshPricesToCache(CheckPriceReq request, FliggyAriResponse ari) {
+        try {
+            PriceReq priceReq = PriceReq.builder()
+                    .checkIn(request.getCheckIn())
+                    .checkout(request.getCheckOut())
+                    .roomNum(request.getRoomNum() == null ? 1 : request.getRoomNum())
+                    .adultNum(request.getAdultCount())
+                    .childNum(request.getChildNum() == null ? 0 : request.getChildNum())
+                    .childAges(request.getChildAges() == null ? new ArrayList<>() : request.getChildAges())
+                    .build();
+            priceReq.setOccupancies(Occupancy.perRoom(priceReq.getRoomNum(), priceReq.getAdultNum(),
+                    priceReq.getChildNum(), priceReq.getChildAges()));
+            List<ProductRespDTO> products;
+            if (ari.isHotelDelisted() || ari.isEmptyResult()) {
+                products = List.of();
+            } else if (!ari.isSucc()) {
+                return;
+            } else {
+                products = convertRates(ari.rates(), priceReq, request.getSHotelId());
+            }
+            priceCacheService.productToCache(products, priceReq, Supplier.builder()
+                    .supplierId(SupplierSourceEnum.FLIGGY.getCode())
+                    .sHotelId(request.getSHotelId()).build());
+        } catch (Exception e) {
+            log.warn("验价即刷：回写失败,不影响验价 sHotelId={}", request.getSHotelId(), e);
+        }
     }
 
     // ---------- 装配与工具 ----------
