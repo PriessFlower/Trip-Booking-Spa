@@ -63,6 +63,23 @@ public class FliggyPriceServiceImpl {
     private FliggyProductKeyDeriver productKeyDeriver;
     @Resource
     private OfferStore offerStore;
+    @Resource
+    private com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService priceCacheService;
+
+    /**
+     * 刷价入口（口径同艺龙 {@code queryPricesCache}）：没问出结果返回 null 不动缓存
+     * （F-5.1，一次网络抖动不许清在售价）；明确无货（含下架）返回空列表并照走
+     * {@code productToCache}——空列表打无货标记，僵尸价随之清掉（B7）。
+     */
+    public List<ProductRespDTO> queryPricesCache(PriceReq request, Supplier supplier) {
+        PricingResult result = queryPrices(request, supplier, CallPurpose.REFRESH);
+        if (result.outcome() == com.trip.booking.spa.gateway.domain.booking.PricingOutcome.INDETERMINATE) {
+            return null;
+        }
+        List<ProductRespDTO> products = result.products();
+        priceCacheService.productToCache(products, request, supplier);
+        return products;
+    }
 
     // ---------- 查价 ----------
 
