@@ -59,4 +59,15 @@ public class FliggyValidateResponse extends FliggyTopResponse {
     public String bizErrorCode() {
         return payload == null ? null : text(payload, "error_resp_code");
     }
+
+    /** 平台码优先，业务层失败时补业务码（biz: 前缀区分两层，码位不混装） */
+    @Override
+    public String metricErrorCode() {
+        String platform = super.metricErrorCode();
+        if (platform != null) {
+            return platform;
+        }
+        String biz = bizErrorCode();
+        return biz == null ? null : "biz:" + biz;
+    }
 }

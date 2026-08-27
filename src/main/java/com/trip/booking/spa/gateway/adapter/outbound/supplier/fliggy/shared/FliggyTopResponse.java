@@ -87,6 +87,17 @@ public abstract class FliggyTopResponse implements BaseResponse {
         return isPlatformError() ? platformCode + "/" + platformSubCode + "/" + platformMsg : null;
     }
 
+    /**
+     * 进 {@code supplier_io_error_code} 分布的码：平台层取 {@code code[:sub_code]}
+     * （sub_code 才是可辨语义，如 invalid-sessionkey）；业务层由子类覆写补充。
+     */
+    public String metricErrorCode() {
+        if (!isPlatformError()) {
+            return null;
+        }
+        return platformSubCode == null ? platformCode : platformCode + ":" + platformSubCode;
+    }
+
     @Override
     public boolean isSucc() {
         return !isPlatformError() && payload != null;

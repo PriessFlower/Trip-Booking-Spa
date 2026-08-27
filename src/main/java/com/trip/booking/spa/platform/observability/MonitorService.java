@@ -60,6 +60,14 @@ public class MonitorService implements MeterBinder {
                 .collect(Collectors.toList()));
     }
 
+    /**
+     * 耗时类 summary 的直方图桶（毫秒）。没有桶就没有 p90/p99——summary 在 Prometheus 里
+     * 只有 sum/count，均值会被长尾抹平（一次 10s 的超时摊进一百次 50ms 里只抬 100ms）。
+     * 桶是固定档而非 percentile 预聚合：histogram_quantile 可跨标签聚合（按 interface
+     * 合并各 status），客户端分位数不能。八档覆盖 50ms～10s，供应商接口耗时都落在这个区间。
+     */
+    private static final double[] TIME_SLO_MS = {50, 100, 250, 500, 1000, 2500, 5000, 10000};
+
     public DistributionSummary getSummary(String name, Map<String, Object> tags) {
         if (tags == null) {
             return getSummary(name);
@@ -69,7 +77,10 @@ public class MonitorService implements MeterBinder {
                 .map(entry -> Tag.of(entry.getKey(), obj2Str(entry.getValue())))
                 .collect(Collectors.toList());
         tagList.add(Tag.of("avg_label", name + "_sum/" + name + "_count"));
-        return meterRegistry.summary(name, tagList);
+        return DistributionSummary.builder(name)
+                .tags(tagList)
+                .serviceLevelObjectives(TIME_SLO_MS)
+                .register(meterRegistry);
     }
 
     public DistributionSummary getSummary(String name) {

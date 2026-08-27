@@ -54,14 +54,24 @@ public abstract class AbstractElongRestAccess<T extends BaseResponse> extends Ba
      */
     @Override
     protected boolean isThrottled(T response) {
+        return THROTTLE_CODE.equals(reflectErrorCode(response));
+    }
+
+    /** 原生码进 supplier_io_error_code 分布（如 H001083、A201010001），码义纪律见基类 */
+    @Override
+    protected String errorCode(T response) {
+        Object code = reflectErrorCode(response);
+        return code == null ? null : String.valueOf(code);
+    }
+
+    private static Object reflectErrorCode(Object response) {
         if (response == null) {
-            return false;
+            return null;
         }
         try {
-            Object code = response.getClass().getMethod("errorCode").invoke(response);
-            return THROTTLE_CODE.equals(code);
+            return response.getClass().getMethod("errorCode").invoke(response);
         } catch (Exception ignored) {
-            return false;
+            return null;
         }
     }
 

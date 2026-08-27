@@ -59,6 +59,9 @@ public final class MetricTags {
     /** 限流桶键（{@code GLOBAL_LIMIT:<供应商>:<接口>[:<用途>]} 全键） */
     public static final String BUCKET = "bucket";
 
+    /** 供应商原生错误码（{@code supplier_io_error_code}）。取值不归并、不翻译 */
+    public static final String CODE = "code";
+
     /** 凭据续期档位，取值只出自 {@code CredentialRenewal.tagValue()} */
     public static final String RENEWAL = "renewal";
 
@@ -145,6 +148,13 @@ public final class MetricTags {
     public static Map<String, Object> bucket(String key) {
         Map<String, Object> tags = new HashMap<>(2);
         tags.put(BUCKET, key);
+        return tags;
+    }
+
+    /** 供应商原生错误码分布。code 集合以各家码表为界（几十个量级），不随流量膨胀 */
+    public static Map<String, Object> errorCode(SupplierSourceEnum supplier, MonitorNameEnum api, String code) {
+        Map<String, Object> tags = of(supplier, api);
+        tags.put(CODE, code);
         return tags;
     }
 

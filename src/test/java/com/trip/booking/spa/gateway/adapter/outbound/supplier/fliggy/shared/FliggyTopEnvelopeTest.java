@@ -27,6 +27,7 @@ class FliggyTopEnvelopeTest {
         assertTrue(r.isPlatformError());
         assertTrue(r.isCredentialFailure());
         assertFalse(r.isSucc());
+        assertEquals("27:invalid-sessionkey", r.metricErrorCode());
     }
 
     @Test
@@ -77,6 +78,7 @@ class FliggyTopEnvelopeTest {
                         + "\"is_success\":false,\"error_resp_code\":101}}");
         assertFalse(fail.isSucc());
         assertEquals("101", fail.bizErrorCode());
+        assertEquals("biz:101", fail.metricErrorCode());
         assertNull(fail.createKey());
     }
 }

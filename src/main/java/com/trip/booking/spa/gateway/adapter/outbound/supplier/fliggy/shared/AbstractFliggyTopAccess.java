@@ -66,6 +66,11 @@ public abstract class AbstractFliggyTopAccess<T extends FliggyTopResponse> exten
     }
 
     @Override
+    protected String errorCode(T response) {
+        return response == null ? null : response.metricErrorCode();
+    }
+
+    @Override
     protected void beforeAccess(FliggyTopCall call) {
         // 限流已统一在 BaseHttpAccess.access()，此处无业务前置
     }

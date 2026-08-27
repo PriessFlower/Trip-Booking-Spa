@@ -110,6 +110,10 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
             boolean throttled = isThrottled(result.getData());
             Monitor.recordOne(MetricNames.SUPPLIER_IO_ACCESS,
                     ioTags(throttled ? CallStatus.THROTTLED : CallStatus.REJECTED), cost);
+            // 原生错误码分布在此统一记（唯一记录点，各家只申报码不各自埋）：status 答
+            // 「败了」，code 答「败成什么样」。具体码此前只在日志里，40 分钟即冲掉
+            Monitor.recordOne(MetricNames.SUPPLIER_IO_ERROR_CODE,
+                    MetricTags.errorCode(supplier, monitorKey, sanitizedErrorCode(result)));
             if (throttled) {
                 logger.warn("供应商频控命中, supplier:[{}], interface:[{}]", supplier, monitorKey);
             }
@@ -129,6 +133,26 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
 
     public boolean isParseError() {
         return false;
+    }
+
+    /**
+     * 该失败响应的<b>供应商原生错误码</b>，进 {@code supplier_io_error_code} 分布。
+     * 默认 null（回落 {@code http_<状态码>}）；各家覆写以申报自己的码——码取原生值
+     * 不归并不翻译（码义未核实先可见后判定），码集合以各家码表为界，不随流量膨胀。
+     * 只在 {@code isSucc()==false} 时被问。
+     */
+    protected String errorCode(T response) {
+        return null;
+    }
+
+    /** 码的卫生：空回落 http_<status>；截断超长，防异常报文把码位撑成自由文本 */
+    private String sanitizedErrorCode(ResponseResult<T> result) {
+        String code = errorCode(result.getData());
+        if (code == null || code.isBlank()) {
+            return "http_" + result.getHttpStatus();
+        }
+        code = code.trim();
+        return code.length() > 40 ? code.substring(0, 40) : code;
     }
 
     /**
