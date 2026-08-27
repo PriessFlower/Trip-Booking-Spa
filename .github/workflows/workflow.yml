@@ -445,6 +445,16 @@ jobs:
           ELONG_SECRET: ${{ secrets.PROD_ELONG_SECRET }}
           ELONG_API_HOST: ${{ vars.PROD_ELONG_API_HOST }}
           ELONG_CUSTOMER_IP_FALLBACK: ${{ vars.PROD_ELONG_CUSTOMER_IP_FALLBACK }}
+          # 飞猪（TOP）。同规：缺一即拒绝部署。SESSION_AUTHORIZED_AT 也必填——它驱动
+          # 到期监控（90 天人工续期的倒计时），漏配的后果是监控静默无数据来源，
+          # 而 session 到期的历史代价是被当"集成死"查了两个月。重授权后 SESSION 与
+          # AUTHORIZED_AT 两个值必须同批更新。
+          FLIGGY_APP_KEY: ${{ secrets.PROD_FLIGGY_APP_KEY }}
+          FLIGGY_SECRET: ${{ secrets.PROD_FLIGGY_SECRET }}
+          FLIGGY_SESSION: ${{ secrets.PROD_FLIGGY_SESSION }}
+          FLIGGY_DISTRIBUTOR: ${{ secrets.PROD_FLIGGY_DISTRIBUTOR }}
+          FLIGGY_API_HOST: ${{ vars.PROD_FLIGGY_API_HOST }}
+          FLIGGY_SESSION_AUTHORIZED_AT: ${{ vars.PROD_FLIGGY_SESSION_AUTHORIZED_AT }}
         run: |
           set -Eeuo pipefail
 
@@ -454,6 +464,8 @@ jobs:
             NACOS_SERVER_ADDR NACOS_NAMESPACE NACOS_USERNAME NACOS_PASSWORD
             SERVER_ADDRESS EXPEDIA_API_KEY EXPEDIA_SHARED_SECRET EXPEDIA_API_HOST
             ELONG_USER ELONG_APP_KEY ELONG_SECRET ELONG_API_HOST
+            FLIGGY_APP_KEY FLIGGY_SECRET FLIGGY_SESSION FLIGGY_DISTRIBUTOR
+            FLIGGY_API_HOST FLIGGY_SESSION_AUTHORIZED_AT
           )
 
           for name in "${required_values[@]}"; do
@@ -486,6 +498,13 @@ jobs:
             exit 1
           fi
 
+          # 飞猪只有一个活网关：gw.api.taobao.com 已下线（2026-08-10 实测超时，cursor
+          # 的"6月集成死"真凶）。代码无兜底（§3.3.3），这里挡住"配了个死网关"这种漏配。
+          if [ "$FLIGGY_API_HOST" != https://eco.taobao.com/router/rest ]; then
+            echo "FLIGGY_API_HOST must point to https://eco.taobao.com/router/rest (gw.api.taobao.com is dead)." >&2
+            exit 1
+          fi
+
           {
             printf 'SPRING_PROFILES_ACTIVE=prod\n'
             printf 'DB_HOST=%s\n' "$DB_HOST"
@@ -509,6 +528,12 @@ jobs:
             printf 'ELONG_SECRET=%s\n' "$ELONG_SECRET"
             printf 'ELONG_API_HOST=%s\n' "$ELONG_API_HOST"
             printf 'ELONG_CUSTOMER_IP_FALLBACK=%s\n' "$ELONG_CUSTOMER_IP_FALLBACK"
+            printf 'FLIGGY_APP_KEY=%s\n' "$FLIGGY_APP_KEY"
+            printf 'FLIGGY_SECRET=%s\n' "$FLIGGY_SECRET"
+            printf 'FLIGGY_SESSION=%s\n' "$FLIGGY_SESSION"
+            printf 'FLIGGY_DISTRIBUTOR=%s\n' "$FLIGGY_DISTRIBUTOR"
+            printf 'FLIGGY_API_HOST=%s\n' "$FLIGGY_API_HOST"
+            printf 'FLIGGY_SESSION_AUTHORIZED_AT=%s\n' "$FLIGGY_SESSION_AUTHORIZED_AT"
           } | ssh -F "$RUNNER_TEMP/trip-booking-spa-deploy-ssh/config" production \
             'set -Eeuo pipefail; app_dir=/opt/trip-booking-spa; install -d -m 700 "$app_dir"; umask 077; cat > "$app_dir/app.env.next"'
 
