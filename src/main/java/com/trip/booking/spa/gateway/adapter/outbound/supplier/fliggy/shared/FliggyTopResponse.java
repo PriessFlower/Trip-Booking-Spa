@@ -6,19 +6,10 @@ import com.trip.booking.spa.platform.exception.ParseException;
 import com.trip.booking.spa.platform.http.asynchttp.BaseResponse;
 
 /**
- * TOP 响应的双层信封基类。飞猪的错误分两层，混为一层就会把「我们的卡坏了」
- * 当成「酒店没货」（cursor 被这个错认坑了两个月）：
- *
- * <ul>
- *   <li><b>平台层</b>：根节点是 {@code error_response{code, sub_code, msg, sub_msg}}——
- *       签名错、session 过期、频控。业务数据完全没有。</li>
- *   <li><b>业务层</b>：根节点是 {@code <method名>_response}，其内再有
- *       {@code is_success / error_resp_code} 等业务结论。</li>
- * </ul>
- *
- * <p>解析用 JsonNode 显式取路径而非 typed POJO + ignoreUnknown：契约漂移是静默的
- * （Spa* DTO 的教训——漏字段不报错只是恒空），在拿到首批真实报文、钉下逐字段守护
- * 测试之前，显式路径 + 空判断的失败是响亮的。首次沙箱实测后按真实报文补齐守护。
+ * TOP 响应的双层信封基类：平台层 {@code error_response}（签名/session/频控）与业务层
+ * {@code is_success} 必须分开判——混为一层会把我方凭据病当成供应商无货。
+ * 解析用 JsonNode 显式取路径而非 typed POJO+ignoreUnknown：形状错要响亮，不许恒空。
+ * 真实形状由 {@code FliggyRealPayloadTest} 钉住。
  */
 public abstract class FliggyTopResponse implements BaseResponse {
 
@@ -44,10 +35,8 @@ public abstract class FliggyTopResponse implements BaseResponse {
                 platformMsg = text(error, "msg") + "/" + text(error, "sub_msg");
                 return;
             }
-            // 2026-08-27 真实报文实证：simplify=true 把 <method>_response 包裹层也去掉了，
-            // 成功响应顶层直接是业务体（{data, trace_id, request_id}）——文档示例展示的是
-            // 非 simplify 形态。两种都认：有包裹取包裹（防对方哪天改口），无包裹取顶层。
-            // 这个坑正是"显式路径宁可响亮失败"的收益：22 条真实报价曾被误看成空。
+            // simplify=true 时 <method>_response 包裹层也被去掉,顶层直接是业务体(真实报文
+            // 实证,与文档示例不同)。两形态都认:有包裹取包裹,无包裹取顶层
             payload = tree.has(rootKey()) ? tree.get(rootKey()) : tree;
         } catch (Exception e) {
             throw new ParseException(e);
@@ -60,9 +49,8 @@ public abstract class FliggyTopResponse implements BaseResponse {
     }
 
     /**
-     * 是不是<b>我方凭据/配置病</b>（AUTH_CONFIG）：session 过期/非法、签名错。
-     * 判据来自 cursor 生产实证（code 27 / Invalid session / invalid-sessionkey /
-     * 过期的SessionKey）——官方错误码表是空白的，此表只增不猜。
+     * 是不是<b>我方凭据/配置病</b>（AUTH_CONFIG）。判据是生产实证码
+     * （官方码表空白），此表只增不猜。
      */
     public boolean isCredentialFailure() {
         if (!isPlatformError()) {

@@ -10,17 +10,10 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 
 /**
- * 飞猪（淘宝 TOP）接入配置。凭据一律经环境变量注入（PROJECT.md §3.5.1），
- * 变量名登记在 {@code .env.example}。
- *
- * <p>契约依据 docs/fliggy/distribution-api.md；网关必须是 {@code eco.taobao.com}——
- * 旧网关 {@code gw.api.taobao.com} 已下线（2026-08-10 cursor 实测直连超时，
- * 6 月「集成死」的真凶）。
- *
- * <p>session 是 TOP OAuth 授权产物：90 天有效、<b>无自动刷新、只能人工重授权</b>。
- * {@link #sessionAuthorizedAt} 记录上次授权日期（重授权后必须同步更新此环境变量），
- * 到期监控（{@code FliggyCredentialExpiry}）以它推算剩余天数——不配则监控无数据来源，
- * 每小时一条告警日志。
+ * 飞猪（淘宝 TOP）接入配置。凭据一律经 FLIGGY_* 环境变量注入（§3.5.1，名单在
+ * {@code .env.example}）；契约与网关事实见 docs/fliggy/distribution-api.md §1。
+ * session 90 天且只能人工重授权，重授权后 {@link #sessionAuthorizedAt} 必须同批更新，
+ * 否则到期监控失真。
  */
 @Slf4j
 @Getter

@@ -21,11 +21,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 飞猪取消。官方明示我方单号（{@code dis_order_id}）足以定位（B5），不要求飞猪单号。
- *
- * <p>罚金：{@code forfeit_fee} 是结构化字段（penaltySource=FIELD），但<b>官方未标币种</b>
- * ——按 cursor 生产实证以 USD 计（快照必测清单第 2 项，沙箱确证前这是唯一依据）。
- * 取不到罚金回 {@link CancelPenalty#unknown()}，不猜 0 元。
+ * 飞猪取消：我方单号足以定位（B5）。罚金 {@code forfeit_fee} 结构化但官方未标币种，
+ * 暂按生产实证的 USD 计（快照 §9 必测第 2 项）；取不到罚金回 unknown，不猜 0 元。
  */
 @Slf4j
 @Service("fliggyCancelSyncService")

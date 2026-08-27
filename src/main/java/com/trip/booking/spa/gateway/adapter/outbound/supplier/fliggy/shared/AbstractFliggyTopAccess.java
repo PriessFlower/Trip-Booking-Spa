@@ -15,19 +15,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 飞猪（淘宝 TOP）通道基类：POST form-urlencoded + TOP MD5 签名 + 双层信封。
- *
- * <p>请求形态（cursor 生产实现同构 + docs/fliggy/distribution-api.md §1）：
- * {@code POST <urlHost>}，body 为 form 键值对 = 业务参数 + 公共参数
- * （method/app_key/session/format=json/v=2.0/sign_method=md5/simplify=true/timestamp/sign）。
- * timestamp 是<b>北京时间</b> {@code yyyy-MM-dd HH:mm:ss}——显式取 Asia/Shanghai，
- * 不吃 JVM 缺省时区（本地开发机不在东八区时签名必错且报错语焉不详）。
- *
- * <p>{@code simplify=true} 跟随 cursor 生产取值：响应省去 TOP 的包装数组层，
- * 响应模型按简化形态解析，两者必须一致。
- *
- * <p>限流走 BaseHttpAccess 唯一闸门，键 {@code GLOBAL_LIMIT:FLIGGY:<接口>[:<用途>]}。
- * 重试一律 0：TOP 平台错误（含 session 病）重试只会烧配额换同一个错。
+ * 飞猪（淘宝 TOP）通道基类：POST form + TOP MD5 签名，请求形态见
+ * docs/fliggy/distribution-api.md §1。timestamp 必须显式取 Asia/Shanghai（时区错=签名错）；
+ * {@code simplify=true} 与响应模型的简化形态解析必须一致。重试一律 0。
  */
 public abstract class AbstractFliggyTopAccess<T extends FliggyTopResponse> extends BaseHttpAccess<FliggyTopCall, T> {
 

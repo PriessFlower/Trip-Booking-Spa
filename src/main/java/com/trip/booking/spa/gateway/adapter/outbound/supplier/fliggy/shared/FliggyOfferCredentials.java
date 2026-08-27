@@ -3,13 +3,8 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared;
 import java.util.List;
 
 /**
- * 飞猪报价句柄的凭据键名——验价（写入方）与下单（读取方）共同引用的唯一出处，
- * 两边各写字面量必然漂移（接入手册 §5 第三步）。
- *
- * <p>飞猪的票据是<b>一组配对</b>而非单值（Offer 凭据设计成 kv Map 的原因之一）：
- * {@code rate_key}（查价签发）+ {@code create_key}（验价签发）双钥缺一不可，
- * {@code request_trace_id} 是定价策略配对键。创单还要回传验价确认的总价与币种
- * （TOP create 必填 total_room_price，防价格漂移）。
+ * 飞猪报价句柄的凭据键名——验价（写入方）与下单（读取方）共同引用的唯一出处
+ * （接入手册 §5 第三步）。票据是一组配对：双钥 + 配对键 + 验价确认的总价与币种。
  */
 public final class FliggyOfferCredentials {
 

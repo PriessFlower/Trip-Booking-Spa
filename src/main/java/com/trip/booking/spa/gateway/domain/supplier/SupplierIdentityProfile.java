@@ -61,20 +61,11 @@ public enum SupplierIdentityProfile {
             Duration.ofMinutes(10), CredentialRenewal.STATELESS),
 
     /**
-     * 接入中（2026-08-26 开工），申报全部取保守侧，实测后凭证据放宽：
-     *
-     * <p>房型 {@code room_id/srid}：<b>UNVERIFIED</b>——官方静态接口
-     * （foundation.hotel.query）按 srid 发布房型、cursor 全程用 rate 里的 room_id，
-     * 线索充分但无本仓实测，按 R-4.2 先按无证据对待，不进房型级目录。
-     *
-     * <p>报价码 {@code rate_key}：<b>易腐</b>——官方文档对有效期只字未提
-     * （docs/fliggy/distribution-api.md §3〔未确认〕），cursor 的 30 分钟是自设 TTL
-     * 非官方承诺。TTL 上限取 10 分钟（cursor 自设值的三分之一，同艺龙先例逻辑），
-     * 沙箱 A/B 实测后调整。
-     *
-     * <p>凭据：<b>HUMAN_ONLY</b>——TOP OAuth session，expires_in=90 天、无自动刷新、
-     * 只能人工重授权（cursor 实证：2026-08-10 重授权，此前过期被当「集成死」查了两个月）。
-     * 到期时间由 {@code FliggyCredentialExpiry} 从环境变量供给。
+     * 接入中（2026-08-26 开工），申报全取保守侧，实测后凭证据放宽（依据与未确认项
+     * 见 docs/fliggy/distribution-api.md §9）：房型 UNVERIFIED（有线索无本仓实测，
+     * R-4.2 不进房型目录）；rate_key 易腐（官方对有效期只字未提，TTL 帽 10 分钟待
+     * A/B 实测调整）；凭据 HUMAN_ONLY（TOP OAuth 90 天、无自动刷新，
+     * 到期由 {@code FliggyCredentialExpiry} 供给）。
      */
     FLIGGY(SupplierSourceEnum.FLIGGY, RoomIdStability.UNVERIFIED, QuoteCodeStability.PERISHABLE,
             Duration.ofMinutes(10), CredentialRenewal.HUMAN_ONLY);

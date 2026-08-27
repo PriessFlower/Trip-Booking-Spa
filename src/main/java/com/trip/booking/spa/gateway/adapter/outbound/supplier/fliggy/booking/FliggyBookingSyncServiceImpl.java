@@ -28,12 +28,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 飞猪下单。凭句柄取回验价时锁定的双钥与总价（{@link FliggyOfferCredentials}），
- * 我方单号进 {@code out_order_id}、飞猪单号从 {@code tid} 回收（B5）。
- *
- * <p>三态纪律：拿到 tid 才是 SUCCESS（随即核销句柄）；平台层拒绝（error_response）
- * 是「请求未达业务」的确定性失败——其中凭据病走 AUTH_CONFIG 告警；业务层失败
- * 官方码表空白，<b>无法证明请求未生效，一律 UNKNOWN</b>，上游凭我方单号反查确证。
+ * 飞猪下单：句柄取回双钥与验价总价，我方单号进 {@code out_order_id}、
+ * 飞猪单号从 {@code tid} 回收（B5）。拿到 tid 才 SUCCESS（随即核销）；
+ * 平台层拒绝=请求未达业务的确定失败（凭据病走 AUTH_CONFIG）；
+ * 业务层失败无法证明未生效，一律 UNKNOWN 引导反查。
  */
 @Slf4j
 @Service("fliggyBookingSyncService")
@@ -66,6 +64,12 @@ public class FliggyBookingSyncServiceImpl extends AbstractBookingSyncSupportServ
                 return failed(req.getOrderId(), "offer_credential_missing",
                         "报价句柄内容不完整（缺 " + key + "），请重新验价后下单");
             }
+        }
+        if (StringUtils.isAllBlank(req.getPersonName(), req.getContactName())
+                || StringUtils.isBlank(req.getContactPhone())) {
+            // 参数缺失是确定性失败,不许滑进 UNKNOWN 让上游白跑一次反查
+            return failed(req.getOrderId(), "missing_guest_or_contact",
+                    "缺少入住人姓名或联系人电话，供应商侧未发生任何动作");
         }
 
         ResponseResult<FliggyCreateResponse> result = new CreateOrderAccess(properties)
