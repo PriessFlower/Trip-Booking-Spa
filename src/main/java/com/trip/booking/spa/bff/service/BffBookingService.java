@@ -92,6 +92,7 @@ public class BffBookingService {
             row.checkout = offer.rate.checkout;
             row.occupancy = String.join("|", offer.rate.occupancies);
             row.bedDescription = offer.rate.bedDescription;
+            row.bedChoice = offer.rate.bedChoice;
             row.travelerName = travelerName;
             row.travelerEmail = travelerEmail;
             row.travelerPhone = travelerPhone;
@@ -291,6 +292,7 @@ public class BffBookingService {
         result.put("checkout", row.checkout);
         result.put("occupancy", row.occupancy);
         result.put("bedDescription", row.bedDescription);
+        result.put("bedChoice", row.bedChoice);
         result.put("travelerName", row.travelerName);
         result.put("travelerEmail", row.travelerEmail);
         result.put("travelerPhone", row.travelerPhone);

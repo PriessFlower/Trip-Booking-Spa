@@ -48,6 +48,39 @@ public class PropertyContentRepo {
                 language, minCount);
     }
 
+    /**
+     * 搜索框联想——城市。按 city 模糊匹配，不受 listCities 的 minCount 门槛限制，
+     * 因此像「Région Test」这种只有一家酒店的城市也能被搜到。
+     */
+    public List<Map<String, Object>> suggestCities(String language, String keyword, int limit) {
+        return jdbcTemplate.queryForList(
+                "SELECT city, country_code AS countryCode, COUNT(*) AS propertyCount"
+                        + " FROM expedia_property_content"
+                        + " WHERE language = ? AND active = 1 AND city IS NOT NULL AND city LIKE ?"
+                        + " GROUP BY city, country_code"
+                        + " ORDER BY propertyCount DESC LIMIT " + boundedLimit(limit),
+                language, "%" + keyword + "%");
+    }
+
+    /**
+     * 搜索框联想——酒店名。只取小列，raw_json 绝不进这条语句：
+     * 它是大 JSON 列，一旦参与排序就会打爆 MySQL sort buffer（见 searchByCity 注释）。
+     */
+    public List<Map<String, Object>> suggestProperties(String language, String keyword, int limit) {
+        return jdbcTemplate.queryForList(
+                "SELECT property_id AS propertyId, name, city, country_code AS countryCode,"
+                        + " star_rating AS starRating"
+                        + " FROM expedia_property_content"
+                        + " WHERE language = ? AND active = 1 AND name LIKE ?"
+                        + " ORDER BY star_rating DESC, property_id"
+                        + " LIMIT " + boundedLimit(limit),
+                language, "%" + keyword + "%");
+    }
+
+    private static int boundedLimit(int limit) {
+        return Math.max(1, Math.min(limit, 50));
+    }
+
     /** 结果在 Java 侧按星级降序排——外层 SQL 排序同样会把 raw_json 拖进 sort buffer */
     public List<PropertySummary> searchByCity(String city, String language, int limit) {
         // raw_json 为大 JSON 列，直接参与 ORDER BY 会打爆 MySQL sort buffer

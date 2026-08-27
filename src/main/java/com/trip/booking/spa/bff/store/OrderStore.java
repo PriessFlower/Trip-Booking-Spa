@@ -40,6 +40,7 @@ public class OrderStore {
         public String checkout;
         public String occupancy;
         public String bedDescription;
+        public boolean bedChoice;
         public String travelerName;
         /** 旅客联系方式：仅存本地供确认页/客服使用，不发送给供应商（§3.4 过渡方案） */
         public String travelerEmail;
@@ -66,6 +67,7 @@ public class OrderStore {
             row.checkout = rs.getString("checkout");
             row.occupancy = rs.getString("occupancy");
             row.bedDescription = rs.getString("bed_description");
+            row.bedChoice = rs.getBoolean("bed_choice");
             row.travelerName = rs.getString("traveler_name");
             row.travelerEmail = rs.getString("traveler_email");
             row.travelerPhone = rs.getString("traveler_phone");
@@ -103,7 +105,7 @@ public class OrderStore {
     public void verifySchema() {
         try {
             jdbcTemplate.query("SELECT order_id, itinerary_id, property_id, property_name,"
-                    + " checkin, checkout, occupancy, bed_description, traveler_name,"
+                    + " checkin, checkout, occupancy, bed_description, bed_choice, traveler_name,"
                     + " traveler_email, traveler_phone, status,"
                     + " request_json, response_json, pricing_json, policy_json, created_at"
                     + " FROM bff_order LIMIT 0", MAPPER);
@@ -116,12 +118,12 @@ public class OrderStore {
 
     public void insert(OrderRow row) {
         jdbcTemplate.update("INSERT INTO bff_order (order_id, itinerary_id, property_id, property_name,"
-                        + " checkin, checkout, occupancy, bed_description, traveler_name,"
+                        + " checkin, checkout, occupancy, bed_description, bed_choice, traveler_name,"
                         + " traveler_email, traveler_phone, status,"
                         + " request_json, response_json, pricing_json, policy_json)"
-                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 row.orderId, row.itineraryId, row.propertyId, row.propertyName,
-                row.checkin, row.checkout, row.occupancy, row.bedDescription, row.travelerName,
+                row.checkin, row.checkout, row.occupancy, row.bedDescription, row.bedChoice, row.travelerName,
                 row.travelerEmail, row.travelerPhone,
                 row.status, asJson(row.requestJson), asJson(row.responseJson),
                 asJson(row.pricingJson), asJson(row.policyJson));
