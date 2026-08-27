@@ -81,6 +81,21 @@ groups:
         # 关闭条件（O-9.6）：若某供应商改用业务错误码表达无房，rejected 会常态化，
         # 届时须把该取值从本表达式移出，而不是调高阈值。
 
+      - alert: SupplierAuthConfigDetected
+        # 我方凭据/配置病（FailureKind.AUTH_CONFIG）：供应商无辜、重试无效、只有人能修。
+        # 阈值就是"非零"——这一档的每一次出现都值得人看（MetricNames 同名注释）。
+        # 历史代价：飞猪 session 过期被当"集成死"查了两个月（2026-06~08）。
+        expr: >-
+          sum by (supplier) (increase(supplier_auth_config_count_total{job="trip-booking-spa"}[15m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.supplier }} 检出我方凭据/配置病（AUTH_CONFIG）"
+          description: >-
+            session 过期、签名错或 IP 白名单问题。重试无效，勿拉黑产品、勿判无房；
+            日志锚 [auth-config]。飞猪 session 须人工重授权并同批更新
+            FLIGGY_SESSION 与 FLIGGY_SESSION_AUTHORIZED_AT 两个值。
+
   - name: application
     rules:
       - alert: HttpServerErrors
