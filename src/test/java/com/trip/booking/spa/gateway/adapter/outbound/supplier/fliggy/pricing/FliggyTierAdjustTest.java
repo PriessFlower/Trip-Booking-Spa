@@ -13,7 +13,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
- * 档位流转=最后一次结果：无货→慢档(1)、有货→快档(0)、失败不动档
+ * 档位流转=最后一次结果：无货=业务档+10(原档可复原)、有货 -10 回原档、失败不动档
  * （F-5.1 同款：网络抖动不许把店打进慢车道）。同档不写库。
  */
 class FliggyTierAdjustTest {
@@ -36,17 +36,17 @@ class FliggyTierAdjustTest {
     }
 
     @Test
-    @DisplayName("快档刷到无货 → 降慢档(1)")
+    @DisplayName("业务档 0 刷到无货 → 沉到 10(原档藏在数值里)")
     void emptyDemotesToSlow() {
         ReflectionTestUtils.invokeMethod(service, "adjustPriority", row(1L, 0), RefreshOutcome.EMPTY);
-        verify(mapper).updatePriority(1L, 1);
+        verify(mapper).updatePriority(1L, 10);
     }
 
     @Test
-    @DisplayName("慢档刷出有货 → 回快档(0)")
+    @DisplayName("无货位 12 刷出有货 → 回业务档 2(成交店待遇不丢)")
     void onSalePromotesToFast() {
-        ReflectionTestUtils.invokeMethod(service, "adjustPriority", row(2L, 1), RefreshOutcome.ON_SALE);
-        verify(mapper).updatePriority(2L, 0);
+        ReflectionTestUtils.invokeMethod(service, "adjustPriority", row(2L, 12), RefreshOutcome.ON_SALE);
+        verify(mapper).updatePriority(2L, 2);
     }
 
     @Test
@@ -54,7 +54,7 @@ class FliggyTierAdjustTest {
     void failedAndSameTierDoNotWrite() {
         ReflectionTestUtils.invokeMethod(service, "adjustPriority", row(3L, 0), RefreshOutcome.FAILED);
         ReflectionTestUtils.invokeMethod(service, "adjustPriority", row(4L, 0), RefreshOutcome.ON_SALE);
-        ReflectionTestUtils.invokeMethod(service, "adjustPriority", row(5L, 1), RefreshOutcome.EMPTY);
+        ReflectionTestUtils.invokeMethod(service, "adjustPriority", row(5L, 11), RefreshOutcome.EMPTY);
         verify(mapper, never()).updatePriority(Mockito.anyLong(), Mockito.anyInt());
     }
 }
