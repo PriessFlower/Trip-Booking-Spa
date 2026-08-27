@@ -77,30 +77,40 @@ public class FliggyCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService
     }
 
     /**
-     * 档位编码：业务档 N（0=当前全量档,将来加远期/成交档即 1/2/…），其无货态 = N+{@link #SOLD_OUT_OFFSET}。
-     * 无货是与业务档<b>正交</b>的状态——成交店也会暂时满房,压进同一序列会丢原档；
-     * +10 偏移让原档藏在数值里：降档 +10、刷出有货 -10 回到自己的业务档,无需记忆列。
+     * 档位编码：业务档=住期远近（0=T0-2 / 1=T3-7 / 2=T8-30），其无货态=N+{@link #SOLD_OUT_OFFSET}。
+     * 无货是与业务档<b>正交</b>的状态,+10 偏移让原档藏在数值里：降档 +10、
+     * 刷出有货 -10 回自己的业务档,无需记忆列。近档先消费,无货位殿后低频探活。
      */
     static final int SOLD_OUT_OFFSET = 10;
 
     @Override
     protected List<Integer> tiers() {
-        return List.of(0, SOLD_OUT_OFFSET);
+        return List.of(0, 1, 2, SOLD_OUT_OFFSET, SOLD_OUT_OFFSET + 1, SOLD_OUT_OFFSET + 2);
     }
 
     @Override
     protected int batchSize(int priority) {
-        return priority >= SOLD_OUT_OFFSET
-                ? environment.getProperty("task.fliggy-cps.slow-batch-size", Integer.class, 100)
-                : environment.getProperty("task.fliggy-cps.batch-size", Integer.class, 200);
+        if (priority >= SOLD_OUT_OFFSET) {
+            return environment.getProperty("task.fliggy-cps.slow-batch-size", Integer.class, 100);
+        }
+        return switch (priority) {
+            case 1 -> environment.getProperty("task.fliggy-cps.mid-batch-size", Integer.class, 200);
+            case 2 -> environment.getProperty("task.fliggy-cps.far-batch-size", Integer.class, 200);
+            default -> environment.getProperty("task.fliggy-cps.batch-size", Integer.class, 200);
+        };
     }
 
     /** 兜底串行是安全侧（§3.3.3）：并发是能力，Nacos 读不到时退回已知安全的慢 */
     @Override
     protected int concurrency(int priority) {
-        return priority >= SOLD_OUT_OFFSET
-                ? environment.getProperty("task.fliggy-cps.slow-concurrency", Integer.class, 1)
-                : environment.getProperty("task.fliggy-cps.concurrency", Integer.class, 1);
+        if (priority >= SOLD_OUT_OFFSET) {
+            return environment.getProperty("task.fliggy-cps.slow-concurrency", Integer.class, 1);
+        }
+        return switch (priority) {
+            case 1 -> environment.getProperty("task.fliggy-cps.mid-concurrency", Integer.class, 1);
+            case 2 -> environment.getProperty("task.fliggy-cps.far-concurrency", Integer.class, 1);
+            default -> environment.getProperty("task.fliggy-cps.concurrency", Integer.class, 1);
+        };
     }
 
     @Override
