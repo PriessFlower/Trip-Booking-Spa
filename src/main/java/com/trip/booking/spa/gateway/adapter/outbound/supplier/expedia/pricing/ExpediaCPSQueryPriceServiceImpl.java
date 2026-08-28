@@ -88,12 +88,19 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
     /** Expedia 目前单档 */
     @Override
     protected List<Integer> tiers() {
-        return List.of(0);
+        return List.of(0, 1, 2, SOLD_OUT_OFFSET, SOLD_OUT_OFFSET + 1, SOLD_OUT_OFFSET + 2);
     }
 
     @Override
     protected int batchSize(int priority) {
-        return environment.getProperty("task.expedia-cps.batch-size", Integer.class, 200);
+        if (priority >= SOLD_OUT_OFFSET) {
+            return environment.getProperty("task.expedia-cps.slow-batch-size", Integer.class, 100);
+        }
+        return switch (priority) {
+            case 1 -> environment.getProperty("task.expedia-cps.mid-batch-size", Integer.class, 200);
+            case 2 -> environment.getProperty("task.expedia-cps.far-batch-size", Integer.class, 200);
+            default -> environment.getProperty("task.expedia-cps.batch-size", Integer.class, 200);
+        };
     }
 
     /**
@@ -102,7 +109,14 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
      */
     @Override
     protected int concurrency(int priority) {
-        return environment.getProperty("task.expedia-cps.concurrency", Integer.class, 1);
+        if (priority >= SOLD_OUT_OFFSET) {
+            return environment.getProperty("task.expedia-cps.slow-concurrency", Integer.class, 1);
+        }
+        return switch (priority) {
+            case 1 -> environment.getProperty("task.expedia-cps.mid-concurrency", Integer.class, 1);
+            case 2 -> environment.getProperty("task.expedia-cps.far-concurrency", Integer.class, 1);
+            default -> environment.getProperty("task.expedia-cps.concurrency", Integer.class, 1);
+        };
     }
 
     /**
@@ -162,6 +176,20 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
             return RefreshOutcome.FAILED;
         }
         return products.isEmpty() ? RefreshOutcome.EMPTY : RefreshOutcome.ON_SALE;
+    }
+
+    /**
+     * 刷完调档：无货沉入本档无货位（+10），刷出有货回原档（-10）；失败不动档
+     * （F-5.1：一次网络抖动不该把店打进慢车道）。算法与艺龙/飞猪共用
+     * {@link #soldOutOffsetTarget}，此前 Expedia 未实现此钩子——满房的店不会沉入
+     * 慢车道，一直按同频消耗额度。
+     */
+    @Override
+    protected void adjustPriority(ExpediaQueryPriceTask row, RefreshOutcome outcome) {
+        int target = soldOutOffsetTarget(row.getPriorityLevelNumber(), outcome);
+        if (target != row.getPriorityLevelNumber()) {
+            expediaQueryPriceTaskMapper.updatePriority(row.getId(), target);
+        }
     }
 
     /**

@@ -22,6 +22,14 @@ task:
     # 艺龙 2026-08-22 曝光断粮事故即此因（只刷 1 人而高德按 2 人问价）。
     # 改此值直接放大/缩小供应商调用量：每多一个占用，刷价量翻一倍。
     occupancies: "1"
+    # 住期档:0=T0-2(batch-size/concurrency)、1=T3-7(mid)、2=T8-30(far);
+    # 无货位=业务档+10,共用 slow-*(沉进去的店少刷,刷出有货再回原档)。与艺龙/飞猪同形。
+    mid-batch-size: 200
+    mid-concurrency: 1
+    far-batch-size: 200
+    far-concurrency: 1
+    slow-batch-size: 100
+    slow-concurrency: 1
     # 行级并发度。兜底 1＝串行，是搬上骨架前的行为；上调前须与连接池一起评估（出价共用同一个池）
     concurrency: 1
     cron: '0 0/30 * * * ?'    # 每 30 分钟

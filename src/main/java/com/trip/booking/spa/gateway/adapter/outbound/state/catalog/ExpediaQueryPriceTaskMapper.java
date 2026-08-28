@@ -29,4 +29,7 @@ public interface ExpediaQueryPriceTaskMapper {
      * @return: int
      **/
     int updateAddCount(ExpediaQueryPriceTask expediaQueryPriceTask);
+
+    /** 调档（模板偏移算法产出）：无货=业务档+10,有货 -10 回原档。失败不调（调用方保证） */
+    int updatePriority(@Param("id") Long id, @Param("priority") int priority);
 }
