@@ -31,7 +31,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 产品建档：查价响应 → {@code supplier_product_base}（一行=一个卖法）。
- * 流程沿旧链路：默认 +9/+10 天占位日期、occupancy=1、零售价+打包价各查一遍、每酒店线程池并发。
+ * 流程沿旧链路：默认 +9/+10 天占位日期、零售价+打包价各查一遍、每酒店线程池并发；
+ * 占用取 {@code task.expedia-catalog.occupancies}，每个占用各建一遍。
  *
  * <p>2026-08-20 起不再双推——聚合域的桥按 R-6.1 不放在供应商网关，已撤表。
  *
@@ -41,7 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <ul>
  *   <li>键必须经 {@link ExpediaProductKeyDeriver#deriveProductKey} 派生——建档与查价/resolve
  *       同一份代码，键分叉即身份分叉</li>
- *   <li>占用是键成分：本档以建档请求的 occupancy（默认 1）派生，目录行只代表该占用下的卖法</li>
+ *   <li>占用是键成分：一行只代表该占用下的卖法，没建的占用取不到</li>
  *   <li>餐食/退改解析不出（UNKNOWN）不进目录（R-5.4），宁缺不污染等价类</li>
  * </ul>
  */
@@ -52,6 +53,14 @@ public class ExpediaProductMappingService {
     private static final int SUPPLIER_ID = SupplierSourceEnum.EXPEDIA.getCode();
     private static final String OPERATOR = "expedia-transform";
     private static final int PAGE_SIZE = 100;
+
+    /**
+     * 建档占用集（逗号分隔）。occupancy 是 productKey 的成分，目录又按 product_key
+     * 精确相等取用，故只建了某个占用，别的占用就取不到——覆盖哪些占用是运营口径，
+     * 不该由本类猜，因此走 Nacos 运行时键，与 elong-cps/fliggy-cps 同形。
+     */
+    @Value("${task.expedia-catalog.occupancies:1,2}")
+    private String catalogOccupancies;
 
     @Value("${expedia.url.host}")
     private String host;
@@ -82,35 +91,45 @@ public class ExpediaProductMappingService {
     /**
      * 照抄旧 saveOrUpdateProductInfo：指定酒店或分页全量
      *
+     * <p><b>占用必须覆盖实际被查的那些</b>：occupancy 是 productKey 的成分，目录只按
+     * {@code product_key} <b>精确相等</b>取用（{@code selectAttributesByProductKeys}），
+     * 故没建的占用一律取不到。本方法原先写死 {@code occupancies=["1"]}（旧实现遗留），
+     * 而刷价走 2 人（{@code ExpediaCPSQueryPriceServiceImpl.dimensions()}），两边各建各的、
+     * 键互不相交。现改为按 {@code task.expedia-catalog.occupancies} 逐个建。
+     *
      * @param checkInDate  查价占位入住日；空=+9 天（旧默认）
      * @param checkOutDate 查价占位离店日；空=+10 天
      * @param supplierHotelIds 指定酒店；空=分页遍历 supplier_hotel_base
      * @param startNum     分页起始页（断点续跑）
+     * @param occupancies0 查价占用集，逗号分隔；空=取 {@code task.expedia-catalog.occupancies}
      * @return 已提交建档的酒店数（产品在后台线程落库）
      */
-    public int syncProducts(String checkInDate, String checkOutDate, List<String> supplierHotelIds, Integer startNum) {
+    public int syncProducts(String checkInDate, String checkOutDate, List<String> supplierHotelIds,
+                            Integer startNum, String occupancies0) {
+        List<String> occupancies = java.util.Arrays.stream(
+                        (StringUtils.isBlank(occupancies0) ? catalogOccupancies : occupancies0).split(","))
+                .map(String::trim).filter(v -> !v.isEmpty()).collect(java.util.stream.Collectors.toList());
         // R-4.3：只有房型 ID 申报为稳定的供应商才许进房型级目录。Expedia 已核验；
         // 这里仍显式过闸，防止此类被当模板复制给未申报的供应商
         if (!SupplierIdentityProfile.forCode(SUPPLIER_ID).catalogEligibleAtRoomLevel()) {
             throw new IllegalStateException("供应商 " + SUPPLIER_ID
                     + " 房型 ID 未核验稳定，禁止进房型级目录（docs/product-identity.md R-4.3）");
         }
-        if (StringUtils.isBlank(checkInDate) || StringUtils.isBlank(checkOutDate)) {
-            checkInDate = DateUtil.getFutureDay(null, 9);
-            checkOutDate = DateUtil.getFutureDay(null, 10);
-        }
+        boolean blankDates = StringUtils.isBlank(checkInDate) || StringUtils.isBlank(checkOutDate);
+        final String checkIn = blankDates ? DateUtil.getFutureDay(null, 9) : checkInDate;
+        final String checkOut = blankDates ? DateUtil.getFutureDay(null, 10) : checkOutDate;
         if (CollectionUtils.isNotEmpty(supplierHotelIds)) {
-            pushProductInfo(checkInDate, checkOutDate, supplierHotelIds);
+            occupancies.forEach(o -> pushProductInfo(checkIn, checkOut, supplierHotelIds, o));
             return supplierHotelIds.size();
         }
         AtomicInteger submitted = new AtomicInteger();
         int pageNum = startNum == null ? 0 : startNum;
         while (true) {
-            List<String> page = catalogMapper.selectSupplierHotelIds(SUPPLIER_ID, pageNum * PAGE_SIZE, PAGE_SIZE);
+            final List<String> page = catalogMapper.selectSupplierHotelIds(SUPPLIER_ID, pageNum * PAGE_SIZE, PAGE_SIZE);
             if (CollectionUtils.isEmpty(page)) {
                 break;
             }
-            pushProductInfo(checkInDate, checkOutDate, page);
+            occupancies.forEach(o -> pushProductInfo(checkIn, checkOut, page, o));
             submitted.addAndGet(page.size());
             pageNum++;
         }
@@ -118,14 +137,15 @@ public class ExpediaProductMappingService {
     }
 
     /** 照抄旧 pushProductInfo：每酒店一个线程，零售价+打包价各建档一遍 */
-    private void pushProductInfo(String checkInDate, String checkOutDate, List<String> supplierHotelIds) {
+    private void pushProductInfo(String checkInDate, String checkOutDate, List<String> supplierHotelIds,
+                                 String occupancy) {
         supplierHotelIds.forEach(supplierHotelId -> ThreadPools.fixedCallerRuns(ExpediaGeographyIngestionService.CONTENT_POOL_NAME, 20, 1000).execute(() -> {
             QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder()
                     .property_id(supplierHotelId)
                     .checkin(checkInDate)
                     .checkout(checkOutDate)
                     .currency("USD")
-                    .occupancies(List.of("1"))
+                    .occupancies(List.of(occupancy))
                     .sales_environment("hotel_only")
                     .build();
             try {
