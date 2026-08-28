@@ -33,8 +33,9 @@ class ExpediaCatalogOccupancyTest {
         Value v = f.getAnnotation(Value.class);
 
         assertNotNull(v, "建档占用必须由 @Value 绑定运行时配置——写死则改一次要发一次版");
-        assertTrue(v.value().contains("task.expedia-catalog.occupancies"),
-                "键名须为 task.expedia-catalog.occupancies（与 elong-cps/fliggy-cps 同形），实际=" + v.value());
+        assertTrue(v.value().contains("task.expedia-cps.occupancies"),
+                "建档占用必须跟随刷价、共用 task.expedia-cps.occupancies——另立一个键就是两套口径，"
+                        + "配歪了建出来的行与真实流量的 productKey 不相等、取不到。实际=" + v.value());
         assertTrue(v.value().contains(":"),
                 "必须带默认值，否则该键在 Nacos 缺席时启动即失败");
     }
