@@ -127,10 +127,21 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
         return expediaQueryPriceTaskMapper.getQueryPriceTaskList(priority, temporaryUpgrade, batchSize);
     }
 
-    /** Expedia 此前按 2 人写死一条，故只有一个维度。改成配置项属行为变更，本次不动 */
+    /**
+     * 每行按这些占用各查一次。占用既是 productKey 的成分，也是缓存键的一维——<b>没刷的占用，
+     * 该占用的查询就如实拿空</b>。艺龙有同构事故可循：只刷 1 人而高德按 2 人问价，曝光刷新
+     * 断粮 16h 后被 RATE_DEAD 整体撤下（2026-08-22，见 {@code ElongCPSQueryPriceServiceImpl}
+     * 同名方法注释）。
+     *
+     * <p>该刷哪些占用取决于渠道实际按几人问价，属运营口径，故取 Nacos 运行时键、可随时调；
+     * 兜底 "2" 是改为配置项之前的写死值，保证键缺席时行为不变。
+     */
     @Override
     protected List<String> dimensions() {
-        return List.of("2");
+        return java.util.Arrays.stream(
+                        environment.getProperty("task.expedia-cps.occupancies", "2").split(","))
+                .map(String::trim).filter(v -> !v.isEmpty())
+                .collect(java.util.stream.Collectors.toList());
     }
 
     @Override

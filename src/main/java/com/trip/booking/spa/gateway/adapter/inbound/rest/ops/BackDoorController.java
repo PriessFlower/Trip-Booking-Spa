@@ -71,15 +71,18 @@ public class BackDoorController {
     }
 
     @GetMapping("/expedia/catalog/products")
-    @ApiOperation("Expedia产品映射建档（原saveOrUpdateProductInfo）；propertyIds空=分页全量")
+    @ApiOperation("Expedia产品映射建档（原saveOrUpdateProductInfo）；propertyIds空=分页全量；"
+            + "occupancy空=2（须与真实流量一致，否则 productKey 不相等、目录取不到）")
     public HttpResponse expediaCatalogProducts(@RequestParam(value = "propertyIds", required = false) String propertyIds,
                                                @RequestParam(value = "checkIn", required = false) String checkIn,
                                                @RequestParam(value = "checkOut", required = false) String checkOut,
-                                               @RequestParam(value = "startNum", required = false) Integer startNum) {
+                                               @RequestParam(value = "startNum", required = false) Integer startNum,
+                                               @RequestParam(value = "occupancy", required = false) String occupancy) {
         List<String> ids = org.apache.commons.lang3.StringUtils.isBlank(propertyIds)
                 ? List.of()
                 : Arrays.asList(propertyIds.split(","));
-        return HttpResponse.getSuccessInstance(expediaProductMappingService.syncProducts(checkIn, checkOut, ids, startNum));
+        return HttpResponse.getSuccessInstance(
+                expediaProductMappingService.syncProducts(checkIn, checkOut, ids, startNum, occupancy));
     }
 
     @GetMapping("/expedia/catalog/deactivate")
