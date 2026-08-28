@@ -71,6 +71,22 @@ PRIVATE_FIELD = re.compile(
 # 残留缺口：其他家的桶漏配只会静默回落 default-qps，暂无自动检查（欠账）。
 MAP_VALUED_PREFIXES = ("ratelimit.qps",)
 
+# 按家拼出来的键：形如 supplier.<家>.catalog-enabled，由 ProductCatalogService 一处
+# 统一读（"supplier." + name + ".catalog-enabled"），家名来自 SupplierSourceEnum。
+# 字面全键在代码里根本不存在，逐键去找必然误报成死键——2026-08-28 CI 即此病：
+# 手抄件 ElongCatalogService 删掉后 supplier.elong.catalog-enabled 被判死键，
+# 而它照旧被读。
+#
+# 同 MAP_VALUED_PREFIXES 用窄白名单而非通用放行：拼串的两半必须在代码里真出现，
+# 家名必须是枚举里的真名——两者任一写错仍然红，取值域也不会随手扩大。
+TEMPLATED_SUPPLIER_KEYS = (("supplier.", ".catalog-enabled"),)
+
+SUPPLIER_ENUM = os.path.join(
+    "com", "trip", "booking", "spa", "gateway", "domain", "supplier", "SupplierSourceEnum.java")
+
+# 枚举常量名（EXPEDIA(10005, "expedia")），代码取的是 name().toLowerCase()
+ENUM_CONSTANT = re.compile(r"^\s{4}([A-Z][A-Z0-9_]*)\s*\(\s*\d+\s*,", re.MULTILINE)
+
 # 检查 3 的黑名单：这些域由框架自身消费，我方代码不读、也不该读。
 # rocketmq 是已知死配置（pom 无依赖、代码零引用），application-dev.yml 里注明按要求保留，
 # 故一并列入——它的死是登记在案的，不是本检查要抓的静默死。
@@ -79,6 +95,27 @@ FRAMEWORK_DOMAINS = {"server", "spring", "mybatis", "logging", "management", "ro
 
 def under_map_valued(key):
     return any(key == p or key.startswith(p + ".") for p in MAP_VALUED_PREFIXES)
+
+
+def supplier_names(source_root):
+    """SupplierSourceEnum 的在产家名（小写）——模板键的取值域就是这个集合。
+
+    枚举只登记在产的家，故家一旦退场，其模板键自动变回死键、要求从 example 清掉。
+    """
+    path = os.path.join(source_root, SUPPLIER_ENUM)
+    if not os.path.exists(path):
+        return set()
+    with open(path, encoding="utf-8") as f:
+        return {name.lower() for name in ENUM_CONSTANT.findall(f.read())}
+
+
+def templated_keys(text, source_root):
+    """本文件若真在拼模板键，返回它按家展开后的全键集合。"""
+    keys = set()
+    for prefix, suffix in TEMPLATED_SUPPLIER_KEYS:
+        if f'"{prefix}" +' in text and f'"{suffix}"' in text:
+            keys.update(prefix + name + suffix for name in supplier_names(source_root))
+    return keys
 
 
 def relaxed(segment):
@@ -129,6 +166,7 @@ def code_keys(source_root):
             text = f.read()
         keys.update(VALUE_REF.findall(text))
         keys.update(GET_PROPERTY.findall(text))
+        keys.update(templated_keys(text, source_root))
         for prefix in CONFIG_PROPS.findall(text):
             for field in PRIVATE_FIELD.findall(text):
                 keys.add(prefix + "." + camel_to_kebab(field))
