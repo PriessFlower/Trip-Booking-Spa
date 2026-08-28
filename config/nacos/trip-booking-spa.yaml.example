@@ -251,6 +251,14 @@ supplier:
     resolve-price-tolerance: 0.02
     resolve-price-cap-cents: 2000            # 20 元：1000 元以下主流单仍由比例门管
 
+    # 产品建档(R-2.6):稳定事实(房型/餐食/退改/productKey)落目录表,数据源=刷价响应,
+    # 零额外额度。默认关——开启会给每轮刷价增加数千次 upsert,须先观察写入耗时对
+    # 刷价周期的影响。语义与 supplier.elong.catalog-enabled 同。
+    #
+    # 另有全量补建后门 GET /backdoor/expedia/catalog/products(自带占位住期、按酒店
+    # 清单分页),与本开关互不影响:后者是按需补建,本开关是随刷价增量维护。
+    catalog-enabled: false
+
     # 下单时提交给 Expedia 的固定联系与账单信息，均为我方（affiliate）信息而非旅客信息。
     #
     # ⚠️ booking-email 改动前须知：反查订单必须使用与下单时完全一致的邮箱
