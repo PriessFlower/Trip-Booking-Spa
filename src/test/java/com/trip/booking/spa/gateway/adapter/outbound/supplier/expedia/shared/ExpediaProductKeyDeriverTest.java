@@ -2,6 +2,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared;
 
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
+import com.trip.booking.spa.gateway.domain.product.RefundType;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.QueryPriceResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -155,7 +156,7 @@ class ExpediaProductKeyDeriverTest {
      */
     @Test
     void breakfastVariantsDeriveDistinctProductKeys() {
-        List<CancelPolicy> free = List.of(CancelPolicy.builder().cancelType(1).build());
+        List<CancelPolicy> free = List.of(CancelPolicy.builder().cancelType(1).type(RefundType.NO_DEDUCTION).build());
 
         String noMeal = key(deriver.convertMeal(2, amenities(UNKNOWN_2203)), free);
         String breakfast = key(deriver.convertMeal(2, amenities(FREE_BREAKFAST)), free);
@@ -169,7 +170,7 @@ class ExpediaProductKeyDeriverTest {
     /** 共现顺序不得影响键：等价类不能因为供应商下发顺序而漂移 */
     @Test
     void productKeyIsIndependentOfAmenityOrder() {
-        List<CancelPolicy> free = List.of(CancelPolicy.builder().cancelType(1).build());
+        List<CancelPolicy> free = List.of(CancelPolicy.builder().cancelType(1).type(RefundType.NO_DEDUCTION).build());
         String a = key(deriver.convertMeal(2, amenities(FREE_BREAKFAST, FULL_BOARD)), free);
         String b = key(deriver.convertMeal(2, amenities(FULL_BOARD, FREE_BREAKFAST)), free);
         assertEquals(a, b);
