@@ -153,6 +153,9 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     @Autowired
     private PriceCacheService priceCacheService;
 
+    @Resource
+    private com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.service.ExpediaCatalogService expediaCatalogService;
+
     @Override
     public PricingResult queryPrices(PriceReq request, Supplier supplier) {
         ResponseResult<QueryPriceResponse> resultOnly = null;
@@ -716,6 +719,9 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
 
         //插入缓存
         priceCacheService.productToCache(productRespDTOList, request, supplier);
+        // 建档(R-2.6):稳定事实落库,与写缓存同一处、同一份数据,不额外调供应商。
+        // 开关默认关;失败不打断刷价(服务内部已吞异常)
+        expediaCatalogService.upsert(productRespDTOList);
         return productRespDTOList;
     }
 
