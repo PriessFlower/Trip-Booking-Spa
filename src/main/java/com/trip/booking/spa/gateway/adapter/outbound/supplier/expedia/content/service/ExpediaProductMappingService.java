@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * 产品建档：查价响应 → {@code supplier_product_base}（一行=一个卖法）。
  * 流程沿旧链路：默认 +9/+10 天占位日期、零售价+打包价各查一遍、每酒店线程池并发；
- * 占用取 {@code task.expedia-catalog.occupancies}，每个占用各建一遍。
+ * 占用跟随刷价（{@code task.expedia-cps.occupancies}），每个占用各建一遍。
  *
  * <p>2026-08-20 起不再双推——聚合域的桥按 R-6.1 不放在供应商网关，已撤表。
  *
@@ -55,11 +55,15 @@ public class ExpediaProductMappingService {
     private static final int PAGE_SIZE = 100;
 
     /**
-     * 建档占用集（逗号分隔）。occupancy 是 productKey 的成分，目录又按 product_key
-     * 精确相等取用，故只建了某个占用，别的占用就取不到——覆盖哪些占用是运营口径，
-     * 不该由本类猜，因此走 Nacos 运行时键，与 elong-cps/fliggy-cps 同形。
+     * 建档占用<b>跟随刷价</b>，共用 {@code task.expedia-cps.occupancies} 这一个键——
+     * 与艺龙同模式：刷什么就建什么档，不另立口径。
+     *
+     * <p>本类原先有独立的 {@code task.expedia-catalog.occupancies}，那是两套口径，
+     * 一旦与刷价配得不一致，建出来的行就与真实流量的 productKey 不相等、取不到
+     * （2026-08-28 生产实测：建档 occupancy=1 而刷价 2，同表两套互不相交的键）。
+     * 兜底与刷价侧同为 "2"（改为配置项之前的写死值）。
      */
-    @Value("${task.expedia-catalog.occupancies:1,2}")
+    @Value("${task.expedia-cps.occupancies:2}")
     private String catalogOccupancies;
 
     @Value("${expedia.url.host}")
@@ -95,13 +99,13 @@ public class ExpediaProductMappingService {
      * {@code product_key} <b>精确相等</b>取用（{@code selectAttributesByProductKeys}），
      * 故没建的占用一律取不到。本方法原先写死 {@code occupancies=["1"]}（旧实现遗留），
      * 而刷价走 2 人（{@code ExpediaCPSQueryPriceServiceImpl.dimensions()}），两边各建各的、
-     * 键互不相交。现改为按 {@code task.expedia-catalog.occupancies} 逐个建。
+     * 键互不相交。现与刷价共用 {@code task.expedia-cps.occupancies} 逐个建。
      *
      * @param checkInDate  查价占位入住日；空=+9 天（旧默认）
      * @param checkOutDate 查价占位离店日；空=+10 天
      * @param supplierHotelIds 指定酒店；空=分页遍历 supplier_hotel_base
      * @param startNum     分页起始页（断点续跑）
-     * @param occupancies0 查价占用集，逗号分隔；空=取 {@code task.expedia-catalog.occupancies}
+     * @param occupancies0 查价占用集，逗号分隔；空=跟随刷价的 {@code task.expedia-cps.occupancies}
      * @return 已提交建档的酒店数（产品在后台线程落库）
      */
     public int syncProducts(String checkInDate, String checkOutDate, List<String> supplierHotelIds,
