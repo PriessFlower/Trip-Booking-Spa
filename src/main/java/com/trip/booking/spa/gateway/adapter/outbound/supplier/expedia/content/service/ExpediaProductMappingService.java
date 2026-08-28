@@ -169,8 +169,9 @@ public class ExpediaProductMappingService {
                 List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges())
                         ? List.of(CancelPolicy.builder().cancelType(0).build())
                         : productKeyDeriver.convertCancelPolicy(request.getCheckin(), rate.getCancel_penalties());
-                // R-5.4：餐食/退改解析不出的不进目录——UNKNOWN 进了目录就会污染等价类匹配
-                if (meal == null || CollectionUtils.isEmpty(cancelPolicy)) {
+                // R-5.4：餐食/退改 UNKNOWN 的不进目录——判据只能问派生器（R-2.8）：
+                // 空列表之外还有「阶梯在但判不出全款」的第三种 UNKNOWN，从列表判空看不出来
+                if (!productKeyDeriver.isCatalogEligible(meal, cancelPolicy)) {
                     skippedUnknown.incrementAndGet();
                     return;
                 }
