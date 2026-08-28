@@ -41,6 +41,7 @@ class PriceInfoDateTest {
     @BeforeEach
     void setUp() {
         service = new PriceCacheServiceImpl();
+        ReflectionTestUtils.setField(service, "productCatalogService", Mockito.mock(com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogService.class));
         redisUtils = Mockito.mock(RedisUtils.class);
         ReflectionTestUtils.setField(service, "redisUtils", redisUtils);
         ReflectionTestUtils.setField(service, "productAttributeReader",

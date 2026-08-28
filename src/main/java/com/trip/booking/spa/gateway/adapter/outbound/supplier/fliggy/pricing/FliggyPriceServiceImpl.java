@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfo;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductInfo;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Room;
@@ -32,6 +33,7 @@ import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
+import com.trip.booking.spa.platform.util.DateUtil;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -121,6 +123,7 @@ public class FliggyPriceServiceImpl {
         String occupancy = request.getOccupancies().get(0);
         int skippedNoRateKey = 0;
         int skippedNoPrice = 0;
+        int skippedNoDayPrice = 0;
         for (JsonNode rate : rates) {
             String rateKey = text(rate, "rate_key");
             if (StringUtils.isBlank(rateKey)) {
@@ -134,13 +137,21 @@ public class FliggyPriceServiceImpl {
                 skippedNoPrice++;
                 continue;
             }
+            List<PriceInfo> priceInfos = convertPriceInfos(rate, request);
+            if (priceInfos == null) {
+                skippedNoDayPrice++;
+                continue;
+            }
             Meal meal = productKeyDeriver.convertMeal(rate.get("meals"));
-            List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(rate.get("cancel_policy"));
+            List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), rate.get("cancel_policy"));
             String roomId = text(rate, "room_id");
             String roomName = text(rate, "room_name");
+            // 产品名=卖法名（口径同艺龙 RatePlanName 回落房型名）：一个房型多个卖法，
+            // 全填房型名的话档案里同房型的行无从分辨
+            String planName = StringUtils.defaultIfBlank(text(rate, "rate_plan_name"), roomName);
             // 身份与成分一次算出（R-2.8）；rate_key 是易腐报价码，与 productKey 永不同字段
             ProductIdentity identity = productKeyDeriver.deriveIdentity(sHotelId, roomId, meal,
-                    cancelPolicy, occupancy);
+                    cancelPolicy, occupancy, inclusive);
             Integer exclusive = intOrNull(totalRate, "exclusive");
             products.add(ProductRespDTO.builder()
                     .hotelId(sHotelId)
@@ -149,20 +160,61 @@ public class FliggyPriceServiceImpl {
                     .identity(identity)
                     .supplierId(SupplierSourceEnum.FLIGGY.getCode())
                     .room(Room.builder().roomId(roomId).roomName(roomName).build())
-                    .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomName).build())
+                    .productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(planName).build())
                     .currencyType(text(totalRate, "currency"))
                     .totalPrice(inclusive)
                     .roomTotalPrice(exclusive == null ? inclusive : exclusive)
+                    .priceInfos(priceInfos)
                     .meal(meal)
                     .cancelPolicy(cancelPolicy)
                     .maxOccupancy(request.getAdultNum())
                     .build());
         }
-        log.info("飞猪查价：转换完成,hotelId={},checkIn={},报价总数={},出报={},跳过_缺票据={},跳过_缺总价={}",
-                sHotelId, request.getCheckIn(), rates.size(), products.size(), skippedNoRateKey, skippedNoPrice);
+        log.info("飞猪查价：转换完成,hotelId={},checkIn={},报价总数={},出报={},跳过_缺票据={},跳过_缺总价={},跳过_缺逐日价={}",
+                sHotelId, request.getCheckIn(), rates.size(), products.size(), skippedNoRateKey, skippedNoPrice,
+                skippedNoDayPrice);
         countDropped(DropReason.NO_SESSION_CREDENTIALS, skippedNoRateKey);
-        countDropped(DropReason.NO_DAY_PRICE, skippedNoPrice);
+        countDropped(DropReason.NO_DAY_PRICE, skippedNoPrice + skippedNoDayPrice);
         return products;
+    }
+
+    /**
+     * 逐日价——写缓存的唯一载体：{@code productToCache} 只认 {@code priceInfos}，
+     * 总价字段进不了价格 Hash。口径同艺龙 {@code buildPriceInfos}：price=含税、
+     * roomPrice=税前（缺则回落含税）、taxes=差额。单晚缺 daily_rates 可用
+     * total_rate 精确回落；多晚缺任何一天即整条不报——均摊会造出假的日期价。
+     */
+    private List<PriceInfo> convertPriceInfos(JsonNode rate, PriceReq request) {
+        List<String> dates = DateUtil.getDatesBetween(request.getCheckIn(), request.getCheckout());
+        if (dates.isEmpty()) {
+            return null;
+        }
+        Map<String, JsonNode> dailyByDate = new HashMap<>();
+        JsonNode dailyRates = rate.get("daily_rates");
+        if (dailyRates != null && dailyRates.isArray()) {
+            for (JsonNode day : dailyRates) {
+                String date = text(day, "date");
+                if (StringUtils.isNotBlank(date)) {
+                    dailyByDate.put(date, day);
+                }
+            }
+        }
+        List<PriceInfo> priceInfos = new ArrayList<>();
+        for (String date : dates) {
+            JsonNode day = dailyByDate.get(date);
+            if (day == null && dates.size() == 1) {
+                day = rate.get("total_rate");
+            }
+            Integer inclusive = intOrNull(day, "inclusive");
+            if (inclusive == null) {
+                return null;
+            }
+            Integer exclusive = intOrNull(day, "exclusive");
+            int roomPrice = exclusive == null ? inclusive : exclusive;
+            priceInfos.add(PriceInfo.builder().date(date).price(inclusive)
+                    .roomPrice(roomPrice).taxes(inclusive - roomPrice).build());
+        }
+        return priceInfos;
     }
 
     // ---------- 验价（现取现验） ----------
@@ -246,7 +298,7 @@ public class FliggyPriceServiceImpl {
                 .totalPriceAfter(totalCents)
                 .currencyType(currency)
                 // 退改以验价时点的同一报价为准（现取现验，与查价同一响应）
-                .cancelPolicy(productKeyDeriver.convertCancelPolicy(fresh.get("cancel_policy")))
+                .cancelPolicy(productKeyDeriver.convertCancelPolicy(request.getCheckIn(), fresh.get("cancel_policy")))
                 .message("验价通过")
                 .build();
     }
@@ -386,7 +438,8 @@ public class FliggyPriceServiceImpl {
         if (v == null || v.isNull()) {
             return null;
         }
-        // 文档标 String 类型、值为分：canConvertToInt 覆盖数字与数字串两种形态
+        // 文档标 String 类型、值为分：parseInt(asText) 覆盖数字与数字串两种形态
+        //（canConvertToInt 对文本节点恒 false，不能用——deriver 曾因它丢光退改规则）
         try {
             return Integer.parseInt(v.asText());
         } catch (NumberFormatException e) {

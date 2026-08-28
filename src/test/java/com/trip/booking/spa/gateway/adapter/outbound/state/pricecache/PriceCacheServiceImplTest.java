@@ -52,6 +52,7 @@ class PriceCacheServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new PriceCacheServiceImpl();
+        ReflectionTestUtils.setField(service, "productCatalogService", Mockito.mock(com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogService.class));
         redisUtils = Mockito.mock(RedisUtils.class);
 
         PriceCacheTrimmer trimmer = Mockito.mock(PriceCacheTrimmer.class);

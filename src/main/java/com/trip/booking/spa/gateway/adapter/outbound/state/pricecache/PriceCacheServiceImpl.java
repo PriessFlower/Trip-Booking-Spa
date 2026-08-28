@@ -72,6 +72,10 @@ public class PriceCacheServiceImpl implements PriceCacheService {
     @org.springframework.beans.factory.annotation.Autowired
     private ProductAttributeReader productAttributeReader;
 
+    /** R-2.6 写侧：建档挂在本漏斗上，刷价与验价即刷两路全覆盖（按家开关默认关） */
+    @Autowired
+    private com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogService productCatalogService;
+
     private static final long ONE_DAY = 86400L;
 
     /**
@@ -383,6 +387,10 @@ public class PriceCacheServiceImpl implements PriceCacheService {
                 markNoInventory(request, supplier);
                 return;
             }
+            // 建档（R-2.6 写侧）：稳定成分落档案表，与写缓存同一份数据。放在裁剪之前——
+            // 被裁掉的仍是真实卖法，档案该有它；失败不打断（服务内部已吞异常）
+            productCatalogService.upsert(list, supplier);
+
             // F-3 裁剪：按 productKey 等价类留最低价的前 N 条。放在最前面——
             // 后续的下架判断依赖"谁进了 dataMap"，裁剪必须先于它发生，
             // 被裁掉的产品才能正确地走下架删除（与被 F-7 拦截者相反，见 PriceCacheTrimmer 注释）

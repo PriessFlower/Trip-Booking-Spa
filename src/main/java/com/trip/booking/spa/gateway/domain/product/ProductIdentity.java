@@ -9,10 +9,11 @@ package com.trip.booking.spa.gateway.domain.product;
  * 下游想入库就只能拿原始响应<b>重新判一遍</b>，而重新判必然降维（2026-08-20 复盘：
  * 建档把 {@code B1L1D1} 与 {@code B1L0D0} 一起压成 {@code breakfast=1}，占用干脆没落）。
  *
- * <p>更坏的是重判会与派生器<b>分叉</b>：建档侧 {@code hasFreeCancelWindow} 只看
+ * <p>更坏的是重判会与派生器<b>分叉</b>：改造前建档侧 {@code hasFreeCancelWindow} 只看
  * {@code cancelType==1}，而派生器 {@code classifyCancel} 还要求
- * {@link RefundType#NO_DEDUCTION}；两者目前结论一致，靠的是 UNKNOWN 先被
- * {@code isCatalogEligible} 挡掉（R-5.4），<b>不是靠共用判据</b>。
+ * {@link RefundType#NO_DEDUCTION}——两者结论一致纯属侥幸。现在 UNKNOWN 判决随成分
+ * 带出（{@code mealSignature}/{@code cancelClass} 的 UNKNOWN 取值），建档读成分即可
+ * 挡掉不进目录者（R-5.4），无须重判。
  *
  * <p>故纪律为 R-2.8：<b>成分只算一次，下游照抄，不得自行判定</b>。
  *
