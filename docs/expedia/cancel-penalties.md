@@ -45,3 +45,26 @@
    该分类随住期可变：免费窗过期后同一卖法如实转不可退，与 FREE 的窗口性同理。
 
 守护测试：`ExpediaCancelPolicyConvertTest`（报文形态取自本采样原样）。
+
+## 4. 判据回归验证（与供应商自标结论交叉比对）
+
+把 §3 判据在 2,154 条采样上重跑，与同一响应里供应商自标的 `refundable`（该 rate 可否退）逐条比对：
+
+| §3 判据结果 | `refundable=true` | `refundable=false` |
+|---|---:|---:|
+| FREE_CANCELLABLE | 1,295 | 0 |
+| NON_REFUNDABLE | 0 | 756 |
+| UNKNOWN | 0 | 103 |
+
+对角线之外为 0，**采样内零分歧**。旧实现称「可免费取消」而新判据改判的 813 条中，
+710 条改判不可退、103 条改判不确定，供应商侧**全部** `refundable=false`；改判为
+不可退者当中 `refundable=true` 的有 **0 条**，即无误伤——不会把可退的卖成不可退而少卖。
+
+`refundable` 仅两态，表达不了 UNKNOWN，也不含罚金额度与起算时刻，故只用作判据的
+**校验尺**，不用作实现；对客条款展示仍须从 `cancel_penalties` 逐段转出。
+
+UNKNOWN 的 103 条按住期分布 T+1 96 / T+13 1 / T+30 6，成因为按晚扣 92、比例<100% 9、
+混合载体 2。建档查价占位住期默认 +9 天（`ExpediaProductMappingService.syncProducts`），
+落在 T+13 档附近，故 UNKNOWN 对建档覆盖的实际影响约 0.1%。按晚扣一类待
+`CancelPolicy.deductsFullPrice(totalCents)` 合入后可进一步判定（该方法当前尚未合入，
+本次转换不依赖它）。
