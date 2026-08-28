@@ -61,22 +61,22 @@ public class ElongProductKeyDeriver {
      * 不许拿 {@link Meal}/{@link CancelPolicy} 再判一遍——重判必然降维且会与本方法分叉。
      */
     public ProductIdentity deriveIdentity(String supplierHotelId, String roomTypeId, Meal meal,
-                                          List<CancelPolicy> cancelPolicy, String occupancy) {
+                                          List<CancelPolicy> cancelPolicy, String occupancy, Integer totalCents) {
         MealSignature mealSignature = meal == null ? MealSignature.unknown()
                 : MealSignature.known(isPositive(meal.getCount()), isPositive(meal.getLunchCount()), isPositive(meal.getDinnerCount()));
-        CancelClass cancelClass = classifyCancel(cancelPolicy);
+        CancelClass cancelClass = classifyCancel(cancelPolicy, totalCents);
         return ProductIdentity.of(SupplierSourceEnum.ELONG.getCode(), properties.getUser(),
                 supplierHotelId, roomTypeId, mealSignature, cancelClass, occupancy);
     }
 
     /** 只要 key 不要成分时用（如 resolve 匹配只做键比对） */
     public String deriveProductKey(String supplierHotelId, String roomTypeId, Meal meal,
-                                   List<CancelPolicy> cancelPolicy, String occupancy) {
-        return deriveIdentity(supplierHotelId, roomTypeId, meal, cancelPolicy, occupancy).productKey();
+                                   List<CancelPolicy> cancelPolicy, String occupancy, Integer totalCents) {
+        return deriveIdentity(supplierHotelId, roomTypeId, meal, cancelPolicy, occupancy, totalCents).productKey();
     }
 
-    /** 退改三分类。抽出以便建档判定（{@link #isCatalogEligible}）复用同一判据，杜绝两处漂移。 */
-    private static CancelClass classifyCancel(List<CancelPolicy> cancelPolicy) {
+    /** 退改三分类。UNKNOWN 进 key 照常可售但不进目录——建档读 identity 的 cancelClass 判（R-5.4）。 */
+    private static CancelClass classifyCancel(List<CancelPolicy> cancelPolicy, Integer totalCents) {
         if (CollectionUtils.isEmpty(cancelPolicy)) {
             return CancelClass.UNKNOWN;
         }
@@ -88,25 +88,15 @@ public class ElongProductKeyDeriver {
         if (cancelPolicy.stream().allMatch(p -> Integer.valueOf(0).equals(p.getCancelType()))) {
             return CancelClass.NON_REFUNDABLE;
         }
-        // 可取消但全程收费：既非"有免费窗口"也非"全程不可退"，三分类无处安放。
+        if (cancelPolicy.stream().allMatch(p -> p.deductsFullPrice(totalCents))) {
+            // 每段确定罚≥全款=经济上不可退（双家同判据；飞猪 305 条采样实证见
+            // docs/fliggy §2，艺龙 CutType=4 官方语义即全额房费）。注意该类随住期/价格
+            // 可变（同一卖法临近入住免费窗过期后如实转为不可退），与 FREE 的窗口性同理
+            return CancelClass.NON_REFUNDABLE;
+        }
+        // 罚金阶梯存在但判不出"全款"（首晚/按晚/定额低于总价）：三分类无处安放。
         // 按元规则 R-1.6（赌错只许少卖）归 UNKNOWN——实时可售，不进目录
         return CancelClass.UNKNOWN;
-    }
-
-    /**
-     * 该产品的餐食与退改是否<b>全部解析成功</b>——即是否可进目录（R-5.4）。
-     *
-     * <p>判据必须与 {@link #deriveProductKey} 同源:UNKNOWN 会正常参与 key 派生
-     * （key 里带 {@code m:UNKNOWN} / {@code c:UNKNOWN}，是合法取值，实时链路照常可售），
-     * 但<b>不得进目录</b>——目录里的 UNKNOWN 会与"已知不含早/已知不可退"混为一谈，
-     * 污染等价类查询。故建档侧不得自行重写判据（第三种 UNKNOWN——"可取消但全程收费"
-     * ——从出参 DTO 根本看不出来），只能问这里。
-     */
-    public boolean isCatalogEligible(Meal meal, List<CancelPolicy> cancelPolicy) {
-        MealSignature mealSignature = meal == null ? MealSignature.unknown()
-                : MealSignature.known(isPositive(meal.getCount()), isPositive(meal.getLunchCount()),
-                        isPositive(meal.getDinnerCount()));
-        return mealSignature.isKnown() && classifyCancel(cancelPolicy) != CancelClass.UNKNOWN;
     }
 
     private static boolean isPositive(Integer count) {

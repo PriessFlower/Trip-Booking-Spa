@@ -47,6 +47,7 @@ class CacheOccupancyShardTest {
     @BeforeEach
     void setUp() {
         service = new PriceCacheServiceImpl();
+        ReflectionTestUtils.setField(service, "productCatalogService", Mockito.mock(com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogService.class));
         redisUtils = Mockito.mock(RedisUtils.class);
         attributeReader = Mockito.mock(ProductAttributeReader.class);
         ReflectionTestUtils.setField(service, "redisUtils", redisUtils);

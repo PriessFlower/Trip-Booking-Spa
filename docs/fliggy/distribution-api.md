@@ -44,7 +44,22 @@
 - **价格单位＝分**：`total_rate{inclusive/exclusive/tax/fees, currency}` + `daily_rates[]` 逐日同构
   ——含税/不含税/税/费四件套全给，币种字段自带（〔实证〕值为 USD）
 - `meals{number,type}`：type 0=无餐/1=含早/2=两餐/3=三餐
+  ——〔实证 2026-08-28，18 店 305 条报价采样〕只出现过 type 0（165）与 type 1（140），
+  type 2/3 与 meals 缺席均未见
 - `cancel_policy{code, cancellation_desc, rules[]{onward,before,inclusive_amount(分),currency}}`
+  ——〔实证 2026-08-28，13 店 × T+1/T+13/T+30 三住期 613 条报价〕`inclusive_amount` 是
+  **数字串**（`"10524"`，canConvertToInt 对文本节点恒 false，解析必须 parseInt(asText)）。
+  形态只有两种、无第三态：**有免费窗**（罚金 0 的段存在）或**全程罚全款**（每段罚金=
+  total_rate.inclusive，多为单段 onward=当下）；未见部分罚金/无规则/解析失败。
+  比例随住期漂移：T+1 全款形态 100%（免费窗临近入住过期），T+13 43%、T+30 45%。
+  `code` 官方无码表：code=2 几乎恒为全款形态（333/335），但 T+1 抓到 2 条 code=4
+  （免费窗码）呈全款形态——**判"不可退"必须按规则内容（每段罚金≥全款），不可按码表**，
+  已实施为双家通用判据（CancelPolicy.deductsFullPrice，艺龙 CutType=4 同义）。
+  `rate_plan_name` 语种：中文为主（~85%），少量英文占位（ROOM_ONLY）与日文原文
+  （带【Fliggy】尾缀，~1%）。**规则时刻（onward/before）＝北京时间**〔实证 2026-08-28〕：
+  响应 `data.time` 毫秒戳＝首段 onward 按 GMT+8 解释（东京酒店，东京时间差 1 小时对不上；
+  规则边界 23:00 北京＝东京午夜整点，即酒店本地政策换算成北京时间表达）——守护钉在
+  FliggyRealPayloadTest.cancelRuleTimesAreBeijing
 
 ## 3. 验价 `...distribution.validate`（68688）
 

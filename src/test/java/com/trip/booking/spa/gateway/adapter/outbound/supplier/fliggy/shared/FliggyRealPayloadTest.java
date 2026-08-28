@@ -36,4 +36,29 @@ class FliggyRealPayloadTest {
         assertEquals("USD", first.get("total_rate").get("currency").asText());
         assertEquals("10524", first.get("total_rate").get("inclusive").asText());
     }
+
+    /**
+     * 退改规则时刻=<b>北京时间</b>（快照 §9 必测第 5 项，2026-08-28 实证销项）：
+     * 响应自带查询时刻毫秒戳（data.time），最早一段 onward=「罚金自当下起算」——
+     * 二者相等于 GMT+8（东京酒店，东京时间差 1 小时对不上）。时区错 1 小时,
+     * "还能免费取消到几点"就错 1 小时,客人在窗口外取消要挨罚金。
+     */
+    @Test
+    @DisplayName("规则时刻是北京时间：响应 time 戳 == 最早段 onward @ GMT+8")
+    void cancelRuleTimesAreBeijing() throws Exception {
+        String raw = Files.readString(Path.of("src/test/resources/fliggy/ari-availability-real-20260827.json"));
+        com.fasterxml.jackson.databind.JsonNode root =
+                new com.fasterxml.jackson.databind.ObjectMapper().readTree(raw);
+        long epochMs = root.get("data").get("time").asLong();
+
+        String earliestOnward = "2026-08-27 13:48:44"; // 首条 rate 最早段的 onward（原文）
+        java.time.Instant onwardBeijing = java.time.LocalDateTime
+                .parse(earliestOnward, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+                .atZone(java.time.ZoneId.of("Asia/Shanghai")).toInstant();
+
+        long diffSeconds = Math.abs(java.time.Duration
+                .between(java.time.Instant.ofEpochMilli(epochMs), onwardBeijing).getSeconds());
+        assertTrue(diffSeconds < 300, "onward 按北京时间解释应≈查询时刻,实际差 " + diffSeconds + " 秒"
+                + "——若本断言红了,说明飞猪改了时区表达,FliggyProductKeyDeriver.RULE_ZONE 必须重证");
+    }
 }

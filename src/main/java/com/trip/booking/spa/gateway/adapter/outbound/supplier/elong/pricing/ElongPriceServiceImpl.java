@@ -14,7 +14,6 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ElongQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
-import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.content.ElongCatalogService;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.domain.shared.Money;
@@ -107,9 +106,6 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     @Resource
     private PriceCacheService priceCacheService;
 
-    @Resource
-    private ElongCatalogService elongCatalogService;
-
     /**
      * 查价并落缓存（刷价任务的唯一入口）。查价逻辑复用 {@link #queryPrices}，
      * 只多一步写缓存——刷价与实时查价必须同源，否则 productKey/退改/餐食会分叉。
@@ -128,9 +124,6 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         }
         List<ProductRespDTO> products = result.products();
         priceCacheService.productToCache(products, request, supplier);
-        // 建档(R-2.6):稳定事实落库,与写缓存同一处、同一份数据,不额外调供应商。
-        // 开关默认关;失败不打断刷价(服务内部已吞异常)
-        elongCatalogService.upsert(products);
         return products;
     }
 
@@ -253,7 +246,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         int displayTotalCents = sumCents(dayPrices);
         // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍
         ProductIdentity identity = productKeyDeriver.deriveIdentity(
-                hotelId, plan.getRoomTypeId(), meal, cancelPolicy, occupancy);
+                hotelId, plan.getRoomTypeId(), meal, cancelPolicy, occupancy, displayTotalCents);
         ProductRespDTO product = ProductRespDTO.builder()
                 .hotelId(hotelId)
                 // 报价标识=GoodsUniqId（会话级易腐，申报见 SupplierIdentityProfile.ELONG）；
@@ -851,7 +844,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 }
                 Meal meal = productKeyDeriver.convertMeal(plan);
                 List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), plan.getPrepayResult());
-                String key = productKeyDeriver.deriveProductKey(hotel.getHotelId(), plan.getRoomTypeId(), meal, cancelPolicy, occupancy);
+                String key = productKeyDeriver.deriveProductKey(hotel.getHotelId(), plan.getRoomTypeId(), meal, cancelPolicy, occupancy, sumCents(dayPrices));
                 if (!request.getProductKey().equals(key)) {
                     continue;
                 }

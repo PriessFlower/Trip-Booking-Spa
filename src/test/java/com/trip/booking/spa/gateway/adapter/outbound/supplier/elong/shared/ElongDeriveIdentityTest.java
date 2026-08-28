@@ -54,8 +54,8 @@ class ElongDeriveIdentityTest {
         Meal m = meal(2, 2, 2);
         List<CancelPolicy> cp = freeCancel();
 
-        ProductIdentity id = deriver.deriveIdentity("26978218", "0013", m, cp, "2");
-        String key = deriver.deriveProductKey("26978218", "0013", m, cp, "2");
+        ProductIdentity id = deriver.deriveIdentity("26978218", "0013", m, cp, "2", 20000);
+        String key = deriver.deriveProductKey("26978218", "0013", m, cp, "2", 20000);
 
         assertEquals(key, id.productKey());
     }
@@ -63,7 +63,7 @@ class ElongDeriveIdentityTest {
     @Test
     @DisplayName("成分与派生器的规范化结果一致")
     void componentsMatchNormalisation() {
-        ProductIdentity id = deriver.deriveIdentity("26978218", "0013", meal(2, 2, 2), freeCancel(), "2");
+        ProductIdentity id = deriver.deriveIdentity("26978218", "0013", meal(2, 2, 2), freeCancel(), "2", 20000);
 
         assertEquals("test-account", id.account(), "账号成分取自配置，不是硬编码");
         assertEquals("26978218", id.supplierHotelId());
@@ -79,7 +79,7 @@ class ElongDeriveIdentityTest {
     @Test
     @DisplayName("identity 不进对外 JSON")
     void identityIsNotSerialised() throws Exception {
-        ProductIdentity id = deriver.deriveIdentity("26978218", "0013", meal(1, 0, 0), freeCancel(), "2");
+        ProductIdentity id = deriver.deriveIdentity("26978218", "0013", meal(1, 0, 0), freeCancel(), "2", 20000);
         ProductRespDTO dto = ProductRespDTO.builder()
                 .hotelId("26978218").productId("易腐报价码").productKey(id.productKey()).identity(id).build();
 

@@ -300,3 +300,8 @@ supplier:
     # 凭据本身（appKey/secret/session/网关/授权日期）经 FLIGGY_* 环境变量注入（§3.5.1），
     # 禁止移入本文件。
     session-ttl-days: 90
+
+    # 产品建档(R-2.6):语义与 supplier.elong.catalog-enabled 同,由公共
+    # ProductCatalogService 按家读。默认关——飞猪刷价清单 9,822 家/304,482 行,
+    # 开启前须先观察 upsert 耗时对刷价周期的影响。
+    catalog-enabled: false

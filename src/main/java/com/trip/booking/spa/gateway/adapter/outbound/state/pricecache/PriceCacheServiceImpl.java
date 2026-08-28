@@ -72,6 +72,10 @@ public class PriceCacheServiceImpl implements PriceCacheService {
     @org.springframework.beans.factory.annotation.Autowired
     private ProductAttributeReader productAttributeReader;
 
+    /** R-2.6 写侧：建档挂在本漏斗上，刷价与验价即刷两路全覆盖（按家开关默认关） */
+    @Autowired
+    private com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogService productCatalogService;
+
     private static final long ONE_DAY = 86400L;
 
     /**
@@ -292,11 +296,14 @@ public class PriceCacheServiceImpl implements PriceCacheService {
      * 已由 {@code catalog_attribute_asked/hit} 的差值覆盖（O-4.6）。
      */
     private static void countDropped(SupplierSourceEnum supplier, DropReason reason) {
+        countDropped(supplier, FunnelStage.CACHE_READ, reason);
+    }
+
+    private static void countDropped(SupplierSourceEnum supplier, FunnelStage stage, DropReason reason) {
         if (supplier == null) {
             return;
         }
-        Monitor.recordOne(MetricNames.QUOTE_DROPPED,
-                MetricTags.dropped(supplier, FunnelStage.CACHE_READ, reason));
+        Monitor.recordOne(MetricNames.QUOTE_DROPPED, MetricTags.dropped(supplier, stage, reason));
     }
 
     /**
@@ -383,6 +390,10 @@ public class PriceCacheServiceImpl implements PriceCacheService {
                 markNoInventory(request, supplier);
                 return;
             }
+            // 建档（R-2.6 写侧）：稳定成分落档案表，与写缓存同一份数据。放在裁剪之前——
+            // 被裁掉的仍是真实卖法，档案该有它；失败不打断（服务内部已吞异常）
+            productCatalogService.upsert(list, supplier);
+
             // F-3 裁剪：按 productKey 等价类留最低价的前 N 条。放在最前面——
             // 后续的下架判断依赖"谁进了 dataMap"，裁剪必须先于它发生，
             // 被裁掉的产品才能正确地走下架删除（与被 F-7 拦截者相反，见 PriceCacheTrimmer 注释）
@@ -462,6 +473,16 @@ public class PriceCacheServiceImpl implements PriceCacheService {
                         //priceJson：{"brokerage":2317,"roomPrice":12728,"price":14658,"storePayPrice":null,"taxes":1930,"stayPrice":0}
                         dataMap.computeIfAbsent(priceKey, k -> new HashMap<>()).put(field, convertPriceJsonStr(productRespDTO, i));
                     });
+                } else {
+                    // 出报却没有逐日价：价格 Hash 按日分档，没有逐日价就无处落价，这条报价
+                    // 就地消失。它不是业务态，是实现方漏建 priceInfos 的编程错误——飞猪即以
+                    // 此形态静默丢掉两天的在售价（6 小时 103,104 次转换全部出报>0、零写入、
+                    // 零报错，最后靠数 Redis 键才发现）。读侧丢弃有账（quote_dropped 的
+                    // cache_read），写侧不能没有
+                    log.error("写缓存：报价无逐日价，本条不落缓存,supplierId={},sHotelId={},productKey={}",
+                            supplierCode, productRespDTO.getHotelId(), field);
+                    countDropped(SupplierSourceEnum.getEnum(supplierCode), FunnelStage.CACHE_WRITE,
+                            DropReason.NO_DAY_PRICE);
                 }
             }
 
