@@ -52,6 +52,7 @@ class FliggyProductToCacheTest {
     private PriceCacheServiceImpl cacheService;
     private RedisUtils redisUtils;
     private ProductCatalogMapper catalogMapper;
+    private SimpleMeterRegistry registry;
 
     @BeforeEach
     void setUp() {
@@ -78,8 +79,9 @@ class FliggyProductToCacheTest {
         ReflectionTestUtils.setField(cacheService, "abnormalPriceGuard", new AbnormalPriceGuard());
         ReflectionTestUtils.setField(cacheService, "priceCacheTtlPolicy", new PriceCacheTtlPolicy());
 
+        registry = new SimpleMeterRegistry();
         MonitorService monitorService = new MonitorService();
-        monitorService.bindTo(new SimpleMeterRegistry());
+        monitorService.bindTo(registry);
         ReflectionTestUtils.setField(Monitor.class, "monitorService", monitorService);
     }
 
@@ -139,5 +141,29 @@ class FliggyProductToCacheTest {
         assertEquals("B0L0D0", row.get("mealSignature"), "type 0=正面声明无餐,是已知不是 UNKNOWN");
         assertEquals("FREE_CANCELLABLE", row.get("cancelClass"),
                 "真实报文罚金 0 的段=免费窗;若为 UNKNOWN 说明数字串解析又坏了,产品会被 R-5.4 挡在目录外");
+    }
+
+    @Test
+    @DisplayName("出报却没有逐日价：不静默——记 cache_write/no_day_price 且一条价都不写")
+    void quotesWithoutDayPricesAreCountedNotSilent() throws Exception {
+        String raw = Files.readString(Path.of("src/test/resources/fliggy/ari-availability-real-20260827.json"));
+        FliggyAriResponse resp = FliggyAriResponse.parse(raw);
+        PriceReq req = PriceReq.builder().checkIn("2026-09-10").checkout("2026-09-11")
+                .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
+        req.setOccupancies(List.of("2"));
+        Supplier supplier = Supplier.builder().supplierId(10015).sHotelId("50363404").build();
+
+        // 真实报文照常转换，再把逐日价摘掉——这就是修复前飞猪的形态（出报>0、priceInfos 空）
+        List<ProductRespDTO> products = fliggyService.convertRates(resp.rates(), req, "50363404");
+        assertFalse(products.isEmpty());
+        products.forEach(p -> p.setPriceInfos(null));
+
+        cacheService.productToCache(products, req, supplier);
+
+        assertEquals(products.size(), registry.counter("quote_dropped_count", "supplier", "FLIGGY",
+                        "stage", "cache_write", "reason", "no_day_price").count(),
+                "写侧丢货必须有账：没有它，出报正常而缓存全空这件事在指标上无从发现");
+        Mockito.verify(redisUtils, Mockito.never())
+                .batchHashMapSetWithExpire(any(), anyLong(), any(TimeUnit.class));
     }
 }
