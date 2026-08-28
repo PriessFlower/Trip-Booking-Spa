@@ -78,6 +78,8 @@ class DelistByHdelRealDataE2EManual {
             ReflectionTestUtils.setField(redisUtils, "redisTemplate", template);
 
             PriceCacheServiceImpl service = new PriceCacheServiceImpl();
+
+            ReflectionTestUtils.setField(service, "productCatalogService", Mockito.mock(com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogService.class));
             ReflectionTestUtils.setField(service, "redisUtils", redisUtils);
             ReflectionTestUtils.setField(service, "priceCacheTrimmer", new PriceCacheTrimmer());
             ReflectionTestUtils.setField(service, "abnormalPriceGuard", new AbnormalPriceGuard());

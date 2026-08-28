@@ -13,6 +13,9 @@ public enum FunnelStage {
     /** 供应商响应 → 内部报价对象的转换环节（如艺龙查价的三类跳过） */
     CONVERT,
 
+    /** 缓存写侧：报价已转换出来，落价格 Hash 时被丢弃（如无逐日价则无处落价） */
+    CACHE_WRITE,
+
     /** 缓存读侧：价格 Hash 已取到，组装对外报价时被丢弃 */
     CACHE_READ;
 

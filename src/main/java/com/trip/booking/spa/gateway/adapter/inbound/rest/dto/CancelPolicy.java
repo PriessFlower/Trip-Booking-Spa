@@ -44,4 +44,22 @@ public class CancelPolicy {
 
     // 当退款类型为扣除固定金额、扣除房费的百分比时，必填。
     private Double value;
+
+    /**
+     * 该段是否<b>确定</b>罚金≥全款：比例≥100%（含艺龙 CutType=4 全额房费），或定额≥总价。
+     * 定额两种载体都认：{@code amount}=分（飞猪），{@code value}=元（艺龙 AmountRmb）。
+     * 判不出金额语义的形态（首晚/按晚/未知型）一律 false——不确定不许说成确定（R-1.6）。
+     */
+    public boolean deductsFullPrice(Integer totalCents) {
+        if (type == RefundType.DEDUCT_BY_PERCENT) {
+            return value != null && value >= 100D;
+        }
+        if (type == RefundType.DEDUCT_BY_AMOUNT) {
+            Integer cents = amount != null ? amount
+                    : value == null ? null : com.trip.booking.spa.gateway.domain.shared.Money
+                            .toCents(java.math.BigDecimal.valueOf(value));
+            return totalCents != null && totalCents > 0 && cents != null && cents >= totalCents;
+        }
+        return false;
+    }
 }
