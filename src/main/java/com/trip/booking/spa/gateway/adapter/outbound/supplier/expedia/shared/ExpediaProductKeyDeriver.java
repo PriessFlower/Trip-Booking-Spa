@@ -9,14 +9,19 @@ import com.trip.booking.spa.gateway.domain.product.ProductKeyFactory;
 import com.trip.booking.spa.gateway.domain.product.RefundType;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.QueryPriceResponse;
-import com.trip.booking.spa.platform.util.DateUtil;
+import com.trip.booking.spa.platform.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
-import java.text.SimpleDateFormat;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -122,6 +127,9 @@ public class ExpediaProductKeyDeriver {
         }
     }
 
+    /** 测试经 ReflectionTestUtils 替换为固定时钟（判定「罚金窗是否已开」要比对当下） */
+    private Clock clock = Clock.systemUTC();
+
     @Resource
     private ExpediaContractProfile contractProfile;
 
@@ -140,16 +148,44 @@ public class ExpediaProductKeyDeriver {
                                           List<CancelPolicy> cancelPolicy, String occupancy) {
         MealSignature mealSignature = meal == null ? MealSignature.unknown()
                 : MealSignature.known(isPositive(meal.getCount()), isPositive(meal.getLunchCount()), isPositive(meal.getDinnerCount()));
-        CancelClass cancelClass;
-        if (CollectionUtils.isEmpty(cancelPolicy)) {
-            cancelClass = CancelClass.UNKNOWN;
-        } else if (cancelPolicy.stream().anyMatch(p -> Integer.valueOf(1).equals(p.getCancelType()))) {
-            cancelClass = CancelClass.FREE_CANCELLABLE;
-        } else {
-            cancelClass = CancelClass.NON_REFUNDABLE;
-        }
         return ProductIdentity.of(SupplierSourceEnum.EXPEDIA.getCode(), contractProfile.getPartnerPointOfSale(),
-                supplierHotelId, supplierRoomId, mealSignature, cancelClass, occupancy);
+                supplierHotelId, supplierRoomId, mealSignature, classifyCancel(cancelPolicy), occupancy);
+    }
+
+    /** 退改三分类。UNKNOWN 进 key 照常可售但不进目录——建档问 {@link #isCatalogEligible}（R-5.4）。 */
+    private static CancelClass classifyCancel(List<CancelPolicy> cancelPolicy) {
+        if (CollectionUtils.isEmpty(cancelPolicy)) {
+            return CancelClass.UNKNOWN;
+        }
+        if (cancelPolicy.stream().anyMatch(p -> Integer.valueOf(1).equals(p.getCancelType())
+                && RefundType.NO_DEDUCTION == p.getType())) {
+            // 存在免费取消窗口（R-5.1 的 FREE 判据），罚金阶梯照常跟在后面。
+            // 旧判据只看 cancelType==1——彼时 convertCancelPolicy 总垫免费头段，两者等价；
+            // 头段改为有真免费窗才垫后，纯罚金段也是 cancelType==1，必须再看 NO_DEDUCTION
+            return CancelClass.FREE_CANCELLABLE;
+        }
+        if (cancelPolicy.stream().allMatch(p -> Integer.valueOf(0).equals(p.getCancelType()))) {
+            return CancelClass.NON_REFUNDABLE;
+        }
+        if (cancelPolicy.stream().allMatch(p -> RefundType.DEDUCT_BY_PERCENT == p.getType()
+                && p.getValue() != null && p.getValue() >= 100D)) {
+            // 每段确定罚≥全款=经济上不可退（同艺龙 CutType=4）。该类随住期可变：
+            // 同一卖法临近入住免费窗过期后如实转不可退，与 FREE 的窗口性同理
+            return CancelClass.NON_REFUNDABLE;
+        }
+        // 罚金阶梯存在但判不出全款（按晚/定额/比例<100）：三分类无处安放，按 R-1.6 归 UNKNOWN
+        return CancelClass.UNKNOWN;
+    }
+
+    /**
+     * 餐食与退改是否全部解析成功——即是否可进目录（R-5.4）。判据与 {@link #deriveIdentity}
+     * 同源：UNKNOWN 正常参与 key 派生、实时链路照常可售，但进了目录会与「已知不可退」
+     * 混为一谈，污染等价类匹配。建档侧不得自行重写判据，只能问这里（R-2.8）。
+     */
+    public boolean isCatalogEligible(Meal meal, List<CancelPolicy> cancelPolicy) {
+        MealSignature mealSignature = meal == null ? MealSignature.unknown()
+                : MealSignature.known(isPositive(meal.getCount()), isPositive(meal.getLunchCount()), isPositive(meal.getDinnerCount()));
+        return mealSignature.isKnown() && classifyCancel(cancelPolicy) != CancelClass.UNKNOWN;
     }
 
     /** 只要 key 不要成分时用（如 resolve 匹配只做键比对） */
@@ -239,55 +275,133 @@ public class ExpediaProductKeyDeriver {
         return MEAL_AMENITIES;
     }
 
+    /**
+     * 查价响应 {@code cancel_penalties} → 契约条款。段语义是时间窗：在 {@code [start,end)}
+     * 内取消收该段罚金。
+     *
+     * <p>转换纪律（2026-08-28 test.ean.com 实测 2,154 条含罚金 rate 采样，见
+     * docs/expedia/cancel-penalties.md；生产凭据只在 test.ean.com 有效，线上消费的就是这份形态）：
+     * <ul>
+     *   <li><b>免费头段只在最早罚金窗 start 晚于当下时垫</b>。采样 40% 的含罚金 rate
+     *       （T+1 住期 70%）start 已过且全部 refundable=false——对它们垫头段就是把不能
+     *       免费退说成能退，旅客据此取消实收罚金；</li>
+     *   <li><b>逐段全部转出</b>，percent 100% 转 DEDUCT_BY_PERCENT value=100（=全款，
+     *       同艺龙 CutType=4），不得丢段——旧实现只取 start 最早一段且把 100% 段整个丢弃；</li>
+     *   <li><b>载体不认识或时间解析失败 → 空列表=UNKNOWN</b>（R-5.4），不得兜成不可退——
+     *       不确定不许说成确定（R-1.6）。</li>
+     * </ul>
+     *
+     * <p>{@code before} = 段截止时刻距入住日 24:00 的小时数（下限 25），入住日按段自带的
+     * UTC 偏移解释而非服务器时区——与艺龙侧同一条纪律（服务器时区随部署漂移）。
+     * {@code cancel_penalties} 缺席维持旧口径记不可退（采样中未出现，另行实证前不动）。
+     */
     public List<CancelPolicy> convertCancelPolicy(String checkIn, List<QueryPriceResponse.CancelPolicy> cancelPolicies) {
-        List<CancelPolicy> cancelPolicyList = new ArrayList<>();
-
-        QueryPriceResponse.CancelPolicy cancelPolicy = null;
         if (CollectionUtils.isEmpty(cancelPolicies)) {
-            cancelPolicyList.add(CancelPolicy.builder().cancelType(0).build());
-            return cancelPolicyList;
+            List<CancelPolicy> nonRefundable = new ArrayList<>();
+            nonRefundable.add(CancelPolicy.builder().cancelType(0).build());
+            return nonRefundable;
         }
-        cancelPolicy = cancelPolicies.stream().min(Comparator.comparing(QueryPriceResponse.CancelPolicy::getStart)).get();
-        SimpleDateFormat sdfTime = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-        SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        int beforeEnd = 0;
-        int beforeStart = 0;
-        try {
-            beforeEnd = DateUtil.diffHour(sdfTime.parse(cancelPolicy.getEnd()), sdfDate.parse(checkIn + " 24:00:00"));
-            beforeStart = DateUtil.diffHour(sdfTime.parse(cancelPolicy.getStart()), sdfDate.parse(checkIn + " 24:00:00"));
-        } catch (Exception e) {
-            log.info("时间转换校验异常", e);
+        List<PenaltyWindow> windows = new ArrayList<>();
+        for (QueryPriceResponse.CancelPolicy segment : cancelPolicies) {
+            OffsetDateTime start = parseOffset(segment.getStart());
+            OffsetDateTime end = parseOffset(segment.getEnd());
+            if (start == null || end == null) {
+                log.info("expedia退改规范化：段时间无法解析，整体按 UNKNOWN 处理(R-5.4),start={},end={}",
+                        segment.getStart(), segment.getEnd());
+                return List.of();
+            }
+            windows.add(new PenaltyWindow(start, end, segment));
         }
-        if (StringUtils.isNotBlank(cancelPolicy.getAmount())) {
-            cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getStart())).before(Math.max(25, beforeStart)).type(RefundType.NO_DEDUCTION).build());
-            if (beforeStart > 25) {
-                cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getEnd())).before(beforeEnd).type(RefundType.DEDUCT_BY_AMOUNT).value(Double.valueOf(cancelPolicy.getAmount())).build());
+        windows.sort(Comparator.comparing(w -> w.start().toInstant()));
+
+        List<CancelPolicy> policies = new ArrayList<>();
+        OffsetDateTime firstStart = windows.get(0).start();
+        if (firstStart.toInstant().isAfter(clock.instant())) {
+            Integer before = hoursUntilCheckInEnd(firstStart, checkIn);
+            if (before == null) {
+                log.info("expedia退改规范化：入住日无法解析，整体按 UNKNOWN 处理(R-5.4),checkIn={}", checkIn);
+                return List.of();
             }
-        } else if (StringUtils.isNotBlank(cancelPolicy.getPercent())) {
-            if ("100%".equals(cancelPolicy.getPercent())) {
-                cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getStart())).before(Math.max(25, beforeStart)).type(RefundType.NO_DEDUCTION).build());
-            } else {
-                cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getStart())).before(Math.max(25, beforeStart)).type(RefundType.NO_DEDUCTION).build());
-                if (beforeStart > 25) {
-                    cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getEnd())).before(Math.max(25, beforeEnd)).type(RefundType.DEDUCT_BY_PERCENT).value(Double.valueOf(cancelPolicy.getPercent().replace("%", ""))).build());
-                }
-            }
-        } else if (StringUtils.isNotBlank(cancelPolicy.getNights())) {
-            if ("0".equals(cancelPolicy.getNights())) {
-                cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getEnd())).before(Math.max(25, beforeEnd)).type(RefundType.NO_DEDUCTION).build());
-            } else {
-                cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getStart())).before(Math.max(25, beforeStart)).type(RefundType.NO_DEDUCTION).build());
-                if (beforeStart > 25) {
-                    cancelPolicyList.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(cancelPolicy.getEnd())).before(Math.max(25, beforeEnd)).type(RefundType.DEDUCT_DAY_NIGHT).value(Double.valueOf(cancelPolicy.getNights())).build());
-                }
-            }
-        } else {
-            cancelPolicyList.add(CancelPolicy.builder().cancelType(0).build());
+            policies.add(CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(firstStart.getOffset()))
+                    .before(before).type(RefundType.NO_DEDUCTION).build());
         }
-        return cancelPolicyList;
+        for (PenaltyWindow window : windows) {
+            CancelPolicy converted = convertPenaltyWindow(checkIn, window);
+            if (converted == null) {
+                return List.of();
+            }
+            policies.add(converted);
+        }
+        return policies;
     }
 
-    private static String timeZoneOf(String cancelDate) {
-        return "GMT" + cancelDate.substring(cancelDate.length() - 6, cancelDate.length() - 3);
+    /** 单段罚金窗 → 契约段；载体不认识、数值或时间解析不出返回 null（调用方整体按 UNKNOWN） */
+    private static CancelPolicy convertPenaltyWindow(String checkIn, PenaltyWindow window) {
+        QueryPriceResponse.CancelPolicy raw = window.raw();
+        RefundType type;
+        Double value;
+        if (StringUtils.isNotBlank(raw.getAmount())) {
+            type = RefundType.DEDUCT_BY_AMOUNT;
+            value = parseNumber(raw.getAmount());
+        } else if (StringUtils.isNotBlank(raw.getPercent())) {
+            type = RefundType.DEDUCT_BY_PERCENT;
+            value = parseNumber(raw.getPercent().replace("%", ""));
+        } else if (StringUtils.isNotBlank(raw.getNights())) {
+            type = RefundType.DEDUCT_DAY_NIGHT;
+            value = parseNumber(raw.getNights());
+        } else {
+            log.info("expedia退改规范化：罚金载体不认识，整体按 UNKNOWN 处理(R-5.4),amount={},percent={},nights={}",
+                    raw.getAmount(), raw.getPercent(), raw.getNights());
+            return null;
+        }
+        Integer before = hoursUntilCheckInEnd(window.end(), checkIn);
+        if (value == null || before == null) {
+            log.info("expedia退改规范化：罚金数值或入住日无法解析，整体按 UNKNOWN 处理(R-5.4),seg={},checkIn={}",
+                    JsonUtils.writeObject2Json(raw), checkIn);
+            return null;
+        }
+        if (value <= 0) {
+            // 罚 0（如 nights="0"）=该窗内实际免费
+            return CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(window.end().getOffset()))
+                    .before(before).type(RefundType.NO_DEDUCTION).build();
+        }
+        return CancelPolicy.builder().cancelType(1).timeZone(timeZoneOf(window.end().getOffset()))
+                .before(before).type(type).value(value).build();
+    }
+
+    private record PenaltyWindow(OffsetDateTime start, OffsetDateTime end, QueryPriceResponse.CancelPolicy raw) {
+    }
+
+    private static OffsetDateTime parseOffset(String value) {
+        if (StringUtils.isBlank(value)) {
+            return null;
+        }
+        try {
+            return OffsetDateTime.parse(value);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static Double parseNumber(String value) {
+        try {
+            return Double.valueOf(value.trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 某时刻距「入住日 24:00」的小时数（下限 25）；入住日按该时刻自带的 UTC 偏移解释 */
+    private static Integer hoursUntilCheckInEnd(OffsetDateTime at, String checkIn) {
+        try {
+            Instant checkInEnd = LocalDate.parse(checkIn).plusDays(1).atStartOfDay().toInstant(at.getOffset());
+            return Math.max(25, (int) Math.ceil(Duration.between(at.toInstant(), checkInEnd).toMinutes() / 60.0));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String timeZoneOf(ZoneOffset offset) {
+        return "GMT" + (offset.getTotalSeconds() == 0 ? "+00:00" : offset.getId());
     }
 }
