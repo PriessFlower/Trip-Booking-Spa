@@ -6,6 +6,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongNightlyRate;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongRatePlan;
 import com.trip.booking.spa.gateway.domain.product.CancelClass;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.shared.CancelClassifier;
 import com.trip.booking.spa.gateway.domain.product.MealSignature;
 import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.domain.product.ProductKeyFactory;
@@ -75,28 +76,15 @@ public class ElongProductKeyDeriver {
         return deriveIdentity(supplierHotelId, roomTypeId, meal, cancelPolicy, occupancy, totalCents).productKey();
     }
 
-    /** 退改三分类。UNKNOWN 进 key 照常可售但不进目录——建档读 identity 的 cancelClass 判（R-5.4）。 */
+    /**
+     * 退改三分类：判据在 {@link CancelClassifier}，本仓唯一一处（三家此前各抄一份，
+     * 同一个"不判过期"的漏也漏了三遍，2026-09-02 实测艺龙 14.3% 的"免费取消"其实已过期）。
+     *
+     * <p>此处不传 checkIn/now：过期段已在 {@link #convertCancelPolicy} 归一化时滤掉，
+     * 判类只该看仍然有效的段。
+     */
     private static CancelClass classifyCancel(List<CancelPolicy> cancelPolicy, Integer totalCents) {
-        if (CollectionUtils.isEmpty(cancelPolicy)) {
-            return CancelClass.UNKNOWN;
-        }
-        if (cancelPolicy.stream().anyMatch(p -> Integer.valueOf(1).equals(p.getCancelType())
-                && RefundType.NO_DEDUCTION == p.getType())) {
-            // 存在免费取消窗口（R-5.1 的 FREE 判据），罚金阶梯照常跟在后面
-            return CancelClass.FREE_CANCELLABLE;
-        }
-        if (cancelPolicy.stream().allMatch(p -> Integer.valueOf(0).equals(p.getCancelType()))) {
-            return CancelClass.NON_REFUNDABLE;
-        }
-        if (cancelPolicy.stream().allMatch(p -> p.deductsFullPrice(totalCents))) {
-            // 每段确定罚≥全款=经济上不可退（双家同判据；飞猪 305 条采样实证见
-            // docs/fliggy §2，艺龙 CutType=4 官方语义即全额房费）。注意该类随住期/价格
-            // 可变（同一卖法临近入住免费窗过期后如实转为不可退），与 FREE 的窗口性同理
-            return CancelClass.NON_REFUNDABLE;
-        }
-        // 罚金阶梯存在但判不出"全款"（首晚/按晚/定额低于总价）：三分类无处安放。
-        // 按元规则 R-1.6（赌错只许少卖）归 UNKNOWN——实时可售，不进目录
-        return CancelClass.UNKNOWN;
+        return CancelClassifier.classify(cancelPolicy, null, totalCents, null);
     }
 
     private static boolean isPositive(Integer count) {
@@ -307,7 +295,9 @@ public class ElongProductKeyDeriver {
             }
             policies.add(policy);
         }
-        return policies;
+        // 过期段不许流出：截止时刻已过的段行使不了，既不能对外承诺，也不该参与判类
+        // （2026-09-02 实测艺龙 14.3% 的"可免费取消"其实免费窗早已关闭）
+        return CancelClassifier.liveSegments(policies, checkIn, java.time.Instant.now());
     }
 
     /**
@@ -354,7 +344,9 @@ public class ElongProductKeyDeriver {
                     : CancelPolicy.builder().cancelType(1).timeZone("GMT+08:00").before(before)
                             .type(RefundType.DEDUCT_BY_AMOUNT).value(penalty).build());
         }
-        return policies;
+        // 过期段不许流出：截止时刻已过的段行使不了，既不能对外承诺，也不该参与判类
+        // （2026-09-02 实测艺龙 14.3% 的"可免费取消"其实免费窗早已关闭）
+        return CancelClassifier.liveSegments(policies, checkIn, java.time.Instant.now());
     }
 
     /** ISO 带偏移时刻（如 2026-08-21T18:00:00+08:00）距入住日 24:00 的小时数；下限 25，同查价侧 */

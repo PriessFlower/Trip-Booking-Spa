@@ -23,6 +23,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.mode
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.model.FliggyValidateResponse;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
+import com.trip.booking.spa.gateway.domain.booking.VerifyLevel;
 import com.trip.booking.spa.gateway.domain.product.Occupancy;
 import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
@@ -137,7 +138,7 @@ public class FliggyPriceServiceImpl {
                 skippedNoPrice++;
                 continue;
             }
-            List<PriceInfo> priceInfos = convertPriceInfos(rate, request);
+            List<PriceInfo> priceInfos = convertPriceInfos(rate, request.getCheckIn(), request.getCheckout());
             if (priceInfos == null) {
                 skippedNoDayPrice++;
                 continue;
@@ -184,8 +185,8 @@ public class FliggyPriceServiceImpl {
      * roomPrice=税前（缺则回落含税）、taxes=差额。单晚缺 daily_rates 可用
      * total_rate 精确回落；多晚缺任何一天即整条不报——均摊会造出假的日期价。
      */
-    private List<PriceInfo> convertPriceInfos(JsonNode rate, PriceReq request) {
-        List<String> dates = DateUtil.getDatesBetween(request.getCheckIn(), request.getCheckout());
+    private List<PriceInfo> convertPriceInfos(JsonNode rate, String checkIn, String checkOut) {
+        List<String> dates = DateUtil.getDatesBetween(checkIn, checkOut);
         if (dates.isEmpty()) {
             return null;
         }
@@ -249,6 +250,14 @@ public class FliggyPriceServiceImpl {
             // 所点报价不在当前响应：重新查价往往同房型仍有房——RATE_DEAD 不可折叠进不确定
             return outcome(CheckPriceOutcome.RATE_DEAD, "所选报价已不在当前在售列表，请重新查价");
         }
+        if (request.getVerifyLevel() == VerifyLevel.AVAILABILITY) {
+            // 渠道曝光档：到此为止，不打 validate（艺龙同款，见
+            // ElongPriceServiceImpl#availabilityOnlyResp）。飞猪 validate 实测 1,833ms
+            // （2026-09-02 生产），加上现取这趟塞不进渠道 1.5s 的核价预算——超时被兜底成
+            // 「不可预订」，报价就在列表页被抹掉（高德实测 SUPPLIER_BUDGET_TIMEOUT，
+            // RT 2312ms）。只回"有货"、不签句柄：rate_key/create_key 到真下单必已过期
+            return availabilityOnlyResp(request, fresh);
+        }
         String freshRateKey = text(fresh, "rate_key");
         String traceId = ari.requestTraceId();
 
@@ -300,6 +309,50 @@ public class FliggyPriceServiceImpl {
                 // 退改以验价时点的同一报价为准（现取现验，与查价同一响应）
                 .cancelPolicy(productKeyDeriver.convertCancelPolicy(request.getCheckIn(), fresh.get("cancel_policy")))
                 .message("验价通过")
+                .build();
+    }
+
+    /**
+     * 曝光档验价：只答"这条报价还在售"，不答"能不能立刻下单"。
+     *
+     * <p>证据是<b>现取的这份 ARI</b>（与 BOOKABLE 档同一份响应），不是缓存——所以它是
+     * 真实的在售判定，只是省掉 validate 那一趟。价格与退改都是 ARI 口径，用于展示；
+     * 真正对账的数在下单前那一档由 validate 给出。
+     *
+     * <p>不签句柄是硬约束（模板 {@code AbstractCheckPriceSyncSupportService} 只对 BOOKABLE
+     * 要求句柄）：飞猪的 create_key 由 validate 签发，此档根本没调它。
+     */
+    CheckPriceRespDTO availabilityOnlyResp(CheckPriceReq request, JsonNode fresh) {
+        JsonNode totalRate = fresh.get("total_rate");
+        Integer inclusive = intOrNull(totalRate, "inclusive");
+        if (inclusive == null) {
+            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未给出总价，未能确认该产品");
+        }
+        String currency = text(totalRate, "currency");
+        if (StringUtils.isBlank(currency)) {
+            // 币种不许缺也不许猜：上游把美元数字当人民币用即 7 倍资损（SpaCurrencyConverter 同纪律）
+            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未给出币种，未能确认该产品");
+        }
+        List<PriceInfo> priceInfos = convertPriceInfos(fresh, request.getCheckIn(), request.getCheckOut());
+        if (priceInfos == null) {
+            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未给出每日价，未能确认该产品");
+        }
+        // salePrice 整单口径：ARI 的 total_rate 是单间价，多间须乘间数（与 BOOKABLE 档一致，
+        // 那档的 validate 总价本就按 number_of_rooms 算）
+        int rooms = request.getRoomNum() == null ? 1 : request.getRoomNum();
+        int totalCents = inclusive * rooms;
+        List<CancelPolicy> cancelPolicy =
+                productKeyDeriver.convertCancelPolicy(request.getCheckIn(), fresh.get("cancel_policy"));
+        log.info("飞猪验价(仅现货)：有货但未验证可订性,sHotelId={},rateKey={},价格={}分{},退改条数={}",
+                request.getSHotelId(), text(fresh, "rate_key"), totalCents, currency, cancelPolicy.size());
+        return CheckPriceRespDTO.builder()
+                .outcome(CheckPriceOutcome.AVAILABLE)
+                .salePrice(totalCents)
+                .subPrice(totalCents)
+                .currencyType(currency)
+                .cancelPolicy(cancelPolicy)
+                .priceInfos(priceInfos)
+                .message("有货，未验证可订性（曝光档）")
                 .build();
     }
 

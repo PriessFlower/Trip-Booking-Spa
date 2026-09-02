@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
 import com.trip.booking.spa.gateway.domain.product.CancelClass;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.shared.CancelClassifier;
 import com.trip.booking.spa.gateway.domain.product.MealSignature;
 import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.domain.product.RefundType;
@@ -95,7 +96,9 @@ public class FliggyProductKeyDeriver {
                     .amount(cents)
                     .build());
         }
-        return out;
+        // 过期段不许流出：截止时刻已过的段行使不了，既不能对外承诺，也不该参与判类
+        // （2026-09-02 实测艺龙 14.3%、飞猪 4.4% 的"可免费取消"其实免费窗早已关闭）
+        return CancelClassifier.liveSegments(out, checkIn, java.time.Instant.now());
     }
 
     /** 某时刻距「入住日 24:00」的小时数（下限 25，字段约定必须>24）。基准恒按北京时间——
@@ -123,20 +126,9 @@ public class FliggyProductKeyDeriver {
                 supplierHotelId, roomId, mealSignature, classifyCancel(cancelPolicy, totalCents), occupancy);
     }
 
+    /** 退改三分类：判据在 {@link CancelClassifier}（全仓唯一）。过期段已在归一化时滤掉 */
     private static CancelClass classifyCancel(List<CancelPolicy> cancelPolicy, Integer totalCents) {
-        if (CollectionUtils.isEmpty(cancelPolicy)) {
-            return CancelClass.UNKNOWN;
-        }
-        if (cancelPolicy.stream().anyMatch(p -> RefundType.NO_DEDUCTION == p.getType())) {
-            return CancelClass.FREE_CANCELLABLE;
-        }
-        if (cancelPolicy.stream().allMatch(p -> p.deductsFullPrice(totalCents))) {
-            // 每段确定罚≥全款=经济上不可退（双家同判据，判规则内容不猜 code 码表）。
-            // 实证:305 条采样里全程收费形态 122/122 罚金=全款且 code 全=2（docs/fliggy §2）
-            return CancelClass.NON_REFUNDABLE;
-        }
-        // 罚金阶梯存在但判不出"全款":按 R-1.6 归 UNKNOWN(实时可售,不进目录)
-        return CancelClass.UNKNOWN;
+        return CancelClassifier.classify(cancelPolicy, null, totalCents, null);
     }
 
     private static boolean isPositive(Integer v) {
