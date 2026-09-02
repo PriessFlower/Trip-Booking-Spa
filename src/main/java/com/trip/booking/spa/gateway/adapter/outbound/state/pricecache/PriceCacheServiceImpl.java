@@ -12,6 +12,7 @@ import com.trip.booking.spa.platform.util.DateUtil;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import com.trip.booking.spa.platform.util.ModelConverterUtils;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.shared.CancelClassifier;
 import com.trip.booking.spa.gateway.domain.product.Occupancy;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.observability.DropReason;
@@ -33,6 +34,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -280,6 +282,11 @@ public class PriceCacheServiceImpl implements PriceCacheService {
                 respDTO.setMeal(attr.toMeal());
                 respDTO.setProductInfo(attr.toProductInfo());
             }
+            // 退改段的过期判定必须在【读侧】再做一次：刷价时还开着的免费窗，等客人来查时
+            // 可能已经关了（未来日期的价能在缓存里活 16 小时）。只在写侧滤，对外照旧会承诺
+            // 一个订不到的免费取消（2026-09-02 实测艺龙 14.3% 的"可免费取消"即此形态）
+            respDTO.setCancelPolicy(CancelClassifier.liveSegments(
+                    respDTO.getCancelPolicy(), priceReq.getCheckIn(), Instant.now()));
             List<PriceInfo> priceInfos = ModelConverterUtils.convert(value, PriceInfo.class);
             respDTO.setPriceInfos(priceInfos);
             respDTO.setStayPrice(stayPriceTotal);
