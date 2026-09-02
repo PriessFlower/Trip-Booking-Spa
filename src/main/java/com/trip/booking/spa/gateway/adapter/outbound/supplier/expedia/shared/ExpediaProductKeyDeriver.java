@@ -3,6 +3,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
 import com.trip.booking.spa.gateway.domain.product.CancelClass;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.shared.CancelClassifier;
 import com.trip.booking.spa.gateway.domain.product.MealSignature;
 import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.domain.product.ProductKeyFactory;
@@ -152,29 +153,14 @@ public class ExpediaProductKeyDeriver {
                 supplierHotelId, supplierRoomId, mealSignature, classifyCancel(cancelPolicy), occupancy);
     }
 
-    /** 退改三分类。UNKNOWN 进 key 照常可售但不进目录——建档问 {@link #isCatalogEligible}（R-5.4）。 */
+    /**
+     * 退改三分类：判据在 {@link CancelClassifier}（全仓唯一）。过期段已在
+     * {@link #convertCancelPolicy} 归一化时滤掉。
+     *
+     * <p>不传总价：Expedia 的"确定罚全款"只以比例 100% 表达，定额分支本就不成立（与原实现一致）。
+     */
     private static CancelClass classifyCancel(List<CancelPolicy> cancelPolicy) {
-        if (CollectionUtils.isEmpty(cancelPolicy)) {
-            return CancelClass.UNKNOWN;
-        }
-        if (cancelPolicy.stream().anyMatch(p -> Integer.valueOf(1).equals(p.getCancelType())
-                && RefundType.NO_DEDUCTION == p.getType())) {
-            // 存在免费取消窗口（R-5.1 的 FREE 判据），罚金阶梯照常跟在后面。
-            // 旧判据只看 cancelType==1——彼时 convertCancelPolicy 总垫免费头段，两者等价；
-            // 头段改为有真免费窗才垫后，纯罚金段也是 cancelType==1，必须再看 NO_DEDUCTION
-            return CancelClass.FREE_CANCELLABLE;
-        }
-        if (cancelPolicy.stream().allMatch(p -> Integer.valueOf(0).equals(p.getCancelType()))) {
-            return CancelClass.NON_REFUNDABLE;
-        }
-        if (cancelPolicy.stream().allMatch(p -> RefundType.DEDUCT_BY_PERCENT == p.getType()
-                && p.getValue() != null && p.getValue() >= 100D)) {
-            // 每段确定罚≥全款=经济上不可退（同艺龙 CutType=4）。该类随住期可变：
-            // 同一卖法临近入住免费窗过期后如实转不可退，与 FREE 的窗口性同理
-            return CancelClass.NON_REFUNDABLE;
-        }
-        // 罚金阶梯存在但判不出全款（按晚/定额/比例<100）：三分类无处安放，按 R-1.6 归 UNKNOWN
-        return CancelClass.UNKNOWN;
+        return CancelClassifier.classify(cancelPolicy, null, null, null);
     }
 
     /**
@@ -332,7 +318,9 @@ public class ExpediaProductKeyDeriver {
             }
             policies.add(converted);
         }
-        return policies;
+        // 过期段不许流出：截止时刻已过的段行使不了，既不能对外承诺，也不该参与判类
+        // （2026-09-02 实测艺龙 14.3% 的"可免费取消"其实免费窗早已关闭）
+        return CancelClassifier.liveSegments(policies, checkIn, java.time.Instant.now());
     }
 
     /** 单段罚金窗 → 契约段；载体不认识、数值或时间解析不出返回 null（调用方整体按 UNKNOWN） */

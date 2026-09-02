@@ -161,6 +161,63 @@ class ProductIdentityArchRulesTest {
                 "违反 R-2.1（易腐令牌禁止落库，docs/product-identity.md §2）：\n" + String.join("\n", violations));
     }
 
+    /**
+     * R-5.1：退改判类只许有一处——{@code CancelClassifier}。供应商包里不得自建判据。
+     *
+     * <p>为什么钉这条：三家此前各抄一份私有 {@code classifyCancel}，连注释都抄了三遍，
+     * 于是"段是否已过期"这个漏也漏了三遍。2026-09-02 实测艺龙 659 条"可免费取消"里
+     * 94 条（14.3%）免费窗早已关闭，飞猪 90 条里 4 条——对外宣称一个订不到的免费退是资损，
+     * 同时让同一卖法在相邻住期分裂成两个 productKey（多晚查询凑不齐而整条丢弃）。
+     *
+     * <p>下一家接入时若又想抄一份，CI 在这里红——他会被迫去读那唯一的判据，
+     * 那里写着为什么必须判过期。
+     */
+    @Test
+    void R51_cancelClassificationMustLiveInOnePlace() throws IOException {
+        Path classifier = MAIN_JAVA.resolve(
+                "com/trip/booking/spa/gateway/adapter/outbound/supplier/shared/CancelClassifier.java");
+        List<String> violations = new ArrayList<>();
+
+        try (Stream<Path> files = Files.walk(MAIN_JAVA)) {
+            files.filter(p -> p.toString().endsWith(".java"))
+                    .filter(p -> !p.equals(classifier))
+                    .forEach(p -> {
+                        String src = read(p);
+                        // 出现分类结果字面量＝在自己判；判类只许委派给唯一判据
+                        if (src.contains("CancelClass.FREE_CANCELLABLE")
+                                || src.contains("CancelClass.NON_REFUNDABLE")) {
+                            violations.add(p + " 自己产出退改分类，应改调 CancelClassifier.classify");
+                        }
+                    });
+        }
+        assertTrue(violations.isEmpty(),
+                "违反 R-5.1（退改判类唯一，见 CancelClassifier 类注释）：\n" + String.join("\n", violations));
+    }
+
+    /**
+     * R-5.1 配套：每家的退改归一化出口必须过一次过期过滤。
+     *
+     * <p>判类唯一只保证"怎么判"一致，不保证"喂进去的段是活的"。归一化是各家自己的活
+     * （报文形态各不相同），故这一步只能按家钉：写了 {@code convertCancelPolicy} 的类里
+     * 必须出现 {@code CancelClassifier.liveSegments}——漏调即对外承诺过期条款。
+     */
+    @Test
+    void R51_eachSupplierMustFilterExpiredSegments() throws IOException {
+        List<String> violations = new ArrayList<>();
+
+        try (Stream<Path> files = Files.walk(MAIN_JAVA)) {
+            files.filter(p -> p.toString().endsWith(".java")).forEach(p -> {
+                String src = read(p);
+                if (src.contains("List<CancelPolicy> convertCancelPolicy")
+                        && !src.contains("CancelClassifier.liveSegments")) {
+                    violations.add(p + " 归一化退改条款但未过滤过期段");
+                }
+            });
+        }
+        assertTrue(violations.isEmpty(),
+                "违反 R-5.1 配套（过期段不许流出）：\n" + String.join("\n", violations));
+    }
+
     private static String read(Path path) {
         try {
             return Files.readString(path);
