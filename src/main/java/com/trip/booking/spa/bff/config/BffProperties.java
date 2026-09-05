@@ -34,6 +34,52 @@ public class BffProperties {
 
     private final Contact contact = new Contact();
 
+    private final Suggest suggest = new Suggest();
+
+    /**
+     * 搜索框联想走 trip-booking-agg 的检索接口（ES）。
+     *
+     * <p>agg 与 spa 同机（trip-offline），spa 容器是 {@code --network host}，所以默认
+     * {@code 127.0.0.1}，不经任何网络设备。agg 不可用时上层退回本地 LIKE 查询。
+     */
+    public static class Suggest {
+
+        private String baseUrl = "http://127.0.0.1:18080";
+
+        /**
+         * 只要这家供应商卖得了的店。本 BFF 的定价链走 Expedia Rapid，
+         * 不过滤就会搜出只挂了 elong / huizhi 的店——点得进去却报不出价。
+         */
+        private String supplier = "expedia";
+
+        /** 联想是敲一个字就发一次的交互，超时必须短，宁可退回旧路径 */
+        private int timeoutMs = 800;
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public String getSupplier() {
+            return supplier;
+        }
+
+        public void setSupplier(String supplier) {
+            this.supplier = supplier;
+        }
+
+        public int getTimeoutMs() {
+            return timeoutMs;
+        }
+
+        public void setTimeoutMs(int timeoutMs) {
+            this.timeoutMs = timeoutMs;
+        }
+    }
+
     public static class Contact {
         private String email = "bff-sandbox@tripbooks.org";
         private String givenName = "Tao";
@@ -169,5 +215,9 @@ public class BffProperties {
 
     public Contact getContact() {
         return contact;
+    }
+
+    public Suggest getSuggest() {
+        return suggest;
     }
 }

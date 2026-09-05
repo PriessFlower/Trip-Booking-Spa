@@ -9,6 +9,13 @@ container. Runtime state is stored below `/opt/elasticsearch` on the host:
 - `ca-private/`: offline CA private key; never mounted into the running container
 - `secrets/elastic_password`: bootstrap superuser password, mode `0640` (`root:root`), so the container process (gid 0) can read it
 
+The image is built from the `Dockerfile` in this directory: the official Elasticsearch
+image plus the IK Chinese analyzer, whose version must match the server version exactly.
+The stock `standard` analyzer splits Chinese per character, which is unusable for
+hotel-name search. IK's built-in dictionary covers major cities and international brands
+but not Southeast Asian districts — `素坤逸`, `芭提雅`, `卡塔` and `新宿` are still split
+per character — so a custom dictionary is still required for our markets.
+
 The container exposes HTTPS only on the host private address `172.21.32.16:9200`.
 Port 9300 is not published. Never proxy Elasticsearch through the public Nginx virtual
 host or open ports 9200/9300 to the internet.
