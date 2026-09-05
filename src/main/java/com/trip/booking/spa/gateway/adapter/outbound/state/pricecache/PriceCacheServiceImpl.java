@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -331,6 +332,18 @@ public class PriceCacheServiceImpl implements PriceCacheService {
      * <p><b>只标记本次刷价的那一片占用</b>：刷价按什么占用问的，就只能替那一片作答。
      * 刷价固定按 1 成人问，故 2 人的片仍然是"没刷过"——不能因为想给 2 人一个确定答案
      * 就把它也标成无货，那是拿"我们没问"冒充"供应商说没有"（R-1.6）。
+     *
+     * <p><b>标记之前先摘掉这一片的旧报价</b>：{@code hMSet} 是合并不是覆盖，只贴标记的话
+     * 旧 field 原样留着；而读侧 {@code getPriceResult} 先判产品再判标记（有货优先），于是
+     * 标记形同虚设，整店卖光的酒店继续挂在渠道列表上，客人点进来才被告知不可订
+     * （2026-09-05 生产实证：春武里 Mybed Chonburi 当晚整店零报价，19:19:30 与 19:19:34
+     * 同一客人连点两次，两次都是 SPA_SOLD_OUT）。
+     *
+     * <p>为什么这里删得、而"有货优先"那条读侧规则不动：两者管的不是同一件事。读侧防的是
+     * <b>陈留标记</b>（下一轮刷回了货、标记还没过期）误伤在售；这里删的是<b>同一次刷价</b>
+     * 里供应商刚刚明确答"没有"的那一片——同一份响应，不存在"标记比价新"的问题。删除范围
+     * 严格限于本次问过的那一片（该供应商、该酒店、该占用、住期内每一天），没问过的占用片
+     * 一个字节都不碰。
      */
     private void markNoInventory(PriceReq request, Supplier supplier) {
         String occupancy = Occupancy.canonical(request.getAdultNum(), request.getChildNum(),
@@ -342,13 +355,29 @@ public class PriceCacheServiceImpl implements PriceCacheService {
             return;
         }
         Map<String, Map<String, String>> dataMap = new HashMap<>();
+        Map<String, Set<String>> staleFields = new HashMap<>();
         for (String date : DateUtil.getDatesBetween(request.getCheckIn(), request.getCheckout())) {
-            dataMap.put(RedisKeyUtils.buildPriceKey(supplier.getSupplierId(), hotelId, occupancy, date),
-                    Map.of(NO_INVENTORY_FIELD, "1"));
+            String priceKey = RedisKeyUtils.buildPriceKey(supplier.getSupplierId(), hotelId, occupancy, date);
+            dataMap.put(priceKey, Map.of(NO_INVENTORY_FIELD, "1"));
+            Map<String, String> existing = redisUtils.hashMapGet(priceKey);
+            if (MapUtils.isNotEmpty(existing)) {
+                Set<String> fields = existing.keySet().stream()
+                        .filter(field -> !NO_INVENTORY_FIELD.equals(field))
+                        .collect(Collectors.toSet());
+                if (!fields.isEmpty()) {
+                    staleFields.put(priceKey, fields);
+                }
+            }
+        }
+        int dropped = staleFields.values().stream().mapToInt(Set::size).sum();
+        if (dropped > 0) {
+            // 先删后标：中间态是"这一片没刷过"（读侧回不确定），比"有货"保守；
+            // 反过来先标后删，中间态是"既有价又有标记"=按有货优先照报，等于没删
+            redisUtils.batchHashDelete(staleFields);
         }
         writeWithTieredTtl(dataMap);
-        log.info("无货标记：已落缓存,hotelId={},occupancy={},checkIn={},checkOut={},共 {} 天",
-                hotelId, occupancy, request.getCheckIn(), request.getCheckout(), dataMap.size());
+        log.info("无货标记：已落缓存,hotelId={},occupancy={},checkIn={},checkOut={},共 {} 天,摘掉旧报价={}条",
+                hotelId, occupancy, request.getCheckIn(), request.getCheckout(), dataMap.size(), dropped);
     }
 
     private void writeWithTieredTtl(Map<String, Map<String, String>> dataMap) {
