@@ -10,11 +10,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -172,5 +174,81 @@ class NoInventoryMarkTest {
                         "a".repeat(64), "{\"price\":12345}")));
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> service.getPriceResult(req(1), sup()));
+    }
+
+    // ---------- 标记之前先摘掉旧报价（2026-09-05） ----------
+
+    /**
+     * 只贴标记不删旧价等于没贴：{@code hMSet} 是合并不是覆盖，而读侧 {@code getPriceResult}
+     * 先判产品再判标记（有货优先），于是整店卖光的酒店继续挂在渠道列表上。
+     *
+     * <p>生产实证：春武里 Mybed Chonburi 2026-09-05 当晚整店零报价，19:19:30 与 19:19:34
+     * 同一客人连点两次，两次都被告知 SPA_SOLD_OUT——因为列表上的价一直没撤。
+     */
+    @Test
+    @DisplayName("刷到无在售 → 先摘掉这一片的旧报价，再贴标记")
+    void emptyRefreshDropsStalePricesBeforeMarking() {
+        Mockito.when(redisUtils.hashMapGet("price:10010:H1:1:" + D1))
+                .thenReturn(Map.of("a".repeat(64), "{\"price\":12345}",
+                        "b".repeat(64), "{\"price\":23456}"));
+
+        service.productToCache(List.of(), req(1), sup());
+
+        ArgumentCaptor<Map<String, Set<String>>> cap = ArgumentCaptor.forClass(Map.class);
+        Mockito.verify(redisUtils).batchHashDelete(cap.capture());
+        assertEquals(Set.of("a".repeat(64), "b".repeat(64)), cap.getValue().get("price:10010:H1:1:" + D1));
+    }
+
+    /** 先删后标：中间态是"没刷过"（读侧回不确定），比"既有价又有标记"=照报有货保守 */
+    @Test
+    @DisplayName("删除必须发生在写标记之前")
+    void deletionHappensBeforeTheMarkerIsWritten() {
+        Mockito.when(redisUtils.hashMapGet("price:10010:H1:1:" + D1))
+                .thenReturn(Map.of("a".repeat(64), "{\"price\":12345}"));
+
+        service.productToCache(List.of(), req(1), sup());
+
+        InOrder order = Mockito.inOrder(redisUtils);
+        order.verify(redisUtils).batchHashDelete(any());
+        order.verify(redisUtils).batchHashMapSetWithExpire(any(), anyLong(), any(TimeUnit.class));
+    }
+
+    /** 标记自己不是旧报价，别把刚写的标记又删一遍 */
+    @Test
+    @DisplayName("已有的标记不进删除名单")
+    void theExistingMarkerIsNotDeleted() {
+        Mockito.when(redisUtils.hashMapGet("price:10010:H1:1:" + D1))
+                .thenReturn(Map.of(PriceCacheServiceImpl.NO_INVENTORY_FIELD, "1"));
+
+        service.productToCache(List.of(), req(1), sup());
+
+        Mockito.verify(redisUtils, Mockito.never()).batchHashDelete(any());
+    }
+
+    /** 本来就没有旧价时不发无谓的 HDEL */
+    @Test
+    @DisplayName("这一片本来就是空的 → 不调删除")
+    void nothingToDropMeansNoDeleteCall() {
+        service.productToCache(List.of(), req(1), sup());
+
+        Mockito.verify(redisUtils, Mockito.never()).batchHashDelete(any());
+    }
+
+    /**
+     * 删除范围与标记同一口径：只碰本次问过的那一片。没问过的占用片里的价是活的，
+     * 删了就是拿"我们没问"当"供应商说没有"（R-1.6）。
+     */
+    @Test
+    @DisplayName("只摘本次问过的那一片，不外溢到别的占用")
+    void deletionStaysInsideTheRefreshedShard() {
+        Mockito.when(redisUtils.hashMapGet(Mockito.anyString()))
+                .thenReturn(Map.of("a".repeat(64), "{\"price\":12345}"));
+
+        service.productToCache(List.of(), req(1), sup());
+
+        ArgumentCaptor<Map<String, Set<String>>> cap = ArgumentCaptor.forClass(Map.class);
+        Mockito.verify(redisUtils).batchHashDelete(cap.capture());
+        assertTrue(cap.getValue().keySet().stream().allMatch(k -> k.startsWith("price:10010:H1:1:")),
+                "不该碰别的占用片: " + cap.getValue().keySet());
     }
 }
