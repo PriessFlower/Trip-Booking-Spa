@@ -305,3 +305,13 @@ supplier:
     # ProductCatalogService 按家读。默认关——飞猪刷价清单 9,822 家/304,482 行,
     # 开启前须先观察 upsert 耗时对刷价周期的影响。
     catalog-enabled: false
+
+    # resolve 管线开关（docs/product-identity.md §3）：验价时所点 rate_key 已不在现货，
+    # 允许按上游携带的 productKey 在现取的现货中自动换等价新票。飞猪 rate_key 会换代
+    # （2026-09-05 实测同一报价长出 _FR 后缀），关闭时精确匹配落空即 RATE_DEAD
+    # （生产 2026-09-02~05 实测 8/18）。改后需重启容器方生效。
+    resolve-enabled: false
+
+    # resolve 换票价格容差（R-3.3 双门取严，语义同 supplier.expedia 同名两键）
+    resolve-price-tolerance: 0.02
+    resolve-price-cap-cents: 2000

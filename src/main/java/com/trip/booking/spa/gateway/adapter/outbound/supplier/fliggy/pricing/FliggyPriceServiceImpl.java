@@ -21,9 +21,10 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.Flig
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyTopResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.model.FliggyAriResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.model.FliggyValidateResponse;
+import com.trip.booking.spa.gateway.application.checkprice.LiveStock;
+import com.trip.booking.spa.gateway.application.checkprice.ResolveCandidate;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
-import com.trip.booking.spa.gateway.domain.booking.VerifyLevel;
 import com.trip.booking.spa.gateway.domain.product.Occupancy;
 import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
@@ -218,46 +219,70 @@ public class FliggyPriceServiceImpl {
         return priceInfos;
     }
 
-    // ---------- 验价（现取现验） ----------
+    // ---------- 验价（现取现验）：流程在 FliggyCheckPriceServiceImpl（模板），这里只是钩子 ----------
 
-    public CheckPriceRespDTO checkPrices(CheckPriceReq request) {
+    /** 凭证未配置即确定失败（网关无兜底），不调供应商 */
+    public CheckPriceRespDTO precondition() {
         if (!properties.isConfigured()) {
             return outcome(CheckPriceOutcome.INDETERMINATE, "飞猪凭证未配置，未能确认该产品是否可订");
         }
+        return null;
+    }
+
+    /** 现取整店 ARI；终态口径与查价同源（下架/整店无售=SOLD_OUT，平台拒绝/无结果=不确定） */
+    public LiveStock<FliggyAriResponse> fetchLiveStock(CheckPriceReq request) {
         ResponseResult<FliggyAriResponse> ariResult = new AriAvailabilityAccess(properties)
                 .access(ariCall(request.getSHotelId(), request.getCheckIn(), request.getCheckOut(),
                         request.getAdultCount(), request.getChildNum(), request.getChildAges()),
                         CallPurpose.CHECK_PRICE);
         FliggyAriResponse ari = ariResult == null ? null : ariResult.getData();
         if (ari == null) {
-            return outcome(CheckPriceOutcome.INDETERMINATE, "查价未取得结果，请稍后重试");
+            return LiveStock.terminal(outcome(CheckPriceOutcome.INDETERMINATE, "查价未取得结果，请稍后重试"));
         }
         // 验价即刷(F-6 即时半边):现取的这份全店现货验完即弃等于白白留着缓存陈价对外报,
         // 异步回写、不占验价预算(艺龙同名机制的实证:河内 Daewoo 陈价每次点击 RATE_DEAD)
         freshPricesToCacheAsync(request, ari);
         if (ari.isHotelDelisted()) {
-            return outcome(CheckPriceOutcome.SOLD_OUT, "该酒店已被供应商下架");
+            return LiveStock.terminal(outcome(CheckPriceOutcome.SOLD_OUT, "该酒店已被供应商下架"));
         }
         if (ari.isPlatformError()) {
             reportPlatformError("验价·现取", ari, request.getSHotelId());
-            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商平台拒绝了请求，未能确认");
+            return LiveStock.terminal(outcome(CheckPriceOutcome.INDETERMINATE, "供应商平台拒绝了请求，未能确认"));
         }
         if (ari.isEmptyResult()) {
-            return outcome(CheckPriceOutcome.SOLD_OUT, "该住期已无任何可售报价");
+            return LiveStock.terminal(outcome(CheckPriceOutcome.SOLD_OUT, "该住期已无任何可售报价"));
         }
-        JsonNode fresh = findByRateKey(ari.rates(), request.getSProductId());
-        if (fresh == null) {
-            // 所点报价不在当前响应：重新查价往往同房型仍有房——RATE_DEAD 不可折叠进不确定
-            return outcome(CheckPriceOutcome.RATE_DEAD, "所选报价已不在当前在售列表，请重新查价");
+        return LiveStock.of(ari);
+    }
+
+    /**
+     * 换票候选：与 {@link #convertRates} 同一套丢弃口径（缺票据/缺总价/缺逐日价的不算在售）、
+     * 同一套身份派生，键相等才收；价格取 total_rate.inclusive，与查价透出的 totalPrice 同口径。
+     */
+    public List<ResolveCandidate<JsonNode>> resolveCandidates(FliggyAriResponse ari, CheckPriceReq request) {
+        String occupancy = Occupancy.canonical(request.getAdultCount(), request.getChildNum(), request.getChildAges());
+        List<ResolveCandidate<JsonNode>> equivalents = new ArrayList<>();
+        for (JsonNode rate : ari.rates()) {
+            if (StringUtils.isBlank(text(rate, "rate_key"))) {
+                continue;
+            }
+            Integer inclusive = intOrNull(rate.get("total_rate"), "inclusive");
+            if (inclusive == null || convertPriceInfos(rate, request.getCheckIn(), request.getCheckOut()) == null) {
+                continue;
+            }
+            Meal meal = productKeyDeriver.convertMeal(rate.get("meals"));
+            List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), rate.get("cancel_policy"));
+            ProductIdentity identity = productKeyDeriver.deriveIdentity(request.getSHotelId(), text(rate, "room_id"),
+                    meal, cancelPolicy, occupancy, inclusive);
+            if (request.getProductKey().equals(identity.productKey())) {
+                equivalents.add(new ResolveCandidate<>(rate, inclusive));
+            }
         }
-        if (request.getVerifyLevel() == VerifyLevel.AVAILABILITY) {
-            // 渠道曝光档：到此为止，不打 validate（艺龙同款，见
-            // ElongPriceServiceImpl#availabilityOnlyResp）。飞猪 validate 实测 1,833ms
-            // （2026-09-02 生产），加上现取这趟塞不进渠道 1.5s 的核价预算——超时被兜底成
-            // 「不可预订」，报价就在列表页被抹掉（高德实测 SUPPLIER_BUDGET_TIMEOUT，
-            // RT 2312ms）。只回"有货"、不签句柄：rate_key/create_key 到真下单必已过期
-            return availabilityOnlyResp(request, fresh);
-        }
+        return equivalents;
+    }
+
+    /** 下单前档：以现取同一响应里的 rate_key + request_trace_id 打 validate，通过才签句柄 */
+    public CheckPriceRespDTO validate(CheckPriceReq request, JsonNode fresh, FliggyAriResponse ari) {
         String freshRateKey = text(fresh, "rate_key");
         String traceId = ari.requestTraceId();
 
@@ -322,7 +347,7 @@ public class FliggyPriceServiceImpl {
      * <p>不签句柄是硬约束（模板 {@code AbstractCheckPriceSyncSupportService} 只对 BOOKABLE
      * 要求句柄）：飞猪的 create_key 由 validate 签发，此档根本没调它。
      */
-    CheckPriceRespDTO availabilityOnlyResp(CheckPriceReq request, JsonNode fresh) {
+    public CheckPriceRespDTO availabilityOnlyResp(CheckPriceReq request, JsonNode fresh) {
         JsonNode totalRate = fresh.get("total_rate");
         Integer inclusive = intOrNull(totalRate, "inclusive");
         if (inclusive == null) {
@@ -447,7 +472,7 @@ public class FliggyPriceServiceImpl {
         return new FliggyTopCall(METHOD_VALIDATE, Map.of("validate_req", JsonUtils.writeObject2Json(req)));
     }
 
-    static JsonNode findByRateKey(List<JsonNode> rates, String rateKey) {
+    public static JsonNode findByRateKey(List<JsonNode> rates, String rateKey) {
         if (StringUtils.isBlank(rateKey)) {
             return null;
         }

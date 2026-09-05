@@ -21,7 +21,6 @@ import com.trip.booking.spa.gateway.domain.product.CancelClass;
 import com.trip.booking.spa.gateway.domain.product.MealSignature;
 import com.trip.booking.spa.gateway.domain.product.ProductKeyFactory;
 import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
-import com.trip.booking.spa.gateway.domain.product.ResolveGate;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.checkprice.client.CheckPriceAccess;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing.client.QueryProductAccess;
@@ -35,6 +34,8 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.Exp
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing.ExpediaPriceService;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaUtils;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
+import com.trip.booking.spa.gateway.application.checkprice.LiveStock;
+import com.trip.booking.spa.gateway.application.checkprice.ResolveCandidate;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.platform.observability.CallStatus;
 import com.trip.booking.spa.platform.observability.DropReason;
@@ -89,8 +90,8 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     /** 报价展示币种：与 EAC 结算币种（CNY）对齐；上游 request.currency 为空时用此默认 */
     private static final String DEFAULT_QUOTE_CURRENCY = "CNY";
 
-    private static final String SALES_ENV_HOTEL_ONLY = "hotel_only";
-    private static final String SALES_ENV_HOTEL_PACKAGE = "hotel_package";
+    public static final String SALES_ENV_HOTEL_ONLY = "hotel_only";
+    public static final String SALES_ENV_HOTEL_PACKAGE = "hotel_package";
 
     /** Expedia 验价响应中表示满房的状态原文 */
     private static final String STATUS_SOLD_OUT = "sold_out";
@@ -461,23 +462,110 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         return null;
     }
 
-    @Override
-    public CheckPriceRespDTO checkPrices(CheckPriceReq request) {
+    // ---------- 验价钩子：流程在 ExpediaCheckPriceServiceImpl（模板），这里只是供应商侧的读法 ----------
+
+    /**
+     * 要依次找票的售卖环境：上游指定了 priceFlag 就只按它查；未指定先零售、零售侧确证
+     * RATE_DEAD 才换打包价再找一次（不确定或已售罄时再查既救不回也会掩盖成因）。
+     */
+    public List<String> salesEnvironments(CheckPriceReq request) {
+        if (StringUtils.isNotBlank(request.getPriceFlag())) {
+            return List.of(request.getPriceFlag());
+        }
+        return List.of(SALES_ENV_HOTEL_ONLY, SALES_ENV_HOTEL_PACKAGE);
+    }
+
+    /** 现取：在指定售卖环境下重打一次查价 */
+    public LiveStock<QueryPriceResponse> fetchLiveStock(CheckPriceReq request, String salesEnvironment) {
         QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder().property_id(request.getSHotelId()).checkin(request.getCheckIn()).checkout(request.getCheckOut()).currency(StringUtils.isBlank(request.getCurrency()) ? DEFAULT_QUOTE_CURRENCY : request.getCurrency()).build();
         queryPriceRequest.setOccupancies(buildOccupancies(request));
+        queryPriceRequest.setSales_environment(salesEnvironment);
+        ResponseResult<QueryPriceResponse> result = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest, CallPurpose.CHECK_PRICE);
+        if (result == null || !result.isSucc() || null == result.getData()
+                || CollectionUtils.isEmpty(result.getData().getHotelPrices())) {
+            log.warn("expedia查价未取得结果,salesEnvironment={},request:{}", salesEnvironment, JsonUtils.writeObject2Json(request));
+            return LiveStock.terminal(outcome(CheckPriceOutcome.INDETERMINATE, "查价调用未取得结果，未能确认该产品是否可订，请稍后重试"));
+        }
+        return LiveStock.of(result.getData());
+    }
 
-        // 上游指定了售卖类型就只按它查；未指定时先零售、未命中再打包。
-        // 原实现在指定的情况下也会再查一次，而两次的售卖类型完全相同——纯属白打一次供应商接口
-        if (StringUtils.isNotBlank(request.getPriceFlag())) {
-            return attemptCheckPrice(request, queryPriceRequest, request.getPriceFlag());
+    /**
+     * 换票候选：对每条现货报价按<b>与查价时完全相同的口径</b>重派生 productKey，键相等才收
+     * （硬门 R-3.2 由键相等保证）；价格=含税价 − 佣金，与查价透出的 totalPrice 同一算法。
+     */
+    public List<ResolveCandidate<QueryPriceResponse.Rates>> resolveCandidates(QueryPriceResponse data, CheckPriceReq request) {
+        String occupancy = buildOccupancies(request).get(0);
+        List<ResolveCandidate<QueryPriceResponse.Rates>> equivalents = new ArrayList<>();
+        QueryPriceResponse.HotelPrice hotelPrice = data.getHotelPrices().get(0);
+        if (hotelPrice.getRooms() == null) {
+            return equivalents;
         }
-        CheckPriceRespDTO retail = attemptCheckPrice(request, queryPriceRequest, SALES_ENV_HOTEL_ONLY);
-        if (retail.getOutcome() != CheckPriceOutcome.RATE_DEAD) {
-            return retail;
+        for (QueryPriceResponse.Rooms room : hotelPrice.getRooms()) {
+            if (room.getRates() == null) {
+                continue;
+            }
+            for (QueryPriceResponse.Rates candidate : room.getRates()) {
+                QueryPriceResponse.Occupancy_pricing pricing = candidate.getOccupancy_pricing() == null
+                        ? null : candidate.getOccupancy_pricing().get(occupancy);
+                if (pricing == null || pricing.getTotals() == null || pricing.getTotals().getInclusive() == null) {
+                    continue;
+                }
+                Meal meal = productKeyDeriver.convertMeal(request.getAdultCount(), candidate.getAmenities());
+                List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(candidate.getNonrefundable_date_ranges())
+                        ? List.of(CancelPolicy.builder().cancelType(0).build())
+                        : productKeyDeriver.convertCancelPolicy(request.getCheckIn(), candidate.getCancel_penalties());
+                String key = productKeyDeriver.deriveProductKey(hotelPrice.getProperty_id(), room.getId(), meal, cancelPolicy, occupancy);
+                if (!request.getProductKey().equals(key)) {
+                    continue;
+                }
+                int priceCents = Money.toCents(new BigDecimal(
+                        pricing.getTotals().getInclusive().getRequest_currency().getValue()))
+                        - calcCommissionCents(pricing);
+                equivalents.add(new ResolveCandidate<>(candidate, priceCents));
+            }
         }
-        // 仅当零售侧确证「没有这个产品」时才换打包价再找一次。
-        // 若零售侧是不确定或已售罄，再查一次打包价既救不回也会掩盖成因
-        return attemptCheckPrice(request, queryPriceRequest, SALES_ENV_HOTEL_PACKAGE);
+        return equivalents;
+    }
+
+    /** 找到票之后的自检：所选床型已不可选即死票 */
+    public CheckPriceRespDTO inspect(QueryPriceResponse.Rates rate, CheckPriceReq request) {
+        if (null == pickBedGroup(rate, request.getBedId())) {
+            log.info("expedia验价：所选床型已不可选,sProductId={},bedId={}", request.getSProductId(), request.getBedId());
+            return outcome(CheckPriceOutcome.RATE_DEAD, "所选床型已不可选，请重新查价后再选择");
+        }
+        return null;
+    }
+
+    /**
+     * 下单前档：打 price_check 并归入确定的分态。原实现对「所点产品不在响应里」「床型不可选」
+     * 「已售罄」「调用失败」一律返回 null，上游无从区分该重新查价、告知满房还是稍后重试。
+     */
+    public CheckPriceRespDTO validate(CheckPriceReq request, QueryPriceResponse.Rates rate) {
+        String occupancy = buildOccupancies(request).get(0);
+        QueryPriceResponse.Bed_groups bedGroups = pickBedGroup(rate, request.getBedId());
+        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedGroups.getLinks().getPrice_check().getHref()), CallPurpose.CHECK_PRICE);
+        if (checkPriceResult == null || !checkPriceResult.isSucc() || null == checkPriceResult.getData()) {
+            log.warn("expedia验价未取得结果,sProductId={},response:{}", request.getSProductId(), JsonUtils.writeObject2Json(checkPriceResult));
+            return outcome(CheckPriceOutcome.INDETERMINATE, "验价调用未取得结果，未能确认该产品是否可订，请稍后重试");
+        }
+        if (STATUS_SOLD_OUT.equals(checkPriceResult.getData().getStatus())) {
+            // 供应商明确回答满房，这是确定性结果，可以如实告知旅客
+            return outcome(CheckPriceOutcome.SOLD_OUT, "该产品已售罄");
+        }
+
+        checkPriceResult.getData().setAdultCount(request.getAdultCount());
+        QueryPriceResponse.Occupancy_pricing occupancyPricing =
+                checkPriceResult.getData().getOccupancy_pricing() == null ? null
+                        : checkPriceResult.getData().getOccupancy_pricing().get(occupancy);
+        if (occupancyPricing == null || occupancyPricing.getTotals() == null
+                || occupancyPricing.getTotals().getInclusive() == null) {
+            // 供应商说可订却没给出本次占用的价格，属响应自相矛盾：既不能报可订（没有价），
+            // 也不能报不可订（供应商并未这么说）
+            log.error("expedia验价：响应缺少本次占用的价格,sProductId={},occupancy={}",
+                    request.getSProductId(), occupancy);
+            return outcome(CheckPriceOutcome.INDETERMINATE, "验价响应缺少本次占用的价格，未能确认该产品是否可订");
+        }
+        return buildCheckPriceResp(checkPriceResult.getData(), occupancyPricing);
     }
 
     /** 占用串：一间房一项，格式为「成人数-儿童年龄,儿童年龄」 */
@@ -499,148 +587,8 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         return occupancies;
     }
 
-    /**
-     * 在指定售卖类型下验一次价，并把结果归入确定的分态。
-     *
-     * <p><b>本方法存在的意义就是不让这些情形塌成同一个 null。</b>原实现对「查价调用失败」
-     * 「所点产品不在响应里」「床型不可选」「已售罄」一律返回 null，上游因此无从区分
-     * 该重新查价、该告知满房、还是该稍后重试——而这三件事的处置完全不同。
-     */
-    private CheckPriceRespDTO attemptCheckPrice(CheckPriceReq request, QueryPriceRequest queryPriceRequest,
-                                                String salesEnvironment) {
-        queryPriceRequest.setSales_environment(salesEnvironment);
-        ResponseResult<QueryPriceResponse> result = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest, CallPurpose.CHECK_PRICE);
-        if (result == null || !result.isSucc() || null == result.getData()
-                || CollectionUtils.isEmpty(result.getData().getHotelPrices())) {
-            log.warn("expedia查价未取得结果,salesEnvironment={},request:{}", salesEnvironment, JsonUtils.writeObject2Json(request));
-            return outcome(CheckPriceOutcome.INDETERMINATE, "查价调用未取得结果，未能确认该产品是否可订，请稍后重试");
-        }
-
-        QueryPriceResponse.Rates rate = findRate(result.getData(), request.getSProductId());
-        if (rate == null) {
-            // rate.id 实测稳定（docs/product-identity.md E-1 修正），走到这里意味着该报价
-            // 当日确实不在售（卖法下架/未开售）。先尝试按 productKey 在现货中换等价新票
-            // （resolve ②）；换不到才是确定性 RATE_DEAD——拿同一个 sProductId 重试必再
-            // 失败。注意这不等于满房——同一房型往往仍有房
-            rate = tryResolveByProductKey(result.getData(), request, queryPriceRequest.getOccupancies().get(0));
-        }
-        if (rate == null) {
-            log.info("expedia验价：所点产品已不在当前报价中,salesEnvironment={},sProductId={}",
-                    salesEnvironment, request.getSProductId());
-            return outcome(CheckPriceOutcome.RATE_DEAD, "该产品已不在供应商当前报价中，请重新查价后再选择");
-        }
-
-        QueryPriceResponse.Bed_groups bedGroups = pickBedGroup(rate, request.getBedId());
-        if (null == bedGroups) {
-            log.info("expedia验价：所选床型已不可选,sProductId={},bedId={}", request.getSProductId(), request.getBedId());
-            return outcome(CheckPriceOutcome.RATE_DEAD, "所选床型已不可选，请重新查价后再选择");
-        }
-
-        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedGroups.getLinks().getPrice_check().getHref()), CallPurpose.CHECK_PRICE);
-        if (checkPriceResult == null || !checkPriceResult.isSucc() || null == checkPriceResult.getData()) {
-            log.warn("expedia验价未取得结果,sProductId={},response:{}", request.getSProductId(), JsonUtils.writeObject2Json(checkPriceResult));
-            return outcome(CheckPriceOutcome.INDETERMINATE, "验价调用未取得结果，未能确认该产品是否可订，请稍后重试");
-        }
-        if (STATUS_SOLD_OUT.equals(checkPriceResult.getData().getStatus())) {
-            // 供应商明确回答满房，这是确定性结果，可以如实告知旅客
-            return outcome(CheckPriceOutcome.SOLD_OUT, "该产品已售罄");
-        }
-
-        checkPriceResult.getData().setAdultCount(request.getAdultCount());
-        QueryPriceResponse.Occupancy_pricing occupancyPricing =
-                checkPriceResult.getData().getOccupancy_pricing() == null ? null
-                        : checkPriceResult.getData().getOccupancy_pricing().get(queryPriceRequest.getOccupancies().get(0));
-        if (occupancyPricing == null || occupancyPricing.getTotals() == null
-                || occupancyPricing.getTotals().getInclusive() == null) {
-            // 供应商说可订却没给出本次占用的价格，属响应自相矛盾：既不能报可订（没有价），
-            // 也不能报不可订（供应商并未这么说）
-            log.error("expedia验价：响应缺少本次占用的价格,sProductId={},occupancy={}",
-                    request.getSProductId(), queryPriceRequest.getOccupancies().get(0));
-            return outcome(CheckPriceOutcome.INDETERMINATE, "验价响应缺少本次占用的价格，未能确认该产品是否可订");
-        }
-        return buildCheckPriceResp(checkPriceResult.getData(), occupancyPricing);
-    }
-
-    /**
-     * 令牌已死时按 productKey 在当前现货中找等价新票（resolve ②，docs/product-identity.md §3）。
-     *
-     * <p>三个前置缺一即放弃（返回 null，走 RATE_DEAD 正门）：开关开启（默认关，行为与旧实现
-     * 完全一致）、上游携带 productKey、上游携带展示价 totalPrice（容差门的基准，R-3.3）。
-     *
-     * <p>硬门（R-3.2）不必单列：productKey 本身由房型ID+餐食+退改类+占用派生，
-     * 对每条现货报价按<b>与查价时完全相同的口径</b>重新派生再比对，键相等即四门全过。
-     * 多条命中交给 {@link ResolveGate}：取最低价、过容差门。
-     *
-     * <p>匹配在已取回的查价响应上进行，不追加供应商调用——天然在时间预算内（R-3.4）。
-     */
-    QueryPriceResponse.Rates tryResolveByProductKey(QueryPriceResponse data, CheckPriceReq request, String occupancy) {
-        if (StringUtils.isBlank(request.getProductKey())) {
-            return null;
-        }
-        if (rapidProperties == null || !rapidProperties.isResolveEnabled()) {
-            // §3.8.4：上游明确请求了换票（带 productKey）而被闸口拒绝，必须可检索
-            log.info("闸口 supplier.expedia.resolve-enabled 关闭，拒绝按 productKey 自动换票,sHotelId={},sProductId={}",
-                    request.getSHotelId(), request.getSProductId());
-            return null;
-        }
-        QueryPriceResponse.HotelPrice hotelPrice = data.getHotelPrices().get(0);
-        if (hotelPrice.getRooms() == null) {
-            return null;
-        }
-        List<ResolveCandidate> equivalents = new ArrayList<>();
-        for (QueryPriceResponse.Rooms room : hotelPrice.getRooms()) {
-            if (room.getRates() == null) {
-                continue;
-            }
-            for (QueryPriceResponse.Rates candidate : room.getRates()) {
-                QueryPriceResponse.Occupancy_pricing pricing = candidate.getOccupancy_pricing() == null
-                        ? null : candidate.getOccupancy_pricing().get(occupancy);
-                if (pricing == null || pricing.getTotals() == null || pricing.getTotals().getInclusive() == null) {
-                    continue;
-                }
-                Meal meal = productKeyDeriver.convertMeal(request.getAdultCount(), candidate.getAmenities());
-                List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(candidate.getNonrefundable_date_ranges())
-                        ? List.of(CancelPolicy.builder().cancelType(0).build())
-                        : productKeyDeriver.convertCancelPolicy(request.getCheckIn(), candidate.getCancel_penalties());
-                String key = productKeyDeriver.deriveProductKey(hotelPrice.getProperty_id(), room.getId(), meal, cancelPolicy, occupancy);
-                if (!request.getProductKey().equals(key)) {
-                    continue;
-                }
-                // 上游口径总价（分）：含税价 − 佣金，与查价响应透出的 totalPrice 同一算法
-                int priceCents = Money.toCents(new BigDecimal(
-                        pricing.getTotals().getInclusive().getRequest_currency().getValue()))
-                        - calcCommissionCents(pricing);
-                equivalents.add(new ResolveCandidate(candidate, priceCents));
-            }
-        }
-        return ResolveGate.pickCheapestWithinTolerance(equivalents, ResolveCandidate::priceCents,
-                        request.getSeenPrice(), rapidProperties.getResolvePriceTolerance(),
-                        rapidProperties.getResolvePriceCapCents())
-                .map(chosen -> {
-                    log.info("expedia验价：令牌已死，按productKey换票成功,原sProductId={},新rateId={},新价={}分,展示价={}分",
-                            request.getSProductId(), chosen.rate().getId(), chosen.priceCents(), request.getSeenPrice());
-                    return chosen.rate();
-                })
-                .orElseGet(() -> {
-                    // 未救回的两种成因必须可区分：排障时"没等价票"该查建档/键口径，"价格不合"该查容差参数
-                    if (equivalents.isEmpty()) {
-                        log.info("expedia验价：resolve 未命中——现货中无同卖法等价报价,sHotelId={},sProductId={},productKey={}",
-                                request.getSHotelId(), request.getSProductId(), request.getProductKey());
-                    } else {
-                        log.info("expedia验价：存在等价报价但超出容差，拒绝自动换票,sProductId={},展示价={}分,候选最低={}分",
-                                request.getSProductId(), request.getSeenPrice(),
-                                equivalents.stream().mapToInt(ResolveCandidate::priceCents).min().orElse(-1));
-                    }
-                    return null;
-                });
-    }
-
-    /** resolve 候选：已过硬门（productKey 相等）的现货报价及其上游口径价格 */
-    private record ResolveCandidate(QueryPriceResponse.Rates rate, int priceCents) {
-    }
-
     /** 在查价响应中找出所点的报价；找不到返回 null */
-    QueryPriceResponse.Rates findRate(QueryPriceResponse data, String sProductId) {
+    public QueryPriceResponse.Rates findRate(QueryPriceResponse data, String sProductId) {
         QueryPriceResponse.HotelPrice hotelPrice = data.getHotelPrices().get(0);
         if (hotelPrice.getRooms() == null) {
             return null;

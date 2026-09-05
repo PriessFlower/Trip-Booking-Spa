@@ -116,6 +116,38 @@ public final class MetricNames {
      */
     public static final String REFRESH_INFLIGHT_SIZE = "refresh_inflight_size";
 
+    /**
+     * 一次验价的终态。标签 supplier/outcome（{@code CheckPriceOutcome} 小写）。
+     * 由验价模板统一打（O-4.3，新接一家自动具备）。此前验价 outcome 只在日志里，
+     * 「飞猪 RATE_DEAD 占多少」只能 grep 现算（2026-09-05：8/18，3 天日志）。
+     */
+    public static final String CHECK_PRICE_OUTCOME = "check_price_outcome";
+
+    /**
+     * 令牌死后 resolve 换票的结果。标签 supplier/outcome，取值见 {@link #RESOLVE_SWAPPED} 等。
+     * 未换到的成因必须可区分（§6.2.2）：无等价票指向建档与键口径，超容差指向容差参数，
+     * 无基准指向上游未携 seenPrice 且缓存反查落空。
+     */
+    public static final String CHECK_PRICE_RESOLVE = "check_price_resolve";
+
+    /** resolve：换到等价新票 */
+    public static final String RESOLVE_SWAPPED = "swapped";
+
+    /** resolve：现货中无同卖法等价报价 */
+    public static final String RESOLVE_NO_EQUIVALENT = "no_equivalent";
+
+    /** resolve：有等价票但超容差 */
+    public static final String RESOLVE_OVER_TOLERANCE = "over_tolerance";
+
+    /** resolve：上游未携 productKey，无从定义等价 */
+    public static final String RESOLVE_NO_PRODUCT_KEY = "no_product_key";
+
+    /** resolve：闸口 supplier.<家>.resolve-enabled 关闭 */
+    public static final String RESOLVE_GATE_CLOSED = "gate_closed";
+
+    /** resolve：无容差基准（上游未携 seenPrice 且缓存反查不到） */
+    public static final String RESOLVE_NO_BASELINE = "no_baseline";
+
     /** 验价时逐日价与总价的对齐检查。标签 supplier/outcome，取值见 {@link #ALIGN_MISMATCH} 等 */
     public static final String VALIDATE_DAY_PRICE_ALIGN = "validate_day_price_align";
 

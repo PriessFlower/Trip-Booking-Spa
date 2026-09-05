@@ -1,9 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
@@ -32,5 +30,4 @@ public interface ElongPriceService {
      */
     List<ProductRespDTO> queryPricesCache(PriceReq request, Supplier supplier);
 
-    CheckPriceRespDTO checkPrices(CheckPriceReq request);
 }

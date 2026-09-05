@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared;
 
+import com.trip.booking.spa.gateway.application.checkprice.ResolveProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,7 +19,7 @@ import org.apache.commons.lang3.StringUtils;
  */
 @Slf4j
 @Component
-public class ElongProperties implements InitializingBean {
+public class ElongProperties implements InitializingBean, ResolveProperties {
 
     /** 艺龙生产网关主机名；测试网关为 api-test.elong.com，二者凭证相同 */
     private static final String PRODUCTION_HOST = "api.elong.com";

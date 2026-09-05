@@ -7,6 +7,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.checkprice.ElongCheckPriceServiceImpl;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongOfferCredentials;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProductKeyDeriver;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProperties;
@@ -84,6 +85,8 @@ class ElongCheckPriceE2ETest {
     private static final String HOTEL = "61497910";
 
     private static ElongPriceServiceImpl service;
+    /** 验价走模板入口——流程（现取→找票→换票→分档→验价）在模板，这里验的是真链路上的整条 */
+    private static ElongCheckPriceServiceImpl flow;
     private static RedisUtils redis;
     private static String checkIn;
     private static String checkOut;
@@ -151,6 +154,10 @@ class ElongCheckPriceE2ETest {
         set(service, "productKeyDeriver", deriver);
         set(service, "offerStore", store);
 
+        flow = new ElongCheckPriceServiceImpl();
+        set(flow, "elongPriceService", service);
+        set(flow, "properties", props);
+
         LocalDate in = LocalDate.now().plusDays(3);
         checkIn = in.toString();
         checkOut = in.plusDays(1).toString();
@@ -213,7 +220,7 @@ class ElongCheckPriceE2ETest {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
 
         TAKEN.clear();
-        CheckPriceRespDTO resp = service.checkPrices(req(VerifyLevel.AVAILABILITY));
+        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY));
 
         // 点订前的现取现验走 :CHECK_PRICE 而不是 :REFRESH——同一个 hotel.detail 接口，
         // 两路各占一个用途桶。这一路是客人在等，与后台刷价必须分开计额
@@ -239,7 +246,7 @@ class ElongCheckPriceE2ETest {
     void bookableLevelDeclaresTheSameBasisItShows() {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
 
-        CheckPriceRespDTO resp = service.checkPrices(req(VerifyLevel.BOOKABLE));
+        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.BOOKABLE));
 
         assertThat(resp.getOutcome()).as("四态之内，不得出现别的值")
                 .isIn(CheckPriceOutcome.BOOKABLE, CheckPriceOutcome.AVAILABLE,
@@ -343,7 +350,7 @@ class ElongCheckPriceE2ETest {
     void multiRoomBookableDeclaresRoomMultipliedTotal() {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
 
-        CheckPriceRespDTO resp = service.checkPrices(req(VerifyLevel.BOOKABLE, 2));
+        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.BOOKABLE, 2));
 
         // 针对 2026-08-23 高德 2 间真单（26082320295835a66d8b13dd）的拒因：TotalPrice
         // 漏乘间数 → H001188|每日价传参异常。修复后该码不允许复现；SOLD_OUT/RATE_DEAD
