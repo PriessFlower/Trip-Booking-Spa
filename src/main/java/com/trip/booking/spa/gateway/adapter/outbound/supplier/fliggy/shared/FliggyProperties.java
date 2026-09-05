@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared;
 
+import com.trip.booking.spa.gateway.application.checkprice.ResolveProperties;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +21,7 @@ import javax.annotation.PostConstruct;
 @Setter
 @Component
 @ConfigurationProperties(prefix = "supplier.fliggy")
-public class FliggyProperties {
+public class FliggyProperties implements ResolveProperties {
 
     /** TOP 应用 appKey */
     private String appKey;
@@ -47,6 +48,19 @@ public class FliggyProperties {
     /** session 有效期天数。TOP 授权响应的 expires_in（cursor 实证 90 天） */
     private int sessionTtlDays = 90;
 
+    /**
+     * resolve 换票闸口（docs/product-identity.md §3）：验价时 rate_key 已不在现货，是否允许按
+     * productKey 换等价新票。飞猪 rate_key 会换代（同一报价长出 _FR 后缀，2026-09-05 神户实测），
+     * 关着就是 44% 的 RATE_DEAD（8/18）。默认关（§3.8），Nacos 开。
+     */
+    private boolean resolveEnabled = false;
+
+    /** resolve 换票的价格容差（R-3.3）：新价 ≤ 展示价 ×(1+本值) 才许自动换票 */
+    private double resolvePriceTolerance = 0.02;
+
+    /** resolve 换票容差的绝对帽（分）：单笔自动让利的财务上限，与比例容差取严 */
+    private int resolvePriceCapCents = 2000;
+
     /** 四样缺一即不可调用（网关无兜底）；接入期未配置是正常态，调用方按「凭据未配置→确定失败」处理 */
     public boolean isConfigured() {
         return StringUtils.isNoneBlank(appKey, secret, session, urlHost);
@@ -54,9 +68,17 @@ public class FliggyProperties {
 
     @PostConstruct
     void logStartupState() {
+        if (resolvePriceTolerance < 0 || resolvePriceTolerance > 0.2) {
+            throw new IllegalStateException(
+                    "supplier.fliggy.resolve-price-tolerance must be between 0 and 0.2, but was " + resolvePriceTolerance);
+        }
+        if (resolvePriceCapCents < 0 || resolvePriceCapCents > 100000) {
+            throw new IllegalStateException(
+                    "supplier.fliggy.resolve-price-cap-cents must be between 0 and 100000, but was " + resolvePriceCapCents);
+        }
         log.info("飞猪接入配置: urlHost={}, credentialsConfigured={}, distributor={}, "
-                        + "sessionAuthorizedAt={}, sessionTtlDays={}",
+                        + "sessionAuthorizedAt={}, sessionTtlDays={}, resolveEnabled={}",
                 urlHost, isConfigured(), StringUtils.defaultIfBlank(distributor, "<未配置>"),
-                StringUtils.defaultIfBlank(sessionAuthorizedAt, "<未配置>"), sessionTtlDays);
+                StringUtils.defaultIfBlank(sessionAuthorizedAt, "<未配置>"), sessionTtlDays, resolveEnabled);
     }
 }

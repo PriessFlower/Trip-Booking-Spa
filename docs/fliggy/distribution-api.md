@@ -136,7 +136,7 @@
 
 | # | 事项 | 为什么 |
 |---|---|---|
-| 1 | `rate_key` 跨时段/跨代稳定性、`create_key` 有效期 | 腐性申报硬门（R-4.1），OfferStore TTL 依据 |
+| 1 | `rate_key` 跨时段/跨代稳定性、`create_key` 有效期 | 腐性申报硬门（R-4.1），OfferStore TTL 依据。〔实证 2026-09-05〕`rate_key` **会换代**：神户 50366597 同一报价，高德回传 `V3\|f605…7319`，当刻现货为 `V3\|f605…7319_FR111881050001`；验价 RATE_DEAD 8/18 全因精确匹配落空。已接模板 resolve 按 productKey 换票（闸口 `supplier.fliggy.resolve-enabled`）。`create_key` 有效期仍未测 |
 | 2 | `forfeit_fee` 币种 | 钱；cursor 的 USD 假设无文档背书 |
 | 3 | `order_status` 取值枚举 | OrderPresence 三态映射 |
 | 4 | `customers` 结构 | 创单必填而文档未展开 |

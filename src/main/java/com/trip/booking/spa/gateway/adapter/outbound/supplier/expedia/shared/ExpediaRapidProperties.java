@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared;
 
+import com.trip.booking.spa.gateway.application.checkprice.ResolveProperties;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.beans.factory.InitializingBean;
@@ -10,7 +11,7 @@ import java.net.URI;
 
 @Component
 @ConfigurationProperties(prefix = "expedia")
-public class ExpediaRapidProperties implements InitializingBean {
+public class ExpediaRapidProperties implements InitializingBean, ResolveProperties {
 
     /**
      * 静态数据摄取总开关，运维可调，权威取值由 Nacos 下发（PROJECT.md §3.2.2）。

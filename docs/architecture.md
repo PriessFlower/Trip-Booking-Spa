@@ -201,6 +201,14 @@ bean 名对得上就自动进矩阵,无需改动 ①。
 与供应商无关，故收在 ② 而不是各家实现里。现网两家的可订路径本就必带这两项
 （拿不到句柄时它们自己就回不确定），这道关卡是给下一家接入时用的。
 
+验价模板还持有**流程本身**（`AbstractCheckPriceFlow`，2026-09-05 起）：现取 → 按令牌找票
+→ 令牌死则按 productKey 换票（`ResolveGate`，容差基准缺席时反查缓存）→ 供应商自检 →
+分档（`AVAILABILITY` 只答有货、不打 validate、不签句柄；`BOOKABLE` 必经 validate）。
+供应商只填钩子：现货怎么取、票怎么找、候选怎么算、两档怎么答。此前这条流程是各家
+自己手写的，`ResolveGate` 共用了、"该在哪一步调它"却靠记性——艺龙写了、Expedia 抄了、
+飞猪没抄，CI 全绿，生产 44% 验价 RATE_DEAD 而酒店明明有货（8/18）。凡是"新接一家必须
+记得写"的步骤都该长在骨架上，`CheckPriceFlowArchRulesTest` 守着这条。
+
 ### 4.2 把易腐令牌关在内部（OfferStore）
 
 ```
@@ -252,7 +260,7 @@ key 为 `GLOBAL_LIMIT:<供应商>:<接口>[:<用途>]`（两级：接口桶＝�
 
 ```
 XxxProductSyncServiceImpl     extends AbstractProductSyncSupportService
-XxxCheckPriceServiceImpl      extends AbstractCheckPriceSyncSupportService
+XxxCheckPriceServiceImpl      extends AbstractCheckPriceFlow<现货, 票>
 XxxBookingSyncServiceImpl     extends AbstractBookingSyncSupportService
 XxxOrderQuerySyncServiceImpl  extends AbstractOrderQuerySyncSupportService
 XxxCancelServiceImpl          extends AbstractCancelSyncSupportService
