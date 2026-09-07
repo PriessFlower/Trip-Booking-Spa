@@ -1,7 +1,9 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.checkprice;
 
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing.ElongPriceServiceImpl;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing.ElongPriceServiceImpl.PlanWithRoom;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProperties;

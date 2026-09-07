@@ -40,19 +40,16 @@ import static org.mockito.Mockito.verify;
 class ElongFreshPricesToCacheTest {
 
     private ElongPriceServiceImpl service;
-    private PriceCacheService priceCacheService;
 
     @BeforeEach
     void setUp() {
         service = new ElongPriceServiceImpl();
-        priceCacheService = Mockito.mock(PriceCacheService.class);
         ElongProductKeyDeriver deriver = new ElongProductKeyDeriver();
         ElongProperties properties = new ElongProperties();
         // productKey 的 account 成分取自 ELONG_USER——键随账号隔离,缺失即拒derive
         ReflectionTestUtils.setField(properties, "user", "test-account");
         ReflectionTestUtils.setField(deriver, "properties", properties);
         ReflectionTestUtils.setField(service, "productKeyDeriver", deriver);
-        ReflectionTestUtils.setField(service, "priceCacheService", priceCacheService);
     }
 
     private static CheckPriceReq checkReq() {
@@ -102,56 +99,42 @@ class ElongFreshPricesToCacheTest {
         return plan;
     }
 
-    @Test
-    @DisplayName("在售 → 回写，且占用键=验价的占用（2大1小9岁 → 2-9）")
-    void sellableInventoryIsWrittenBackUnderTheCheckOccupancy() {
-        service.freshPricesToCache(checkReq(), response("0", hotelWith(sellablePlan())));
-
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<ProductRespDTO>> products = ArgumentCaptor.forClass(List.class);
-        ArgumentCaptor<PriceReq> priceReq = ArgumentCaptor.forClass(PriceReq.class);
-        ArgumentCaptor<Supplier> supplier = ArgumentCaptor.forClass(Supplier.class);
-        verify(priceCacheService).productToCache(products.capture(), priceReq.capture(), supplier.capture());
-
-        assertEquals(1, products.getValue().size());
-        assertEquals("2-9", priceReq.getValue().getOccupancies().get(0),
-                "占用键必须随验价走——写成 1 人档即静默错键");
-        assertEquals("2026-08-28", priceReq.getValue().getCheckout(), "CheckPriceReq.checkOut → PriceReq.checkout");
-        assertEquals("61835012", supplier.getValue().getSHotelId());
+    /** 占用键随验价走（2 大 1 小 9 岁 → 2-9）；组装由模板做，这里只喂同形状的入参 */
+    private static PriceReq priceReq() {
+        PriceReq r = PriceReq.builder()
+                .checkIn("2026-08-27").checkout("2026-08-28")
+                .roomNum(1).adultNum(2).childNum(1).childAges(List.of(9)).build();
+        r.setOccupancies(com.trip.booking.spa.gateway.domain.product.Occupancy
+                .perRoom(1, 2, 1, List.of(9)));
+        return r;
     }
 
     @Test
-    @DisplayName("业务错误 → 不动缓存（F-5.1：没问出结果不清在售价）")
-    void businessErrorMustNotTouchCache() {
-        service.freshPricesToCache(checkReq(), response("E1|throttled", null));
-        verify(priceCacheService, never()).productToCache(any(), any(), any());
+    @DisplayName("在售 → 给出产品")
+    void sellableInventoryConvertsToProducts() {
+        assertEquals(1, service.freshProducts(response("0", hotelWith(sellablePlan())), priceReq(), "61835012").size());
     }
 
     @Test
-    @DisplayName("全被过滤（缺凭据）→ INDETERMINATE → 不动缓存")
-    void allFilteredMustNotTouchCache() {
+    @DisplayName("业务错误 → 给 null（F-5.1：模板据此不动缓存，不清在售价）")
+    void businessErrorYieldsNull() {
+        org.junit.jupiter.api.Assertions.assertNull(
+                service.freshProducts(response("E1|throttled", null), priceReq(), "61835012"));
+    }
+
+    @Test
+    @DisplayName("全被过滤（缺凭据）→ INDETERMINATE → 给 null")
+    void allFilteredYieldsNull() {
         ElongRatePlan noCreds = sellablePlan();
         noCreds.setGoodsUniqId(null);
-        service.freshPricesToCache(checkReq(), response("0", hotelWith(noCreds)));
-        verify(priceCacheService, never()).productToCache(any(), any(), any());
+        org.junit.jupiter.api.Assertions.assertNull(
+                service.freshProducts(response("0", hotelWith(noCreds)), priceReq(), "61835012"));
     }
 
     @Test
-    @DisplayName("确定无货 → 空列表落缓存（不落则僵尸价借回写还魂）")
-    void confirmedNoInventoryWritesEmptyList() {
-        service.freshPricesToCache(checkReq(), response("0", null));
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<ProductRespDTO>> products = ArgumentCaptor.forClass(List.class);
-        verify(priceCacheService).productToCache(products.capture(), any(PriceReq.class), any(Supplier.class));
-        assertEquals(0, products.getValue().size());
+    @DisplayName("确定无货 → 空列表（模板据此落无货标记，不落则僵尸价借回写还魂）")
+    void confirmedNoInventoryYieldsEmptyList() {
+        assertEquals(0, service.freshProducts(response("0", null), priceReq(), "61835012").size());
     }
 
-    @Test
-    @DisplayName("回写内部炸了只落日志，绝不外抛（验价主流程不受影响）")
-    void writeBackFailureIsSwallowed() {
-        Mockito.doThrow(new RuntimeException("redis down"))
-                .when(priceCacheService).productToCache(any(), any(), any());
-        service.freshPricesToCache(checkReq(), response("0", hotelWith(sellablePlan())));
-        // 不抛即过
-    }
 }

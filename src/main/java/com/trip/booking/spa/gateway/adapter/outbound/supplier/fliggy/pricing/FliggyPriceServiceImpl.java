@@ -67,23 +67,7 @@ public class FliggyPriceServiceImpl {
     private FliggyProductKeyDeriver productKeyDeriver;
     @Resource
     private OfferStore offerStore;
-    @Resource
-    private com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService priceCacheService;
 
-    /**
-     * 刷价入口（口径同艺龙 {@code queryPricesCache}）：没问出结果返回 null 不动缓存
-     * （F-5.1，一次网络抖动不许清在售价）；明确无货（含下架）返回空列表并照走
-     * {@code productToCache}——空列表打无货标记，僵尸价随之清掉（B7）。
-     */
-    public List<ProductRespDTO> queryPricesCache(PriceReq request, Supplier supplier) {
-        PricingResult result = queryPrices(request, supplier, CallPurpose.REFRESH);
-        if (result.outcome() == com.trip.booking.spa.gateway.domain.booking.PricingOutcome.INDETERMINATE) {
-            return null;
-        }
-        List<ProductRespDTO> products = result.products();
-        priceCacheService.productToCache(products, request, supplier);
-        return products;
-    }
 
     // ---------- 查价 ----------
 
@@ -229,6 +213,20 @@ public class FliggyPriceServiceImpl {
         return null;
     }
 
+    /**
+     * 验价即刷的转换（机制在 {@code AbstractCheckPriceFlow}）：口径与查价同源——
+     * 下架/明确无货回空列表（打无货标记清僵尸价 B7）；平台或业务错误回 null 不动缓存（F-5.1）。
+     */
+    public List<ProductRespDTO> freshProducts(FliggyAriResponse ari, PriceReq priceReq, String sHotelId) {
+        if (ari.isHotelDelisted() || ari.isEmptyResult()) {
+            return List.of();
+        }
+        if (!ari.isSucc()) {
+            return null;
+        }
+        return convertRates(ari.rates(), priceReq, sHotelId);
+    }
+
     /** 现取整店 ARI；终态口径与查价同源（下架/整店无售=SOLD_OUT，平台拒绝/无结果=不确定） */
     public LiveStock<FliggyAriResponse> fetchLiveStock(CheckPriceReq request) {
         ResponseResult<FliggyAriResponse> ariResult = new AriAvailabilityAccess(properties)
@@ -239,20 +237,21 @@ public class FliggyPriceServiceImpl {
         if (ari == null) {
             return LiveStock.terminal(outcome(CheckPriceOutcome.INDETERMINATE, "查价未取得结果，请稍后重试"));
         }
-        // 验价即刷(F-6 即时半边):现取的这份全店现货验完即弃等于白白留着缓存陈价对外报,
-        // 异步回写、不占验价预算(艺龙同名机制的实证:河内 Daewoo 陈价每次点击 RATE_DEAD)
-        freshPricesToCacheAsync(request, ari);
+        // 验价即刷的转换器（机制在 AbstractCheckPriceFlow）：闭包捕获这份原始 ARI，
+        // 终态分支也带着它返回——下架/整店无售正是要落无货标记的时候（B7）
+        java.util.function.Function<PriceReq, List<ProductRespDTO>> fresh =
+                priceReq -> freshProducts(ari, priceReq, request.getSHotelId());
         if (ari.isHotelDelisted()) {
-            return LiveStock.terminal(outcome(CheckPriceOutcome.SOLD_OUT, "该酒店已被供应商下架"));
+            return LiveStock.<FliggyAriResponse>terminal(outcome(CheckPriceOutcome.SOLD_OUT, "该酒店已被供应商下架")).freshConvertedBy(fresh);
         }
         if (ari.isPlatformError()) {
             reportPlatformError("验价·现取", ari, request.getSHotelId());
-            return LiveStock.terminal(outcome(CheckPriceOutcome.INDETERMINATE, "供应商平台拒绝了请求，未能确认"));
+            return LiveStock.<FliggyAriResponse>terminal(outcome(CheckPriceOutcome.INDETERMINATE, "供应商平台拒绝了请求，未能确认")).freshConvertedBy(fresh);
         }
         if (ari.isEmptyResult()) {
-            return LiveStock.terminal(outcome(CheckPriceOutcome.SOLD_OUT, "该住期已无任何可售报价"));
+            return LiveStock.<FliggyAriResponse>terminal(outcome(CheckPriceOutcome.SOLD_OUT, "该住期已无任何可售报价")).freshConvertedBy(fresh);
         }
-        return LiveStock.of(ari);
+        return LiveStock.of(ari).freshConvertedBy(fresh);
     }
 
     /**
@@ -379,52 +378,6 @@ public class FliggyPriceServiceImpl {
                 .priceInfos(priceInfos)
                 .message("有货，未验证可订性（曝光档）")
                 .build();
-    }
-
-    // ---------- 验价即刷回写 ----------
-
-    /** 回写线程:单线程+有界队列+满则弃——宁可丢一次回写(下轮刷价会补),不许积压拖验价 */
-    private static final java.util.concurrent.ExecutorService FRESH_PRICES_POOL =
-            com.trip.booking.spa.platform.concurrent.ThreadPools.serialBounded("fliggy-fresh-prices", 64, true);
-
-    void freshPricesToCacheAsync(CheckPriceReq request, FliggyAriResponse ari) {
-        try {
-            FRESH_PRICES_POOL.execute(() -> freshPricesToCache(request, ari));
-        } catch (java.util.concurrent.RejectedExecutionException e) {
-            log.warn("验价即刷：回写队列满，本次丢弃(下轮刷价会补) sHotelId={}", request.getSHotelId());
-        }
-    }
-
-    /**
-     * 回写本体（同步，供测试直接驱动）。口径与查价同源：下架/明确无货回写空列表
-     * （打无货标记清僵尸价 B7）；平台/业务错误不动缓存（F-5.1）;占用键随验价走。
-     */
-    void freshPricesToCache(CheckPriceReq request, FliggyAriResponse ari) {
-        try {
-            PriceReq priceReq = PriceReq.builder()
-                    .checkIn(request.getCheckIn())
-                    .checkout(request.getCheckOut())
-                    .roomNum(request.getRoomNum() == null ? 1 : request.getRoomNum())
-                    .adultNum(request.getAdultCount())
-                    .childNum(request.getChildNum() == null ? 0 : request.getChildNum())
-                    .childAges(request.getChildAges() == null ? new ArrayList<>() : request.getChildAges())
-                    .build();
-            priceReq.setOccupancies(Occupancy.perRoom(priceReq.getRoomNum(), priceReq.getAdultNum(),
-                    priceReq.getChildNum(), priceReq.getChildAges()));
-            List<ProductRespDTO> products;
-            if (ari.isHotelDelisted() || ari.isEmptyResult()) {
-                products = List.of();
-            } else if (!ari.isSucc()) {
-                return;
-            } else {
-                products = convertRates(ari.rates(), priceReq, request.getSHotelId());
-            }
-            priceCacheService.productToCache(products, priceReq, Supplier.builder()
-                    .supplierId(SupplierSourceEnum.FLIGGY.getCode())
-                    .sHotelId(request.getSHotelId()).build());
-        } catch (Exception e) {
-            log.warn("验价即刷：回写失败,不影响验价 sHotelId={}", request.getSHotelId(), e);
-        }
     }
 
     // ---------- 装配与工具 ----------
