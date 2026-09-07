@@ -31,7 +31,6 @@ import static org.mockito.Mockito.verify;
 class FliggyFreshPricesTest {
 
     private FliggyPriceServiceImpl service;
-    private PriceCacheService priceCacheService;
 
     @BeforeEach
     void setUp() {
@@ -40,8 +39,6 @@ class FliggyFreshPricesTest {
         properties.setAppKey("app-1");
         ReflectionTestUtils.setField(service, "properties", properties);
         ReflectionTestUtils.setField(service, "productKeyDeriver", new FliggyProductKeyDeriver(properties));
-        priceCacheService = Mockito.mock(PriceCacheService.class);
-        ReflectionTestUtils.setField(service, "priceCacheService", priceCacheService);
     }
 
     private static PriceReq req() {

@@ -6,6 +6,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ElongQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongQueryPriceTask;
 import com.trip.booking.spa.gateway.application.pricing.AbstractCPSQueryPriceService;
+import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.platform.ratelimit.RateLimitProperties;
@@ -167,26 +168,19 @@ public class ElongCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService<
 
     @Override
     protected RefreshOutcome refreshOne(ElongQueryPriceTask row, String dimension) {
-        LocalDate today = LocalDate.now(SUPPLIER_ZONE);
-        // roomNum 恒 1 是已验证的选择：缓存键不含间数、缓存价也是单间口径，多间在验价与下单侧
-        // 乘间数（H001188）。2026-08-24 生产 A/B 实测 hotel.detail 不按 NumberOfRooms 过滤可售
-        // 集合与单间价；FAQ 337 亦只要求 NumberOfAdults 与 ChildAges 与 detail 一致，未提间数。
-        PriceReq request = PriceReq.builder()
-                .adultNum(Integer.parseInt(dimension)).childNum(0)
-                .childAges(new ArrayList<>())
-                .checkIn(today.plusDays(row.getDelayCheckIn()).toString())
-                .checkout(today.plusDays(row.getDelayCheckOut()).toString())
-                .roomNum(1).build();
-        Supplier supplier = Supplier.builder()
-                .supplierId(SupplierSourceEnum.ELONG.getCode())
-                .sHotelId(row.getShId()).build();
+        // 组装请求、写缓存、三态映射全在骨架（refreshViaQuery）——此前这段两家逐字相同
+        return refreshViaQuery(row, dimension);
+    }
 
-        List<ProductRespDTO> products = elongPriceService.queryPricesCache(request, supplier);
-        if (products == null) {
-            // 没问出结果（频控或网络/解析）——不动缓存（F-5.1）
-            return RefreshOutcome.FAILED;
-        }
-        return products.isEmpty() ? RefreshOutcome.EMPTY : RefreshOutcome.ON_SALE;
+    /** 只查不写：写缓存与三态由骨架统一做 */
+    @Override
+    protected PricingResult queryForRefresh(PriceReq request, Supplier supplier) {
+        return elongPriceService.queryPrices(request, supplier, CallPurpose.REFRESH);
+    }
+
+    @Override
+    protected ZoneId supplierZone() {
+        return SUPPLIER_ZONE;
     }
 
     @Override

@@ -40,19 +40,16 @@ import static org.mockito.Mockito.verify;
 class ElongFreshPricesToCacheTest {
 
     private ElongPriceServiceImpl service;
-    private PriceCacheService priceCacheService;
 
     @BeforeEach
     void setUp() {
         service = new ElongPriceServiceImpl();
-        priceCacheService = Mockito.mock(PriceCacheService.class);
         ElongProductKeyDeriver deriver = new ElongProductKeyDeriver();
         ElongProperties properties = new ElongProperties();
         // productKey 的 account 成分取自 ELONG_USER——键随账号隔离,缺失即拒derive
         ReflectionTestUtils.setField(properties, "user", "test-account");
         ReflectionTestUtils.setField(deriver, "properties", properties);
         ReflectionTestUtils.setField(service, "productKeyDeriver", deriver);
-        ReflectionTestUtils.setField(service, "priceCacheService", priceCacheService);
     }
 
     private static CheckPriceReq checkReq() {

@@ -103,29 +103,6 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     private OfferStore offerStore;
 
     /** 刷价落缓存用；与 Expedia 共用同一实现，键结构 price:hotelId:date 与供应商无关 */
-    @Resource
-    private PriceCacheService priceCacheService;
-
-    /**
-     * 查价并落缓存（刷价任务的唯一入口）。查价逻辑复用 {@link #queryPrices}，
-     * 只多一步写缓存——刷价与实时查价必须同源，否则 productKey/退改/餐食会分叉。
-     *
-     * <p>空结果（该店当日无在售）也照常落缓存：那是"确实没有"的事实，
-     * 让缓存如实反映，比留着上一轮的陈价对外报要好（宁可少卖，不可卖错，R-1.6）。
-     */
-    @Override
-    public List<ProductRespDTO> queryPricesCache(PriceReq request, Supplier supplier) {
-        // 后台刷价这条路：没人在等，限流上阻塞排队而不是失败（F-5.1 失败不动缓存）
-        PricingResult result = queryPrices(request, supplier, CallPurpose.REFRESH);
-        if (result.outcome() == PricingOutcome.INDETERMINATE) {
-            // 调用失败与"无在售"必须分开（F-5.1）：没问出结果时不动缓存，
-            // 避免一次网络抖动清空在售价
-            return null;
-        }
-        List<ProductRespDTO> products = result.products();
-        priceCacheService.productToCache(products, request, supplier);
-        return products;
-    }
 
     @Override
     public PricingResult queryPrices(PriceReq request, Supplier supplier, CallPurpose purpose) {

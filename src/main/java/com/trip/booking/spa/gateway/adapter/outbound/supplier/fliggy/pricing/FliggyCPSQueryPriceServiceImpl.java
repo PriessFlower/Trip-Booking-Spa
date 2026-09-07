@@ -6,6 +6,8 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.FliggyQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyQueryPriceTask;
 import com.trip.booking.spa.gateway.application.pricing.AbstractCPSQueryPriceService;
+import com.trip.booking.spa.gateway.application.pricing.PricingResult;
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.ratelimit.RateLimitProperties;
 import lombok.extern.slf4j.Slf4j;
@@ -133,22 +135,19 @@ public class FliggyCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService
 
     @Override
     protected RefreshOutcome refreshOne(FliggyQueryPriceTask row, String dimension) {
-        LocalDate today = LocalDate.now(SUPPLIER_ZONE);
-        PriceReq request = PriceReq.builder()
-                .adultNum(Integer.parseInt(dimension)).childNum(0)
-                .childAges(new ArrayList<>())
-                .checkIn(today.plusDays(row.getDelayCheckIn()).toString())
-                .checkout(today.plusDays(row.getDelayCheckOut()).toString())
-                .roomNum(1).build();
-        Supplier supplier = Supplier.builder()
-                .supplierId(SupplierSourceEnum.FLIGGY.getCode())
-                .sHotelId(row.getShId()).build();
+        // 组装请求、写缓存、三态映射全在骨架（refreshViaQuery）——此前这段两家逐字相同
+        return refreshViaQuery(row, dimension);
+    }
 
-        List<ProductRespDTO> products = fliggyPriceService.queryPricesCache(request, supplier);
-        if (products == null) {
-            return RefreshOutcome.FAILED;
-        }
-        return products.isEmpty() ? RefreshOutcome.EMPTY : RefreshOutcome.ON_SALE;
+    /** 只查不写：写缓存与三态由骨架统一做 */
+    @Override
+    protected PricingResult queryForRefresh(PriceReq request, Supplier supplier) {
+        return fliggyPriceService.queryPrices(request, supplier, CallPurpose.REFRESH);
+    }
+
+    @Override
+    protected ZoneId supplierZone() {
+        return SUPPLIER_ZONE;
     }
 
     @Override

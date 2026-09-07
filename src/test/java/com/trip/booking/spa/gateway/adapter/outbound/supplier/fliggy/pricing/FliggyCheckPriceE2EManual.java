@@ -17,6 +17,17 @@ import com.trip.booking.spa.gateway.domain.booking.VerifyLevel;
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.platform.ratelimit.RateLimitHolder;
 import com.trip.booking.spa.platform.ratelimit.RateLimitManager;
+import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheServiceImpl;
+import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheTrimmer;
+import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheTtlPolicy;
+import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.AbnormalPriceGuard;
+import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
+import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogService;
+import org.junit.jupiter.api.AfterAll;
+import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import java.util.Map;
 import com.trip.booking.spa.platform.redis.RedisUtils;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -53,7 +64,8 @@ import static org.mockito.Mockito.when;
  * 不是恰好命中。
  *
  * <p>只读接口：全程只调 ari.availability 与 distribution.validate，<b>不会调 create</b>，
- * 不产生真单与费用。落缓存的副作用用 mock 挡掉。
+ * 不产生真单与费用。<b>价格缓存用真 Redis</b>（127.0.0.1:63792，本地 docker）——验价即刷
+ * 已上提到模板，那一跳必须落到真键上才算验过（§2.2.6）。目录与档案表用 mock 挡掉。
  */
 @EnabledIfEnvironmentVariable(named = "FLIGGY_E2E", matches = "1")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -69,6 +81,9 @@ class FliggyCheckPriceE2EManual {
     private static FliggyPriceServiceImpl service;
     private static FliggyCheckPriceServiceImpl flow;
     private static RedisUtils redis;
+    /** 验价即刷落地用的真 Redis（回写键要真的读回来） */
+    private static RedisUtils redisUtils;
+    private static LettuceConnectionFactory redisFactory;
     private static String checkIn;
     private static String checkOut;
 
@@ -117,11 +132,29 @@ class FliggyCheckPriceE2EManual {
         ReflectionTestUtils.setField(service, "properties", props);
         ReflectionTestUtils.setField(service, "productKeyDeriver", new FliggyProductKeyDeriver(props));
         ReflectionTestUtils.setField(service, "offerStore", store);
-        ReflectionTestUtils.setField(service, "priceCacheService", mock(PriceCacheService.class));
 
         flow = new FliggyCheckPriceServiceImpl();
         ReflectionTestUtils.setField(flow, "fliggyPriceService", service);
         ReflectionTestUtils.setField(flow, "properties", props);
+
+        // 真 Redis + 真写缓存实现：验价即刷已上提到模板，回写这一跳必须落到真键上才算验过
+        // （§2.2.6：生产数据 e2e 管数据形状，mock 掉就只剩单测）
+        redisFactory = new LettuceConnectionFactory(new RedisStandaloneConfiguration("127.0.0.1", 63792));
+        redisFactory.afterPropertiesSet();
+        StringRedisTemplate template = new StringRedisTemplate(redisFactory);
+        template.afterPropertiesSet();
+        template.getConnectionFactory().getConnection().serverCommands().flushDb();
+        redisUtils = new RedisUtils();
+        ReflectionTestUtils.setField(redisUtils, "redisTemplate", template);
+        PriceCacheServiceImpl realCache = new PriceCacheServiceImpl();
+        ReflectionTestUtils.setField(realCache, "redisUtils", redisUtils);
+        ReflectionTestUtils.setField(realCache, "productCatalogService", mock(ProductCatalogService.class));
+        ReflectionTestUtils.setField(realCache, "productAttributeReader", mock(ProductAttributeReader.class));
+        ReflectionTestUtils.setField(realCache, "priceCacheTrimmer", new PriceCacheTrimmer());
+        ReflectionTestUtils.setField(realCache, "abnormalPriceGuard", new AbnormalPriceGuard());
+        ReflectionTestUtils.setField(realCache, "priceCacheTtlPolicy", new PriceCacheTtlPolicy());
+        ReflectionTestUtils.setField(service, "priceCacheService", realCache);
+        ReflectionTestUtils.setField(flow, "priceCacheService", realCache);
 
         LocalDate in = LocalDate.now(ZoneId.of("Asia/Shanghai")).plusDays(13);
         checkIn = in.toString();
@@ -222,5 +255,40 @@ class FliggyCheckPriceE2EManual {
                 .roomNum(1).adultCount(2).childNum(0).childAges(List.of())
                 .verifyLevel(level)
                 .build();
+    }
+
+    @Test
+    @Order(6)
+    @DisplayName("验价即刷：走完一次曝光档验价后，真 Redis 里必须出现该占用片的真价")
+    void freshWriteLandsInRealRedis() throws Exception {
+        assumeTrue(reference != null, "查价未取到参照产品，跳过");
+
+        String priceKey = "price:10015:" + HOTEL + ":2:" + checkIn;
+        redisUtils.remove(priceKey);
+
+        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY, reference.getProductId()));
+        assumeTrue(resp.getOutcome() != CheckPriceOutcome.INDETERMINATE, "飞猪未给出结果，跳过");
+
+        // 回写是异步单线程池：轮询等它落地（上限 5s）
+        Map<String, String> hash = null;
+        for (int i = 0; i < 50 && (hash == null || hash.isEmpty()); i++) {
+            Thread.sleep(100);
+            hash = redisUtils.hashMapGet(priceKey);
+        }
+        assertThat(hash).as("验价即刷未落到真 Redis：键 %s 为空", priceKey).isNotEmpty();
+
+        boolean hasRealPrice = hash.entrySet().stream()
+                .anyMatch(e -> !e.getKey().startsWith("__") && e.getValue() != null && e.getValue().contains("price"));
+        assertThat(hasRealPrice)
+                .as("键里只有标记没有真价，回写等于没做：%s", hash.keySet())
+                .isTrue();
+        System.out.println("[e2e] 验价即刷落地 key=" + priceKey + " field数=" + hash.size());
+    }
+
+    @AfterAll
+    static void closeRedis() {
+        if (redisFactory != null) {
+            redisFactory.destroy();
+        }
     }
 }
