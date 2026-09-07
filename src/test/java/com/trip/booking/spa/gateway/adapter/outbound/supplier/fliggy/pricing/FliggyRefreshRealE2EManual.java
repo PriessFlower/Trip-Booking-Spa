@@ -1,5 +1,8 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
+import com.trip.booking.spa.gateway.application.pricing.PricingResult;
+import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
+import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
@@ -47,6 +50,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -157,7 +161,6 @@ class FliggyRefreshRealE2EManual {
         FliggyPriceServiceImpl fliggyService = new FliggyPriceServiceImpl();
         ReflectionTestUtils.setField(fliggyService, "properties", props);
         ReflectionTestUtils.setField(fliggyService, "productKeyDeriver", new FliggyProductKeyDeriver(props));
-        ReflectionTestUtils.setField(fliggyService, "priceCacheService", cacheService);
 
         // ── 刷价（口径同生产：飞猪按北京时间计入住日，T+13 单晚，2 人占用）──
         LocalDate checkIn = LocalDate.now(ZoneId.of("Asia/Shanghai")).plusDays(13);
@@ -166,9 +169,15 @@ class FliggyRefreshRealE2EManual {
                 .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
         Supplier supplier = Supplier.builder().supplierId(10015).sHotelId(HOTEL).build();
 
-        List<ProductRespDTO> products = fliggyService.queryPricesCache(req, supplier);
+        // 刷价的"查一次 + 写缓存"2026-09-07 起归骨架 refreshViaQuery；这里按骨架的走法
+        // 复现同一条路：查价拿 PricingResult，再由真 PriceCacheService 落缓存
+        PricingResult refreshed = fliggyService.queryPrices(req, supplier, CallPurpose.REFRESH);
+        assertNotNull(refreshed, "查价未取得结果");
+        assertNotEquals(PricingOutcome.INDETERMINATE, refreshed.outcome(),
+                "没问出结果——网络或凭据病（session 到期看 [auth-config] 日志）");
+        List<ProductRespDTO> products = refreshed.products();
+        cacheService.productToCache(products, req, supplier);
 
-        assertNotNull(products, "查价未取得结果——网络或凭据病（session 到期看 [auth-config] 日志）");
         assertFalse(products.isEmpty(), "新宿华盛顿 T+13 报全无货——极不寻常，先人工核实再怀疑测试");
 
         // ── 真 Redis：价格 Hash 有真 field（不是无货标记），分价>0 ──

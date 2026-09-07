@@ -1,6 +1,13 @@
 package com.trip.booking.spa.gateway.application.pricing;
 
 import com.trip.booking.spa.platform.concurrent.ThreadPools;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.observability.MetricNames;
 import com.trip.booking.spa.platform.observability.MetricTags;
@@ -54,6 +61,9 @@ public abstract class AbstractCPSQueryPriceService<T extends RefreshTaskRow> {
      */
     private static final double PER_CALL_SEC_MEAN = 1.5;
 
+    @javax.annotation.Resource
+    private com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService priceCacheService;
+
     protected abstract RedissonClient redissonClient();
 
     /** 与手动入口共用的锁键（§3.8.2 一事一闸） */
@@ -86,6 +96,60 @@ public abstract class AbstractCPSQueryPriceService<T extends RefreshTaskRow> {
 
     /** 刷一行的一个维度。实现方只需返回三态，不必自己计数或落日志 */
     protected abstract RefreshOutcome refreshOne(T row, String dimension);
+
+    /**
+     * 供应商侧的"今天"用哪个时区算入住日。默认 JVM 默认时区；
+     * 供应商有明确口径的必须覆盖（艺龙与飞猪均为 Asia/Shanghai）。
+     */
+    protected ZoneId supplierZone() {
+        return ZoneId.systemDefault();
+    }
+
+    /**
+     * 刷一行的一次查价。<b>只查不写</b>——写缓存与三态映射由 {@link #refreshViaQuery} 统一做。
+     * 默认抛异常：只有走 {@code refreshViaQuery} 的实现才需要它（Expedia 刷价出口另有形状，
+     * 见其 {@code refreshOne}）。
+     */
+    protected PricingResult queryForRefresh(PriceReq request, Supplier supplier) {
+        throw new UnsupportedOperationException("未实现 queryForRefresh：该家的 refreshOne 应自建流程");
+    }
+
+    /**
+     * 刷一行一个维度的标准走法：组装请求 → 查一次 → 写缓存 → 给三态。
+     *
+     * <p>此前这三件事在每家的 {@code refreshOne} 与 {@code queryPricesCache} 里各写一份
+     * （2026-09-07 前艺龙与飞猪逐字相同、Expedia 另有形状），而它们换一家供应商完全不用改
+     * （§4.1.3 首要判据）。各家现在只答一个问题：这一次查价的结果是什么
+     * （{@link #queryForRefresh}）。
+     *
+     * <p><b>roomNum 恒 1 是已验证的选择</b>：缓存键不含间数、缓存价也是单间口径，多间在
+     * 验价与下单侧乘间数（艺龙 H001188）。2026-08-24 生产 A/B 实测 hotel.detail 不按
+     * NumberOfRooms 过滤可售集合与单间价；FAQ 337 亦只要求 NumberOfAdults 与 ChildAges
+     * 与 detail 一致，未提间数。
+     *
+     * <p>三态口径：INDETERMINATE → FAILED 且<b>不动缓存</b>（F-5.1，一次抖动不许清在售价）；
+     * 空列表照走 {@code productToCache}（F-5.2 落无货标记、清僵尸价 B7）。
+     */
+    protected final RefreshOutcome refreshViaQuery(T row, String dimension) {
+        LocalDate today = LocalDate.now(supplierZone());
+        PriceReq request = PriceReq.builder()
+                .adultNum(Integer.parseInt(dimension)).childNum(0)
+                .childAges(new ArrayList<>())
+                .checkIn(today.plusDays(row.getDelayCheckIn()).toString())
+                .checkout(today.plusDays(row.getDelayCheckOut()).toString())
+                .roomNum(1).build();
+        Supplier supplier = Supplier.builder()
+                .supplierId(supplier().getCode())
+                .sHotelId(row.getShId()).build();
+
+        PricingResult result = queryForRefresh(request, supplier);
+        if (result == null || result.outcome() == PricingOutcome.INDETERMINATE) {
+            return RefreshOutcome.FAILED;
+        }
+        List<ProductRespDTO> products = result.products();
+        priceCacheService.productToCache(products, request, supplier);
+        return products.isEmpty() ? RefreshOutcome.EMPTY : RefreshOutcome.ON_SALE;
+    }
 
     /** 记账：写回刷价时间与次数（各家 mapper 不同，且 Expedia 还要按天重置计数） */
     protected abstract void markRefreshed(T row);

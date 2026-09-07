@@ -29,6 +29,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class RefreshDateUsesBeijingTimezoneTest {
 
+    /**
+     * 日期换算 2026-09-07 起在刷价骨架里（refreshViaQuery），各家只申报时区
+     * （supplierZone）。不变式没变、位置变了，故守护跟着搬——两处都要看：
+     * 骨架里不许出现无参 now()，艺龙那侧必须申报 Asia/Shanghai。
+     */
+    private static final Path SKELETON = Path.of("src/main/java/com/trip/booking/spa/gateway"
+            + "/application/pricing/AbstractCPSQueryPriceService.java");
+
     private static final Path REFRESH = Path.of("src/main/java/com/trip/booking/spa/gateway/adapter"
             + "/outbound/supplier/elong/pricing/ElongCPSQueryPriceServiceImpl.java");
     private static final Path DOCKERFILE = Path.of("Dockerfile");
@@ -36,10 +44,10 @@ class RefreshDateUsesBeijingTimezoneTest {
     @Test
     @DisplayName("刷价换算日期必须显式给时区，不得用 JVM 默认")
     void refreshDateCarriesAnExplicitZone() throws Exception {
-        String src = Files.readString(REFRESH);
-        String code = stripComments(src);
+        String skeleton = stripComments(Files.readString(SKELETON));
+        String code = stripComments(Files.readString(REFRESH));
 
-        assertFalse(code.contains("LocalDate.now()"),
+        assertFalse(skeleton.contains("LocalDate.now()"),
                 "刷价里又出现了无参的 LocalDate.now()。它取 JVM 默认时区，而默认时区随基础镜像变——"
                         + "实测走 UTC 时整个日期窗口错位一天：三分之一额度打在已经过去的日期上，"
                         + "上游要的第三天反而没有。必须写成 LocalDate.now(SUPPLIER_ZONE)");
@@ -47,8 +55,11 @@ class RefreshDateUsesBeijingTimezoneTest {
         assertTrue(code.contains("ZoneId.of(\"Asia/Shanghai\")"),
                 "找不到显式的 Asia/Shanghai。日期口径是供应商属性——艺龙与上游 cursor 都按北京时间");
 
-        assertTrue(Pattern.compile("LocalDate\\.now\\(SUPPLIER_ZONE\\)").matcher(code).find(),
-                "换算入住/离店日期时没用上那个时区常量");
+        assertTrue(Pattern.compile("LocalDate\\.now\\(supplierZone\\(\\)\\)").matcher(skeleton).find(),
+                "骨架换算入住/离店日期时没用上各家申报的时区");
+
+        assertTrue(Pattern.compile("ZoneId supplierZone\\(\\)[^}]*SUPPLIER_ZONE").matcher(code).find(),
+                "艺龙没把 SUPPLIER_ZONE 申报给骨架——申报漏了就静默回落 JVM 默认时区");
     }
 
     /**
