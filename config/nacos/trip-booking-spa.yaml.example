@@ -310,6 +310,7 @@ supplier:
     # 飞猪没有沙箱——唯一可用端点即生产 TOP 网关，故本开关不存在"先在沙箱验一遍"的
     # 中间态：开即真单真扣款。误关的后果仅是该家下单全拒，查价/验价/查单/取消不受影响。
     # 语义与 elong.booking-enabled 同；闸口由下单模板统一执行（三家共用）。
+    # 2026-09-07 Owner 定：三家一律默认关，开哪一家都是「这家从此可以真扣钱」的显式决策。
     booking-enabled: false
 
     # resolve 管线开关（docs/product-identity.md §3）：验价时所点 rate_key 已不在现货，

@@ -41,11 +41,18 @@ supplier:
 
 elong:
 
+  # 下单安全护栏(§3.8,闸口由 AbstractBookingSyncSupportService 统一执行)。
+  # 三家一律默认关,开哪一家都是"这家从此可以真扣钱"的显式决策(2026-09-07 Owner 定)。
+  # 艺龙无沙箱:唯一可用端点即生产网关(api-test 2026-08-15 实测全服务 403),
+  # 故本开关不存在"先在沙箱验一遍"的中间态,true 即真单真费用。
   booking-enabled: false
   customer-ip-fallback: ${ELONG_CUSTOMER_IP_FALLBACK:47.92.28.195}
 
 expedia:
-  booking-enabled: true
+  # 同上。Expedia 有沙箱,但"下不下单"与"打哪个端点"是两个独立护栏:
+  # 本开关管前者,production-endpoint-enabled 管后者,两者都关才是完全静默。
+  # 2026-09-07 由 true 改 false:网关侧的闸此前无人执行,把闸接上时才发现它是开着的。
+  booking-enabled: false
   production-endpoint-enabled: false
   user-agent: trip-booking-spa/0.0.1
   static-data:
