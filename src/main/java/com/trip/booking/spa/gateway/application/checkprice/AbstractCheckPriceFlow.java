@@ -8,10 +8,12 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
 import com.trip.booking.spa.gateway.domain.booking.VerifyLevel;
+import com.trip.booking.spa.gateway.domain.product.Occupancy;
 import com.trip.booking.spa.gateway.domain.product.ResolveGate;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.observability.MetricNames;
 import com.trip.booking.spa.platform.observability.MetricTags;
+import com.trip.booking.spa.platform.concurrent.ThreadPools;
 import com.trip.booking.spa.platform.observability.Monitor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -21,7 +23,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
  * 验价流程模板：现取 → 找票 → 换票 → 分档 → 验价。流程归模板，供应商只填钩子。
@@ -116,6 +122,11 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
 
     private CheckPriceRespDTO attempt(CheckPriceReq request, String salesEnvironment) {
         LiveStock<S> live = fetchLiveStock(request, salesEnvironment);
+        // 验价即刷：现取的这份现货验完即弃等于白白留着缓存陈价对外报。终态也要写——
+        // 下架/整店无售正是要落无货标记的时候（挂了转换器才做，Expedia 没挂）
+        if (live.freshConverter() != null) {
+            freshStockToCacheAsync(request, live.freshConverter());
+        }
         if (live.isTerminal()) {
             return live.terminal();
         }
@@ -195,6 +206,82 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
     private C resolveMissed(String reason) {
         Monitor.recordOne(MetricNames.CHECK_PRICE_RESOLVE, MetricTags.outcomeOf(supplier(), reason));
         return null;
+    }
+
+    /**
+     * 验价即刷的回写池。<b>按家一个</b>：单线程有界、满则弃——一家的回写变慢不该堵住另一家
+     * （§4.3.1 的差异只在分配参数：池名）。创建只经 {@code ThreadPools} 这一处出生地。
+     */
+    private static final Map<String, ExecutorService> FRESH_POOLS = new ConcurrentHashMap<>();
+
+    /**
+     * 验价即刷（F-6 的即时半边）：把验价现取的这份现货异步回写价格缓存。
+     *
+     * <p>为什么值得做：手里这份现货就是最新报价，验完即弃等于白白留着缓存里的陈价继续
+     * 对外报（实证 2026-08-22 河内 Daewoo：市场价已涨 4.3%，缓存价换不到票，每次点击
+     * 都 RATE_DEAD）。零额外供应商调用——数据是验价本来就拉的。
+     *
+     * <p>为什么在模板：机制（异步、满则弃、组装请求、吞异常、记账）换一家供应商完全
+     * 不用改（§4.1.3 首要判据），只有"这份现货怎么转报价"要改，那一件事交给
+     * {@code LiveStock#freshConvertedBy} 挂上的转换器。此前两家各写一份，前三段逐字相同，而飞猪那份漏了成功
+     * 日志——「飞猪回写了几条价」在生产上无从回答。
+     *
+     * <p><b>占用键随验价走</b>：客人问 2 大 1 小就回写 2-x 键，长尾占用按需成盘
+     * （刷价任务只铺 1 人档）。任何失败只落日志与指标，绝不影响验价主流程。
+     */
+    private void freshStockToCacheAsync(CheckPriceReq request,
+                                        java.util.function.Function<PriceReq, List<ProductRespDTO>> converter) {
+        ExecutorService pool = FRESH_POOLS.computeIfAbsent(supplier().getDesc(),
+                name -> ThreadPools.serialBounded(name + "-fresh-prices", 64, true));
+        try {
+            pool.execute(() -> freshStockToCache(request, converter));
+        } catch (RejectedExecutionException e) {
+            log.warn("验价即刷：回写队列满，本次丢弃(下轮刷价会补),supplier={},sHotelId={},checkIn={}",
+                    supplier().getDesc(), request.getSHotelId(), request.getCheckIn());
+            Monitor.recordOne(MetricNames.CHECK_PRICE_FRESH_WRITE,
+                    MetricTags.outcomeOf(supplier(), MetricNames.FRESH_REJECTED));
+        }
+    }
+
+    /** 回写本体（同步，供测试直接驱动） */
+    final void freshStockToCache(CheckPriceReq request,
+                                 java.util.function.Function<PriceReq, List<ProductRespDTO>> converter) {
+        try {
+            PriceReq priceReq = PriceReq.builder()
+                    .checkIn(request.getCheckIn())
+                    .checkout(request.getCheckOut())
+                    .roomNum(request.getRoomNum() == null ? 1 : request.getRoomNum())
+                    .adultNum(request.getAdultCount())
+                    .childNum(request.getChildNum() == null ? 0 : request.getChildNum())
+                    .childAges(request.getChildAges() == null ? new ArrayList<>() : request.getChildAges())
+                    .build();
+            priceReq.setOccupancies(Occupancy.perRoom(priceReq.getRoomNum(), priceReq.getAdultNum(),
+                    priceReq.getChildNum(), priceReq.getChildAges()));
+            List<ProductRespDTO> products = converter.apply(priceReq);
+            if (products == null) {
+                // F-5.1：没问出结果不动缓存。§6.2.1 非常态走向必须可检索
+                log.info("验价即刷：未取得可用现货，不动缓存,supplier={},sHotelId={},occupancy={},checkIn={}",
+                        supplier().getDesc(), request.getSHotelId(), priceReq.getOccupancies().get(0),
+                        request.getCheckIn());
+                Monitor.recordOne(MetricNames.CHECK_PRICE_FRESH_WRITE,
+                        MetricTags.outcomeOf(supplier(), MetricNames.FRESH_SKIPPED));
+                return;
+            }
+            priceCacheService.productToCache(products, priceReq, Supplier.builder()
+                    .supplierId(supplier().getCode())
+                    .sHotelId(request.getSHotelId())
+                    .build());
+            log.info("验价即刷：现货已回写缓存,supplier={},sHotelId={},occupancy={},checkIn={},产品={}条",
+                    supplier().getDesc(), request.getSHotelId(), priceReq.getOccupancies().get(0),
+                    request.getCheckIn(), products.size());
+            Monitor.recordOne(MetricNames.CHECK_PRICE_FRESH_WRITE,
+                    MetricTags.outcomeOf(supplier(), MetricNames.FRESH_WRITTEN));
+        } catch (Exception e) {
+            log.warn("验价即刷：回写失败不影响验价,supplier={},sHotelId={},err={}",
+                    supplier().getDesc(), request.getSHotelId(), e.toString());
+            Monitor.recordOne(MetricNames.CHECK_PRICE_FRESH_WRITE,
+                    MetricTags.outcomeOf(supplier(), MetricNames.FRESH_ERROR));
+        }
     }
 
     /**

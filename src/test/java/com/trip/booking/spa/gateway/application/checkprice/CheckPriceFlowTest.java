@@ -3,6 +3,8 @@ package com.trip.booking.spa.gateway.application.checkprice;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
 import com.trip.booking.spa.gateway.domain.booking.VerifyLevel;
@@ -10,6 +12,7 @@ import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.ArrayList;
@@ -66,8 +69,15 @@ class CheckPriceFlowTest {
         CheckPriceRespDTO inspection;
         final List<String> calls = new ArrayList<>();
 
+        /** 验价即刷：转换器返回什么由用例设定；null=不挂（该家没有即刷） */
+        java.util.function.Function<PriceReq, List<ProductRespDTO>> freshConverter;
+
         StubFlow stock(String env, Map<String, Offer> stock) {
-            stocks.put(env, LiveStock.of(stock));
+            LiveStock<Map<String, Offer>> live = LiveStock.of(stock);
+            if (freshConverter != null) {
+                live = live.freshConvertedBy(freshConverter);
+            }
+            stocks.put(env, live);
             return this;
         }
 
@@ -345,5 +355,105 @@ class CheckPriceFlowTest {
 
         assertEquals(CheckPriceOutcome.INDETERMINATE, resp.getOutcome());
         assertTrue(flow.calls.stream().noneMatch("fetch:hotel_package"::equals), flow.calls.toString());
+    }
+
+    // ---------- 验价即刷（机制归模板，2026-09-07 由两家各一份上提）----------
+
+    private static PriceCacheService cacheSpy() {
+        return Mockito.mock(PriceCacheService.class);
+    }
+
+    private static StubFlow flowWithCache(PriceCacheService cache) {
+        StubFlow flow = new StubFlow();
+        ReflectionTestUtils.setField(flow, "priceCacheService", cache);
+        return flow;
+    }
+
+    @Test
+    @DisplayName("验价即刷：转换器给出产品 → 回写缓存，占用键随验价走")
+    void freshStockIsWrittenBackUnderTheCheckOccupancy() {
+        PriceCacheService cache = cacheSpy();
+        StubFlow flow = flowWithCache(cache);
+        flow.freshConverter = priceReq -> List.of(ProductRespDTO.builder().productId("T1").build());
+        flow.stock(null, stockOf("T1", KEY, 10000));
+
+        flow.freshStockToCache(req(VerifyLevel.AVAILABILITY, "T1", KEY, 10000), flow.freshConverter);
+
+        ArgumentCaptor<PriceReq> pr = ArgumentCaptor.forClass(PriceReq.class);
+        ArgumentCaptor<Supplier> sp = ArgumentCaptor.forClass(Supplier.class);
+        Mockito.verify(cache).productToCache(Mockito.anyList(), pr.capture(), sp.capture());
+        assertEquals("1", pr.getValue().getOccupancies().get(0),
+                "占用键必须随验价走——写成别的档即静默错键");
+        assertEquals("2026-09-30", pr.getValue().getCheckIn());
+        assertEquals("2026-10-01", pr.getValue().getCheckout(), "CheckPriceReq.checkOut → PriceReq.checkout");
+        assertEquals(SupplierSourceEnum.FLIGGY.getCode(), sp.getValue().getSupplierId());
+        assertEquals("50366597", sp.getValue().getSHotelId());
+    }
+
+    @Test
+    @DisplayName("验价即刷：转换器给 null → 不动缓存（F-5.1 一次抖动不许清在售价）")
+    void freshNullMeansDoNotTouchTheCache() {
+        PriceCacheService cache = cacheSpy();
+        StubFlow flow = flowWithCache(cache);
+
+        flow.freshStockToCache(req(VerifyLevel.AVAILABILITY, "T1", KEY, 10000), priceReq -> null);
+
+        // 用 any() 而不是 anyList()：后者不匹配 null，会让"把 null 送进缓存"这个 bug 假绿
+        Mockito.verify(cache, Mockito.never()).productToCache(Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("验价即刷：转换器给空列表 → 照样回写（模板据此落无货标记清僵尸价 B7）")
+    void freshEmptyListStillWritesSoTheMarkerLands() {
+        PriceCacheService cache = cacheSpy();
+        StubFlow flow = flowWithCache(cache);
+
+        flow.freshStockToCache(req(VerifyLevel.AVAILABILITY, "T1", KEY, 10000), priceReq -> List.of());
+
+        ArgumentCaptor<List> products = ArgumentCaptor.forClass(List.class);
+        Mockito.verify(cache).productToCache(products.capture(), Mockito.any(), Mockito.any());
+        assertEquals(0, products.getValue().size());
+    }
+
+    @Test
+    @DisplayName("验价即刷：回写炸了只落日志，绝不外抛（验价主流程不受影响）")
+    void freshWriteFailureIsSwallowed() {
+        PriceCacheService cache = cacheSpy();
+        Mockito.doThrow(new RuntimeException("redis down"))
+                .when(cache).productToCache(Mockito.anyList(), Mockito.any(), Mockito.any());
+        StubFlow flow = flowWithCache(cache);
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> flow.freshStockToCache(
+                req(VerifyLevel.AVAILABILITY, "T1", KEY, 10000),
+                priceReq -> List.of(ProductRespDTO.builder().productId("T1").build())));
+    }
+
+    @Test
+    @DisplayName("验价即刷：终态也要写——下架/整店无售正是要落无货标记的时候")
+    void terminalStockStillTriggersTheFreshWrite() {
+        PriceCacheService cache = cacheSpy();
+        StubFlow flow = flowWithCache(cache);
+        flow.freshConverter = priceReq -> List.of();
+        flow.stocks.put(null, LiveStock.<Map<String, Offer>>terminal(
+                        CheckPriceRespDTO.builder().outcome(CheckPriceOutcome.SOLD_OUT).build())
+                .freshConvertedBy(flow.freshConverter));
+
+        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY, "T1", KEY, 10000));
+
+        assertEquals(CheckPriceOutcome.SOLD_OUT, resp.getOutcome());
+        // 异步池：等回写落地（单线程池，提交即有序）
+        Mockito.verify(cache, Mockito.timeout(2000)).productToCache(Mockito.anyList(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("没挂转换器的家（如 Expedia）：模板一个字节都不碰缓存")
+    void suppliersWithoutFreshWriteAreUntouched() {
+        PriceCacheService cache = cacheSpy();
+        StubFlow flow = flowWithCache(cache);
+        flow.stock(null, stockOf("T1", KEY, 10000));   // freshConverter 未设 = 不挂
+
+        flow.checkPrice(req(VerifyLevel.AVAILABILITY, "T1", KEY, 10000));
+
+        Mockito.verify(cache, Mockito.never()).productToCache(Mockito.anyList(), Mockito.any(), Mockito.any());
     }
 }

@@ -124,6 +124,25 @@ public final class MetricNames {
     public static final String CHECK_PRICE_OUTCOME = "check_price_outcome";
 
     /**
+     * 验价即刷的一次回写（F-6 即时半边）。标签 supplier/outcome，取值见 {@link #FRESH_WRITTEN} 等。
+     * 由验价模板统一打（O-4.3，新接一家自动具备）。此前这段各家一份，飞猪那份连成功日志都没有，
+     * 「飞猪回写了几条价」在生产上无从回答。
+     */
+    public static final String CHECK_PRICE_FRESH_WRITE = "check_price_fresh_write";
+
+    /** 验价即刷：现货已回写缓存（含明确无货落标记） */
+    public static final String FRESH_WRITTEN = "written";
+
+    /** 验价即刷：没问出结果，不动缓存（F-5.1，一次抖动不许清在售价） */
+    public static final String FRESH_SKIPPED = "skipped";
+
+    /** 验价即刷：回写队列满，本次丢弃（下轮刷价会补） */
+    public static final String FRESH_REJECTED = "rejected";
+
+    /** 验价即刷：回写过程抛异常（不影响验价主流程） */
+    public static final String FRESH_ERROR = "error";
+
+    /**
      * 令牌死后 resolve 换票的结果。标签 supplier/outcome，取值见 {@link #RESOLVE_SWAPPED} 等。
      * 未换到的成因必须可区分（§6.2.2）：无等价票指向建档与键口径，超容差指向容差参数，
      * 无基准指向上游未携 seenPrice 且缓存反查落空。
