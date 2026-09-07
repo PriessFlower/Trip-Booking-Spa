@@ -1,6 +1,11 @@
 package com.trip.booking.spa.gateway.application.checkprice;
 
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+
+import java.util.List;
+import java.util.function.Function;
 
 /**
  * 现取一趟的结果：要么是可以找票的现货，要么是适配层已经判定的终态
@@ -11,10 +16,32 @@ public final class LiveStock<S> {
 
     private final S stock;
     private final CheckPriceRespDTO terminal;
+    private Function<PriceReq, List<ProductRespDTO>> freshConverter;
 
     private LiveStock(S stock, CheckPriceRespDTO terminal) {
         this.stock = stock;
         this.terminal = terminal;
+    }
+
+    /**
+     * 挂上验价即刷的转换器：拿这份<b>原始</b>现货响应转成可入缓存的报价。
+     *
+     * <p>为什么用闭包而不是模板的抽象方法：各家的原始响应与"票所在的对象"往往不是同一个
+     * 类型（艺龙 {@code ElongHotelDetailResponse} vs 票所在的 {@code ElongHotel}），
+     * 由适配层在此处捕获原始响应，模板只需要一个「PriceReq → 报价」的函数。
+     *
+     * <p>返回 {@code null} = 没问出结果，不动缓存（F-5.1）；空列表 = 明确无货（打无货标记
+     * 清僵尸价，B7）；非空 = 现货报价。<b>终态也可以挂</b>——下架/整店无售正是要落无货标记的时候。
+     *
+     * <p>不挂 = 该家没有验价即刷（如 Expedia），模板什么都不做。
+     */
+    public LiveStock<S> freshConvertedBy(Function<PriceReq, List<ProductRespDTO>> converter) {
+        this.freshConverter = converter;
+        return this;
+    }
+
+    public Function<PriceReq, List<ProductRespDTO>> freshConverter() {
+        return freshConverter;
     }
 
     public static <S> LiveStock<S> of(S stock) {
