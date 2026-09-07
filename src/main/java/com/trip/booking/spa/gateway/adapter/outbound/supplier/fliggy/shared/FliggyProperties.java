@@ -61,6 +61,16 @@ public class FliggyProperties implements ResolveProperties {
     /** resolve 换票容差的绝对帽（分）：单笔自动让利的财务上限，与比例容差取严 */
     private int resolvePriceCapCents = 2000;
 
+    /**
+     * 下单安全护栏（§3.8）：false 即拒绝下单，供应商侧不发生任何动作。
+     *
+     * <p><b>飞猪没有沙箱</b>——唯一可用端点就是生产 TOP 网关（eco.taobao.com），
+     * 故本开关不存在"先在沙箱验一遍"的中间态：开即真单真扣款。默认关。
+     *
+     * <p>此前飞猪连这个配置项都没有，SPA 侧下单是常开的（三家里只有艺龙真有闸）。
+     */
+    private boolean bookingEnabled = false;
+
     /** 四样缺一即不可调用（网关无兜底）；接入期未配置是正常态，调用方按「凭据未配置→确定失败」处理 */
     public boolean isConfigured() {
         return StringUtils.isNoneBlank(appKey, secret, session, urlHost);
@@ -77,8 +87,8 @@ public class FliggyProperties implements ResolveProperties {
                     "supplier.fliggy.resolve-price-cap-cents must be between 0 and 100000, but was " + resolvePriceCapCents);
         }
         log.info("飞猪接入配置: urlHost={}, credentialsConfigured={}, distributor={}, "
-                        + "sessionAuthorizedAt={}, sessionTtlDays={}, resolveEnabled={}",
+                        + "sessionAuthorizedAt={}, sessionTtlDays={}, resolveEnabled={}, bookingEnabled={}",
                 urlHost, isConfigured(), StringUtils.defaultIfBlank(distributor, "<未配置>"),
-                StringUtils.defaultIfBlank(sessionAuthorizedAt, "<未配置>"), sessionTtlDays, resolveEnabled);
+                StringUtils.defaultIfBlank(sessionAuthorizedAt, "<未配置>"), sessionTtlDays, resolveEnabled, bookingEnabled);
     }
 }

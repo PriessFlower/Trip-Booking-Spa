@@ -73,16 +73,19 @@ public class ElongBookingSyncServiceImpl
         return holder;
     }
 
+    @Override
+    protected String bookingGateKey() {
+        return "elong.booking-enabled";
+    }
+
+    @Override
+    protected boolean bookingAllowed() {
+        return properties.isBookingEnabled();
+    }
+
     private BookingOutcomeHolder bookInternal(BookingReq req) {
         // 以下判定全部在向艺龙发出任何请求之前完成，供应商侧不会发生任何事，
         // 一律确定失败而非"结果不确定"——上游可以放心地不去查单
-        if (!properties.isBookingEnabled()) {
-            // §3.8.4：闸口拦截必须可检索
-            log.info("闸口 elong.booking-enabled 关闭，拒绝下单,orderId={},sHotelId={}",
-                    req.getOrderId(), req.getSHotelId());
-            return BookingOutcomeHolder.failed(req.getOrderId(), "booking_disabled",
-                    "艺龙下单未开通（安全护栏关闭），供应商侧未发生任何动作");
-        }
         if (!properties.isConfigured()) {
             log.error("艺龙下单：凭证未配置，无法下单,orderId={}", req.getOrderId());
             return BookingOutcomeHolder.failed(req.getOrderId(), "credentials_missing",

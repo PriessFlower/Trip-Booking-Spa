@@ -102,6 +102,26 @@ class AbstractBookingSyncSupportServiceTest {
         }
 
         @Override
+
+        protected String bookingGateKey() {
+
+            return "stub.booking-enabled";
+
+        }
+
+
+        /** 本类验的是三态兜底，不是闸口；放行以免每条用例都被闸挡在门外 */
+
+        @Override
+
+        protected boolean bookingAllowed() {
+
+            return true;
+
+        }
+
+
+        @Override
         public String doBooking(BookingReq bookingReq) {
             switch (behaviour) {
                 case RETURN_NULL:
