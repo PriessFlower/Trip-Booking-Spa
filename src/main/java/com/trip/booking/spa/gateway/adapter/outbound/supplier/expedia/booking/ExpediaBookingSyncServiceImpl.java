@@ -16,6 +16,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.Exp
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.booking.ExpediaBookingClassifier;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaOfferCredentials;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.booking.ExpediaBookingClassifier.Classification;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaRapidProperties;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaUtils;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.BookingReq;
 import com.trip.booking.spa.gateway.application.booking.AbstractBookingSyncSupportService;
@@ -57,6 +58,9 @@ public class ExpediaBookingSyncServiceImpl
     private String ownIp;
 
     @Resource
+    private ExpediaRapidProperties rapidProperties;
+
+    @Resource
     private ExpediaUtils expediaUtils;
     @Resource
     private DistributedRateLimiter rateLimiter;
@@ -64,6 +68,17 @@ public class ExpediaBookingSyncServiceImpl
     private ExpediaBookingContact bookingContact;
     @Resource
     private OfferStore offerStore;
+
+    @Override
+    protected String bookingGateKey() {
+        return "expedia.booking-enabled";
+    }
+
+    /** 此前只有 BFF（独立项目，§0.4）判过这道闸，网关这条路一直裸奔 */
+    @Override
+    protected boolean bookingAllowed() {
+        return rapidProperties.isBookingEnabled();
+    }
 
     @Override
     public BookingOutcomeHolder doBooking(BookingReq req) {

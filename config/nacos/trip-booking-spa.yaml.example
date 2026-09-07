@@ -306,6 +306,12 @@ supplier:
     # 开启前须先观察 upsert 耗时对刷价周期的影响。
     catalog-enabled: false
 
+    # 下单安全护栏（§3.8）：false 即拒绝下单，供应商侧不发生任何动作（回 FAILED 非 UNKNOWN）。
+    # 飞猪没有沙箱——唯一可用端点即生产 TOP 网关，故本开关不存在"先在沙箱验一遍"的
+    # 中间态：开即真单真扣款。误关的后果仅是该家下单全拒，查价/验价/查单/取消不受影响。
+    # 语义与 elong.booking-enabled 同；闸口由下单模板统一执行（三家共用）。
+    booking-enabled: false
+
     # resolve 管线开关（docs/product-identity.md §3）：验价时所点 rate_key 已不在现货，
     # 允许按上游携带的 productKey 在现取的现货中自动换等价新票。飞猪 rate_key 会换代
     # （2026-09-05 实测同一报价长出 _FR 后缀），关闭时精确匹配落空即 RATE_DEAD
