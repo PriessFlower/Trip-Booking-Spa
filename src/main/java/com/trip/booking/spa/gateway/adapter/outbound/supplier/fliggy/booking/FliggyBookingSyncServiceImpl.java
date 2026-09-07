@@ -45,6 +45,16 @@ public class FliggyBookingSyncServiceImpl extends AbstractBookingSyncSupportServ
     private OfferStore offerStore;
 
     @Override
+    protected String bookingGateKey() {
+        return "supplier.fliggy.booking-enabled";
+    }
+
+    @Override
+    protected boolean bookingAllowed() {
+        return properties.isBookingEnabled();
+    }
+
+    @Override
     public BookingRespDTO doBooking(BookingReq req) {
         if (!properties.isConfigured()) {
             return failed(req.getOrderId(), "credentials_missing", "飞猪凭证未配置，供应商侧未发生任何动作");
