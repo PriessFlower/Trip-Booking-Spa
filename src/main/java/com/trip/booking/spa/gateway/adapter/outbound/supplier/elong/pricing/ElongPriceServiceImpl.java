@@ -221,9 +221,13 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         Meal meal = productKeyDeriver.convertMeal(plan);
         List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), plan.getPrepayResult());
         int displayTotalCents = sumCents(dayPrices);
-        // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍
+        // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍。
+        // 房型成分 = 外层 Room.RoomId（物理房型，供应商静态接口里的那个号），与其他五家口径一致；
+        // 此前用 RatePlan.RoomTypeId（销售房型）——依据是「cursor 全程以其为等价锚」，2026-09-08 核实为误：
+        // cursor 老路的锚一直是 Room.RoomId，销售号只是对艺龙说话的凭证。销售号仍留在下单凭据
+        // （ElongOfferCredentials.ROOM_TYPE_ID），不进身份。resolveCandidates 的重派生必须同口径（F-3.3）。
         ProductIdentity identity = productKeyDeriver.deriveIdentity(
-                hotelId, plan.getRoomTypeId(), meal, cancelPolicy, occupancy, displayTotalCents);
+                hotelId, room.getRoomId(), meal, cancelPolicy, occupancy, displayTotalCents);
         ProductRespDTO product = ProductRespDTO.builder()
                 .hotelId(hotelId)
                 // 报价标识=GoodsUniqId（会话级易腐，申报见 SupplierIdentityProfile.ELONG）；
@@ -330,7 +334,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 }
                 Meal meal = productKeyDeriver.convertMeal(plan);
                 List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), plan.getPrepayResult());
-                String key = productKeyDeriver.deriveProductKey(hotel.getHotelId(), plan.getRoomTypeId(), meal, cancelPolicy, occupancy, sumCents(dayPrices));
+                // 与 convertPlan 同口径：房型成分 = 外层 Room.RoomId（物理房型），键分叉即身份分叉（F-3.3）
+                String key = productKeyDeriver.deriveProductKey(hotel.getHotelId(), room.getRoomId(), meal, cancelPolicy, occupancy, sumCents(dayPrices));
                 if (!request.getProductKey().equals(key)) {
                     continue;
                 }
