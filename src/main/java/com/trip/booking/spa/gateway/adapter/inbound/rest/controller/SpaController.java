@@ -20,7 +20,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.mapping.CancelMapping;
 import com.trip.booking.spa.gateway.domain.cancellation.CancelResult;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
-import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.service.ExpediaGeographyIngestionService;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.service.ExpediaRegionService;
 import com.trip.booking.spa.gateway.application.booking.BookingSyncService;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.application.cancellation.CancelSyncService;
@@ -62,7 +62,7 @@ import java.util.Map;
 public class SpaController {
 
     @Resource
-    private ExpediaGeographyIngestionService expediaGeographyIngestionService;
+    private ExpediaRegionService expediaRegionService;
 
     @Resource
     private NacosRuntimeConfig nacosRuntimeConfig;
@@ -322,7 +322,7 @@ public class SpaController {
      */
     @GetMapping(value = "/query/expediaHotelIdByCity")
     public ResponseDTO<List<String>> queryExpediaHotelIdByCity(@RequestParam("cityId") String cityId) {
-        return ResponseDTO.success(expediaGeographyIngestionService.queryHotelIdsByRegion(cityId));
+        return ResponseDTO.success(expediaRegionService.queryHotelIdsByRegion(cityId));
     }
 
     /**

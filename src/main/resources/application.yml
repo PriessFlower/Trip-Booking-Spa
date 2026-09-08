@@ -55,12 +55,6 @@ expedia:
   booking-enabled: false
   production-endpoint-enabled: false
   user-agent: trip-booking-spa/0.0.1
-  static-data:
-    batch-size: 250
-    language: en-US
-    languages: ${EXPEDIA_STATIC_DATA_LANGUAGES:en-US,zh-CN}
-    supply-source: expedia
-    mapping-version: expedia-content-v2
 
 logging:
   config: classpath:log4j2.xml

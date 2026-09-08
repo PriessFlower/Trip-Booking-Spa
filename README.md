@@ -29,9 +29,9 @@ the service can start before the dev Data ID is populated.
 
 Expedia credentials are not stored in YAML. Copy the variable names from
 `.env.example` into your shell or IntelliJ run configuration. The default host
-is the Rapid test endpoint and booking is disabled. Static Content ingestion,
-field mapping, evidence and the local table definition are documented in
-`docs/expedia-static-data.md`.
+is the Rapid test endpoint and booking is disabled. The Static Content
+ingestion pipeline was retired on 2026-09-08; what remains of the snapshot
+table and who reads it is documented in `docs/expedia-static-data.md`.
 
 Legacy supplier beans currently inherit safe mock configuration from
 `application.yml`. Set `MOCK_SUPPLIER_BASE_URL` only when a local mock server is

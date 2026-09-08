@@ -54,12 +54,4 @@ class ExpediaRapidPropertiesTest {
         properties.setSharedSecret("test-secret");
         return properties;
     }
-
-    @Test
-    void requiresCredentialsWhenStaticIngestionIsEnabled() {
-        ExpediaRapidProperties properties = new ExpediaRapidProperties();
-        properties.setStaticDataEnabled(true);
-
-        assertThrows(IllegalStateException.class, properties::afterPropertiesSet);
-    }
 }

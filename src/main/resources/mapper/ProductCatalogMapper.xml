@@ -46,4 +46,10 @@
         <foreach collection="productKeys" item="k" open="(" separator="," close=")">#{k}</foreach>
     </select>
 
+    <select id="selectSupplierHotelIds" resultType="java.lang.String">
+        SELECT supplier_hotel_id FROM supplier_hotel_base
+        WHERE supplier_id = #{supplierId} AND del = 0
+        ORDER BY id LIMIT #{limit} OFFSET #{offset}
+    </select>
+
 </mapper>

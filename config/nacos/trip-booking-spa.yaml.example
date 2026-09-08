@@ -82,18 +82,6 @@ task:
     # 上调前先看两处：① Redis 连接池（出价链路读同一个池，抢连接会拖慢真实客流）；
     # ② 线程若堆在 acquire() 上超过 ratelimit.acquire-timeout-ms 会变成假失败。
 
-  # Expedia 静态酒店同步
-  expedia-hotel-sync:
-    enabled: false
-    cron: '0 0 2 * * ?'       # 每日 02:00
-    update-days: 1            # 增量天数
-
-  # Expedia 下线酒店清理
-  expedia-remove-hotel:
-    enabled: false
-    cron: '0 0 4 * * ?'       # 每日 04:00
-    delete-date: ''           # 指定日期；空=默认取 7 天前
-
 # ── ratelimit：调用外部接口的限流 ───────────────────────────
 # key = GLOBAL_LIMIT:供应商:接口（BaseHttpAccess.buildGlobalLimitKey 产出）。
 # 未在 qps 表中列出的 key 使用 default-qps。改 qps 热生效（@RefreshScope）。
@@ -129,7 +117,6 @@ ratelimit:
   # 会让旧镜像超速、"先发版"这条路会崩——两个方向都不安全。把 default-qps 压到安全值
   # 之后，改形态就可以安全地先改配置再发版（漏登记的键宁可被憋死，不该按 20 放飞）。
   qps:
-    "[GLOBAL_LIMIT:EXPEDIA:STATIC_CONTENT]": 15
     "[GLOBAL_LIMIT:EXPEDIA:STATIC_REGIONS]": 10
     "[GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES]": 50
     "[GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH]": 10
@@ -245,11 +232,8 @@ supplier:
     # 归宿应是 supplier_hotel_base 的一列）。本开关只解决「不发版能否关掉」（§3.8.6）。
     same-day-block-enabled: true
 
-    # 静态数据摄取总开关。关闭时目录清单与内容摄取接口一律拒绝调用
-    # （播种、ExpediaHotelSyncTask 每日增量同步均失效）。改后需重启容器方生效。
     # 注意：expedia.booking-enabled 与 expedia.production-endpoint-enabled 为安全护栏，
     # 固定在 application.yml，禁止移入本文件（PROJECT.md §3.2.3）。
-    static-data-enabled: true
 
     # resolve 管线开关（docs/product-identity.md §3）：验价时所点报价已不在，
     # 允许按上游携带的 productKey 在当前现货中自动换等价新票。

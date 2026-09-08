@@ -1,58 +1,63 @@
-# Expedia static data integration
+# Expedia static data
 
-## Scope and safety boundary
+## Status: the ingestion pipeline was retired on 2026-09-08
+
+Static content is owned by `trip-booking-agg`, not by this gateway. What used to live here —
+Property Content / Catalog file / Inactive Property ingestion, the geography (regions) build-up,
+and the transform that fanned a snapshot out into a restored legacy catalog — has been removed
+together with the six tables it wrote.
+
+Why, in one line: the six catalog tables had **zero readers** anywhere in the repo (bff and b2b
+referenced none of them), their data had been frozen since 2026-08-14 because both `@Scheduled`
+jobs were `enabled: false` in Nacos the whole time, and they still occupied about 3 GB of a 29 GB
+database. Aggregation and canonical identity belong to the aggregation domain (`docs/product-identity.md`
+R-2.4), and agg already runs `hotel_base` / `room_base` / `room_i18n` in production.
+
+Removed in that change:
+
+| Removed | What it was |
+| --- | --- |
+| `hotel_details`, `room_base`, `hotel_picture`, `hotel_extend` | restored legacy catalog domain, written only by the transform |
+| `country_info`, `city_info` | geography build-up from the Regions API |
+| `supplier_hotel_base.hotel_id` / `.merger`, `supplier_room_base.room_id` / `.merger` | unified-side columns; production held 97,409/97,409 and 356,571/356,571 rows where they merely copied the supplier-side id |
+| `task.expedia-hotel-sync`, `task.expedia-remove-hotel` | the two daily jobs, never enabled in production |
+| `supplier.expedia.static-data-enabled`, `supplier.expedia.static-data.*` | the ingestion gate and its batch/download settings |
+
+`StaticCatalogRetiredArchRulesTest` keeps all of that from creeping back, the way
+`ProductIdentityArchRulesTest` guards the retired `global_product_supplier` bridge.
+
+## What is still here
+
+`expedia_property_content` — the raw + normalized property snapshot, 194,548 rows
+(97,410 `en-US`, 97,138 `zh-CN`), frozen at 2026-08-14. It is **read-only now**; nothing in this
+repo writes it any more. Its readers are:
+
+- `bff/store/PropertyContentRepo` — hotel detail pages, city listing, and the `LIKE` fallback used
+  when the agg suggest endpoint is unavailable;
+- `b2b/service/B2bBookingService` — property summary on the B2B booking path;
+- `ExpediaProductKeyDeriver` — room/rate facts for productKey derivation.
+
+Refreshing that content is agg's job. If this repo ever needs fresh Expedia content again, the
+ingestion code is still in git history at commit `b692544b` — but re-adding it here is a decision
+about who owns static content, not a revert.
+
+`ExpediaRegionService` also survives: `/query/expediaHotelIdByCity` is a registered SPA contract
+endpoint (pinned by `SpaControllerContractTest`). It asks Rapid Geography per request and stores
+nothing.
+
+## Safety boundary (unchanged)
 
 - Rapid test endpoint only by default.
-- Booking remains disabled (`expedia.booking-enabled=false`) and startup fails if it is enabled.
-- Production API access is blocked unless a separately controlled production flag is explicitly enabled.
-- API credentials are read from `EXPEDIA_API_KEY` and `EXPEDIA_SHARED_SECRET`.
-- Portal credentials do not belong in this repository or application configuration.
+- Booking stays disabled (`expedia.booking-enabled=false`); startup fails if it is enabled against
+  the production endpoint.
+- Production API access is blocked unless the separately controlled production flag is enabled.
+- Credentials come from `EXPEDIA_API_KEY` / `EXPEDIA_SHARED_SECRET`; portal credentials belong in
+  neither this repository nor application configuration.
 - Raw API bodies and authorization headers must not be logged.
-- Static ingestion is opt-in through the Nacos key `supplier.expedia.static-data-enabled` (default `false`); enabling it without credentials fails startup. The value is bound at startup only, so a container restart is required after changing it.
 
-## Ingestion flow
+## Backups taken when the tables were dropped
 
-1. Use the Property Catalog File to seed the active property ID set and high-level mapping candidates.
-2. Fetch Property Content in batches of at most 250 property IDs.
-3. Keep the raw property JSON, calculate its SHA-256, and map a normalized document.
-4. Upsert the raw snapshot, normalized document, and evidence into `expedia_property_content`.
-5. For updates, query with `date_updated_start` and `date_updated_end` and replace the whole property document.
-6. For additions, query with `date_added_start` and `date_added_end`, normally partitioned by country.
-7. Mark properties returned by Inactive Property as inactive. Run this at least every two weeks.
-
-The Workshop recommends running new/updated deltas at least weekly. Content responses return the
-complete current property and do not identify which section changed, so partial patching is not used.
-
-## Field mapping
-
-| Normalized field | Rapid Content source | Notes |
-| --- | --- | --- |
-| `supplierPropertyId` | `property_id` | Expedia ID and primary key |
-| `name` | `name` | Locale depends on request language |
-| `address` | `address` | Keeps country, city, postal code and obfuscation flag |
-| `coordinates` | `location.coordinates` | Keeps the location obfuscation flag |
-| `rating` | `ratings.property`, `ratings.guest` | Property and guest ratings stay separate |
-| `category` | `category` | Expedia category ID and label |
-| `chain`, `brand` | `chain`, `brand` | IDs and labels are retained |
-| `businessModel` | `business_model` | Expedia Collect and Property Collect stay separate |
-| `stayInformation` | `checkin`, `checkout`, `fees`, `policies` | Raw HTML text is retained in the normalized JSON |
-| `propertyAmenities` | `amenities` | Level is explicitly `PROPERTY` |
-| `rooms` | `rooms` | Includes occupancy, area, beds, room images and room amenities |
-| `ratePlans` | `rates` | Rate-plan amenities are not flattened into room/property amenities |
-| `sourceAddedAt`, `sourceUpdatedAt` | `dates` | Drives delta synchronization |
-
-Every normalized document contains evidence with `source=EXPEDIA`, property ID, fetch time, raw
-SHA-256, mapping version and field-level JSON paths. Internal hotel matching remains intentionally
-unset until a dedicated matching algorithm produces an internal ID, confidence and match evidence.
-
-## Local database
-
-Create the snapshot table once:
-
-```bash
-docker exec -i tg-local-mysql sh -c \
-  'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
-  < config/mysql/expedia-static-schema.sql
-```
-
-Real passwords should be supplied by the local environment rather than copied into scripts.
+- Structure of all eight affected tables: `SHOW CREATE TABLE` output attached to the retirement commit.
+- `country_info` + `city_info` data (the only rows not recomputable from the retained snapshot):
+  `trip-offline:/opt/trip-booking-spa/retired-static/geo-info-20260908.sql.gz`,
+  md5 `faaac920097cae16c58792e5b62692dd`, 630,145 bytes.

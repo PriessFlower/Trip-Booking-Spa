@@ -13,15 +13,6 @@ import java.net.URI;
 @ConfigurationProperties(prefix = "expedia")
 public class ExpediaRapidProperties implements InitializingBean, ResolveProperties {
 
-    /**
-     * 静态数据摄取总开关，运维可调，权威取值由 Nacos 下发（PROJECT.md §3.2.2）。
-     * 键名归入 supplier 域而非本类的 expedia 前缀，故用 @Value 单独绑定——
-     * 域为封闭枚举，不得为单个供应商新增顶层域（§3.7.2）。
-     * 默认 false 为安全侧兜底（§3.3.3）；本类未加 @RefreshScope，改后需重启容器方生效。
-     */
-    @Value("${supplier.expedia.static-data-enabled:false}")
-    private boolean staticDataEnabled;
-
     /** Expedia Rapid 生产端点主机名；下单与真实费用仅可能产生于此 */
     private static final String PRODUCTION_HOST = "api.ean.com";
 
@@ -77,7 +68,6 @@ public class ExpediaRapidProperties implements InitializingBean, ResolveProperti
     private boolean bookingEnabled;
     private boolean productionEndpointEnabled;
     private Url url = new Url();
-    private StaticData staticData = new StaticData();
 
     public void requireCredentials() {
         if (!StringUtils.hasText(apiKey) || !StringUtils.hasText(sharedSecret)) {
@@ -114,19 +104,9 @@ public class ExpediaRapidProperties implements InitializingBean, ResolveProperti
                     "Expedia booking against the production endpoint is blocked until certification; "
                             + "booking is permitted only against the test endpoint");
         }
-        if (bookingEnabled || staticDataEnabled) {
+        if (bookingEnabled) {
             requireCredentials();
         }
-    }
-
-    /** 静态数据摄取是否启用；唯一读取入口，取值见 {@link #staticDataEnabled} */
-    public boolean isStaticDataEnabled() {
-        return staticDataEnabled;
-    }
-
-    /** 仅供测试构造场景使用；运行期取值由 @Value 从 Nacos 绑定 */
-    public void setStaticDataEnabled(boolean staticDataEnabled) {
-        this.staticDataEnabled = staticDataEnabled;
     }
 
     public String getApiKey() {
@@ -224,14 +204,6 @@ public class ExpediaRapidProperties implements InitializingBean, ResolveProperti
         this.url = url;
     }
 
-    public StaticData getStaticData() {
-        return staticData;
-    }
-
-    public void setStaticData(StaticData staticData) {
-        this.staticData = staticData;
-    }
-
     public static class Url {
         private String host = "https://test.ean.com";
 
@@ -244,81 +216,4 @@ public class ExpediaRapidProperties implements InitializingBean, ResolveProperti
         }
     }
 
-    public static class StaticData {
-        private int batchSize = 250;
-        /**
-         * 下载 catalog 清单文件的并发连接数。
-         *
-         * <p>该文件在 AWS S3 us-west-2 裸源站（无 CDN），生产机到该源 RTT 约 170ms。单条 TCP 流
-         * 在这种长肥管道上吞吐被拥塞窗口卡死——生产实测 21 KB/s，而入网能力有 2 MB/s，
-         * 闲着七十倍。分块并行绕开该限制。
-         *
-         * <p>取值依据为生产实测（在生产机上跑同一套分块算法，走真实链路）：
-         * 8 连接 142 KB/s，99MB 文件 11.8 分钟，较单连接的约 80 分钟提速 6.8 倍；
-         * 99 块全部一次收满、gzip 校验通过、无空洞。
-         *
-         * <p>取 8 而不更高：每块都是一次 S3 请求，过多可能触发对端限速；且实测该值已能
-         * 全程跑满、无长尾。取值域 1–32，设为 1 即退回单连接。
-         */
-        private int downloadConnections = 8;
-        private String language = "en-US";
-        /**
-         * 摄取的语言列表；不指定语言时按此列表逐语言拉取
-         */
-        private java.util.List<String> languages = new java.util.ArrayList<>(java.util.List.of("en-US", "zh-CN"));
-        private String supplySource = "expedia";
-        private String mappingVersion = "expedia-content-v2";
-
-
-        public int getBatchSize() {
-            return batchSize;
-        }
-
-        public int getDownloadConnections() {
-            return downloadConnections;
-        }
-
-        public void setDownloadConnections(int downloadConnections) {
-            if (downloadConnections < 1 || downloadConnections > 32) {
-                throw new IllegalArgumentException(
-                        "expedia.static-data.download-connections must be between 1 and 32");
-            }
-            this.downloadConnections = downloadConnections;
-        }
-
-        public void setBatchSize(int batchSize) {
-            if (batchSize < 1 || batchSize > 250) {
-                throw new IllegalArgumentException("expedia.static-data.batch-size must be between 1 and 250");
-            }
-            this.batchSize = batchSize;
-        }
-
-        public String getLanguage() {
-            return language;
-        }
-
-        public void setLanguage(String language) {
-            this.language = language;
-        }
-
-        public java.util.List<String> getLanguages() { return languages; }
-
-        public void setLanguages(java.util.List<String> languages) { this.languages = languages; }
-
-        public String getSupplySource() {
-            return supplySource;
-        }
-
-        public void setSupplySource(String supplySource) {
-            this.supplySource = supplySource;
-        }
-
-        public String getMappingVersion() {
-            return mappingVersion;
-        }
-
-        public void setMappingVersion(String mappingVersion) {
-            this.mappingVersion = mappingVersion;
-        }
-    }
 }

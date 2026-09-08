@@ -11,7 +11,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing.cl
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.request.QueryPriceRequest;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.QueryPriceResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaContractProfile;
-import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ExpediaCatalogMapper;
+import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogMapper;
 import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaUtils;
 import com.trip.booking.spa.platform.concurrent.ThreadPools;
@@ -52,6 +52,12 @@ public class ExpediaProductMappingService {
 
     private static final int SUPPLIER_ID = SupplierSourceEnum.EXPEDIA.getCode();
     private static final String OPERATOR = "expedia-transform";
+    /**
+     * 建档线程池：定容 + 有界队列 + 满则打回调用者。池名沿用 expedia-content——
+     * 原先是三个摄取服务共享的常量，2026-09-08 静态摄取撤除后只剩本类一个使用方，常量随之移来。
+     */
+    private static final String CONTENT_POOL_NAME = "expedia-content";
+
     private static final int PAGE_SIZE = 100;
 
     /**
@@ -81,12 +87,9 @@ public class ExpediaProductMappingService {
     private ExpediaUtils expediaUtils;
     @Resource
     private DistributedRateLimiter rateLimiter;
+    /** 产品档案写入口，兼建档名单（selectSupplierHotelIds）——都是供应商通用语句 */
     @Resource
-    private ExpediaCatalogMapper catalogMapper;
-
-    /** 产品档案走供应商通用写入口；ExpediaCatalogMapper 只留 Expedia 专属的表操作 */
-    @javax.annotation.Resource
-    private com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogMapper productCatalogMapper;
+    private ProductCatalogMapper productCatalogMapper;
 
     /** 键派生与餐食/退改规范化的唯一权威——建档的键必须与查价/resolve 逐字节同口径 */
     @Resource
@@ -129,7 +132,7 @@ public class ExpediaProductMappingService {
         AtomicInteger submitted = new AtomicInteger();
         int pageNum = startNum == null ? 0 : startNum;
         while (true) {
-            final List<String> page = catalogMapper.selectSupplierHotelIds(SUPPLIER_ID, pageNum * PAGE_SIZE, PAGE_SIZE);
+            final List<String> page = productCatalogMapper.selectSupplierHotelIds(SUPPLIER_ID, pageNum * PAGE_SIZE, PAGE_SIZE);
             if (CollectionUtils.isEmpty(page)) {
                 break;
             }
@@ -143,7 +146,7 @@ public class ExpediaProductMappingService {
     /** 照抄旧 pushProductInfo：每酒店一个线程，零售价+打包价各建档一遍 */
     private void pushProductInfo(String checkInDate, String checkOutDate, List<String> supplierHotelIds,
                                  String occupancy) {
-        supplierHotelIds.forEach(supplierHotelId -> ThreadPools.fixedCallerRuns(ExpediaGeographyIngestionService.CONTENT_POOL_NAME, 20, 1000).execute(() -> {
+        supplierHotelIds.forEach(supplierHotelId -> ThreadPools.fixedCallerRuns(CONTENT_POOL_NAME, 20, 1000).execute(() -> {
             QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder()
                     .property_id(supplierHotelId)
                     .checkin(checkInDate)

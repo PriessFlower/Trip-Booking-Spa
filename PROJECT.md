@@ -275,7 +275,7 @@ dev      ──●──────●──────●──────�
 
 > 艺龙没有对应的 `production-endpoint-enabled`：既然测试端点不存在可用形态，“是否连生产”就不是一个可选项，无从设闸。端点误配的防线改设在部署流水线（`ELONG_API_HOST` 必须为生产网关，否则拒绝部署）。
 
-**3.2.4**　运维开关与安全护栏易被混淆，归类时以 §3.2.3 的两条为准。**在业务路径上按次判定、且存在正当运维停用场景的，一律属运维可调**，例如 `supplier.expedia.static-data-enabled`（每次调用时判定，运维需要时应能停摄取而不发版）。
+**3.2.4**　运维开关与安全护栏易被混淆，归类时以 §3.2.3 的两条为准。**在业务路径上按次判定、且存在正当运维停用场景的，一律属运维可调**，例如 `supplier.elong.catalog-enabled`（每次建档时判定，运维需要时应能停建档而不发版）。
 
 ### 3.3 兜底默认值
 
@@ -284,8 +284,8 @@ dev      ──●──────●──────●──────�
 **3.3.2**　兜底默认值必须写在代码的 `@Value` 表达式内，与使用处同址：
 
 ```java
-@Value("${supplier.expedia.static-data-enabled:false}")   // 默认关闭
-private boolean staticDataEnabled;
+@Value("${supplier.expedia.resolve-enabled:false}")   // 默认关闭
+private boolean resolveEnabled;
 ```
 
 **3.3.3**　兜底默认值必须取**安全侧取值**：开关默认关闭、限额默认从严、名单默认为空。禁止以生产实际值作为兜底默认值。
