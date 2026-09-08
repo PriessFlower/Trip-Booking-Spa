@@ -85,6 +85,7 @@ public class ProductAttributeReader {
                 }
                 ProductAttribute attr = ProductAttribute.builder()
                         .roomId(str(row.get("supplier_room_id")))
+                        .displayRoomId(str(row.get("supplier_display_room_id")))
                         .productName(str(row.get("supplier_product_name")))
                         .mealSignature(str(row.get("meal_signature")))
                         .cancelClass(str(row.get("cancel_class")))
@@ -150,7 +151,14 @@ public class ProductAttributeReader {
     @Data
     @Builder
     public static class ProductAttribute {
+        /** 身份成分 r（艺龙 = RatePlan.RoomTypeId 销售号）。不是给渠道归组用的 */
         private String roomId;
+        /**
+         * 展示/归组用的房型号 = 供应商静态房型号（艺龙 = 外层 Room.RoomId 物理号）。
+         * 2026-09-08 加：缓存读侧此前用 {@link #roomId} 重建 room.roomId，艺龙两套号大多不等，
+         * cursor 按物理号归组查不到、报价被丢。老行为空时退回 roomId（别家两号相同，无差别）。
+         */
+        private String displayRoomId;
         private String productName;
         /** {@code MealSignature.canonical()}，如 {@code B1L0D0} */
         private String mealSignature;
@@ -158,7 +166,8 @@ public class ProductAttributeReader {
         private String cancelClass;
 
         public Room toRoom() {
-            return Room.builder().roomId(roomId).roomName(productName).build();
+            String shown = displayRoomId == null || displayRoomId.isBlank() ? roomId : displayRoomId;
+            return Room.builder().roomId(shown).roomName(productName).build();
         }
 
         /**

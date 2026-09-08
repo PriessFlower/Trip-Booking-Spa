@@ -128,6 +128,12 @@ public class ProductCatalogService {
                 p.put("supplierAccount", identity.account());
                 p.put("supplierHotelId", identity.supplierHotelId());
                 p.put("supplierRoomId", identity.supplierRoomId());
+                // 展示/归组用的房型号 = 供应商静态房型号，照抄适配器填的 room.roomId（艺龙 = 外层 Room.RoomId 物理号）。
+                // 与身份成分 supplierRoomId（艺龙 = RatePlan.RoomTypeId）是两套号：缓存读侧靠这一列重建 room.roomId，
+                // 缺了它 cursor 拿销售号去物理号表归组查不到、整条报价被丢（2026-09-08）。别家两号相同，退回身份号
+                String displayRoomId = product.getRoom() == null || StringUtils.isBlank(product.getRoom().getRoomId())
+                        ? identity.supplierRoomId() : product.getRoom().getRoomId();
+                p.put("supplierDisplayRoomId", displayRoomId);
                 p.put("mealSignature", identity.mealSignature());
                 p.put("cancelClass", identity.cancelClass());
                 p.put("occupancy", identity.occupancy());
