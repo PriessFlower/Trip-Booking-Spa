@@ -221,9 +221,13 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         Meal meal = productKeyDeriver.convertMeal(plan);
         List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), plan.getPrepayResult());
         int displayTotalCents = sumCents(dayPrices);
-        // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍
+        // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍。
+        // 房型成分 = 外层 Room.RoomId（物理房型，供应商静态接口里的那个号），与其他五家口径一致；
+        // 此前用 RatePlan.RoomTypeId（销售房型）——依据是「cursor 全程以其为等价锚」，2026-09-08 核实为误：
+        // cursor 老路的锚一直是 Room.RoomId，销售号只是对艺龙说话的凭证。销售号仍留在下单凭据
+        // （ElongOfferCredentials.ROOM_TYPE_ID），不进身份。resolveCandidates 的重派生必须同口径（F-3.3）。
         ProductIdentity identity = productKeyDeriver.deriveIdentity(
-                hotelId, plan.getRoomTypeId(), meal, cancelPolicy, occupancy, displayTotalCents);
+                hotelId, room.getRoomId(), meal, cancelPolicy, occupancy, displayTotalCents);
         ProductRespDTO product = ProductRespDTO.builder()
                 .hotelId(hotelId)
                 // 报价标识=GoodsUniqId（会话级易腐，申报见 SupplierIdentityProfile.ELONG）；
@@ -232,7 +236,14 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 .productKey(identity.productKey())
                 .identity(identity)
                 .supplierId(SupplierSourceEnum.ELONG.getCode())
-                .room(Room.builder().roomId(plan.getRoomTypeId()).roomName(room.getName()).build())
+                // room.roomId 的契约含义是「供应商静态接口里的房型号」，下游（cursor 的物理房型对照表、
+                // agg 的房型对照）全按它对静态数据。艺龙有两套号：静态 hotel.static.info 与
+                // hotel.detail 外层 Room 用物理房型 RoomId（0001…），RatePlan 用销售房型 RoomTypeId（0053…），
+                // 两套大多不相等（2026-09-08 实测 61504129：18 个报价号里只有 0029 能对上静态 20 个号）。
+                // 此前这里填的是 RoomTypeId，cursor 拿它去物理号表归组查不到、整条报价被丢。
+                // 身份（productKey / identity.supplierRoomId）与下单凭据（ElongOfferCredentials.ROOM_TYPE_ID）
+                // 仍用 RoomTypeId，不受影响——那两处才是销售号该待的地方。
+                .room(Room.builder().roomId(room.getRoomId()).roomName(room.getName()).build())
                 // inventory 原样透出艺龙的 CurrentAlloment（房量限额，0/999/9999=不限，非剩余房量）。
                 // 上游若按 inventory<=0 过滤，会误杀"不限"的产品——语义见 ElongRatePlan 字段注释
                 .productInfo(ProductInfo.builder().inventory(plan.getCurrentAlloment()).productStatus(1)
@@ -323,7 +334,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 }
                 Meal meal = productKeyDeriver.convertMeal(plan);
                 List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), plan.getPrepayResult());
-                String key = productKeyDeriver.deriveProductKey(hotel.getHotelId(), plan.getRoomTypeId(), meal, cancelPolicy, occupancy, sumCents(dayPrices));
+                // 与 convertPlan 同口径：房型成分 = 外层 Room.RoomId（物理房型），键分叉即身份分叉（F-3.3）
+                String key = productKeyDeriver.deriveProductKey(hotel.getHotelId(), room.getRoomId(), meal, cancelPolicy, occupancy, sumCents(dayPrices));
                 if (!request.getProductKey().equals(key)) {
                     continue;
                 }
