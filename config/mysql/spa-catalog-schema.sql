@@ -172,3 +172,26 @@ CREATE TABLE IF NOT EXISTS fliggy_query_price_task (
     -- 原 idx_sh_id 被本键的最左前缀覆盖，同时撤除。
     UNIQUE KEY uk_hotel_stay (sh_id, delay_check_in, delay_check_out)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='飞猪查价预热任务队列';
+
+-- 道旅查价预热任务队列（与 elong/fliggy 的同名表同构）。速率不由本表控制，由 Nacos
+-- ratelimit.qps 的 GLOBAL_LIMIT:DIDA:*:REFRESH 约束。
+-- 一行 = 一次 pricesearch：道旅支持 HotelIDList 混批，但「多店 + IsRealTime=true」这个组合
+-- 会被它降级——2026-09-08 实测（10 家、同住期）：逐店实时 280 条报价，10 家一批实时只剩 105 条，
+-- 其中 4 家整家不出现；同一批改 IsRealTime=false 则逐家与逐店实时完全一致。故逐店查询。
+-- 播种口径：道旅可卖清单（静态内容接口的酒店 id），住期 T+0..2 各 1 晚起步，扩住期改 delay 列。
+CREATE TABLE IF NOT EXISTS dida_query_price_task (
+    id                    BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    sh_id                 VARCHAR(64)  NOT NULL COMMENT '道旅酒店id（HotelID）',
+    delay_check_in        INT          NOT NULL DEFAULT 0 COMMENT '入住日期偏移(天)',
+    delay_check_out       INT          NOT NULL DEFAULT 1 COMMENT '离店日期偏移(天)',
+    query_count           INT          NOT NULL DEFAULT 0 COMMENT '已查价次数',
+    create_time           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    last_time             DATETIME     NULL COMMENT '最近一次查价时间',
+    priority_level_number INT          NOT NULL DEFAULT 0 COMMENT '优先级(0=T+0~2 1=T+3~7 2=T+8~30,无货态=业务档+10)',
+    temporary_upgrade     INT          NOT NULL DEFAULT 0 COMMENT '临时提升优先级 0否 1是',
+    upgrade_deadline      DATETIME     NULL COMMENT '临时优先级截止时间',
+    PRIMARY KEY (id),
+    KEY idx_priority_last (priority_level_number, last_time),
+    KEY idx_sh_id (sh_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='道旅查价预热任务队列';

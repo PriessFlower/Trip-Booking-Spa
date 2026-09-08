@@ -68,7 +68,29 @@ public enum SupplierIdentityProfile {
      * 到期由 {@code FliggyCredentialExpiry} 供给）。
      */
     FLIGGY(SupplierSourceEnum.FLIGGY, RoomIdStability.UNVERIFIED, QuoteCodeStability.PERISHABLE,
-            Duration.ofMinutes(10), CredentialRenewal.HUMAN_ONLY);
+            Duration.ofMinutes(10), CredentialRenewal.HUMAN_ONLY),
+
+    /**
+     * 房型 RoomTypeID：<b>稳定</b>。2026-09-08 生产实测：36 家有报价的酒店、225 个不同的
+     * pricesearch {@code RoomTypeID}，<b>全部</b>能在道旅静态内容接口
+     * （{@code static-api.didatravel.com/api/v1/hotel/details} 的 {@code rooms[].id}）里找到，
+     * 未命中 0 个——即报价里的房型 id 就是它对外发布的静态房型目录的主键。
+     *
+     * <p>报价码 RatePlanID：<b>易腐，且腐得极快</b>。2026-09-08 实测：同店同参数间隔 3 秒
+     * 重查，所点的 RatePlanID 已不在响应中（首查 24 条与复查 116 条只有 12 条同码）。
+     * 官方错误码表（{@code information-hub/api-error-code}，2026-09-08 查阅）为此备了三个码：
+     * 2006「此价格计划失效」、2030「价格不可用」、2020「RatePlanID不正确」。
+     * 故它只进 OfferStore、禁止落库（R-2.1），验价一律现取现验（R-3.1）。
+     *
+     * <p>TTL 上限取 30 分钟：句柄里存的是验价 PreBook 拿到的 {@code ReferenceNo}。它能活多久
+     * 官方只在错误码 3006 的文案里提过一句「有效时长为2小时」（接口说明页未写），而且那说的是
+     * 号本身的寿命，不是房价被锁住——故取其四分之一为帽，不把这条软证据当承诺（R-2.2）。
+     *
+     * <p>凭据：<b>每请求现签</b>（每个请求体自带 {@code Header.ClientID/LicenseKey}），
+     * 无会话无到期。
+     */
+    DIDA(SupplierSourceEnum.DIDA, RoomIdStability.STABLE, QuoteCodeStability.PERISHABLE,
+            Duration.ofMinutes(30), CredentialRenewal.STATELESS);
 
     /** 房型 ID 的申报档位 */
     public enum RoomIdStability {

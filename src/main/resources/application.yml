@@ -29,6 +29,13 @@ supplier:
     url-host: ${ELONG_API_HOST:https://api-test.elong.com/rest}
     version: "1.62"
 
+  dida:
+    client-id: ${DIDA_CLIENT_ID:}
+    license-key: ${DIDA_LICENSE_KEY:}
+    # 道旅无沙箱（官方 pricesearch 注 15：DidaApiTestID 已废除，测试账号须找客户经理开），
+    # 故兜底即生产端点——不存在"先在沙箱验"的中间态，与艺龙同形。凭证缺失时链路自停
+    url-host: ${DIDA_API_HOST:https://api.didatravel.com}
+
   fliggy:
     app-key: ${FLIGGY_APP_KEY:}
     secret: ${FLIGGY_SECRET:}

@@ -135,18 +135,20 @@ LEGACY_mustStayDeleted 守"不复活":新供应商一律走 gateway 六边形结
 
 | 端点 | 能力接口 | 已实现的供应商 |
 |---|---|---|
-| `POST /client/spa/price` | `ProductSyncService` | expedia、elong、fliggy |
-| `POST /client/spa/check` | `CheckPriceSyncService` | expedia、elong、fliggy |
+| `POST /client/spa/price` | `ProductSyncService` | expedia、elong、fliggy、dida |
+| `POST /client/spa/check` | `CheckPriceSyncService` | expedia、elong、fliggy、dida |
 | `POST /client/spa/booking` | `BookingSyncService` | expedia、elong、fliggy |
 | `POST /client/spa/order` | `OrderQuerySyncService` | expedia、elong、fliggy |
 | `POST /client/spa/cancel` | `CancelSyncService` | expedia、elong、fliggy |
 
-即：三家供应商五个能力全在册。启动日志的能力矩阵可核对（2026-08-26 本地实跑）：
+即：前三家五个能力全在册，道旅只在册查价与验价（一批范围）。启动日志的能力矩阵可核对
+（2026-09-08 本地实跑）：
 
 ```
 能力注册: supplier=expedia(10005) capabilities=[PRICING, CHECK_PRICE, BOOKING, ORDER_QUERY, CANCELLATION]
 能力注册: supplier=elong(10010)   capabilities=[PRICING, CHECK_PRICE, BOOKING, ORDER_QUERY, CANCELLATION]
 能力注册: supplier=fliggy(10015)  capabilities=[PRICING, CHECK_PRICE, BOOKING, ORDER_QUERY, CANCELLATION]
+能力注册: supplier=dida(10020)    capabilities=[PRICING, CHECK_PRICE]
 ```
 
 > 飞猪状态（2026-08-26）：五能力在册但**未放量**——查价段已从真实入口穿透验证
@@ -155,9 +157,18 @@ LEGACY_mustStayDeleted 守"不复活":新供应商一律走 gateway 六边形结
 > [fliggy/distribution-api.md](fliggy/distribution-api.md) §9。生产 Nacos 的
 > FLIGGY 限流键与 GitHub secrets 的 FLIGGY_* 均未配置，放量前须补齐。
 
-`SupplierSourceEnum` 中其余 7 家（travelConnect、aicHotels、didatravel、huitravel、
-FastpayHotels、ratehawk、meituan）只保留供应商编码，无任何实现——它们的适配代码已随
-2026-08-18 的 `legacy/` 整包删除而消亡，矩阵中一律为空。
+> 道旅状态（2026-09-08 接入，一批）：查价与验价<b>已从真实入口穿透验证</b>——本机经白名单机
+> SOCKS 出口真打 `api.didatravel.com`，查价 23 条报价、曝光档 AVAILABLE、下单前档 BOOKABLE
+> 并签出句柄（`DidaCheckPriceE2ETest`）。刷价与建档同批落地（`task.dida-cps.*`、
+> `supplier.dida.catalog-enabled`），下单/查单/取消留待二批，故 `/booking`、`/order`、
+> `/cancel` 三个端点对 dida 一律回「该供应商不支持该操作」。放量前置：生产 Nacos 的 DIDA
+> 限流键与 GitHub secrets 的 `DIDA_*` 均未配置；且**出网 IP 必须在道旅白名单内**
+> （2026-09-08 实测本机美国出口被拒 `2017 Invalid ip/signature`，腾讯云 trip-offline 与
+> 阿里云 tg_server1 已在白名单）。
+
+`SupplierSourceEnum` 中曾登记的其余几家（travelConnect、aicHotels、huitravel、
+FastpayHotels、ratehawk、meituan）已于 2026-08-21 随 `legacy/` 删除而撤销登记——本枚举
+只登记在产的家（R-4.6）。didatravel 即本次重新接入的 dida。
 
 ### 3.1 路由与能力发现（SupplierCapabilityRegistry）
 

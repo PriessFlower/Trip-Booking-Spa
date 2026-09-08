@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trip.booking.spa.gateway.adapter.outbound.state.catalog.DidaQueryPriceTaskMapper">
+
+    <resultMap id="BaseResultMap" type="com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.DidaQueryPriceTask">
+        <result column="id" property="id" jdbcType="BIGINT" />
+        <result column="sh_id" property="shId" jdbcType="VARCHAR" />
+        <result column="delay_check_in" property="delayCheckIn" jdbcType="INTEGER" />
+        <result column="delay_check_out" property="delayCheckOut" jdbcType="INTEGER" />
+        <result column="query_count" property="queryCount" jdbcType="INTEGER" />
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP" />
+        <result column="update_time" property="updateTime" jdbcType="TIMESTAMP" />
+        <result column="last_time" property="lastTime" jdbcType="TIMESTAMP" />
+        <result column="priority_level_number" property="priorityLevelNumber" jdbcType="INTEGER" />
+        <result column="temporary_upgrade" property="temporaryUpgrade" jdbcType="INTEGER" />
+        <result column="upgrade_deadline" property="upgradeDeadline" jdbcType="TIMESTAMP" />
+    </resultMap>
+
+    <sql id="BASE_LIST">
+        id, sh_id, delay_check_in, delay_check_out, query_count, update_time, last_time, priority_level_number, temporary_upgrade, upgrade_deadline
+    </sql>
+
+    <!--
+      取批条件与艺龙那份逐字同构，两条纪律照抄（改这里前先读 ElongQueryPriceTaskMapper.xml
+      的长注释）：
+
+      ① 各档条件必须互斥且穷尽，否则会出现哪档都不匹配的孤儿行——而"升档复位"只在 Java 侧、
+         且只在行被取到时执行，取不到即永不复位、永不再刷（issue #95）。
+      ② 排序键必须是 last_time（上次查价时间），不是 update_time（issue #102）：后者带
+         ON UPDATE CURRENT_TIMESTAMP，任何一次写这行都会把它刷成当前时刻，用它排序等于
+         "谁刚被写过谁排队尾"。新插入的行 last_time 为空，升序 NULL 优先，即新上架的酒店
+         优先刷第一次。
+
+      档号同另两家：0=T+0~2 / 1=T+3~7 / 2=T+8~30，无货态=业务档+10。
+      道旅暂无验价反馈环（无 upgradeByShId 写入方），temporary_upgrade 恒 0；条件仍保留，
+      是为了让本表与另两家同构——将来接反馈环时只需加写入方，取批侧不动。
+    -->
+    <select id="getQueryPriceTaskList" resultMap="BaseResultMap">
+        SELECT
+        <include refid="BASE_LIST"/>
+        FROM dida_query_price_task
+        WHERE priority_level_number = #{priorityLevelNumber}
+        <if test="1 == temporaryUpgrade">
+            or (temporary_upgrade = 1 and (upgrade_deadline is null or upgrade_deadline &gt; now()))
+        </if>
+        <if test="0 == temporaryUpgrade">
+            and (temporary_upgrade = 0 or (upgrade_deadline is not null and upgrade_deadline &lt;= now()))
+        </if>
+        order by last_time limit #{batchSize}
+    </select>
+
+    <update id="updateAddCount"
+            parameterType="com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.DidaQueryPriceTask">
+        update dida_query_price_task
+        set query_count = #{queryCount} + 1 , last_time = #{updateTime}, temporary_upgrade = #{temporaryUpgrade}
+        WHERE id = #{id}
+    </update>
+
+    <!-- 调档：无货=业务档+10（原档藏在数值里，有货 -10 回原档）。不动 last_time——
+         调档不代表刷过价，动了会打乱"最久未刷优先" -->
+    <update id="updatePriority">
+        UPDATE dida_query_price_task
+        SET priority_level_number = #{priority}
+        WHERE id = #{id} AND priority_level_number != #{priority}
+    </update>
+
+</mapper>

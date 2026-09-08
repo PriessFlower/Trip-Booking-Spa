@@ -21,6 +21,9 @@ public enum DropReason {
     /** 缺所查占用的价：rate 在响应里，但 occupancy_pricing 没有本次查询的占用档（Expedia） */
     NO_OCCUPANCY_PRICING,
 
+    /** 非即时确认报价：房是有的，但要酒店二次确认，本网关暂不卖（道旅 IsOnRequest） */
+    ON_REQUEST,
+
     // ── CACHE_READ 阶段（缓存读侧组装出报）──
 
     /** 总价为 0：该产品在缓存里的逐日价合计为 0 */

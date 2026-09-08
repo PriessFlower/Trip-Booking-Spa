@@ -56,6 +56,26 @@ task:
     # 每行按这些成人数各查一次。飞猪价格与人数相关(rate_key 按占用签发),默认主流 2 人
     occupancies: "2"
 
+  dida-cps:
+    # 道旅刷价（消费 dida_query_price_task，逐店查询）。误开=与 cursor 侧仍在跑的道旅刷价
+    # 叠加打同一个 ClientID，撞 2022（超过流量限制）；误关=缓存价陈旧，不资损（下单前必经验价）。
+    # 道旅未公开配额，放量看 supplier_io_access{supplier="DIDA",status="throttled"}。
+    enabled: false
+    cron: '0 8/10 * * * ?'    # 与艺龙(0/10)、飞猪(5/10)错开，仅启动时读取
+    batch-size: 200
+    concurrency: 1
+    # 慢档(无货档)：小批长周期，只为探测满房回归与重新上架
+    slow-batch-size: 100
+    slow-concurrency: 1
+    # 住期档：0=T+0~2(batch-size/concurrency)、1=T+3~7(mid)、2=T+8~30(far)
+    mid-batch-size: 200
+    mid-concurrency: 1
+    far-batch-size: 200
+    far-concurrency: 1
+    # 每行按这些成人数各查一次。道旅报价按占用签发(RealTimeOccupancy 进请求)，
+    # 缺哪一档那一档的查询就恒空；高德按 2 人问价，故默认 2 人
+    occupancies: "2"
+
   elong-cps:
     # 每行任务按这些成人数各查一次（逗号分隔）。高德按 2 人问价，缺 2 人片=曝光断粮（2026-08-22 事故）
     occupancies: "1,2"
@@ -147,6 +167,15 @@ ratelimit:
     "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_CREATE_ORDER]": 1
     "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_QUERY_ORDER]": 2
     "[GLOBAL_LIMIT:FLIGGY:SPA_SUPPLIER_API_CANCEL_ORDER]": 1
+    # 道旅（DIDA）：官方文档未公布任何 QPS 数值（缓存建议页与 FAQ 均无，2026-09-08 查阅），
+    # 撞限是错误码 2022。取值依据见 config/supplier-capability/dida.yaml：cursor 在产的
+    # 道旅静态抓取自律 5/s、订单类桶 8/s，本仓起步取更保守值，撞 throttled 指标再调。
+    # ⚠️ 与 cursor 共用同一个 ClientID，两边的量是叠加的
+    "[GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_PRODUCT_PRICES]": 4
+    "[GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH]": 2
+    "[GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_PRODUCT_PRICES:CHECK_PRICE]": 1
+    "[GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_PRODUCT_PRICES:LIVE]": 1
+    "[GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_ORDER_PRICE]": 2
 
 # ── supplier / expedia：静态数据摄取总开关 ──────────────────
 # ── cache：我方自建缓存 ────────────────────────────────────
@@ -275,6 +304,29 @@ supplier:
     catalog-enabled: false
 
     # resolve 换票价格容差（R-3.3 双门取严，语义同 supplier.expedia 同名两键）
+    resolve-price-tolerance: 0.02
+    resolve-price-cap-cents: 2000
+
+  dida:
+    # 产品建档(R-2.6)：语义与另两家的 catalog-enabled 同，由公共 ProductCatalogService 按家读。
+    # 默认关——道旅可卖清单 9 万家量级，开启前先看 upsert 耗时对刷价周期的影响。
+    catalog-enabled: false
+
+    # 报价币种（ISO 4217）。它同时决定退改罚金 Amount 的币种——道旅那张政策表只给数值不给币种，
+    # 其币种即本次报价币种。改它等于改全部金额口径，改前先想清楚缓存里的存量价怎么办。
+    currency: CNY
+
+    # 客人国籍（ISO 3166-1 alpha-2），pricesearch 必填且影响可售集合与价格。
+    # 官方注 14 要求填「客人输入的真实国籍」；我方客源为中国大陆，故 CN。
+    # 不要照 cursor 填酒店所在国——那是拿酒店国冒充客人国籍，正是文档点名的争议单来源。
+    nationality: CN
+
+    # resolve 管线开关（docs/product-identity.md §3）：验价时所点 RatePlanID 已不在现货，
+    # 允许按上游携带的 productKey 在现取的现货中自动换等价新票。
+    # 道旅报价码腐得极快——2026-09-08 实测同参数间隔 3 秒重查，所点报价码已不在响应中，
+    # 故关闭状态下"旧列表点击"绝大多数会直接 RATE_DEAD。改后需重启容器方生效。
+    resolve-enabled: false
+    # 换票容差双门（R-3.3）：比例门与绝对帽同时成立才换，口径与另两家一致
     resolve-price-tolerance: 0.02
     resolve-price-cap-cents: 2000
 

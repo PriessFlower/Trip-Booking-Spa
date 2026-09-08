@@ -1,0 +1,46 @@
+# 道旅的接口能力（供应商契约，不是环境配置）
+#
+# 与 elong.yaml 的分工相同：本表记「道旅允许我们打多快」，Nacos 的 ratelimit.qps 记
+# 「我方实际配多快」，后者不得超过前者。
+#
+# ⚠️ 与艺龙那份的关键差别：**道旅没有公布任何 QPS 数值**。官方文档的
+# information-hub/recommend-cache-strategy 与 faq 两页都只讲"别把全量报价都缓存下来"，
+# 一个数都没给（2026-09-08 查阅），要数得找专属客户经理或 techsupport@dida.com。
+# 故下表 qps 列写的是**我方自律值**，依据在 note 里，不是道旅的承诺。
+#
+# 撞限的信号是错误码 2022「超过流量限制（超过QPS限制）」，它在通道层被计成
+# supplier_io_access{supplier="DIDA",status="throttled"}（AbstractDidaJsonAccess#isThrottled）。
+#
+# ⚠️ **额度与 tg-trip-cursor 共用**：两边用的是同一个 ClientID，道旅看到的是两边之和。
+# 调本表或 Nacos 之前先确认 cursor 侧道旅刷价的实际速率。
+
+supplier: DIDA
+source: https://apidoc.didatravel.com/zh/    # 官方文档站；配额需另问客户经理
+checked-at: 2026-09-08                       # 必填：供应商会改文档与配额
+
+methods:
+  pricesearch:
+    qps: 4
+    limit-key: GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_PRODUCT_PRICES
+    note: >
+      自律值。依据：cursor 在产的道旅静态内容抓取自设 5 req/s 长期未撞限（dida_fetch.py）；
+      本仓起步取 4 并把刷价用途桶压到 2，给客流留头。我方三路消费方各占一个用途桶：
+      REFRESH 后台刷价（阻塞排队）、CHECK_PRICE 点订前现取现验、LIVE 上游实时查价。
+      **必须逐店查询**：「多店 + IsRealTime=true」会被道旅降级（2026-09-08 实测 10 家：
+      逐店实时 280 条报价 vs 10 家一批实时 105 条，4 家整家消失、3 家最低价被抬高）。
+      要合批省调用数就得同时关掉 IsRealTime——那一档实测与逐店实时逐家等值，但等于接受
+      道旅的缓存价，值不值得另说。
+  PriceConfirm:
+    qps: 2
+    limit-key: GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_ORDER_PRICE
+    note: >
+      自律值。cursor 侧订单类共享桶（verify/create/cancel/query）配 8 req/s，本仓只用其中
+      验价一路，起步取 2。PreBook=true 会拿到有效期 2 小时的 ReferenceNo（错误码 3006）。
+
+# 尚未接入（二批）：
+#   /api/booking/HotelBookingConfirm        下单
+#   /api/booking/HotelBookingSearch         查单
+#   /api/booking/HotelBookingCancel         预取消（拿取消确认号，有效期 10 分钟，错误码 3007）
+#   /api/booking/HotelBookingCancelConfirm  确认取消
+# 静态内容另有一套端点与鉴权（static-api.didatravel.com/api/v1/hotel/details，HTTP Basic
+# base64(ClientID:LicenseKey)），本仓尚未接入，播种清单目前由离线抓取提供。
