@@ -42,6 +42,16 @@ public class ProductRespCacheDTO {
     private String productKey;
 
     /**
+     * 这条报价属于供应商静态房型里的哪间房（{@code ProductRespDTO.room.roomId}，各家适配器已保证是静态房型号；
+     * 艺龙 = 外层 Room.RoomId 物理号）。它是<b>报价自带的事实</b>，不是档案属性，所以随票据详情走、每轮刷价重写。
+     *
+     * <p>2026-09-08 加。此前读侧按 productKey 从档案表重建 room，取的是身份成分 supplier_room_id（艺龙 = 销售号
+     * RoomTypeId），与静态房型号是两套号、大多不等；cursor 按静态号归组查不到、报价被丢。放这里而不是给档案表
+     * 加列：档案表是六家共用的表，不为一家的两套号多一列（Owner 2026-09-08 定）。老票据没有这个字段 → 读侧退回档案重建。
+     */
+    private String roomId;
+
+    /**
      * 线下支付金额的币种。
      *
      * <p>金额本身（{@code storePayPrice}）由读侧按日累加，但币种无处可算——它不在每日

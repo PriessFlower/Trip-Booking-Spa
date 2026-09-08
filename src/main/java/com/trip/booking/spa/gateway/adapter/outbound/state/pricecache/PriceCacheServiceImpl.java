@@ -6,6 +6,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespCacheDTO;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Room;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.platform.redis.RedisUtils;
 import com.trip.booking.spa.platform.util.DateUtil;
@@ -279,10 +280,11 @@ public class PriceCacheServiceImpl implements PriceCacheService {
             // 房型/餐食/产品名来自档案表，不再随每轮刷价重写进 Redis
             ProductAttributeReader.ProductAttribute attr = attrMap.get(key);
             if (attr != null) {
-                respDTO.setRoom(attr.toRoom());
                 respDTO.setMeal(attr.toMeal());
                 respDTO.setProductInfo(attr.toProductInfo());
             }
+            // 房型号优先取票据里随刷价写入的静态房型号；老票据没有 → 退回档案重建（那是身份成分，艺龙 = 销售号）
+            respDTO.setRoom(roomFor(attr, productRespCacheDTO.getRoomId()));
             // 退改段的过期判定必须在【读侧】再做一次：刷价时还开着的免费窗，等客人来查时
             // 可能已经关了（未来日期的价能在缓存里活 16 小时）。只在写侧滤，对外照旧会承诺
             // 一个订不到的免费取消（2026-09-02 实测艺龙 14.3% 的"可免费取消"即此形态）
@@ -397,6 +399,23 @@ public class PriceCacheServiceImpl implements PriceCacheService {
      * 由 {@link AbnormalPriceGuard} 按"无基准即放行"处理——没有依据就不该拦，
      * 拦掉首刷会让新产品永远进不了缓存。
      */
+    /**
+     * 出价用的 room：房型号优先取票据里的 {@code roomId}（各家适配器填的静态房型号，随每轮刷价重写），
+     * 名字取档案。票据没带房型号（2026-09-08 之前写入的老票据）→ 整体退回档案重建，行为等同过去。
+     * 档案也没有时，有号就只给号——cursor 归组只看号，名字为空不致命。
+     */
+    static Room roomFor(ProductAttributeReader.ProductAttribute attr, String cachedRoomId) {
+        boolean hasCached = StringUtils.isNotBlank(cachedRoomId);
+        if (attr == null) {
+            return hasCached ? Room.builder().roomId(cachedRoomId).build() : null;
+        }
+        Room fromCatalog = attr.toRoom();
+        if (!hasCached) {
+            return fromCatalog;
+        }
+        return Room.builder().roomId(cachedRoomId).roomName(fromCatalog.getRoomName()).build();
+    }
+
     private Integer cachedPriceCents(String priceKey, String productId) {
         try {
             Map<String, String> cached = redisUtils.hashMapGet(priceKey);
@@ -490,6 +509,8 @@ public class PriceCacheServiceImpl implements PriceCacheService {
                     // 不存在"同一条的早餐变了"
                     ProductRespCacheDTO respCacheDTO = new ProductRespCacheDTO();
                     BeanUtils.copyProperties(productRespDTO, respCacheDTO);
+                    // 房型号随票据走（见 ProductRespCacheDTO.roomId）；名字不带，仍由档案表给
+                    respCacheDTO.setRoomId(productRespDTO.getRoom() == null ? null : productRespDTO.getRoom().getRoomId());
                     productRespCacheDTOMap.put(priceInfoKey, respCacheDTO);
 
                     List<PriceInfo> infos = productRespDTO.getPriceInfos();
