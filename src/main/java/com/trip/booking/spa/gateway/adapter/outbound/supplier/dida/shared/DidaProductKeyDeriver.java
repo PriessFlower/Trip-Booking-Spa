@@ -78,11 +78,23 @@ public class DidaProductKeyDeriver {
      * 餐食规范化：只认逐晚的 {@code MealType} + {@code MealAmount}（官方 price-search 注 8，
      * 2026-09-08 查阅：BreakfastType 已过时，且「人数跟餐数对不齐就会认为是无早」）。
      *
-     * <p><b>官方没有给 MealType 的取值表</b>（字段说明只写着 "MealType"）。2026-09-08 生产
-     * 实测 606 条报价，出现四种组合（BreakfastType, MealType, MealAmount）：
-     * (1,1,0) 344 条、(2,2,2) 210 条、(2,3,2) 32 条、(2,7,2) 20 条。其中 MealType=7 的样例是
-     * 日式「1泊2食」（一晚含两餐），而它的 BreakfastType 同样是 2——<b>照 BreakfastType 判就会
-     * 把早+晚说成仅含早</b>，那是卖错。故只认两种有实证的取值：
+     * <p><b>官方没有给 MealType 的取值表</b>（字段说明只写着 "MealType"），故取值靠统计推。
+     * 2026-09-08 两轮生产实测，组合记为（BreakfastType, MealType, MealAmount）：
+     * <ul>
+     *   <li>样本 A（36 家，日本居多）606 条：(1,1,0) 344、(2,2,2) 210、(2,3,2) 32、(2,7,2) 20</li>
+     *   <li>样本 B（可卖清单等距抽 260 家、86 家有货）1844 条：(2,2,2) 1018、(1,1,0) 819、
+     *       (1,3,1) 6、(2,3,2) 1 ——<b>1 与 2 两种取值覆盖 99.6%</b>，3 与 7 是长尾</li>
+     * </ul>
+     * 房型名帮不上忙：样本 B 的 1844 条里，名称含餐食词的 0 条。
+     *
+     * <p><b>MealAmount 是人份，不是餐数</b>（实测：同一家酒店改占用，1 成人→1、2 成人→2、
+     * 3 成人→3、2 成人 1 儿童→3，而 MealType 恒为 2）。故 {@code Meal.count} 填它与艺龙同口径
+     * （那边的份数来自文案、这边来自请求占用）；占用本就是 productKey 成分，不会因此键分叉。
+     *
+     * <p><b>BreakfastType 与逐晚 MealType 会打架，一律以后者为准</b>：样本 A 里 MealType=7 的
+     * 样例是日式「1泊2食」（一晚含两餐）而 BreakfastType 仍是 2，照它判就会把早+晚说成仅含早；
+     * 样本 B 里另有 (1,3,1) 6 条与占用扫描时见到的 (1,2,2)——BreakfastType 说无早、逐晚却有餐。
+     * 官方 price-search 注 8 也写着 BreakfastType 已过时。故只认两种有实证的取值：
      * <ul>
      *   <li>逐晚全部 {@code MealType=1} 且 {@code MealAmount=0} → 确定无餐</li>
      *   <li>逐晚全部 {@code MealType=2} 且 {@code MealAmount>0} → 确定含早（份数取逐晚最大）</li>
