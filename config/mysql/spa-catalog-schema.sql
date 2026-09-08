@@ -192,6 +192,9 @@ CREATE TABLE IF NOT EXISTS dida_query_price_task (
     temporary_upgrade     INT          NOT NULL DEFAULT 0 COMMENT '临时提升优先级 0否 1是',
     upgrade_deadline      DATETIME     NULL COMMENT '临时优先级截止时间',
     PRIMARY KEY (id),
-    KEY idx_priority_last (priority_level_number, last_time),
-    KEY idx_sh_id (sh_id)
+    -- 播种幂等靠这把唯一键，不靠脚本自己记（飞猪那张表没有，播种脚本只能自建幂等闸）。
+    -- 取三列而不是 (sh_id, delay_check_in)：同一入住偏移将来可能要铺不同住期长度
+    -- （1 晚与 2 晚），两列会把它们判成重复。趁表还是空的先加上。
+    UNIQUE KEY uk_hotel_stay (sh_id, delay_check_in, delay_check_out),
+    KEY idx_priority_last (priority_level_number, last_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='道旅查价预热任务队列';
