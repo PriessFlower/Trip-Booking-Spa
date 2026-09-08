@@ -9,11 +9,12 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared;
  * ReferenceNo」。其余键是下单侧的自校验材料（住期、间数、占用、申报总价必须与验价那次一致，
  * 否则报 3001/3005/3008）。
  *
- * <p><b>关于"有效期 2 小时"</b>：这个数只出现在错误码表 3006 的文案里（「订单参考号过期了。
- * 订单参考号有效时长为2小时」），price-confirm 与 booking-confirm 两页都<b>没写</b>有效期。
- * 且它说的是<b>这个号最长能活多久</b>，不是"这 2 小时内房和价被锁住"——道旅自己的 3015
- * 「无房或变价」正是拿着有效号去下单仍然失败的那一种。故本仓不依赖它：句柄 TTL 上限
- * 30 分钟（{@code SupplierIdentityProfile.DIDA}），实际存活以 OfferStore 的 TTL 为准。
+ * <p><b>它能活多久，本仓按 1 小时计</b>——我方选定的保守口径，不是道旅的承诺。官方那句
+ * 「有效时长为2小时」只出现在错误码表 3006 的文案里，price-confirm 与 booking-confirm 两页
+ * 都<b>没写</b>有效期；且它说的是这个号最长能活多久，不是"这段时间里房和价被锁住"——道旅
+ * 自己的 3015「无房或变价」正是拿着未过期的号去下单仍然失败的那一种，当天入住的单子还会
+ * 更早死于酒店的当日截止。故句柄 TTL 上限取 30 分钟（{@code SupplierIdentityProfile.DIDA}），
+ * 实际存活以 OfferStore 的 TTL 为准，过期一律凭 productKey 现取现验。
  *
  * <p>{@link #RATE_PLAN_ID} 是会话级易腐报价码：只进 OfferStore，禁止落库（R-2.1）。
  */
