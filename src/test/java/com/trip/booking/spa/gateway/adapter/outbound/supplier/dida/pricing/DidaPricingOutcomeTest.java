@@ -80,6 +80,24 @@ class DidaPricingOutcomeTest {
         assertEquals(2, products.get(0).getPriceInfos().size());
     }
 
+    /**
+     * 钉住身份的房型成分是<b>物理房型</b>。艺龙 2026-09-08 (#215) 栽在这上面：它拿销售房型号
+     * （RatePlan.RoomTypeId）当身份，与静态目录的物理房型号大多不等，约六成报价在上游按物理号
+     * 归组时查不到。道旅只有一个房型号 {@code RatePlan.RoomTypeID}，且 2026-09-08 实测 36 家
+     * 225 个 id 全部命中静态内容接口发布的 {@code rooms[].id}（即物理房型主键），本测试防的是
+     * 将来有人把它换成别的字段。
+     */
+    @Test
+    @DisplayName("productKey 的房型成分与对外 roomId 同为 RoomTypeID（物理房型）")
+    void roomComponentIsThePhysicalRoomId() throws IOException {
+        ProductRespDTO first = service.toPricingResult(
+                fixture("/dida/price-search-563-1night.json"), request("2026-09-29", "2026-09-30"), "563")
+                .products().get(0);
+
+        assertEquals("9566690", first.getIdentity().supplierRoomId());
+        assertEquals(first.getRoom().getRoomId(), first.getIdentity().supplierRoomId());
+    }
+
     @Test
     @DisplayName("空 HotelList = 供应商说这家这天没得卖 → 确定无货（缓存该被清）")
     void emptyHotelListIsNoInventory() throws IOException {
