@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.trip.booking.spa.bff.client.AggSearchGateway;
 import com.trip.booking.spa.bff.client.RapidGateway;
 import com.trip.booking.spa.bff.client.RapidReply;
 import com.trip.booking.spa.bff.config.BffProperties;
@@ -45,6 +46,7 @@ public class BffShopService {
     private final PropertyContentRepo contentRepo;
     private final OfferCache offerCache;
     private final BffProperties props;
+    private final AggSearchGateway aggSearch;
 
     /**
      * 合同档案：本层与 core 共用同一份取值，不再各自绑定配置。
@@ -61,11 +63,13 @@ public class BffShopService {
     private ExpediaContractProfile contractProfile;
 
     public BffShopService(RapidGateway gateway, PropertyContentRepo contentRepo,
-                             OfferCache offerCache, BffProperties props) {
+                             OfferCache offerCache, BffProperties props,
+                             AggSearchGateway aggSearch) {
         this.gateway = gateway;
         this.contentRepo = contentRepo;
         this.offerCache = offerCache;
         this.props = props;
+        this.aggSearch = aggSearch;
     }
 
     // ---------- 城市 ----------
@@ -83,7 +87,17 @@ public class BffShopService {
 
     /**
      * 搜索框联想：同时给出城市与酒店两组结果（对齐 Expedia 目的地搜索的行为）。
-     * 关键词里的 SQL LIKE 通配符先转义，否则用户输入 % 会把整库拉出来。
+     *
+     * <p><b>酒店</b>走 agg 的 ES 检索（中文分词），agg 不可用时退回本地
+     * {@code name LIKE '%关键词%'}。旧路径整串扫表、没有分词，「素坤逸希尔顿」
+     * 这类跨词输入一条都搜不出来。
+     *
+     * <p><b>城市</b>仍走本地表，<b>不是漏改</b>：agg 的 {@code hotel_base.city_name}
+     * 中文条数为 0（646 个品牌、316 个集团也全是拉丁文），而本站展示语言是 zh-CN，
+     * 挪过去会让城市联想从中文退化成英文。
+     *
+     * <p>关键词有两份：SQL 路径要转义 LIKE 通配符（用户输入 % 会把整库拉出来），
+     * ES 路径不能用转义后的那份——反斜杠会被当成关键词的一部分。
      */
     public JsonNode suggest(String keyword) {
         ObjectNode result = MAPPER.createObjectNode();
@@ -99,6 +113,20 @@ public class BffShopService {
             node.put("city", String.valueOf(row.get("city")));
             node.put("countryCode", String.valueOf(row.get("countryCode")));
             node.put("propertyCount", ((Number) row.get("propertyCount")).intValue());
+        }
+        List<AggSearchGateway.Hotel> matched = aggSearch.suggestHotels(trimmed, props.getLanguage(), 8);
+        if (matched != null) {
+            for (AggSearchGateway.Hotel hotel : matched) {
+                ObjectNode node = hotels.addObject();
+                node.put("propertyId", hotel.propertyId());
+                node.put("name", hotel.name());
+                node.put("city", hotel.city());
+                node.put("countryCode", hotel.countryCode());
+                if (hotel.starRating() != null) {
+                    node.put("starRating", hotel.starRating());
+                }
+            }
+            return result;
         }
         for (Map<String, Object> row : contentRepo.suggestProperties(props.getLanguage(), escaped, 8)) {
             ObjectNode node = hotels.addObject();

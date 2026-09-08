@@ -1,6 +1,6 @@
 services:
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:9.5.1
+    image: trip-elasticsearch:9.5.1-ik
     container_name: trip-elasticsearch
     restart: unless-stopped
     mem_limit: 6g
