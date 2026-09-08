@@ -25,8 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * 61513057 零重合）。下游 cursor 的 {@code room_physical_mapping} 与 agg 的 {@code room_supplier_ref} 都按静态号建，
  * 此前这里填 RoomTypeId，cursor 归组查不到、整条艺龙报价被丢。
  *
- * <p>销售号仍留在它该待的两处：产品身份（{@code identity.supplierRoomId} / productKey）与下单凭据
- * （{@code ElongOfferCredentials.ROOM_TYPE_ID}）。本测试同时钉住这一点：改 roomId 不许把身份也改了。
+ * <p>2026-09-08 第二步：身份的房型成分也改为物理号（此前用销售号的依据「cursor 以其为等价锚」核实为误），
+ * 与其他五家同口径；销售号只留在下单凭据（{@code ElongOfferCredentials.ROOM_TYPE_ID}）。
  */
 class ElongRoomIdIsPhysicalRoomTest {
 
@@ -75,8 +75,8 @@ class ElongRoomIdIsPhysicalRoomTest {
     }
 
     @Test
-    @DisplayName("同一物理房 0029 下两个销售房型 0053/0054：报价 roomId 都是 0029，身份里的 supplierRoomId 仍是各自的销售号")
-    void roomIdIsParentPhysicalRoomIdentityKeepsRoomTypeId() {
+    @DisplayName("同一物理房 0029 下两个销售房型 0053/0054：报价 roomId 与身份房型成分都是 0029，两条落同一等价类")
+    void roomIdAndIdentityAreParentPhysicalRoom() {
         ElongHotelDetailResponse.ElongRoom room = new ElongHotelDetailResponse.ElongRoom();
         room.setRoomId("0029");
         room.setName("高级大床房");
@@ -91,10 +91,14 @@ class ElongRoomIdIsPhysicalRoomTest {
             assertEquals("0029", p.getRoom().getRoomId(), "报价的房型号必须是物理 RoomId，下游按它对静态数据");
             assertEquals("高级大床房", p.getRoom().getRoomName());
         }
-        assertEquals(List.of("0053", "0054"),
-                products.stream().map(p -> p.getIdentity().supplierRoomId()).sorted().toList(),
-                "产品身份仍按销售房型 RoomTypeId 算，不许跟着 roomId 一起改");
-        assertEquals(2, products.stream().map(ProductRespDTO::getProductKey).distinct().count(),
-                "两个销售房型是两个产品，productKey 不能撞");
+        for (ProductRespDTO p : products) {
+            assertEquals("0029", p.getIdentity().supplierRoomId(),
+                    "身份的房型成分也是物理号（2026-09-08 起），与其他五家同口径；销售号只在下单凭据里");
+        }
+        assertEquals(1, products.stream().map(ProductRespDTO::getProductKey).distinct().count(),
+                "同物理房、同餐食退改占用的两个销售房型 = 同一等价类，换票时按容差取最低价");
+        assertEquals(List.of("g-53", "g-54"),
+                products.stream().map(ProductRespDTO::getProductId).sorted().toList(),
+                "报价码仍各自保留，下单凭据走它们");
     }
 }

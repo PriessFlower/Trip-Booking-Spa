@@ -262,7 +262,7 @@ CREATE TABLE IF NOT EXISTS supplier_product_base (
     -- 判据可执行——拿这些列重算一遍 sha256，必须等于 product_key
     supplier_account VARCHAR(64) NOT NULL COMMENT '成分 a:账号/渠道 profile。艺龙=账户名,Expedia=partnerPointOfSale',
     supplier_hotel_id VARCHAR(64) NOT NULL COMMENT '成分 h',
-    supplier_room_id VARCHAR(64) NOT NULL COMMENT '成分 r。艺龙=RatePlan.RoomTypeId,非外层 Room.RoomId',
+    supplier_room_id VARCHAR(64) NOT NULL COMMENT '成分 r = 供应商静态房型号。艺龙=外层 Room.RoomId（物理房型，2026-09-08 起；此前误用 RatePlan.RoomTypeId 销售号，销售号只在下单凭据里）',
     meal_signature VARCHAR(8) NOT NULL COMMENT '成分 m:MealSignature.canonical(),如 B1L0D0。禁止降维成布尔(R-2.7)',
     cancel_class VARCHAR(20) NOT NULL COMMENT '成分 c:CancelClass 名,如 FREE_CANCELLABLE。UNKNOWN 不进目录(R-5.4)',
     occupancy VARCHAR(32) NOT NULL COMMENT '成分 o:占用规范串,如 2 或 2-9,4',

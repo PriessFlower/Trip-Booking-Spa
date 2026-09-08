@@ -33,8 +33,15 @@ import java.util.List;
  * 查价响应组装与验价 resolve 匹配都必须经由本类——键分叉即身份分叉。
  *
  * <p>键成分：supplier=ELONG、账号=艺龙账户名（单账号；马甲是产品维促销凭证而非
- * 账号维，不进键）、supplierRoomId=<b>RatePlan.RoomTypeId</b>（cursor 全程以其为
- * 房型等价锚；不是外层 Room.RoomId）、餐食、退改类、占用。
+ * 账号维，不进键）、supplierRoomId=<b>外层 Room.RoomId（物理房型）</b>、餐食、退改类、占用。
+ *
+ * <p>⚠️ 2026-09-08 改口径：此前 supplierRoomId 取 RatePlan.RoomTypeId（销售房型），依据是
+ * 「cursor 全程以其为房型等价锚」——核实为误，cursor 老路（ElongHotelPriceWrapper）的锚一直是
+ * Room.RoomId，RoomTypeId 只存在扩展字段里当下单凭证。艺龙两套号大多不等（61504129：报价侧 18 个
+ * RoomTypeId 只有 1 个在静态 20 个 RoomId 里），用销售号做身份的后果：档案 / 缓存读侧重建出的
+ * room.roomId 是销售号，cursor 按物理号归组查不到、六成艺龙报价被丢；且销售号随酒店调整售卖方式
+ * 增减，换票按它找等价产品更容易落空。改为物理号后与 Expedia / 飞猪 / 道旅同一口径。
+ * 销售号仍在 {@code ElongOfferCredentials.ROOM_TYPE_ID} 里随票据走，下单不受影响。
  *
  * <p>规范化纪律（R-5.4）：餐食/退改解析不出一律 UNKNOWN，禁止兜成任何确定值。
  * UNKNOWN 键可在实时链路流转，但不进目录。cursor 把"解析不出"兜成硬不可退是
@@ -61,19 +68,19 @@ public class ElongProductKeyDeriver {
      * <p>建档要落的 {@code meal_signature}/{@code cancel_class}/{@code occupancy} 都从这里取，
      * 不许拿 {@link Meal}/{@link CancelPolicy} 再判一遍——重判必然降维且会与本方法分叉。
      */
-    public ProductIdentity deriveIdentity(String supplierHotelId, String roomTypeId, Meal meal,
+    public ProductIdentity deriveIdentity(String supplierHotelId, String supplierRoomId, Meal meal,
                                           List<CancelPolicy> cancelPolicy, String occupancy, Integer totalCents) {
         MealSignature mealSignature = meal == null ? MealSignature.unknown()
                 : MealSignature.known(isPositive(meal.getCount()), isPositive(meal.getLunchCount()), isPositive(meal.getDinnerCount()));
         CancelClass cancelClass = classifyCancel(cancelPolicy, totalCents);
         return ProductIdentity.of(SupplierSourceEnum.ELONG.getCode(), properties.getUser(),
-                supplierHotelId, roomTypeId, mealSignature, cancelClass, occupancy);
+                supplierHotelId, supplierRoomId, mealSignature, cancelClass, occupancy);
     }
 
     /** 只要 key 不要成分时用（如 resolve 匹配只做键比对） */
-    public String deriveProductKey(String supplierHotelId, String roomTypeId, Meal meal,
+    public String deriveProductKey(String supplierHotelId, String supplierRoomId, Meal meal,
                                    List<CancelPolicy> cancelPolicy, String occupancy, Integer totalCents) {
-        return deriveIdentity(supplierHotelId, roomTypeId, meal, cancelPolicy, occupancy, totalCents).productKey();
+        return deriveIdentity(supplierHotelId, supplierRoomId, meal, cancelPolicy, occupancy, totalCents).productKey();
     }
 
     /**
