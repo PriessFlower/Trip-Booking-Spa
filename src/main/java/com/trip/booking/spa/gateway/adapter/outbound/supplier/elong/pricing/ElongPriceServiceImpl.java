@@ -232,7 +232,14 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 .productKey(identity.productKey())
                 .identity(identity)
                 .supplierId(SupplierSourceEnum.ELONG.getCode())
-                .room(Room.builder().roomId(plan.getRoomTypeId()).roomName(room.getName()).build())
+                // room.roomId 的契约含义是「供应商静态接口里的房型号」，下游（cursor 的物理房型对照表、
+                // agg 的房型对照）全按它对静态数据。艺龙有两套号：静态 hotel.static.info 与
+                // hotel.detail 外层 Room 用物理房型 RoomId（0001…），RatePlan 用销售房型 RoomTypeId（0053…），
+                // 两套大多不相等（2026-09-08 实测 61504129：18 个报价号里只有 0029 能对上静态 20 个号）。
+                // 此前这里填的是 RoomTypeId，cursor 拿它去物理号表归组查不到、整条报价被丢。
+                // 身份（productKey / identity.supplierRoomId）与下单凭据（ElongOfferCredentials.ROOM_TYPE_ID）
+                // 仍用 RoomTypeId，不受影响——那两处才是销售号该待的地方。
+                .room(Room.builder().roomId(room.getRoomId()).roomName(room.getName()).build())
                 // inventory 原样透出艺龙的 CurrentAlloment（房量限额，0/999/9999=不限，非剩余房量）。
                 // 上游若按 inventory<=0 过滤，会误杀"不限"的产品——语义见 ElongRatePlan 字段注释
                 .productInfo(ProductInfo.builder().inventory(plan.getCurrentAlloment()).productStatus(1)
