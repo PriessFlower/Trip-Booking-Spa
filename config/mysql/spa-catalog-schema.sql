@@ -166,5 +166,9 @@ CREATE TABLE IF NOT EXISTS fliggy_query_price_task (
     upgrade_deadline      DATETIME     NULL COMMENT '临时优先级截止时间',
     PRIMARY KEY (id),
     KEY idx_priority_update (priority_level_number, last_time),
-    KEY idx_sh_id (sh_id)
+    -- 播种的幂等键：一行 = 一家酒店的一个住期。取三列而非两列，是为了同一入住偏移
+    -- 将来铺不同住期长度（1 晚 vs 2 晚）时不被误判成重复。有了它播种可直接 INSERT IGNORE，
+    -- 不必再由脚本自建幂等闸——2026-09-08 补播 941 家时表上还没有唯一键，重跑就会翻倍。
+    -- 原 idx_sh_id 被本键的最左前缀覆盖，同时撤除。
+    UNIQUE KEY uk_hotel_stay (sh_id, delay_check_in, delay_check_out)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='飞猪查价预热任务队列';
