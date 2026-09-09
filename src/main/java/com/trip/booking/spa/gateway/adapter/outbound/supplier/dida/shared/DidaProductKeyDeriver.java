@@ -100,7 +100,13 @@ public class DidaProductKeyDeriver {
      *   <li>逐晚全部 {@code MealType=2} 且 {@code MealAmount>0} → 确定含早（份数取逐晚最大）</li>
      *   <li>其余（含 3、7 及未来新值、逐晚不一致、字段缺失）→ UNKNOWN（R-5.4）</li>
      * </ul>
-     * UNKNOWN 照常可售，只是不进产品目录；要收窄它须先向道旅要到 MealType 取值表。
+     * UNKNOWN 照常可售，只是不进产品目录。
+     *
+     * <p><b>取值表已找到，但差一个偏移量待道旅确认</b>（2026-09-09，详见 docs/dida/booking-api.md §5.1）：
+     * 官方渠道管理端文档附录有完整餐型表（0=Room Only、1=Breakfast Included、2=Half-Board、
+     * 6=BreakfastAndDinner…），与分销侧差 1——本仓实测分销 1=无餐、2=含早，正对应供应侧 0 与 1。
+     * 按 +1 推则分销 3=Half-Board、7=BreakfastAndDinner。三条旁证吻合，但没有一条是官方对分销侧
+     * 的明文，故此处不放开；放开只需道旅回答：分销 MealType 是否 = 渠道 MealTypeID + 1。
      *
      * @return {@code null} 表示 UNKNOWN——调用方不得兜成任何确定值
      */

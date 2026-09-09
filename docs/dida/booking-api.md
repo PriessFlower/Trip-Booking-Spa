@@ -234,6 +234,35 @@ TotalPrice 运算」），故 `totalTaxes` 报 0，不做加减。`InventoryCoun
 照它判就会把两餐说成仅含早——那是卖错；样本 B 里另有 (1,3,1) 6 条、占用扫描时另见 (1,2,2)，
 都是 `BreakfastType` 说无早而逐晚有餐。
 
+### 5.1 取值表找到了，但差一个偏移量待确认（2026-09-09）
+
+官方**渠道管理端**文档（`/supplier-docs/DidaTravel_ChannelManager_API_Document_CN.html`，
+供应侧推价用，与分销 API 不是同一份）附录给了完整餐型表：
+
+| MealTypeID | 名称 | | MealTypeID | 名称 |
+|---|---|---|---|---|
+| 0 | Room Only | | 5 | Dinner |
+| 1 | Breakfast Included | | 6 | BreakfastAndDinner |
+| 2 | Half-Board | | 7 | BreakfastAndLunch |
+| 3 | Full-Board | | 8 | PKG(Room&Ticket) |
+| 4 | All Inclusive | | 9~14 | Lunch / Lunch And Dinner / Suhur 系 |
+
+**它与分销侧的 `MealType` 差 1**：我们实测分销 1=无餐、2=含早，对应供应侧 0=Room Only、
+1=Breakfast Included。若两侧同码，分销 1 就该是「含早」，与实测（`MealAmount=0`、
+`BreakfastType=1`）直接矛盾，故同码被排除。按 +1 推：
+
+- **分销 3 = 供应 2 = Half-Board（半食宿）**
+- **分销 7 = 供应 6 = BreakfastAndDinner（早+晚）**
+
+支持这个推断的独立旁证：①样本 A 里 `MealType=7` 的样例是日式「一泊二食」，与「早+晚」吻合；
+②实测 3 与 7 的价格都比同房型含早档贵（+155 / +1346 / +1674 / +1707），符合「多一餐」。
+
+**但没有任何一条是官方对分销侧的明文**，故代码维持 UNKNOWN 不放开。要放开只需道旅回答一句：
+**分销 price-search 的 `MealType` 是否等于渠道端 `MealTypeID` + 1？**
+
+两条排除掉的路，避免重复试：验价响应不返回餐食名称（字段与查价同构）；验价独有的
+`Supplement` / `PriceWithoutSupplement` **实测恒 0**，不是餐费拆分。
+
 **判定**（`DidaProductKeyDeriver#convertMeal`）：逐晚全 1 且份数 0 → 无餐；逐晚全 2 且份数 >0 →
 含早（份数取逐晚最大）；**其余一律 UNKNOWN**（含 3、7、将来的新值、逐晚不一致、字段缺失）。
 UNKNOWN 照常可售，只是不进产品目录。按样本 B，这条纪律的代价是 0.4% 的报价不进目录。
