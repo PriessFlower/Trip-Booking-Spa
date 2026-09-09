@@ -5,8 +5,8 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.Flig
 
 /**
  * {@code taobao.xhotel.order.international.distribution.detail} 响应
- * （docs/fliggy/distribution-api.md §5）。{@code order_status} 的取值枚举官方未列
- * （必测清单第 3 项）——映射不出的状态一律回 null，绝不猜。
+ * （docs/fliggy/distribution-api.md §5）。{@code order_status} 的枚举文档已列，但各态真实
+ * 报文未见（必测清单第 3 项）——映射不出的状态一律回 null，绝不猜。
  */
 public class FliggyOrderDetailResponse extends FliggyTopResponse {
 
@@ -46,6 +46,21 @@ public class FliggyOrderDetailResponse extends FliggyTopResponse {
         return text(baseInfo(), "order_status_desc");
     }
 
+    /** 房费总额（售卖币种的分，见 {@link #currencyCode()}）；缺席返回 null */
+    public Integer totalRoomPrice() {
+        return intOf(baseInfo(), "total_room_price");
+    }
+
+    /** 买家实退（同币种同单位）。官方注明「取消未成功时为空」，缺席返回 null */
+    public Integer buyerRealRefund() {
+        return intOf(baseInfo(), "buyer_real_refund");
+    }
+
+    /** 售卖币种（如 USD）；缺席返回 null */
+    public String currencyCode() {
+        return text(baseInfo(), "currency_code");
+    }
+
     /** 供应商侧确认号（酒店确认码） */
     public String confirmCode() {
         JsonNode r = result();
@@ -55,6 +70,18 @@ public class FliggyOrderDetailResponse extends FliggyTopResponse {
 
     public String bizErrorCode() {
         return payload == null ? null : text(payload, "error_resp_code");
+    }
+
+    private static Integer intOf(JsonNode node, String field) {
+        JsonNode v = node == null ? null : node.get(field);
+        if (v == null || v.isNull()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(v.asText().trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     @Override

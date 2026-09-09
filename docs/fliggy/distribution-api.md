@@ -96,24 +96,37 @@
 ## 5. 查单 `...distribution.detail`（68687）
 
 请求〔官方〕：**`dis_order_id`（我方单号）与 `fliggy_order_id` 二者不可同空**——
-即我方单号足够反查，符合 B5。`distributor` 必填。
+即我方单号足够反查，符合 B5。`distributor` 必填。三个字段**必须包在 `order_base_req`
+对象里**（TOP 惯例：JSON 串）：〔实证 2026-09-09〕SPA 此前平铺发送，真打回
+`code 40 Missing required arguments:order_base_req`——这条查单链路从未通过。
 
-响应〔官方〕：`order_base_info{order_status/order_status_desc/currency_code/...}`、
-`daily_info_list[]`（含 `currency_rate`、`buyer_real_refund`、`is_checked_in`）、
+响应〔官方〕：`order_base_info{order_status, order_status_desc, currency_code, total_room_price,
+buyer_real_refund, currency_rate, is_checked_in, ...}`、`daily_info_list[]`（只有逐日 `price`——
+〔实证〕退款与总价三项在 `order_base_info` 下，本节此前记在 daily 里是错的）、
 `order_fulfill_info{check_in/out, out_confirm_code(确认号), order_guest_list[]}`、
-`room_info`、`hotel_info{shid,...}`。
+`room_info`、`hotel_info{shid,...}`。金额单位是**售卖币种的分**（`currency_code`）。
 
-〔未确认〕`order_status` 的取值枚举——文档未列。三态映射（OrderPresence）判据需实测/考古。
+`order_status` 取值〔官方，2026-08-04 改版后已列〕：2=待确认、3=已确认、4=已完成、7/8=已取消。
+代码里仍按"未列"处理（不做状态翻译），改判前需实测这四类各自的真实报文。
 
 ## 6. 取消 `trade...distribution.cancel`（68689）
 
 请求〔官方〕：`order_base_req{dis_order_id, fliggy_order_id, distributor}`——两个单号
 均标"可选"（至少给一，同查单口径）。**我方单号足够，cursor 传双号是超额**。
 
-响应〔官方〕：`result{cancel_success(Boolean), forfeit_fee(Number, 示例 10000)}`。
-- **`forfeit_fee` 无币种字段、文档未标单位**〔官方确认缺失〕。〔实证〕cursor 按 USD 分
-  处理并换汇；汇率取不到时**用原值不阻断（这是资损口子，SPA 侧纪律：取不到→不确定）**。
-  〔未确认〕真实币种，**接入必验（钱）**。
+响应〔官方，2026-09-09 复核 docId 122474/122458，页面更新日 2026-08-03/04〕：
+`result{cancel_success(Boolean)}`——**字段表里没有罚金**，并写明「罚金金额以订单详情接口
+的返回为准」。此前本节记的 `forfeit_fee(示例 10000)` 抄自国内「酒店通用分销」的取消页
+（docId 121393，`taobao.xhotel.order.distribution.cancel`，那里写明「罚金金额，单位：分」），
+归错了接口。
+- 〔实证 2026-09-09〕**国际接口线上仍在返回这个字段，且值不可信**：单
+  260909173834659dd355e09a（大阪 MYSTAYS 堺筋本町）取消回
+  `{"cancel_success":true,"forfeit_fee":-380}`，同单详情却是 `total_room_price=3176`
+  `buyer_real_refund=3176`（USD，全额退＝免罚）。cursor 照读并乘加价率，落库 -27.89 元
+  申报给高德，卡住退款（cursor `474eff240`）。
+- 故 SPA 侧罚金取自详情：`total_room_price - buyer_real_refund`，币种取 `currency_code`；
+  实退缺席/为 0/大于房费一律回 unknown（`FliggyCancelSyncServiceImpl.penaltyOf`）。
+  `forfeit_fee` 只留一行 info 日志观察。
 - 无"取消受理中"三态——`cancel_success` 布尔。UNKNOWN 判定只能靠超时/无响应兜底。
 
 ## 7. 静态数据 `foundation.hotel.query`（75171）——cursor 没用上的接口
@@ -137,8 +150,8 @@
 | # | 事项 | 为什么 |
 |---|---|---|
 | 1 | `rate_key` 跨时段/跨代稳定性、`create_key` 有效期 | 腐性申报硬门（R-4.1），OfferStore TTL 依据。〔实证 2026-09-05〕`rate_key` **会换代**：神户 50366597 同一报价，高德回传 `V3\|f605…7319`，当刻现货为 `V3\|f605…7319_FR111881050001`；验价 RATE_DEAD 8/18 全因精确匹配落空。已接模板 resolve 按 productKey 换票（闸口 `supplier.fliggy.resolve-enabled`）。`create_key` 有效期仍未测 |
-| 2 | `forfeit_fee` 币种 | 钱；cursor 的 USD 假设无文档背书 |
-| 3 | `order_status` 取值枚举 | OrderPresence 三态映射 |
+| 2 | 取消后多久 `buyer_real_refund` 才结算完 | 钱；罚金已改从详情算（§6），但「实退为 0」分不清罚全款与结算未完成，现按 unknown 处置。〔销项 2026-09-09〕`forfeit_fee` 币种之问作废：该字段已不作依据；详情侧金额确证是**售卖币种的分**（`total_room_price=3176` 对上库里 `supplier_cost_amount=31.76 USD`） |
+| 3 | `order_status` 各态的真实报文 | OrderPresence 三态映射。取值枚举本身文档已列（§5），但代码仍不做状态翻译，改判前要有各态实样 |
 | 4 | `customers` 结构 | 创单必填而文档未展开 |
 | 5 | `intention` 三值语义 | 验价即刷 vs 下单前验价可能应声明不同意图 |
 | 6 | 是否有 IP 白名单 | 两仓均无记录（艺龙有先例）；本机出口在美国，实测须在腾讯云生产机 |
