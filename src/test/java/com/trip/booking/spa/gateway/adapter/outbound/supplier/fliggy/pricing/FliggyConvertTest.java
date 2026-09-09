@@ -103,7 +103,11 @@ class FliggyConvertTest {
                 .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
         req.setOccupancies(List.of("2"));
 
-        List<ProductRespDTO> products = service.convertRates(resp.rates(), req, "50363404");
+        // 时钟钉在报文抓取当日：本夹具的免费窗截止 2026-09-08 23:00 北京，用真实时间跑
+        // 会在该时刻之后被 CancelClassifier 正确判为已过期而丢弃，测试随之腐烂
+        // （2026-09-09 实测转红，代码一行没改）。判过期是被测行为的一部分，必须钉住。
+        java.time.Instant asOf = java.time.OffsetDateTime.parse("2026-08-27T10:00:00+08:00").toInstant();
+        List<ProductRespDTO> products = service.convertRates(resp.rates(), req, "50363404", asOf);
 
         assertEquals(2, products.size());
         for (ProductRespDTO p : products) {

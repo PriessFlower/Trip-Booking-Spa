@@ -90,6 +90,17 @@ class FliggyProductToCacheTest {
         ReflectionTestUtils.setField(Monitor.class, "monitorService", null);
     }
 
+    /**
+     * 时钟钉在报文抓取当日。本夹具（2026-08-27 抓）里那条免费取消窗截止 2026-09-08 23:00 北京，
+     * 用真实时间跑，过了那一刻就会被 {@code CancelClassifier} 正确判为已过期而丢弃——
+     * 于是退改段少一条、判类从 FREE_CANCELLABLE 变掉、产品被 R-5.4 挡在目录外。
+     * 2026-09-09 实测：本测试与 FliggyConvertTest 同日转红，而代码一行没改。
+     * 过期判定本身就是被测行为的一部分，必须由测试钉住，不能交给 {@code Instant.now()}。
+     */
+    private static java.time.Instant asOf() {
+        return java.time.OffsetDateTime.parse("2026-08-27T10:00:00+08:00").toInstant();
+    }
+
     @Test
     @DisplayName("真实 ari 报文 → 转换 → 写缓存：价格 Hash 必须出现真实 field，不是无货标记")
     void realPayloadPricesLandInPriceHash() throws Exception {
@@ -100,7 +111,7 @@ class FliggyProductToCacheTest {
         req.setOccupancies(List.of("2"));
         Supplier supplier = Supplier.builder().supplierId(10015).sHotelId("50363404").build();
 
-        List<ProductRespDTO> products = fliggyService.convertRates(resp.rates(), req, "50363404");
+        List<ProductRespDTO> products = fliggyService.convertRates(resp.rates(), req, "50363404", asOf());
         assertFalse(products.isEmpty());
         cacheService.productToCache(products, req, supplier);
 
@@ -128,7 +139,7 @@ class FliggyProductToCacheTest {
         req.setOccupancies(List.of("2"));
         Supplier supplier = Supplier.builder().supplierId(10015).sHotelId("50363404").build();
 
-        List<ProductRespDTO> products = fliggyService.convertRates(resp.rates(), req, "50363404");
+        List<ProductRespDTO> products = fliggyService.convertRates(resp.rates(), req, "50363404", asOf());
         cacheService.productToCache(products, req, supplier);
 
         ArgumentCaptor<java.util.HashMap<String, Object>> cap =

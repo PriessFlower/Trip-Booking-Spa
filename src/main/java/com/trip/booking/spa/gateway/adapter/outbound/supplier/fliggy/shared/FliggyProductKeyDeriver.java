@@ -71,6 +71,16 @@ public class FliggyProductKeyDeriver {
      * （=UNKNOWN）——半份条款比没有更误导（同艺龙 convertLadder 口径）。
      */
     public List<CancelPolicy> convertCancelPolicy(String checkIn, JsonNode cancelPolicy) {
+        return convertCancelPolicy(checkIn, cancelPolicy, java.time.Instant.now());
+    }
+
+    /**
+     * 同上，但由调用方给时钟。<b>过期判定是本方法输出的一部分</b>（末尾的 liveSegments），
+     * 把它留给 {@code Instant.now()} 就没法钉住"免费窗关闭后不再对外承诺免费"这条判据，
+     * 夹具还会随真实时间自己腐烂——2026-09-09 实测：两个飞猪用例因夹具里 09-08 23:00 的
+     * 免费窗被时间追上而转红，代码一行没改。道旅同款重载见 DidaProductKeyDeriver。
+     */
+    public List<CancelPolicy> convertCancelPolicy(String checkIn, JsonNode cancelPolicy, java.time.Instant now) {
         List<CancelPolicy> out = new ArrayList<>();
         JsonNode rules = cancelPolicy == null ? null : cancelPolicy.get("rules");
         if (rules == null || !rules.isArray()) {
@@ -98,7 +108,7 @@ public class FliggyProductKeyDeriver {
         }
         // 过期段不许流出：截止时刻已过的段行使不了，既不能对外承诺，也不该参与判类
         // （2026-09-02 实测艺龙 14.3%、飞猪 4.4% 的"可免费取消"其实免费窗早已关闭）
-        return CancelClassifier.liveSegments(out, checkIn, java.time.Instant.now());
+        return CancelClassifier.liveSegments(out, checkIn, now);
     }
 
     /** 某时刻距「入住日 24:00」的小时数（下限 25，字段约定必须>24）。基准恒按北京时间——
