@@ -14,13 +14,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * 钉住餐食判据：<b>只认有实证的两种 MealType</b>，其余一律 UNKNOWN。
+ * 钉住餐食判据：按官方餐型表判（分销码 = 渠道码 + 1），<b>表外与自相矛盾的一律 UNKNOWN</b>。
  *
- * <p>2026-09-08 生产实测 606 条报价出现四种组合（BreakfastType, MealType, MealAmount）：
- * (1,1,0) 344、(2,2,2) 210、(2,3,2) 32、(2,7,2) 20。MealType=7 的样例是日式「1泊2食」
- * （一晚含两餐），而它的 BreakfastType 同样是 2——<b>照 BreakfastType 判就会把早+晚说成
- * 仅含早</b>，那是卖错（R-1.6：赌错只许少卖，不许卖错）。本测试守的就是这条：新值不许被
- * 顺手兜进"含早"。
+ * <p>偏移量由数据定案：分销 {@code MealType=1} 的 2,063 条实测 {@code MealAmount} 无一例外为 0，
+ * 若两侧同码则 1=Breakfast Included，含早却零份餐不可能；且 4,279 条报价里从未出现 0
+ * （2026-09-09 生产实测）。
+ *
+ * <p>本测试守的是两头：<b>该判出来的要判出来</b>（3/7 是早+晚，不许再兜成 UNKNOWN 白丢），
+ * <b>不该判的绝不硬判</b>（PKG、斋月餐系、表外新值、逐晚不一致、份数与餐食矛盾）——
+ * 尤其不许把早+晚说成仅含早，那是卖错（R-1.6：赌错只许少卖，不许卖错）。
  */
 class DidaMealSignatureTest {
 
@@ -47,15 +49,65 @@ class DidaMealSignatureTest {
     }
 
     @Test
-    @DisplayName("MealType=7（一泊二食）不许当成仅含早——无取值表即 UNKNOWN")
-    void halfBoardIsUnknownNotBreakfast() {
-        assertNull(deriver.convertMeal(plan(new int[][]{{7, 2}})));
+    @DisplayName("MealType=7（渠道 6 BreakfastAndDinner）：早+晚，绝不能落成仅含早")
+    void breakfastAndDinner() {
+        Meal meal = deriver.convertMeal(plan(new int[][]{{7, 2}}));
+        assertNotNull(meal);
+        assertEquals(2, meal.getCount());
+        assertEquals(0, meal.getLunchCount());
+        assertEquals(2, meal.getDinnerCount());
     }
 
     @Test
-    @DisplayName("MealType=3 同样无实证，UNKNOWN")
-    void unverifiedTypeIsUnknown() {
-        assertNull(deriver.convertMeal(plan(new int[][]{{3, 2}})));
+    @DisplayName("MealType=3（渠道 2 Half-Board）：早+晚")
+    void halfBoard() {
+        Meal meal = deriver.convertMeal(plan(new int[][]{{3, 1}}));
+        assertNotNull(meal);
+        assertEquals(1, meal.getCount());
+        assertEquals(0, meal.getLunchCount());
+        assertEquals(1, meal.getDinnerCount());
+    }
+
+    @Test
+    @DisplayName("MealType=4/5（全食宿、全包）：三餐都算")
+    void fullBoardAndAllInclusive() {
+        for (int type : new int[]{4, 5}) {
+            Meal meal = deriver.convertMeal(plan(new int[][]{{type, 2}}));
+            assertNotNull(meal, "MealType=" + type);
+            assertEquals(2, meal.getCount());
+            assertEquals(2, meal.getLunchCount());
+            assertEquals(2, meal.getDinnerCount());
+        }
+    }
+
+    @Test
+    @DisplayName("MealType=6（渠道 5 Dinner）：只有晚餐，早餐数必须是 0")
+    void dinnerOnly() {
+        Meal meal = deriver.convertMeal(plan(new int[][]{{6, 2}}));
+        assertNotNull(meal);
+        assertEquals(0, meal.getCount());
+        assertEquals(0, meal.getLunchCount());
+        assertEquals(2, meal.getDinnerCount());
+    }
+
+    /**
+     * 表里有、但映射不进本仓「早/午/晚」模型的那几类，必须留在 UNKNOWN：
+     * 9=PKG(Room&amp;Ticket) 是房+票打包不是餐食；12~15 是斋月的 Suhur/Iftar 系，
+     * 与早/午/晚不是同一套划分，且 15 = "Suhur or Iftar" 自带"或"。
+     */
+    @Test
+    @DisplayName("PKG 与斋月餐系不硬塞进早/午/晚，仍为 UNKNOWN")
+    void unmappableTypesStayUnknown() {
+        for (int type : new int[]{9, 12, 13, 14, 15}) {
+            assertNull(deriver.convertMeal(plan(new int[][]{{type, 2}})), "MealType=" + type);
+        }
+    }
+
+    @Test
+    @DisplayName("表外的新值一律 UNKNOWN，不许兜成任何确定餐食")
+    void offTableTypeIsUnknown() {
+        assertNull(deriver.convertMeal(plan(new int[][]{{99, 2}})));
+        assertNull(deriver.convertMeal(plan(new int[][]{{0, 2}})));
     }
 
     @Test

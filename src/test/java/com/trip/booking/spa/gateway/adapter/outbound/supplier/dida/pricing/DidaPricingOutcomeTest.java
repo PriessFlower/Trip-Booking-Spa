@@ -155,17 +155,33 @@ class DidaPricingOutcomeTest {
         assertTrue(result.products().isEmpty());
     }
 
+    /**
+     * 用 9（渠道 8 = PKG(Room&amp;Ticket)）而不是 7：7 自 2026-09-09 起按官方餐型表判为早+晚，
+     * 已不再是"判不出"的例子。9 是表里有、却映射不进本仓早/午/晚模型的那一类。
+     */
     @Test
     @DisplayName("餐食判不出的报价照常出报，只是 identity 带 UNKNOWN（不进目录）")
     void unknownMealStillSells() {
         DidaRatePlan plan = plainPlan();
-        plan.getPriceList().get(0).setMealType(7);
+        plan.getPriceList().get(0).setMealType(9);
         plan.getPriceList().get(0).setMealAmount(2);
         PricingResult result = service.toPricingResult(withPlans(plan), request("2026-09-29", "2026-09-30"), "563");
 
         assertEquals(PricingOutcome.AVAILABLE, result.outcome());
         assertEquals("UNKNOWN", result.products().get(0).getIdentity().mealSignature());
         assertNull(result.products().get(0).getMeal());
+    }
+
+    @Test
+    @DisplayName("早+晚的报价必须带上晚餐进 identity——落成仅含早就是卖错")
+    void breakfastAndDinnerReachesIdentity() {
+        DidaRatePlan plan = plainPlan();
+        plan.getPriceList().get(0).setMealType(7);
+        plan.getPriceList().get(0).setMealAmount(2);
+        PricingResult result = service.toPricingResult(withPlans(plan), request("2026-09-29", "2026-09-30"), "563");
+
+        assertEquals("B1L0D1", result.products().get(0).getIdentity().mealSignature());
+        assertEquals(2, result.products().get(0).getMeal().getDinnerCount());
     }
 
     private PricingOutcome outcomeOf(String code) {

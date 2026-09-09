@@ -25,6 +25,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 道旅产品规范化与键派生的<b>唯一权威</b>（docs/product-identity.md R-1.1）：
@@ -41,10 +42,48 @@ public class DidaProductKeyDeriver {
     /** 道旅的取消政策时刻以北京时间报出（官方 price-search FromDate 字段说明，2026-09-08 查阅） */
     private static final ZoneId DIDA_ZONE = ZoneId.of("Asia/Shanghai");
 
-    /** 实测的 MealType 取值：1=无餐、2=含早。官方无取值表，其余取值一律不猜（见 convertMeal） */
-    private static final int MEAL_TYPE_NONE = 1;
+    /**
+     * 分销侧 {@code MealType} → 餐食构成。<b>分销码 = 渠道端 {@code MealTypeID} + 1</b>，判据见
+     * {@link #convertMeal}。表内容取自官方渠道管理端文档附录「餐型代码说明」（2026-09-09 查阅）。
+     *
+     * <p>三类不进表，一律 UNKNOWN：<b>9</b>（渠道 8 = PKG(Room&amp;Ticket)，那是房+票的打包，
+     * 根本不是餐食描述）；<b>12~15</b>（渠道 11~14 = Suhur/Iftar 斋月餐系，与早/午/晚不是同一套
+     * 划分，且 15 = "Suhur or Iftar" 自带"或"，本就不可确定）；以及表外的任何新值。
+     */
+    private static final Map<Integer, MealShape> MEAL_TABLE = Map.of(
+            1, MealShape.NONE,                      // 渠道 0  Room Only
+            2, MealShape.BREAKFAST,                 // 渠道 1  Breakfast Included
+            3, MealShape.BREAKFAST_DINNER,          // 渠道 2  Half-Board（早+另一餐，业界惯例为晚餐）
+            4, MealShape.BREAKFAST_LUNCH_DINNER,    // 渠道 3  Full-Board
+            5, MealShape.BREAKFAST_LUNCH_DINNER,    // 渠道 4  All Inclusive
+            6, MealShape.DINNER,                    // 渠道 5  Dinner
+            7, MealShape.BREAKFAST_DINNER,          // 渠道 6  BreakfastAndDinner
+            8, MealShape.BREAKFAST_LUNCH,           // 渠道 7  BreakfastAndLunch
+            10, MealShape.LUNCH,                    // 渠道 9  Lunch
+            11, MealShape.LUNCH_DINNER);            // 渠道 10 Lunch And Dinner
 
-    private static final int MEAL_TYPE_BREAKFAST = 2;
+    /** 餐食形态。与艺龙同名同义（那边从文案分类，这边从码查表），{@code null} 即 UNKNOWN。 */
+    private enum MealShape {
+        /** 供应商正面声明「无餐食」——可信的确定信息，不是"没填" */
+        NONE(false, false, false),
+        BREAKFAST(true, false, false),
+        LUNCH(false, true, false),
+        DINNER(false, false, true),
+        BREAKFAST_LUNCH(true, true, false),
+        BREAKFAST_DINNER(true, false, true),
+        LUNCH_DINNER(false, true, true),
+        BREAKFAST_LUNCH_DINNER(true, true, true);
+
+        final boolean breakfast;
+        final boolean lunch;
+        final boolean dinner;
+
+        MealShape(boolean breakfast, boolean lunch, boolean dinner) {
+            this.breakfast = breakfast;
+            this.lunch = lunch;
+            this.dinner = dinner;
+        }
+    }
 
     @Resource
     private DidaProperties properties;
@@ -102,11 +141,19 @@ public class DidaProductKeyDeriver {
      * </ul>
      * UNKNOWN 照常可售，只是不进产品目录。
      *
-     * <p><b>取值表已找到，但差一个偏移量待道旅确认</b>（2026-09-09，详见 docs/dida/booking-api.md §5.1）：
-     * 官方渠道管理端文档附录有完整餐型表（0=Room Only、1=Breakfast Included、2=Half-Board、
-     * 6=BreakfastAndDinner…），与分销侧差 1——本仓实测分销 1=无餐、2=含早，正对应供应侧 0 与 1。
-     * 按 +1 推则分销 3=Half-Board、7=BreakfastAndDinner。三条旁证吻合，但没有一条是官方对分销侧
-     * 的明文，故此处不放开；放开只需道旅回答：分销 MealType 是否 = 渠道 MealTypeID + 1。
+     * <p><b>2026-09-09 起按官方餐型表判定</b>（{@link #MEAL_TABLE}），不再只认 1/2。表来自官方
+     * <b>渠道管理端</b>文档附录（供应侧推价用，与分销 API 不是同一份），<b>分销码 = 渠道码 + 1</b>。
+     * 偏移量由数据定案，不是推断：
+     * <ul>
+     *   <li><b>同码假设被 2,063 个样本推翻</b>：分销 {@code MealType=1} 的 2,063 条，
+     *       {@code MealAmount} <b>无一例外为 0</b>。若同码则 1=Breakfast Included，
+     *       含早却零份餐不可能</li>
+     *   <li><b>4,279 条报价里从未出现 0</b>，也无表外新值——与「渠道 0~14 加 1 = 分销 1~15」相符</li>
+     *   <li>旁证：{@code MealType=7} 的样例是日式「1泊2食」，与渠道 6=BreakfastAndDinner 吻合；
+     *       3 与 7 的价格都比同房型含早档贵（+155~+1707），符合「多一餐」</li>
+     * </ul>
+     * <b>残留风险</b>：那张表印在供应侧文档里，分销侧文档从未引用它。若道旅两侧用的是两套表、
+     * 只是前两个值碰巧一致，本判定会错——已列入向客户经理确认的清单（docs §9）。
      *
      * @return {@code null} 表示 UNKNOWN——调用方不得兜成任何确定值
      */
@@ -115,25 +162,27 @@ public class DidaProductKeyDeriver {
         if (CollectionUtils.isEmpty(nights)) {
             return null;
         }
-        boolean allNone = true;
-        boolean allBreakfast = true;
+        MealShape shape = null;
         int portions = 0;
         for (DidaPriceItem night : nights) {
-            Integer type = night.getMealType();
+            MealShape nightShape = MEAL_TABLE.get(night.getMealType());
             int amount = night.getMealAmount() == null ? 0 : night.getMealAmount();
-            allNone &= Integer.valueOf(MEAL_TYPE_NONE).equals(type) && amount == 0;
-            allBreakfast &= Integer.valueOf(MEAL_TYPE_BREAKFAST).equals(type) && amount > 0;
+            // 表外取值、逐晚不一致、以及份数与餐食自相矛盾（有餐 0 份 / 无餐却报份数），一律 UNKNOWN
+            boolean contradictory = nightShape == MealShape.NONE ? amount != 0 : amount <= 0;
+            if (nightShape == null || contradictory || (shape != null && shape != nightShape)) {
+                log.info("道旅餐食规范化：MealType 无法归类，按 UNKNOWN 处理(R-5.4),ratePlanId={},逐晚={}",
+                        plan.getRatePlanId(), mealDigest(nights));
+                return null;
+            }
+            shape = nightShape;
             portions = Math.max(portions, amount);
         }
-        if (allNone) {
-            return Meal.builder().count(0).lunchCount(0).dinnerCount(0).mealDesc("").build();
-        }
-        if (allBreakfast) {
-            return Meal.builder().count(portions).lunchCount(0).dinnerCount(0).mealDesc("").build();
-        }
-        log.info("道旅餐食规范化：MealType 组合无实证取值，按 UNKNOWN 处理(R-5.4),ratePlanId={},逐晚={}",
-                plan.getRatePlanId(), mealDigest(nights));
-        return null;
+        return Meal.builder()
+                .count(shape.breakfast ? portions : 0)
+                .lunchCount(shape.lunch ? portions : 0)
+                .dinnerCount(shape.dinner ? portions : 0)
+                .mealDesc("")
+                .build();
     }
 
     /**
