@@ -2,151 +2,21 @@
 -- spa 专属目录层（原系统还原表）
 -- 依据：docs/legacy-schema-restoration.md（旧中台 intl jar 反编译还原）
 -- 库：tg_trip_spa（与 trip-cursor 的库物理隔离）
--- 域划分：统一目录域（hotel-base 还原，7 张）+ 供应商档案域（hotel-info 还原，3 张）
+-- 域划分：供应商档案域（hotel-info 还原，3 张）。统一目录域已于 2026-09-08 整域撤除，见下。
 -- =====================================================================
 
--- ---------- 统一目录域 ----------
-
--- 酒店双语主档 ← base.HotelDetailsRequest
-CREATE TABLE IF NOT EXISTS hotel_details (
-    id BIGINT NOT NULL AUTO_INCREMENT,
-    hotel_id VARCHAR(64) NOT NULL COMMENT '统一酒店ID（Expedia打底=property_id）',
-    hotel_name VARCHAR(255) NULL,
-    hotel_name_cn VARCHAR(255) NULL,
-    telephone VARCHAR(64) NULL,
-    address VARCHAR(255) NULL,
-    address_cn VARCHAR(255) NULL,
-    post_code VARCHAR(64) NULL,
-    city_id VARCHAR(64) NULL,
-    city_name VARCHAR(255) NULL,
-    city_name_cn VARCHAR(255) NULL,
-    state_name VARCHAR(255) NULL,
-    country_id VARCHAR(64) NULL,
-    country_code VARCHAR(64) NULL,
-    fax VARCHAR(64) NULL,
-    star VARCHAR(64) NULL,
-    score VARCHAR(64) NULL,
-    longitude VARCHAR(64) NULL,
-    latitude VARCHAR(64) NULL,
-    hotel_group VARCHAR(255) NULL COMMENT '原字段 group（MySQL 保留字改名）',
-    brand VARCHAR(255) NULL,
-    status TINYINT(1) NOT NULL DEFAULT 1,
-    del TINYINT(1) NOT NULL DEFAULT 0,
-    operator VARCHAR(64) NULL,
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    UNIQUE KEY uqx_hotel_details_hotel (hotel_id),
-    KEY idx_hotel_details_city (city_id),
-    KEY idx_hotel_details_country (country_code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='酒店双语主档（原 hotel-base.saveHotelDetails）';
-
--- 房型双语档案 ← base.RoomBaseRequest
-CREATE TABLE IF NOT EXISTS room_base (
-    id BIGINT NOT NULL AUTO_INCREMENT,
-    room_id VARCHAR(64) NOT NULL COMMENT '统一房型ID',
-    hotel_id VARCHAR(64) NOT NULL,
-    room_name VARCHAR(255) NULL,
-    room_name_cn VARCHAR(255) NULL,
-    area VARCHAR(64) NULL,
-    floor VARCHAR(64) NULL,
-    broadnet INT NULL,
-    bed_name VARCHAR(255) NULL COMMENT '床名英文（"1 King Bed or 2 Queen Beds"）',
-    bed_name_cn VARCHAR(255) NULL COMMENT '床名中文（"1张特大床或2张大床"）',
-    bed_type VARCHAR(255) NULL,
-    bed_desc TEXT NULL COMMENT 'JSON：List<List<BedInfoDTO>>（旧 adaptor convertBedInfo 产物）',
-    bed_type_status INT NULL,
-    bed_number VARCHAR(64) NULL,
-    capacity INT NULL,
-    has_bathroom INT NULL,
-    has_windows INT NULL,
-    is_smoking INT NULL,
-    status TINYINT(1) NOT NULL DEFAULT 1,
-    del TINYINT(1) NOT NULL DEFAULT 0,
-    operator VARCHAR(64) NULL,
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    UNIQUE KEY uqx_room_base_room (room_id),
-    KEY idx_room_base_hotel (hotel_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='房型双语档案（原 hotel-base.saveRoomBase）';
-
--- 酒店/房型图片（共用，room_id 空=酒店图） ← base.GlobalHotelPictureDTO
-CREATE TABLE IF NOT EXISTS hotel_picture (
-    id BIGINT NOT NULL AUTO_INCREMENT,
-    hotel_id VARCHAR(64) NOT NULL,
-    room_id VARCHAR(64) NULL,
-    type VARCHAR(64) NULL COMMENT 'hotel/room',
-    name VARCHAR(255) NULL,
-    name_cn VARCHAR(255) NULL,
-    sort INT NULL COMMENT 'hero 图=0 置顶',
-    url VARCHAR(768) NULL,
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    KEY idx_hotel_picture_hotel (hotel_id),
-    KEY idx_hotel_picture_room (room_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='酒店/房型图片（原 GlobalHotelPictureDTO）';
-
--- 政策/费用/描述扩展（language 维度） ← base.GlobalHotelBaseExtendDTO
-CREATE TABLE IF NOT EXISTS hotel_extend (
-    id BIGINT NOT NULL AUTO_INCREMENT,
-    hotel_id VARCHAR(64) NOT NULL,
-    room_id VARCHAR(64) NOT NULL DEFAULT '' COMMENT '空串=酒店级',
-    language VARCHAR(20) NOT NULL DEFAULT 'en-US',
-    check_in VARCHAR(255) NULL,
-    check_out VARCHAR(255) NULL,
-    instructions TEXT NULL,
-    min_age VARCHAR(64) NULL,
-    fees TEXT NULL,
-    policies TEXT NULL,
-    descriptions TEXT NULL,
-    del TINYINT(1) NOT NULL DEFAULT 0,
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    UNIQUE KEY uqx_hotel_extend (hotel_id, room_id, language)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='入住政策/费用/描述扩展（原系统自带 language 列的多语言表）';
-
--- 国家档案 ← base.CountryInfoRequest（洲际+双语+坐标+区号）
-CREATE TABLE IF NOT EXISTS country_info (
-    id BIGINT NOT NULL AUTO_INCREMENT,
-    country_id VARCHAR(64) NOT NULL COMMENT 'Expedia region id',
-    country_code VARCHAR(64) NULL,
-    phone_code VARCHAR(64) NULL,
-    country_name VARCHAR(255) NULL,
-    country_name_cn VARCHAR(255) NULL,
-    continent VARCHAR(64) NULL,
-    continent_cn VARCHAR(64) NULL,
-    longitude DECIMAL(13,10) NULL,
-    latitude DECIMAL(13,10) NULL,
-    note VARCHAR(64) NULL COMMENT '来源标记（旧代码存 supplier desc）',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    UNIQUE KEY uqx_country_info (country_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='国家档案（原 hotel-base.saveCountryList）';
-
--- 城市/州省档案（state_id 指向上级，递归成树） ← base.CityInfoRequest/Response 并集
-CREATE TABLE IF NOT EXISTS city_info (
-    id BIGINT NOT NULL AUTO_INCREMENT,
-    city_id VARCHAR(64) NOT NULL COMMENT 'Expedia region id',
-    city_name VARCHAR(255) NULL,
-    city_name_cn VARCHAR(255) NULL,
-    state_id VARCHAR(64) NULL COMMENT '上级 region id（递归层级）',
-    state_name VARCHAR(255) NULL,
-    state_name_cn VARCHAR(255) NULL,
-    country_id VARCHAR(64) NULL,
-    longitude DECIMAL(13,10) NULL,
-    latitude DECIMAL(13,10) NULL,
-    note VARCHAR(64) NULL COMMENT 'region type（city/province_state 等，旧代码语义）',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    UNIQUE KEY uqx_city_info (city_id),
-    KEY idx_city_info_country (country_id),
-    KEY idx_city_info_state (state_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='城市/州省档案（原 hotel-base.saveCityList）';
+-- ---------- 统一目录域：**本仓不再有此域**（2026-09-08 撤除） ----------
+--
+-- 原有 7 张：hotel_details / room_base / hotel_picture / hotel_extend / country_info /
+-- city_info / global_product_supplier。前六张是 2026-08-07 还原旧中台（hotel-base 带目录层）
+-- 时一并建的静态目录，由 Expedia 静态摄取→加工链路单向写入。撤除前实况：
+--   · 全仓零 SELECT（bff/b2b 对它们的引用数为 0，唯一读取是加工层自己回查 city_id/country_id）；
+--   · 数据停在 2026-08-14（两个 @Scheduled 在 Nacos 里始终 enabled:false）；
+--   · 占 tg_trip_spa 约 3 GB（hotel_picture 787 万行 1.4 GB + 索引 0.6 GB、hotel_extend 723 MB）。
+-- 生产 DDL 已于 2026-09-08 执行（DROP 六表；结构备份见提交信息，
+-- country_info/city_info 的数据备份留在 trip-offline:/opt/trip-booking-spa/retired-static/）。
+-- 酒店静态内容的家是 trip-booking-agg（hotel_base/room_base/room_i18n 在产），
+-- 本仓只保留 expedia_property_content 供 bff/b2b 详情页与 productKey 派生读取。
 
 -- 产品-供应商映射（global_product_supplier）：**本仓不建此表**（2026-08-20 撤除）
 --
@@ -162,13 +32,13 @@ CREATE TABLE IF NOT EXISTS city_info (
 -- ---------- 供应商档案域 ----------
 
 -- 供应商酒店原始档案 ← info.SupplierHotelBaseRequest
--- 决策①：合并原 base 域副本表（GlobalHotelSupplierRequest），映射列 hotel_id/merger/country_name_cn 落在这里
+-- 只存供应商侧事实。统一侧列 hotel_id/merger 已于 2026-09-08 撤除：归一属聚合域（R-2.4），
+-- 且生产实测 97,409/97,409 行的 hotel_id 就等于 supplier_hotel_id——与 global_product_supplier
+-- 当年被撤的同一个病（统一侧是供应商侧的 1:1 拷贝）。country_name_cn 是事实列，保留。
 CREATE TABLE IF NOT EXISTS supplier_hotel_base (
     id BIGINT NOT NULL AUTO_INCREMENT,
     supplier_id INT NOT NULL,
     supplier_hotel_id VARCHAR(64) NOT NULL,
-    hotel_id VARCHAR(64) NULL COMMENT '统一酒店ID（映射列，原 base 域副本表 hotelId；Expedia 打底=supplier_hotel_id）',
-    merger TINYINT(1) NOT NULL DEFAULT 0 COMMENT '合并状态（原 base 域副本表 merger）',
     supplier_hotel_name VARCHAR(255) NULL,
     supplier_hotel_name_cn VARCHAR(255) NULL,
     telephone VARCHAR(64) NULL,
@@ -206,17 +76,16 @@ CREATE TABLE IF NOT EXISTS supplier_hotel_base (
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE KEY uqx_shb_supplier_hotel (supplier_id, supplier_hotel_id),
-    KEY idx_shb_hotel (hotel_id)
+    UNIQUE KEY uqx_shb_supplier_hotel (supplier_id, supplier_hotel_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='供应商酒店原始档案（原 hotel-info.saveHotelInfo）';
 
 -- 供应商房型原始档案 ← info.SupplierRoomBaseRequest
+-- 同上：统一侧列 room_id/merger 已撤（生产 356,571/356,571 行 room_id = supplier_room_id）。
 CREATE TABLE IF NOT EXISTS supplier_room_base (
     id BIGINT NOT NULL AUTO_INCREMENT,
     supplier_id INT NOT NULL,
     supplier_room_id VARCHAR(64) NOT NULL,
     supplier_hotel_id VARCHAR(64) NOT NULL,
-    room_id VARCHAR(64) NULL COMMENT '统一房型ID（映射列，原 base 域副本表 roomId）',
     supplier_room_name VARCHAR(255) NULL,
     supplier_room_name_cn VARCHAR(255) NULL,
     description TEXT NULL,
@@ -231,7 +100,6 @@ CREATE TABLE IF NOT EXISTS supplier_room_base (
     is_add_bed INT NULL,
     service TEXT NULL,
     remarks TEXT NULL,
-    merger INT NOT NULL DEFAULT 0 COMMENT '合并状态',
     status TINYINT(1) NOT NULL DEFAULT 1,
     operator VARCHAR(64) NULL,
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -298,5 +166,9 @@ CREATE TABLE IF NOT EXISTS fliggy_query_price_task (
     upgrade_deadline      DATETIME     NULL COMMENT '临时优先级截止时间',
     PRIMARY KEY (id),
     KEY idx_priority_update (priority_level_number, last_time),
-    KEY idx_sh_id (sh_id)
+    -- 播种的幂等键：一行 = 一家酒店的一个住期。取三列而非两列，是为了同一入住偏移
+    -- 将来铺不同住期长度（1 晚 vs 2 晚）时不被误判成重复。有了它播种可直接 INSERT IGNORE，
+    -- 不必再由脚本自建幂等闸——2026-09-08 补播 941 家时表上还没有唯一键，重跑就会翻倍。
+    -- 原 idx_sh_id 被本键的最左前缀覆盖，同时撤除。
+    UNIQUE KEY uk_hotel_stay (sh_id, delay_check_in, delay_check_out)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='飞猪查价预热任务队列';

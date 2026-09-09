@@ -21,8 +21,8 @@ import java.net.URI;
 import java.util.List;
 
 /**
- * Rapid Geography 单地区查询（GET /v3/regions/{regionId}?include=details）。
- * 请求语义照抄旧链路 RegionsAccess；HTTP 风格与 ExpediaPropertyContentClient 一致。
+ * Rapid Geography 单地区查询（GET /v3/regions/{regionId}）。
+ * 请求语义照抄旧链路 RegionsAccess。
  */
 @Slf4j
 @Component
@@ -50,13 +50,10 @@ public class ExpediaRegionsClient {
     }
 
     /**
-     * @return 该地区详情（含 descendants），请求失败/解析失败返回 null（对齐旧链路"单点失败不断流程"的语义）
+     * include 取 property_ids（旧 queryHotelIdByCity 语义）。
+     *
+     * @return 该地区详情，请求失败/解析失败返回 null（对齐旧链路"单点失败不断流程"的语义）
      */
-    public RegionsInfoResponse fetchRegion(String regionId, String language) {
-        return fetchRegion(regionId, language, "details");
-    }
-
-    /** include 可选 details / property_ids（旧 queryHotelIdByCity 语义） */
     public RegionsInfoResponse fetchRegion(String regionId, String language, String include) {
         try {
             URI uri = UriComponentsBuilder
@@ -73,7 +70,7 @@ public class ExpediaRegionsClient {
             headers.set("Customer-Session-Id", properties.getSession());
             headers.set(HttpHeaders.USER_AGENT, properties.getUserAgent());
 
-            // 统一限流（阻塞式）：地理递归建档会大量调 regions，QPS 配在 Nacos ratelimit.qps
+            // 统一限流（阻塞式）：QPS 配在 Nacos ratelimit.qps
             Permits.take(RATE_LIMIT_KEY, CallPurpose.CONTENT);
             ResponseEntity<String> response = restTemplate.exchange(
                     uri, HttpMethod.GET, new HttpEntity<>(headers), String.class);

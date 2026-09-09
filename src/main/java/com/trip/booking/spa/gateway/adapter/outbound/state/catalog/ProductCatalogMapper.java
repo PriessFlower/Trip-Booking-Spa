@@ -9,9 +9,9 @@ import java.util.Map;
 /**
  * 产品档案的<b>供应商通用</b>写入口（R-2.6 按腐性分层存储）。
  *
- * <p>为什么抽出来：这条 upsert 除 {@code operator} 外与供应商无关，而
- * {@code ExpediaCatalogMapper} 里还混着 Expedia 专属的快照/地理表操作。艺龙接建档时
- * 若去调那个 mapper，等于让艺龙依赖 Expedia 的适配层——违反 architecture.md §2
+ * <p>为什么抽出来：这条 upsert 除 {@code operator} 外与供应商无关，而它原先长在 Expedia
+ * 专属的 mapper 里（那个 mapper 2026-09-08 随静态链路撤除）。艺龙接建档时若去调它，
+ * 等于让艺龙依赖 Expedia 的适配层——违反 architecture.md §2
  * （供应商语义只允许出现在各自适配层）。
  *
  * <p>写入纪律：
@@ -45,4 +45,14 @@ public interface ProductCatalogMapper {
      */
     List<Map<String, Object>> selectAttributesByProductKeys(@Param("supplierId") int supplierId,
                                                             @Param("productKeys") List<String> productKeys);
+
+    /**
+     * 建档名单：按供应商分页取酒店 id，调用方是 Expedia 的全量补建。
+     *
+     * <p>2026-09-08 从已撤除的 ExpediaCatalogMapper 迁来——SQL 只认 supplier_id，与供应商无关。
+     * 表自静态加工层撤除后不再有写入方，名单即当时的存量（97,409 家）。
+     */
+    List<String> selectSupplierHotelIds(@Param("supplierId") int supplierId,
+                                        @Param("offset") int offset,
+                                        @Param("limit") int limit);
 }

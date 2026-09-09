@@ -32,7 +32,17 @@
 两层各司其职：**info 层存"供应商怎么说"，base 层存"我们对外怎么讲"**。还原时保留这个分层——
 对应到新链路：`expedia_property_content`（raw，已有）之上，加工产物落 base 域表；info 域表可选（见第五节取舍）。
 
-## 三、建表清单 —— 统一目录域（hotel-base，7 张）
+## 三、建表清单 —— 统一目录域（hotel-base，7 张）　**整域已撤除（2026-09-08）**
+
+> 本域七张表在本仓已全部不存在：`global_product_supplier` 2026-08-20 撤（聚合域的桥），
+> 其余六张 2026-09-08 撤（DROP TABLE 已在生产执行）。下面的字段清单保留为**还原图纸**——
+> 它记录了旧中台长什么样，不再描述本仓的现状。
+>
+> 撤除依据：六张表全仓零 SELECT（bff/b2b 引用数 0，唯一读取是加工层自己回查 city_id/country_id）；
+> 数据停在 2026-08-14（两个 @Scheduled 在 Nacos 始终 enabled:false）；占 tg_trip_spa 约 3 GB。
+> 静态内容与归一的家是 trip-booking-agg（R-2.4），那边 hotel_base/room_base/room_i18n 已在产。
+> 防复活：`StaticCatalogRetiredArchRulesTest`。备份见 `docs/expedia-static-data.md`。
+
 
 ### `hotel_details` ← `HotelDetailsRequest`（29 字段）
 
@@ -287,8 +297,10 @@
 
 ## 五、取舍与边界（需拍板的点）
 
-1. **【已定】base 域副本表不建，映射列搬家**：base 域 `GlobalHotelSupplierRequest`/`GlobalRoomSupplierRequest` 与 info 域 supplier_* 有 35 个字段完全相同——历史上因两个中台跨库不能 JOIN 而存的副本，其真实身份是"映射工作台"（独有 `hotelId`=归属统一酒店、`merger`=合并状态）。单库后副本冗余取消，**映射列 `hotel_id`/`merger`/`country_name_cn` 迁至 `supplier_hotel_base`（房型同理 `room_id`）**，能力零丢失。`hotel_mapping_fail`（映射失败记录）等接入第二家供应商做映射时再建。
-2. **info 域三张表建不建**：如果 spa 只做"Expedia 打底目录"，raw 已有 `expedia_property_content`，info 域（供应商原始档案的关系化形态）可暂缓；如果希望完整还原两层架构（未来多供应商时按旧模式扩），则一起建。**默认：一起建**（还原优先）。
+1. ~~**【已定】base 域副本表不建，映射列搬家**~~　**已推翻（2026-09-08 撤除映射列）**：base 域 `GlobalHotelSupplierRequest`/`GlobalRoomSupplierRequest` 与 info 域 supplier_* 有 35 个字段完全相同——历史上因两个中台跨库不能 JOIN 而存的副本，其真实身份是"映射工作台"（独有 `hotelId`=归属统一酒店、`merger`=合并状态）。当初的决定是把映射列 `hotel_id`/`merger`/`country_name_cn` 迁至 `supplier_hotel_base`（房型同理 `room_id`）。
+
+   **推翻的理由**：那三列是统一侧（归一产物），按 R-2.4 归聚合域，网关只该存供应商侧事实。生产实测也证明它们没在做映射——`hotel_id` 97,409/97,409 行等于 `supplier_hotel_id`、`room_id` 356,571/356,571 行等于 `supplier_room_id`，与 `global_product_supplier` 被撤时同一个病（统一侧是供应商侧的 1:1 拷贝）。`hotel_id`/`room_id`/`merger` 已从两表 DROP；`country_name_cn` 是事实列，保留。
+2. **info 域三张表建不建**：当初默认"一起建"。事后看：`supplier_product_base` 是活的（productKey 档案，出价读侧在用），`supplier_hotel_base` 只剩建档名单一个读者，`supplier_room_base` 零读者零写者——静态加工层撤除后这两张表不再有写入方，行是 2026-08-14 的存量。**未定**：它们要不要跟着目录域一起消失，取决于 Expedia 全量补建（后门 `/expedia/catalog/products`）是否还需要那份名单。
 3. **家务列**：原实体自带 `status/del/operator/create_time/update_time`——全部保留（这正是原系统风格）；仅统一为 MySQL 惯例 `create_dt/update_dt` 命名？**默认：保留原名 create_time/update_time**（还原优先）。
 4. 还原不了的（明示）：中台合并/映射治理的**算法**（ArtificialMerger*、matching 打分）、列宽/索引/默认值物理细节、中台内部运营表。
 
@@ -297,7 +309,7 @@
 ```
 第0层 expedia_property_content（raw+双语快照）      ←已有，不动
 第1层 本图纸的还原表（spa 专属目录）                  ←图纸确认后建
-加工  ExpediaCatalogTransformService                ←目标表从 trip-cursor hotel_base 切换到还原表
+加工  ~~ExpediaCatalogTransformService~~              ←2026-09-08 随目录域一并撤除
 geo   阶段3的 Geography 服务                         ←直接落 country_info / city_info
 ```
 

@@ -1,9 +1,11 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.cancellation;
 
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.cancellation.client.CancelOrderAccess;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.order.client.QueryOrderAccess;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyProperties;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyTopCall;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.model.FliggyCancelResponse;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.model.FliggyOrderDetailResponse;
 import com.trip.booking.spa.gateway.application.cancellation.AbstractCancelSyncSupportService;
 import com.trip.booking.spa.gateway.domain.cancellation.CancelCommand;
 import com.trip.booking.spa.gateway.domain.cancellation.CancelPenalty;
@@ -21,17 +23,16 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 飞猪取消：我方单号足以定位（B5）。罚金 {@code forfeit_fee} 结构化但官方未标币种，
- * 暂按生产实证的 USD 计（快照 §9 必测第 2 项）；取不到罚金回 unknown，不猜 0 元。
+ * 飞猪取消：我方单号足以定位（B5）。<b>罚金以订单详情为准</b>——官方国际分销文档
+ * （docs/fliggy/distribution-api.md §6）明示这一点，取消响应的字段表里也已没有罚金。
+ * 故取消成功后再查一次单，按「房费总额 − 买家实退」得出罚金，币种取详情的
+ * {@code currency_code}；任一环节取不到就回 unknown，不猜 0 元。
  */
 @Slf4j
 @Service("fliggyCancelSyncService")
 public class FliggyCancelSyncServiceImpl extends AbstractCancelSyncSupportService {
 
     private static final String METHOD_CANCEL = "taobao.xhotel.trade.international.distribution.cancel";
-
-    /** forfeit_fee 的币种：官方未标，cursor 实证 USD——沙箱确证后若不符须同步改 */
-    private static final String FORFEIT_CURRENCY = "USD";
 
     @Resource
     private FliggyProperties properties;
@@ -69,10 +70,15 @@ public class FliggyCancelSyncServiceImpl extends AbstractCancelSyncSupportServic
         }
         Boolean cancelSuccess = resp.cancelSuccess();
         if (resp.isSucc() && Boolean.TRUE.equals(cancelSuccess)) {
-            Integer fee = resp.forfeitFee();
-            CancelPenalty penalty = fee == null ? CancelPenalty.unknown()
-                    : CancelPenalty.fromField(Money.ofCents(fee, FORFEIT_CURRENCY));
-            return CancelResult.success(command.orderId(), null, penalty, "取消成功");
+            Integer offContractFee = resp.forfeitFee();
+            if (offContractFee != null) {
+                // 字段表已无此字段而报文仍带（2026-09-09 实证 -380，同单详情却是全额退）。
+                // 只记不用：它变没变、跟详情合不合，靠这行日志看
+                log.info("飞猪取消：响应仍带 forfeit_fee={}，不作罚金依据,orderId={}",
+                        offContractFee, command.orderId());
+            }
+            return CancelResult.success(command.orderId(), null,
+                    penaltyFromOrderDetail(command.orderId()), "取消成功");
         }
         if (resp.isSucc() && Boolean.FALSE.equals(cancelSuccess)) {
             return CancelResult.failed(command.orderId(), null, resp.bizErrorCode(),
@@ -82,5 +88,42 @@ public class FliggyCancelSyncServiceImpl extends AbstractCancelSyncSupportServic
         log.warn("飞猪取消：结果不明,orderId={},bizErrorCode={}", command.orderId(), resp.bizErrorCode());
         return CancelResult.unknown(command.orderId(), null, resp.metricErrorCode(),
                 "供应商未确认取消结果，请查单确证");
+    }
+
+    /** 取消已成功，再查单取罚金。查不到、字段缺、数对不上一律 unknown——罚金宁可不知，不可猜 */
+    private CancelPenalty penaltyFromOrderDetail(String orderId) {
+        ResponseResult<FliggyOrderDetailResponse> result = new QueryOrderAccess(properties)
+                .access(QueryOrderAccess.callByOrderId(orderId, properties.getDistributor()), CallPurpose.ORDER);
+        FliggyOrderDetailResponse detail = result == null ? null : result.getData();
+        if (detail == null || !detail.isSucc()) {
+            log.warn("飞猪取消：已取消但查单未取得详情，罚金无从得知,orderId={}", orderId);
+            return CancelPenalty.unknown();
+        }
+        return penaltyOf(detail, orderId);
+    }
+
+    /** 详情 → 罚金。{@link #penaltyFromOrderDetail} 的判定部分，单测直接喂真实报文 */
+    static CancelPenalty penaltyOf(FliggyOrderDetailResponse detail, String orderId) {
+        Integer total = detail.totalRoomPrice();
+        Integer refund = detail.buyerRealRefund();
+        String currency = detail.currencyCode();
+        if (total == null || refund == null || currency == null || currency.isBlank()) {
+            log.warn("飞猪取消：详情缺房费/实退/币种，罚金无从得知,orderId={},total={},refund={},currency={}",
+                    orderId, total, refund, currency);
+            return CancelPenalty.unknown();
+        }
+        if (refund <= 0) {
+            // 「一分没退」既可能是罚全款，也可能是退款还没结算完（我们没有实证能分开这两种）。
+            // 判成罚全款会让上游照单扣客人的钱，故只报不知道
+            log.warn("飞猪取消：实退为 {}，分不清罚全款还是结算未完成,orderId={},total={}",
+                    refund, orderId, total);
+            return CancelPenalty.unknown();
+        }
+        if (refund > total) {
+            log.warn("飞猪取消：实退大于房费，详情自相矛盾,orderId={},total={},refund={}",
+                    orderId, total, refund);
+            return CancelPenalty.unknown();
+        }
+        return CancelPenalty.fromField(Money.ofCents(total - refund, currency));
     }
 }

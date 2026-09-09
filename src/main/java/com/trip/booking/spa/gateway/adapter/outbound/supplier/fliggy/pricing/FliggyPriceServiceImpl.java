@@ -105,6 +105,13 @@ public class FliggyPriceServiceImpl {
     }
 
     List<ProductRespDTO> convertRates(List<JsonNode> rates, PriceReq request, String sHotelId) {
+        // 一轮只读一次时钟：同一次转换里所有退改段对同一时刻判过期，避免跨秒时同批段判法不一
+        return convertRates(rates, request, sHotelId, java.time.Instant.now());
+    }
+
+    /** 同上，但由调用方给时钟——过期判定随时间漂移，测试必须能钉住它（见 deriver 同款重载）。 */
+    List<ProductRespDTO> convertRates(List<JsonNode> rates, PriceReq request, String sHotelId,
+                                      java.time.Instant now) {
         List<ProductRespDTO> products = new ArrayList<>();
         String occupancy = request.getOccupancies().get(0);
         int skippedNoRateKey = 0;
@@ -129,7 +136,8 @@ public class FliggyPriceServiceImpl {
                 continue;
             }
             Meal meal = productKeyDeriver.convertMeal(rate.get("meals"));
-            List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), rate.get("cancel_policy"));
+            List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(
+                    request.getCheckIn(), rate.get("cancel_policy"), now);
             String roomId = text(rate, "room_id");
             String roomName = text(rate, "room_name");
             // 产品名=卖法名（口径同艺龙 RatePlanName 回落房型名）：一个房型多个卖法，

@@ -281,7 +281,17 @@ public class ExpediaProductKeyDeriver {
      * UTC 偏移解释而非服务器时区——与艺龙侧同一条纪律（服务器时区随部署漂移）。
      * {@code cancel_penalties} 缺席维持旧口径记不可退（采样中未出现，另行实证前不动）。
      */
-    public List<CancelPolicy> convertCancelPolicy(String checkIn, List<QueryPriceResponse.CancelPolicy> cancelPolicies) {
+        public List<CancelPolicy> convertCancelPolicy(String checkIn, List<QueryPriceResponse.CancelPolicy> cancelPolicies) {
+        return convertCancelPolicy(checkIn, cancelPolicies, java.time.Instant.now());
+    }
+
+    /**
+     * 同上，但由调用方给时钟。<b>过期判定是本方法输出的一部分</b>（末尾的 liveSegments），
+     * 留给 {@code Instant.now()} 就没法钉住"免费窗关闭后不再对外承诺免费"这条判据，夹具也会
+     * 随真实时间自己腐烂——2026-09-09 两个飞猪用例即因夹具里 09-08 23:00 的免费窗被时间追上
+     * 而转红，代码一行未改（见 FliggyProductToCacheTest#asOf）。
+     */
+    public List<CancelPolicy> convertCancelPolicy(String checkIn, List<QueryPriceResponse.CancelPolicy> cancelPolicies, java.time.Instant now) {
         if (CollectionUtils.isEmpty(cancelPolicies)) {
             List<CancelPolicy> nonRefundable = new ArrayList<>();
             nonRefundable.add(CancelPolicy.builder().cancelType(0).build());
@@ -320,7 +330,7 @@ public class ExpediaProductKeyDeriver {
         }
         // 过期段不许流出：截止时刻已过的段行使不了，既不能对外承诺，也不该参与判类
         // （2026-09-02 实测艺龙 14.3% 的"可免费取消"其实免费窗早已关闭）
-        return CancelClassifier.liveSegments(policies, checkIn, java.time.Instant.now());
+        return CancelClassifier.liveSegments(policies, checkIn, now);
     }
 
     /** 单段罚金窗 → 契约段；载体不认识、数值或时间解析不出返回 null（调用方整体按 UNKNOWN） */

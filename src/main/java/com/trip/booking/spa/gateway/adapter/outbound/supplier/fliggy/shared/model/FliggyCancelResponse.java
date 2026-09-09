@@ -5,8 +5,8 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.Flig
 
 /**
  * {@code taobao.xhotel.trade.international.distribution.cancel} 响应
- * （docs/fliggy/distribution-api.md §6）：{@code result{cancel_success, forfeit_fee}}。
- * forfeit_fee 官方未标币种（必测清单第 2 项），消费方自行处置。
+ * （docs/fliggy/distribution-api.md §6）：{@code result{cancel_success}}。
+ * 官方字段表已无罚金，罚金以订单详情为准。
  */
 public class FliggyCancelResponse extends FliggyTopResponse {
 
@@ -40,7 +40,10 @@ public class FliggyCancelResponse extends FliggyTopResponse {
         return v == null || !v.isBoolean() ? null : v.asBoolean();
     }
 
-    /** 罚金（单位分，币种未标——cursor 实证按 USD，待沙箱确证）；缺席返回 null */
+    /**
+     * 官方字段表已删除的 {@code forfeit_fee}，而线上仍在返回（2026-09-09 实证 -380）。
+     * <b>只供记日志观察，不作罚金依据</b>——罚金看订单详情。缺席返回 null
+     */
     public Integer forfeitFee() {
         JsonNode r = result();
         JsonNode v = r == null ? null : r.get("forfeit_fee");

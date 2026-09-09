@@ -4,7 +4,6 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.OrderRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.OrderQueryReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.order.client.QueryOrderAccess;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyProperties;
-import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyTopCall;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.model.FliggyOrderDetailResponse;
 import com.trip.booking.spa.gateway.application.order.AbstractOrderQuerySyncSupportService;
 import com.trip.booking.spa.gateway.domain.booking.OrderPresence;
@@ -19,8 +18,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * 飞猪查单：{@code dis_order_id}（我方单号）足以定位（B5）。
@@ -31,8 +28,6 @@ import java.util.Map;
 @Service("fliggyOrderQuerySyncService")
 public class FliggyOrderQuerySyncServiceImpl extends AbstractOrderQuerySyncSupportService<FliggyOrderDetailResponse> {
 
-    private static final String METHOD_DETAIL = "taobao.xhotel.order.international.distribution.detail";
-
     @Resource
     private FliggyProperties properties;
 
@@ -41,13 +36,9 @@ public class FliggyOrderQuerySyncServiceImpl extends AbstractOrderQuerySyncSuppo
         if (!properties.isConfigured() || StringUtils.isBlank(req.getOrderId())) {
             return null; // 模板兜底为「结果不确定」
         }
-        // 入参形态〔未确认〕：快照 §5 只给了字段名，是否包对象官方页未展开——
-        // 按 TOP 简单参数平铺；错了首测报 isv.invalid-parameter 即改
-        Map<String, String> biz = new LinkedHashMap<>();
-        biz.put("dis_order_id", req.getOrderId());
-        biz.put("distributor", properties.getDistributor());
         ResponseResult<FliggyOrderDetailResponse> result = new QueryOrderAccess(properties)
-                .access(new FliggyTopCall(METHOD_DETAIL, biz), CallPurpose.ORDER);
+                .access(QueryOrderAccess.callByOrderId(req.getOrderId(), properties.getDistributor()),
+                        CallPurpose.ORDER);
         return result == null ? null : result.getData();
     }
 
@@ -73,7 +64,7 @@ public class FliggyOrderQuerySyncServiceImpl extends AbstractOrderQuerySyncSuppo
         }
         dto.presence = OrderPresence.FOUND;
         dto.message = StringUtils.defaultIfBlank(resp.orderStatusDesc(), resp.orderStatus());
-        // order_status 取值枚举官方未列（必测清单第 3 项）：状态映射待实测补齐，
+        // order_status 枚举文档已列、各态真实报文未见（必测清单第 3 项）：状态映射待实测补齐，
         // 现阶段只回报「在」与供应商原文，不做任何状态翻译——识别不出的绝不猜
         return dto;
     }
