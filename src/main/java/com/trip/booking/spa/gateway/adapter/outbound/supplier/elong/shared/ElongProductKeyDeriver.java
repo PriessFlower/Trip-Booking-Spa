@@ -275,7 +275,17 @@ public class ElongProductKeyDeriver {
      * ElongCancelRuleParser 的旧表（3=百分比/5=扣几晚）与官方文档冲突，以官方为准。
      * 金额严格取 AmountRmb，缺失即整条视为解析失败，禁止拿合约币种 Amount 冒充人民币。
      */
-    public List<CancelPolicy> convertCancelPolicy(String checkIn, JsonNode prepayResult) {
+        public List<CancelPolicy> convertCancelPolicy(String checkIn, JsonNode prepayResult) {
+        return convertCancelPolicy(checkIn, prepayResult, java.time.Instant.now());
+    }
+
+    /**
+     * 同上，但由调用方给时钟。<b>过期判定是本方法输出的一部分</b>（末尾的 liveSegments），
+     * 留给 {@code Instant.now()} 就没法钉住"免费窗关闭后不再对外承诺免费"这条判据，夹具也会
+     * 随真实时间自己腐烂——2026-09-09 两个飞猪用例即因夹具里 09-08 23:00 的免费窗被时间追上
+     * 而转红，代码一行未改（见 FliggyProductToCacheTest#asOf）。
+     */
+    public List<CancelPolicy> convertCancelPolicy(String checkIn, JsonNode prepayResult, java.time.Instant now) {
         if (prepayResult == null || prepayResult.isNull() || prepayResult.isEmpty()) {
             return List.of();
         }
@@ -304,7 +314,7 @@ public class ElongProductKeyDeriver {
         }
         // 过期段不许流出：截止时刻已过的段行使不了，既不能对外承诺，也不该参与判类
         // （2026-09-02 实测艺龙 14.3% 的"可免费取消"其实免费窗早已关闭）
-        return CancelClassifier.liveSegments(policies, checkIn, java.time.Instant.now());
+        return CancelClassifier.liveSegments(policies, checkIn, now);
     }
 
     /**
@@ -329,7 +339,17 @@ public class ElongProductKeyDeriver {
      *
      * @return 解析不出返回空列表（R-5.4），调用方不得据此声称"可免费取消"
      */
-    public List<CancelPolicy> convertValidatedCancelPolicy(String checkIn, JsonNode cancelPolicyList) {
+        public List<CancelPolicy> convertValidatedCancelPolicy(String checkIn, JsonNode cancelPolicyList) {
+        return convertValidatedCancelPolicy(checkIn, cancelPolicyList, java.time.Instant.now());
+    }
+
+    /**
+     * 同上，但由调用方给时钟。<b>过期判定是本方法输出的一部分</b>（末尾的 liveSegments），
+     * 留给 {@code Instant.now()} 就没法钉住"免费窗关闭后不再对外承诺免费"这条判据，夹具也会
+     * 随真实时间自己腐烂——2026-09-09 两个飞猪用例即因夹具里 09-08 23:00 的免费窗被时间追上
+     * 而转红，代码一行未改（见 FliggyProductToCacheTest#asOf）。
+     */
+    public List<CancelPolicy> convertValidatedCancelPolicy(String checkIn, JsonNode cancelPolicyList, java.time.Instant now) {
         if (cancelPolicyList == null || !cancelPolicyList.isArray() || cancelPolicyList.isEmpty()) {
             return List.of();
         }
@@ -353,7 +373,7 @@ public class ElongProductKeyDeriver {
         }
         // 过期段不许流出：截止时刻已过的段行使不了，既不能对外承诺，也不该参与判类
         // （2026-09-02 实测艺龙 14.3% 的"可免费取消"其实免费窗早已关闭）
-        return CancelClassifier.liveSegments(policies, checkIn, java.time.Instant.now());
+        return CancelClassifier.liveSegments(policies, checkIn, now);
     }
 
     /** ISO 带偏移时刻（如 2026-08-21T18:00:00+08:00）距入住日 24:00 的小时数；下限 25，同查价侧 */
