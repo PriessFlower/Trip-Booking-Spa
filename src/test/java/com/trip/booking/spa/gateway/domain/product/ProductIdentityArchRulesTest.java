@@ -225,4 +225,31 @@ class ProductIdentityArchRulesTest {
             throw new IllegalStateException("读不到 " + path, e);
         }
     }
+
+    /**
+     * 退改的<b>过期判定不许直接读系统时钟</b>：{@code CancelClassifier.liveSegments} 的第三个入参
+     * 必须来自调用方传入的 {@code Instant}，各家 deriver 只在无参重载里读一次 {@code Instant.now()}。
+     *
+     * <p>准入证据（2026-09-09）：提交 a8665cc2 给判类加了「丢弃已关闭的免费窗」——判据是当前时刻，
+     * 于是两个飞猪用例在夹具里那条免费窗（截止 09-08 23:00 北京）过期的当天集体转红，而代码一行
+     * 未改。夹具是真实报文、不许改日期（§4.2.6），所以只能把时钟交给测试钉住。四家已统一为
+     * 「无参版委托带 Instant 的重载」，本规则守的是不许有人再把 now() 塞回判定处。
+     */
+    @Test
+    void R63_cancelExpiryMustNotReadTheClockInline() throws IOException {
+        List<String> violations = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(MAIN_JAVA)) {
+            files.filter(p -> p.toString().endsWith(".java")).forEach(p -> {
+                String source = read(p);
+                for (String line : source.split("\n")) {
+                    String flat = line.replace(" ", "");
+                    if (flat.contains("liveSegments(") && flat.contains("Instant.now()")) {
+                        violations.add(p + " 在过期判定处直接读时钟：" + line.trim());
+                    }
+                }
+            });
+        }
+        assertTrue(violations.isEmpty(),
+                "过期判定必须收调用方的时钟，否则夹具会随真实时间腐烂：\n" + String.join("\n", violations));
+    }
 }
