@@ -99,11 +99,23 @@
 > 顺带的观察（不构成结论）：从非实时那一档拿到的 4 条最低价报价，逐条打 PriceConfirm
 > 验价，4/4 价格与查价完全一致。这只说明"此刻缓存价没有陈"，不足以证明它长期可靠。
 
-**cursor 侧现状**：`DidaTravelPriceFetchService#fetchBatchHotelPriceFromDida` 把
-`IsRealTime` 写死 true，而生产 Redis 的 `dida:flush:batch-size` 当前取值为 **10**
-（2026-09-08 读取），即正好踩在退化组合上。代码默认值本是 1（注释引用过一次
-「fix batchsize to 1」的提交），是后来灰度拉到 10 的（动机写着"10× 降调用数缓解账号级限流"）。
-在线验价的重解析路径用的是 `Collections.singletonList`，不受影响。
+**cursor 侧现状**（2026-09-09 重新核对，此前记载有误，见下）：批量查价在生产**确实存在，
+但只有一条车道**——`AmapPioneerFlushService`（先锋刷价，`FlushPriority.HOT_HOTEL`），
+批量大小是代码常量 `DIDA_BATCH = 10`，热配 `amapPioneer.enabled=true`、`cap=8000`（跨供应商
+共享的候选名额），`@Scheduled(cron="0 50 * * * ?")` 每小时一轮、每轮只刷一个住期。
+
+**其余查价调用一律单店**（`Collections.singletonList`）：`HotelFlushServiceImpl` 四处（含
+C_END）、`Non7EmergencyClwyFlushService` 两处、`DidaTravelPriceStrategy` 的 2005 重解析一处。
+故这些车道不受本节问题影响。
+
+> **更正**：此前本节写「生产 Redis `dida:flush:batch-size=10`，故刷价正踩在退化组合上」——
+> **错**。该键读在 `DidaTravelHotelTask`，而生产定时任务给它的入参是 `needWrapPrice=false`
+> （周频**静态**同步，不查价）。同样作废的还有由此推出的影响面（"每周约 100 万行 room_price
+> 从未落地"）——那个数把全部 100~158 万次/天的道旅调用都当成批量的，而实测按刷新时间的
+> 分钟分布看不到先锋轮次的尖峰（:50–:55 段占近 6 小时的 12.7%，与均匀分布的 10% 无显著差异），
+> 说明批量车道在总调用里占比很小。**真实影响面尚未量化**。
+
+影响面虽小，方向仍不利：先锋刷价挑的是**热门酒店**，每次丢货丢的是最该有价的那批。
 
 **文档自己怎么说的**（官方 price-search，2026-09-08 查阅）：同一个端点靠参数分三种查法——
 `LowestPriceOnly=true` 是**最低价查询**、`IsRealTime.Value=false` 是**缓存查询**
