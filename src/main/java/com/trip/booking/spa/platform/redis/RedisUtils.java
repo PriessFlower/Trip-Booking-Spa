@@ -1,5 +1,6 @@
 package com.trip.booking.spa.platform.redis;
 
+import java.util.ArrayList;
 import com.google.common.collect.HashMultimap;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -189,6 +190,31 @@ public class RedisUtils {
      * @param key Redis键名
      * @return 是否存在
      */
+    /**
+     * 一次 MGET 取多把键；Redis 里没有的键不进结果。
+     *
+     * <p>给读侧「N 个产品 N 次 GET」收口用：{@code PriceCacheServiceImpl.getPrice} 此前对每个产品单独
+     * {@code get} 票据详情，一家店 22~72 个产品就是 22~72 次往返——2026-09-10 机器内实测
+     * 单腿 0.5~0.9s，大头在此。MGET 一次往返。
+     */
+    public Map<String, String> multiGet(Collection<String> keys) {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (keys == null || keys.isEmpty()) {
+            return out;
+        }
+        List<String> keyList = new ArrayList<>(keys);
+        List<String> values = redisTemplate.opsForValue().multiGet(keyList);
+        if (values == null) {
+            return out;
+        }
+        for (int i = 0; i < keyList.size() && i < values.size(); i++) {
+            if (values.get(i) != null) {
+                out.put(keyList.get(i), values.get(i));
+            }
+        }
+        return out;
+    }
+
     public String get(final String key) {
         String result = null;
         ValueOperations<String, String> operations = redisTemplate.opsForValue();
