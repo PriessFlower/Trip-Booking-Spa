@@ -252,4 +252,37 @@ class ProductIdentityArchRulesTest {
         assertTrue(violations.isEmpty(),
                 "过期判定必须收调用方的时钟，否则夹具会随真实时间腐烂：\n" + String.join("\n", violations));
     }
+
+    /**
+     * 持有 {@code Clock} 字段的类不许再读 {@code Instant.now()}：一个类里两个时间来源，测试钉住
+     * 其中一个，另一个照样随真实时间走——夹具还是会腐烂，只是慢一点、更难看出来。
+     *
+     * <p>准入证据（2026-09-10）：{@code ExpediaProductKeyDeriver} 的 {@code clock} 只管「罚金窗
+     * 是否已开」，两参 {@code convertCancelPolicy} 却把过期过滤的 now 写成 {@code Instant.now()}。
+     * {@code ExpediaCancelPolicyConvertTest} 钉了 clock、调的是两参版，夹具里 09-10 18:00 开的
+     * 免费窗被时间追上当天转红，代码一行未改；R63 因 now() 不在 liveSegments 那一行而放行。
+     */
+    @Test
+    void R64_classWithClockFieldMustNotReadInstantNow() throws IOException {
+        List<String> violations = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(MAIN_JAVA)) {
+            files.filter(p -> p.toString().endsWith(".java")).forEach(p -> {
+                String source = read(p);
+                if (!source.contains("Clock clock")) {
+                    return;
+                }
+                for (String line : source.split("\n")) {
+                    String flat = line.strip();
+                    if (flat.startsWith("*") || flat.startsWith("//") || flat.startsWith("/**")) {
+                        continue;
+                    }
+                    if (flat.replace(" ", "").contains("Instant.now()")) {
+                        violations.add(p + " 有 Clock 字段却直接读时钟：" + flat);
+                    }
+                }
+            });
+        }
+        assertTrue(violations.isEmpty(),
+                "一个类只能有一个时间来源，有 Clock 字段就用 clock.instant()：\n" + String.join("\n", violations));
+    }
 }

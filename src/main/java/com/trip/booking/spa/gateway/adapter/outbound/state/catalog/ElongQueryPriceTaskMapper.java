@@ -32,8 +32,8 @@ public interface ElongQueryPriceTaskMapper {
      * 高频档取批以 OR 借入这些行(取批处判 upgrade_deadline 未过期),让刷价额度
      * 自动流向有真实需求的酒店;到期后自然退出借入,无需显式降档任务。
      *
-     * <p><b>不升成交档(2)与远期档(3)</b>:借入是"档 0 临时接管",而成交档比档 0 更快,
-     * 借入反成降级。详见 mapper XML 中本语句的注释。
+     * <p><b>只升档 0(T+0~2)/档 1(T+3~7),不升档 2(T+8~30)</b>:验价说明客人要订的是近期日期,
+     * 远期行不急,且档 2 行数多,借进档 0 会把近期行挤饿。详见 mapper XML 中本语句的注释。
      */
     int upgradeByShId(@org.apache.ibatis.annotations.Param("shId") String shId);
 
