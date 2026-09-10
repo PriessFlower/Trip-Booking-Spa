@@ -1,5 +1,12 @@
 package com.trip.booking.spa.gateway.adapter.inbound.rest.controller;
 
+import java.util.concurrent.Future;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Callable;
+import java.util.HashMap;
+import java.util.ArrayList;
 import com.trip.booking.spa.gateway.domain.booking.BookingOutcome;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
 import com.trip.booking.spa.gateway.domain.booking.OrderPresence;
@@ -83,50 +90,65 @@ public class SpaController {
         List<PricingOutcome> outcomes = Lists.newArrayList();
         List<Integer> cachePriceSuppliers = nacosRuntimeConfig.getCachePriceSuppliers();
         Map<Integer, List<String>> cachePriceHotels = nacosRuntimeConfig.getCachePriceHotels();
-        for (Supplier supplier : priceReq.getSuppliers()) {
+        // 每条腿先定走缓存还是实时，并把「不支持实时查价」的供应商在派发前挑出来。
+        // 以前是串行走到那一腿才返回 unsupported；并行后必须先查，否则别的腿白跑
+        List<Supplier> suppliers = priceReq.getSuppliers();
+        List<Boolean> useCache = new ArrayList<>(suppliers.size());
+        Map<Integer, ProductSyncService> liveServices = new HashMap<>();
+        for (Supplier supplier : suppliers) {
             //如果没有传产品id并且配置了供应商查询缓存，则走缓存
             List<String> hotelIdList = cachePriceHotels.getOrDefault(
                     supplier.getSupplierId(), Collections.emptyList());
-            if (StringUtils.isBlank(supplier.getSProductId())
+            boolean cache = StringUtils.isBlank(supplier.getSProductId())
                     && cachePriceSuppliers.contains(supplier.getSupplierId())
                     //查询供应商是全量走缓存还是部分酒店走缓存
-                    && (CollectionUtils.isEmpty(hotelIdList) || hotelIdList.contains(supplier.getSHotelId()))) {
-                // 缓存读侧如实分态（F-5.1 / F-5.2，2026-08-20）：
-                //   有产品     → AVAILABLE
-                //   有无货标记 → NO_INVENTORY（刷过、供应商明确答没有；重试无用）
-                //   两者皆无   → INDETERMINATE（这一片没刷过，或已过 TTL）
-                // 此前三者塌成一态、一律回报「未能确认」。塌了之后：既诱发上游对确定无货的
-                // 无谓重试，也让「刷价没覆盖到这个占用片」这类缺口在出价侧完全不可见
-                PricingResult cached;
-                try {
-                    cached = priceCacheService.getPriceResult(priceReq, supplier);
-                } catch (RuntimeException e) {
-                    recordFailedLeg(supplier, MetricTags.SOURCE_CACHE);
-                    throw e;
-                }
-                if (cached.outcome() == PricingOutcome.AVAILABLE) {
-                    respDTOList.addAll(cached.products());
-                }
-                outcomes.add(cached.outcome());
-                recordPriceLeg(supplier, MetricTags.SOURCE_CACHE, cached);
-            } else {
-                //实时查询
-                ProductSyncService hotelService = capabilityRegistry.find(supplier.getSupplierId(), Capability.PRICING, ProductSyncService.class);
+                    && (CollectionUtils.isEmpty(hotelIdList) || hotelIdList.contains(supplier.getSHotelId()));
+            useCache.add(cache);
+            if (!cache && !liveServices.containsKey(supplier.getSupplierId())) {
+                ProductSyncService hotelService = capabilityRegistry.find(
+                        supplier.getSupplierId(), Capability.PRICING, ProductSyncService.class);
                 if (hotelService == null) {
                     return unsupportedSupplierOperation(supplier.getSupplierId(), "price");
                 }
-                PricingResult result;
-                try {
-                    result = hotelService.queryPrice(priceReq, supplier);
-                } catch (RuntimeException e) {
-                    recordFailedLeg(supplier, MetricTags.SOURCE_LIVE);
-                    throw e;
-                }
-                respDTOList.addAll(result.products());
-                outcomes.add(result.outcome());
-                recordPriceLeg(supplier, MetricTags.SOURCE_LIVE, result);
+                liveServices.put(supplier.getSupplierId(), hotelService);
             }
+        }
 
+        // 多条腿并行，结果按下标归位。此前是串行 for：机器内实测 1 条腿 0.9s、5 条腿 4.6~5.0s
+        // 线性累加（2026-09-10），上游一页 5 家从美国机跨海过来必撞 5s 预算。各腿互不依赖，
+        // 缓存腿不占供应商额度，实时腿各自受自家限流器约束。
+        List<Leg> legs = runLegs(priceReq, suppliers, useCache, liveServices);
+
+        // 每腿记一次（O-3.4），失败腿照旧 recordFailedLeg 后整批抛出——与串行时的语义一致：
+        // 以前一腿抛就整批 500，现在也是，只是别的腿的指标不再因为它没被记
+        RuntimeException firstFailure = null;
+        for (Leg leg : legs) {
+            String source = leg.cache ? MetricTags.SOURCE_CACHE : MetricTags.SOURCE_LIVE;
+            if (leg.failure != null) {
+                recordFailedLeg(leg.supplier, source);
+                if (firstFailure == null) {
+                    firstFailure = leg.failure;
+                }
+                continue;
+            }
+            // 缓存读侧如实分态（F-5.1 / F-5.2，2026-08-20）：
+            //   有产品     → AVAILABLE
+            //   有无货标记 → NO_INVENTORY（刷过、供应商明确答没有；重试无用）
+            //   两者皆无   → INDETERMINATE（这一片没刷过，或已过 TTL）
+            // 此前三者塌成一态、一律回报「未能确认」。塌了之后：既诱发上游对确定无货的
+            // 无谓重试，也让「刷价没覆盖到这个占用片」这类缺口在出价侧完全不可见
+            if (leg.cache) {
+                if (leg.result.outcome() == PricingOutcome.AVAILABLE) {
+                    respDTOList.addAll(leg.result.products());
+                }
+            } else {
+                respDTOList.addAll(leg.result.products());
+            }
+            outcomes.add(leg.result.outcome());
+            recordPriceLeg(leg.supplier, source, leg.result);
+        }
+        if (firstFailure != null) {
+            throw firstFailure;
         }
 
         Monitor.recordTime(MetricNames.QUERY_PRICE_FOR_SPA, System.currentTimeMillis() - startTime);
@@ -142,6 +164,52 @@ public class SpaController {
      * 的分态结论，不另造词表。出报条数单独一个名字：它计的是产品条数，和「腿」不是
      * 同一个度量，混在一个 counter 里会把出报率算错。
      */
+    /** 一条腿的答复：结果或异常二者只有一个非空 */
+    private record Leg(Supplier supplier, boolean cache, PricingResult result, RuntimeException failure) {
+    }
+
+    /**
+     * 并行跑各腿，<b>按请求顺序</b>归位。单腿不进线程池，走原路。
+     * 不设整体超时：各腿的耗时上限由各自的供应商客户端 / Redis 客户端超时管，这里只负责别再串行等。
+     */
+    private List<Leg> runLegs(PriceReq priceReq, List<Supplier> suppliers, List<Boolean> useCache,
+                              Map<Integer, ProductSyncService> liveServices) {
+        if (suppliers.size() == 1) {
+            return List.of(oneLeg(priceReq, suppliers.get(0), useCache.get(0), liveServices));
+        }
+        List<Callable<Leg>> tasks = new ArrayList<>(suppliers.size());
+        for (int i = 0; i < suppliers.size(); i++) {
+            Supplier supplier = suppliers.get(i);
+            boolean cache = useCache.get(i);
+            tasks.add(() -> oneLeg(priceReq, supplier, cache, liveServices));
+        }
+        List<Leg> out = new ArrayList<>(suppliers.size());
+        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (Future<Leg> f : pool.invokeAll(tasks)) {
+                out.add(f.get());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("查价被中断", e);
+        } catch (ExecutionException e) {
+            // oneLeg 已把 RuntimeException 装进 Leg，走到这里只可能是 Error 级别的问题
+            throw new IllegalStateException("查价腿执行异常", e.getCause());
+        }
+        return out;
+    }
+
+    private Leg oneLeg(PriceReq priceReq, Supplier supplier, boolean cache,
+                       Map<Integer, ProductSyncService> liveServices) {
+        try {
+            PricingResult r = cache
+                    ? priceCacheService.getPriceResult(priceReq, supplier)
+                    : liveServices.get(supplier.getSupplierId()).queryPrice(priceReq, supplier);
+            return new Leg(supplier, cache, r, null);
+        } catch (RuntimeException e) {
+            return new Leg(supplier, cache, null, e);
+        }
+    }
+
     private static void recordPriceLeg(Supplier supplier, String source, PricingResult result) {
         SupplierSourceEnum supplierEnum = SupplierSourceEnum.getEnum(supplier.getSupplierId());
         if (supplierEnum == null) {

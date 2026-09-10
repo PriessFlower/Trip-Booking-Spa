@@ -107,12 +107,13 @@ class CancelPolicySurvivesCacheTest {
         Mockito.when(redisUtils.hashMapListAndKey(Mockito.anyList()))
                 .thenReturn(Map.of("price:10010:H1:1:" + DATE,
                         Map.of(pk, "{\"price\":29317,\"taxes\":0,\"roomPrice\":29317}")));
-        // 缓存里的票据载荷带着条款
-        Mockito.when(redisUtils.get("quote:10010:H1:" + pk)).thenReturn(
+        // 缓存里的票据载荷带着条款。读侧 2026-09-10 起一次 MGET 取齐票据（此前逐产品 GET），stub 跟着改
+        Mockito.when(redisUtils.multiGet(Mockito.anyCollection())).thenReturn(Map.of(
+                "quote:10010:H1:" + pk,
                 JsonUtils.writeObject2Json(java.util.Map.of(
                         "productId", "易腐票", "productKey", pk,
                         "cancelPolicy", List.of(java.util.Map.of(
-                                "cancelType", 1, "before", 36, "type", "NO_DEDUCTION")))));
+                                "cancelType", 1, "before", 36, "type", "NO_DEDUCTION"))))));
 
         List<ProductRespDTO> out = service.getPrice(req(), sup());
 

@@ -218,6 +218,13 @@ public class PriceCacheServiceImpl implements PriceCacheService {
         // 这五个分支此前既无日志也无指标，出报率的扣分项只能靠 grep 和猜
         SupplierSourceEnum supplierEnum = SupplierSourceEnum.getEnum(supplier.getSupplierId());
 
+        // 票据详情一次 MGET 取齐。此前在下面的 forEach 里每个产品单独 GET 一次：
+        // 一家店 22~72 个产品 = 22~72 次往返，2026-09-10 机器内实测单腿 0.5~0.9s 大头在此，
+        // 上游一页 5 家串行就是 4.6s。键还是逐个产品的 quote 键，只是合成一次往返
+        Map<String, String> quoteJsonByKey = redisUtils.multiGet(productMap.keySet().stream()
+                .map(k -> RedisKeyUtils.buildQuoteKey(supplier.getSupplierId(), supplier.getSHotelId(), k))
+                .toList());
+
         // 使用已经收集的价格信息构建响应对象
         productMap.forEach((key, value) -> {
             ProductRespDTO respDTO = new ProductRespDTO();
@@ -255,7 +262,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
             // 补充产品其他信息。key 是 productKey（见 cacheField），
             // 票据键随之为 quote:{supplierCode}:{sHotelId}:{productKey}
             String priceInfoKey = RedisKeyUtils.buildQuoteKey(supplier.getSupplierId(), supplier.getSHotelId(), key);
-            String priceInfoJson = redisUtils.get(priceInfoKey);
+            String priceInfoJson = quoteJsonByKey.get(priceInfoKey);
             if (StringUtils.isBlank(priceInfoJson)) {
                 // 详情缺席 = 拿不到可下单的票据（productId 只存在于详情里，依 R-2.1 不落库）。
                 // 只有价没有票的报价不可成交，不如不报（R-1.6）
