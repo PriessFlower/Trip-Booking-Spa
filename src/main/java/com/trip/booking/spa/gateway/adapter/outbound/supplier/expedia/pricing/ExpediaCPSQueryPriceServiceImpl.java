@@ -85,7 +85,9 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
         return environment.getProperty("task.expedia-cps.enabled", Boolean.class, false);
     }
 
-    /** Expedia 目前单档 */
+    /**
+     * 档位=住期远近(与艺龙/飞猪统一):0=T0-2 / 1=T3-7 / 2=T8-30,无货态=N+10(模板偏移算法)。
+     */
     @Override
     protected List<Integer> tiers() {
         return List.of(0, 1, 2, SOLD_OUT_OFFSET, SOLD_OUT_OFFSET + 1, SOLD_OUT_OFFSET + 2);
