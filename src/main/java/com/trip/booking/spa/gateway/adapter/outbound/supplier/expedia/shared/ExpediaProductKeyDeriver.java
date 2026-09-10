@@ -128,7 +128,10 @@ public class ExpediaProductKeyDeriver {
         }
     }
 
-    /** 测试经 ReflectionTestUtils 替换为固定时钟（判定「罚金窗是否已开」要比对当下） */
+    /**
+     * 退改判定唯一的时间来源：「罚金窗是否已开」与「过期段过滤」都从这里取当下，
+     * 测试经 ReflectionTestUtils 换成固定时钟即同时钉住两处。类内不得再读 Instant.now()（R64）。
+     */
     private Clock clock = Clock.systemUTC();
 
     @Resource
@@ -281,8 +284,8 @@ public class ExpediaProductKeyDeriver {
      * UTC 偏移解释而非服务器时区——与艺龙侧同一条纪律（服务器时区随部署漂移）。
      * {@code cancel_penalties} 缺席维持旧口径记不可退（采样中未出现，另行实证前不动）。
      */
-        public List<CancelPolicy> convertCancelPolicy(String checkIn, List<QueryPriceResponse.CancelPolicy> cancelPolicies) {
-        return convertCancelPolicy(checkIn, cancelPolicies, java.time.Instant.now());
+    public List<CancelPolicy> convertCancelPolicy(String checkIn, List<QueryPriceResponse.CancelPolicy> cancelPolicies) {
+        return convertCancelPolicy(checkIn, cancelPolicies, clock.instant());
     }
 
     /**
@@ -312,7 +315,7 @@ public class ExpediaProductKeyDeriver {
 
         List<CancelPolicy> policies = new ArrayList<>();
         OffsetDateTime firstStart = windows.get(0).start();
-        if (firstStart.toInstant().isAfter(clock.instant())) {
+        if (firstStart.toInstant().isAfter(now)) {
             Integer before = hoursUntilCheckInEnd(firstStart, checkIn);
             if (before == null) {
                 log.info("expedia退改规范化：入住日无法解析，整体按 UNKNOWN 处理(R-5.4),checkIn={}", checkIn);
