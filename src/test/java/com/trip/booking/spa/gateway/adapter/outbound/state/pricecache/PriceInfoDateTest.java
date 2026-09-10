@@ -70,8 +70,13 @@ class PriceInfoDateTest {
         hashes.put("price:10010:H1:" + occupancy + ":" + D1, Map.of(pk, "{\"price\":65940,\"taxes\":0,\"roomPrice\":65940}"));
         hashes.put("price:10010:H1:" + occupancy + ":" + D2, Map.of(pk, "{\"price\":59609,\"taxes\":0,\"roomPrice\":59609}"));
         Mockito.when(redisUtils.hashMapListAndKey(Mockito.anyList())).thenReturn(hashes);
-        Mockito.when(redisUtils.get(Mockito.startsWith("quote:")))
-                .thenReturn("{\"productId\":\"易腐票\",\"productKey\":\"" + pk + "\"}");
+        // 读侧 2026-09-10 起一次 MGET 取齐票据（此前逐产品 GET）：要什么键就给什么键，载荷同一份
+        Mockito.when(redisUtils.multiGet(Mockito.anyCollection())).thenAnswer(inv -> {
+            java.util.Collection<String> keys = inv.getArgument(0);
+            Map<String, String> m = new LinkedHashMap<>();
+            keys.forEach(k -> m.put(k, "{\"productId\":\"易腐票\",\"productKey\":\"" + pk + "\"}"));
+            return m;
+        });
     }
 
     @Test
