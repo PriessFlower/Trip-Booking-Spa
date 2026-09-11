@@ -1,8 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.inbound.rest.controller;
 
 import java.util.concurrent.Future;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Callable;
 import java.util.HashMap;
@@ -38,6 +36,7 @@ import com.trip.booking.spa.gateway.application.pricing.ProductSyncService;
 import com.trip.booking.spa.bootstrap.NacosRuntimeConfig;
 import com.trip.booking.spa.platform.observability.MetricNames;
 import com.trip.booking.spa.platform.observability.MetricTags;
+import com.trip.booking.spa.platform.concurrent.ThreadPools;
 import com.trip.booking.spa.platform.observability.Monitor;
 
 import java.util.Locale;
@@ -164,6 +163,9 @@ public class SpaController {
      * 的分态结论，不另造词表。出报条数单独一个名字：它计的是产品条数，和「腿」不是
      * 同一个度量，混在一个 counter 里会把出报率算错。
      */
+    /** 查价扇出池名：进 ThreadPools 注册表，水位由 PoolStatsSampler 推成 gauge */
+    private static final String LEG_POOL_NAME = "price-leg";
+
     /** 一条腿的答复：结果或异常二者只有一个非空 */
     private record Leg(Supplier supplier, boolean cache, PricingResult result, RuntimeException failure) {
     }
@@ -184,8 +186,8 @@ public class SpaController {
             tasks.add(() -> oneLeg(priceReq, supplier, cache, liveServices));
         }
         List<Leg> out = new ArrayList<>(suppliers.size());
-        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
-            for (Future<Leg> f : pool.invokeAll(tasks)) {
+        try {
+            for (Future<Leg> f : ThreadPools.virtualPerTask(LEG_POOL_NAME).invokeAll(tasks)) {
                 out.add(f.get());
             }
         } catch (InterruptedException e) {
