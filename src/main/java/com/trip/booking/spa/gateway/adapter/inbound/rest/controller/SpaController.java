@@ -19,6 +19,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.BookingReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CancelReq;
 import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.OrderQueryReq;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PushProductsReq;
@@ -292,19 +293,21 @@ public class SpaController {
      * 验价
      */
     @PostMapping(value = "/check")
-    public ResponseDTO<CheckPriceResult> checkPrice(@RequestBody @Validated CheckPriceCommand checkPriceReq) {
+    public ResponseDTO<CheckPriceResult> checkPrice(@RequestBody @Validated CheckPriceReq checkPriceReq) {
 
-        CheckPriceSyncService checkPriceSyncService = capabilityRegistry.find(checkPriceReq.supplierId(), Capability.CHECK_PRICE, CheckPriceSyncService.class);
+        CheckPriceSyncService checkPriceSyncService = capabilityRegistry.find(checkPriceReq.getSupplierId(), Capability.CHECK_PRICE, CheckPriceSyncService.class);
         if (checkPriceSyncService == null) {
-            return unsupportedSupplierOperation(checkPriceReq.supplierId(), "check");
+            return unsupportedSupplierOperation(checkPriceReq.getSupplierId(), "check");
         }
 
-        CheckPriceResult checkPriceRespDTO = checkPriceSyncService.checkPrice(checkPriceReq);
+        // JSON↔领域的翻译收在 PricingMapping（①持有翻译，②③不识 JSON）
+        CheckPriceResult checkPriceRespDTO = checkPriceSyncService.checkPrice(
+                PricingMapping.toCommand(checkPriceReq));
 
         if (checkPriceRespDTO == null) {
             // 兜底：模板已保证非空，此处仅防实现绕过模板。不可表达为「不可订」，
             // 否则会把「我们不知道」说成「供应商说没有」
-            log.error("checkPrice 返回空，按未能确认回报, sProductId={}", checkPriceReq.supplierProductId());
+            log.error("checkPrice 返回空，按未能确认回报, sProductId={}", checkPriceReq.getSProductId());
             checkPriceRespDTO = CheckPriceResult.builder()
                     .outcome(CheckPriceOutcome.INDETERMINATE)
                     .message("验价未能确认该产品是否可订，请稍后重试")
