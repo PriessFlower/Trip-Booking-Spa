@@ -2,8 +2,6 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.order;
 
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.OrderRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.OrderQueryReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.order.client.QueryOrderAccess;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProperties;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongRestCall;
@@ -12,7 +10,9 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongOrderDetailResponse;
 import com.trip.booking.spa.gateway.application.order.AbstractOrderQuerySyncSupportService;
 import com.trip.booking.spa.gateway.domain.shared.Money;
-import com.trip.booking.spa.gateway.domain.booking.OrderPresence;
+import com.trip.booking.spa.gateway.domain.booking.OrderState;
+import com.trip.booking.spa.gateway.domain.order.OrderQueryCommand;
+import com.trip.booking.spa.gateway.domain.order.OrderQueryResult;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -37,27 +37,20 @@ import java.math.BigDecimal;
 public class ElongOrderQuerySyncServiceImpl
         extends AbstractOrderQuerySyncSupportService<ElongOrderDetailResponse> {
 
-    /** 我方订单状态码，取值含义见 {@link OrderRespDTO#orderStatus} */
-    private static final int ORDER_STATUS_BOOKING = 20;
-    private static final int ORDER_STATUS_BOOK_SUCCESS = 21;
-    private static final int ORDER_STATUS_BOOK_FAIL = 22;
-    private static final int ORDER_STATUS_CANCELING = 30;
-    private static final int ORDER_STATUS_CANCEL_SUCCESS = 31;
-
     @Resource
     private ElongProperties properties;
 
     @Override
-    public ElongOrderDetailResponse doOrderQuery(OrderQueryReq req) {
+    public ElongOrderDetailResponse doOrderQuery(OrderQueryCommand command) {
         if (!properties.isConfigured()) {
-            log.error("艺龙查单：凭证未配置,orderId={}", req.getOrderId());
+            log.error("艺龙查单：凭证未配置,orderId={}", command.orderId());
             return null;
         }
-        Long supplierOrderId = parseLongQuietly(req.getSupplierOrderId());
+        Long supplierOrderId = parseLongQuietly(command.supplierOrderId());
         // OrderId 优先；按我方单号反查时必须显式传 0（cursor 生产教训：缺省报语义不清的 H001054）
         ElongOrderDetailRequest request = ElongOrderDetailRequest.builder()
                 .orderId(supplierOrderId == null ? 0L : supplierOrderId)
-                .affiliateConfirmationId(req.getOrderId())
+                .affiliateConfirmationId(command.orderId())
                 .build();
         String dataJson = JsonUtils.writeObject2Json(new ElongRequestEnvelope(properties.getVersion(), request));
         ResponseResult<ElongOrderDetailResponse> result = new QueryOrderAccess(properties)
@@ -66,39 +59,29 @@ public class ElongOrderQuerySyncServiceImpl
     }
 
     @Override
-    public OrderRespDTO orderQueryRespConvert(ElongOrderDetailResponse resp) {
+    public OrderQueryResult orderQueryRespConvert(ElongOrderDetailResponse resp) {
         if (!resp.isSucc()) {
             String errorCode = StringUtils.trimToEmpty(resp.errorCode());
             if (errorCode.startsWith("H001054")) {
                 // 官方：订单不存在。可安全判"确实没这单"（幂等双保险见类注释）
-                return OrderRespDTO.builder()
-                        .presence(OrderPresence.NOT_FOUND)
-                        .message("供应商确认订单不存在(H001054)")
-                        .build();
+                return OrderQueryResult.notFound("供应商确认订单不存在(H001054)");
             }
             log.warn("艺龙查单：业务错误按不确定处理,code={}", resp.getCode());
-            return OrderRespDTO.builder()
-                    .presence(OrderPresence.INDETERMINATE)
-                    .message("查单未取得确定结果(" + errorCode + ")")
-                    .build();
+            return OrderQueryResult.indeterminate("查单未取得确定结果(" + errorCode + ")");
         }
         ElongOrderDetailResponse.Result result = resp.getResult();
         if (result == null || result.getOrderId() == null) {
             log.error("艺龙查单：响应自相矛盾——成功但无订单号");
-            return OrderRespDTO.builder()
-                    .presence(OrderPresence.INDETERMINATE)
-                    .message("查单响应自相矛盾：报告成功但未给出订单号")
-                    .build();
+            return OrderQueryResult.indeterminate("查单响应自相矛盾：报告成功但未给出订单号");
         }
-        Integer orderStatus = mapOrderStatus(result.getStatus());
-        if (orderStatus == null) {
+        OrderState state = mapOrderStatus(result.getStatus());
+        if (state == null) {
             // §6.2.1：映射不上不是常态，必须有落点；状态原文随响应透出
             log.warn("艺龙查单：状态原文无法映射,sOrderId={},status={}", result.getOrderId(), result.getStatus());
         }
-        return OrderRespDTO.builder()
-                .presence(OrderPresence.FOUND)
+        return OrderQueryResult.found()
                 .supplierOrderId(String.valueOf(result.getOrderId()))
-                .orderStatus(orderStatus)
+                .state(state)
                 .supplierOrderStatus(result.getStatus())
                 .confirmationNumber(extractConfirmationNumber(result.getOrderRooms()))
                 .totalPrice(yuanToCents(result.getTotalPrice()))
@@ -122,7 +105,7 @@ public class ElongOrderQuerySyncServiceImpl
      *   <li>S特殊：语义不明，不映射</li>
      * </ul>
      */
-    static Integer mapOrderStatus(String status) {
+    static OrderState mapOrderStatus(String status) {
         if (StringUtils.isBlank(status)) {
             return null;
         }
@@ -131,7 +114,7 @@ public class ElongOrderQuerySyncServiceImpl
             case "B":
             case "C":
             case "F":
-                return ORDER_STATUS_BOOK_SUCCESS;
+                return OrderState.BOOKED;
             case "N":
             case "V":
             case "B1":
@@ -139,16 +122,16 @@ public class ElongOrderQuerySyncServiceImpl
             case "B3":
             case "G":
             case "H":
-                return ORDER_STATUS_BOOKING;
+                return OrderState.BOOKING;
             case "E1":
-                return ORDER_STATUS_CANCELING;
+                return OrderState.CANCELING;
             case "E":
             case "D":
             case "Z":
-                return ORDER_STATUS_CANCEL_SUCCESS;
+                return OrderState.CANCELED;
             case "O":
             case "U":
-                return ORDER_STATUS_BOOK_FAIL;
+                return OrderState.BOOK_FAILED;
             default:
                 return null;
         }

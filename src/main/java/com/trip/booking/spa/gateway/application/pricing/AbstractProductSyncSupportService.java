@@ -1,7 +1,6 @@
 package com.trip.booking.spa.gateway.application.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.observability.CallStatus;
 import com.trip.booking.spa.platform.observability.MetricNames;
@@ -23,26 +22,26 @@ import lombok.extern.slf4j.Slf4j;
 public abstract class AbstractProductSyncSupportService implements ProductSyncService {
 
     @Override
-    public PricingResult queryPrice(PriceReq priceReq, Supplier supplier) {
-        PricingResult result = safeQuery(priceReq, supplier);
-        recordSupplierQuery(supplier, result);
+    public PricingResult queryPrice(PriceQuery priceReq) {
+        PricingResult result = safeQuery(priceReq);
+        recordSupplierQuery(priceReq, result);
         return result;
     }
 
-    private PricingResult safeQuery(PriceReq priceReq, Supplier supplier) {
+    private PricingResult safeQuery(PriceQuery priceReq) {
         try {
-            PricingResult result = querySupplierPrice(priceReq, supplier);
+            PricingResult result = querySupplierPrice(priceReq);
             if (result == null) {
                 // 实现方绕过分态直接返回空：不可表达为「无在售」，否则会把「我们不知道」
                 // 说成「供应商说没有」
-                log.error("查价：实现方返回空结果，按未能确认回报,priceReq={},supplier={}",
-                        JsonUtils.writeObject2Json(priceReq), JsonUtils.writeObject2Json(supplier));
+                log.error("查价：实现方返回空结果，按未能确认回报,supplierId={},sHotelId={}",
+                        priceReq.supplierId(), priceReq.supplierHotelId());
                 return PricingResult.indeterminate();
             }
             return result;
         } catch (Exception e) {
             log.error("查价：过程异常，按未能确认回报,supplierId={},sHotelId={}",
-                    supplier.getSupplierId(), supplier.getSHotelId(), e);
+                    priceReq.supplierId(), priceReq.supplierHotelId(), e);
             return PricingResult.indeterminate();
         }
     }
@@ -52,9 +51,8 @@ public abstract class AbstractProductSyncSupportService implements ProductSyncSe
      * 要再细分 throttled/timeout 须先在通道层辨别成因（欠账，同 BaseHttpAccess）。
      * 刷价腿不经本模板，其三态由 {@code refresh_onsale/empty/failed} 覆盖，不在此重复。
      */
-    private static void recordSupplierQuery(Supplier supplier, PricingResult result) {
-        SupplierSourceEnum source = supplier == null || supplier.getSupplierId() == null
-                ? null : SupplierSourceEnum.getEnum(supplier.getSupplierId());
+    private static void recordSupplierQuery(PriceQuery query, PricingResult result) {
+        SupplierSourceEnum source = SupplierSourceEnum.getEnum(query.supplierId());
         if (source == null) {
             return;
         }
@@ -73,6 +71,6 @@ public abstract class AbstractProductSyncSupportService implements ProductSyncSe
      * 只有供应商<b>明确</b>回答无可售产品时才允许 {@link PricingResult#noInventory()}；
      * 超时、限流、5xx、响应无法判读、凭据缺失一律 {@link PricingResult#indeterminate()}。
      */
-    public abstract PricingResult querySupplierPrice(PriceReq priceReq, Supplier supplier);
+    public abstract PricingResult querySupplierPrice(PriceQuery priceReq);
 
 }

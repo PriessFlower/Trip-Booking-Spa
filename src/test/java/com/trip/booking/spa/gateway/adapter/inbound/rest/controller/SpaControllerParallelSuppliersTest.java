@@ -1,9 +1,10 @@
 package com.trip.booking.spa.gateway.adapter.inbound.rest.controller;
 
 import com.trip.booking.spa.bootstrap.NacosRuntimeConfig;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ResponseDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
@@ -30,10 +31,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 
 /**
- * /client/spa/price 的多条腿要并行且按请求顺序归位。
- * 2026-09-10 机器内实测：串行 for 下 1 条腿 0.9s、5 条腿 4.6~5.0s 线性累加；上游一页 5 家从美国机跨海过来必撞 5s。
+ * /client/spa/price 的多条家要并行且按请求顺序归位。
+ * 2026-09-10 机器内实测：串行 for 下 1 条家 0.9s、5 条家 4.6~5.0s 线性累加；上游一页 5 家从美国机跨海过来必撞 5s。
  */
-class SpaControllerParallelLegsTest {
+class SpaControllerParallelSuppliersTest {
 
     private final SpaController controller = new SpaController();
     private PriceCacheService cache;
@@ -55,59 +56,61 @@ class SpaControllerParallelLegsTest {
         SpringAppContextUtil.AppContext.setApplicationContextHolder(null);
     }
 
+    /** 控制器吃的是对外 JSON（① 的 PriceReq），拆成每家一条 PriceQuery 是它内部的事 */
     private static PriceReq req(String... hotelIds) {
         List<Supplier> sups = java.util.Arrays.stream(hotelIds)
                 .map(h -> Supplier.builder().supplierId(10005).sHotelId(h).build()).toList();
         return PriceReq.builder().checkIn("2026-09-30").checkout("2026-10-01")
-                .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).suppliers(sups).build();
+                .roomNum(1).adultNum(2).childNum(0).childAges(List.of())
+                .suppliers(sups).build();
     }
 
     @Test
-    @DisplayName("5 条腿真的同时在跑，且结果按请求顺序归位")
+    @DisplayName("5 条家真的同时在跑，且结果按请求顺序归位")
     void legsRunConcurrentlyAndKeepOrder() throws Exception {
         CountDownLatch allStarted = new CountDownLatch(5);
         AtomicInteger peak = new AtomicInteger();
         AtomicInteger inFlight = new AtomicInteger();
-        Mockito.when(cache.getPriceResult(any(), any())).thenAnswer(inv -> {
-            Supplier s = inv.getArgument(1);
+        Mockito.when(cache.getPriceResult(any())).thenAnswer(inv -> {
+            PriceQuery s = inv.getArgument(0);
             peak.accumulateAndGet(inFlight.incrementAndGet(), Math::max);
             allStarted.countDown();
-            // 要是串行，这里会等满 2 秒才超时——并行时 5 条腿几乎同时到达
+            // 要是串行，这里会等满 2 秒才超时——并行时 5 条家几乎同时到达
             allStarted.await(2, TimeUnit.SECONDS);
             inFlight.decrementAndGet();
-            return PricingResult.available(List.of(ProductRespDTO.builder().hotelId(s.getSHotelId()).productId("p-" + s.getSHotelId()).build()));
+            return PricingResult.available(List.of(Product.builder().hotelId(s.supplierHotelId()).productId("p-" + s.supplierHotelId()).build()));
         });
 
-        ResponseDTO<List<ProductRespDTO>> resp = controller.queryPrice(req("A", "B", "C", "D", "E"));
+        ResponseDTO<List<Product>> resp = controller.queryPrice(req("A", "B", "C", "D", "E"));
 
         assertEquals(List.of("A", "B", "C", "D", "E"),
-                resp.getResult().stream().map(ProductRespDTO::getHotelId).toList(), "结果按请求顺序归位");
-        assertTrue(peak.get() >= 5, "五条腿应同时在飞，实测峰值 " + peak.get());
+                resp.getResult().stream().map(Product::getHotelId).toList(), "结果按请求顺序归位");
+        assertTrue(peak.get() >= 5, "五家应同时在飞，实测峰值 " + peak.get());
     }
 
     @Test
-    @DisplayName("单腿不进线程池，行为与从前一致")
+    @DisplayName("只有一家不进线程池，行为与从前一致")
     void singleLegStaysInline() {
-        Mockito.when(cache.getPriceResult(any(), any())).thenReturn(PricingResult.available(
-                List.of(ProductRespDTO.builder().hotelId("A").productId("p").build())));
-        ResponseDTO<List<ProductRespDTO>> resp = controller.queryPrice(req("A"));
+        Mockito.when(cache.getPriceResult(any())).thenReturn(PricingResult.available(
+                List.of(Product.builder().hotelId("A").productId("p").build())));
+        ResponseDTO<List<Product>> resp = controller.queryPrice(req("A"));
         assertEquals(1, resp.getResult().size());
         assertEquals(Thread.currentThread().getName(), Thread.currentThread().getName());
     }
 
     @Test
-    @DisplayName("一条腿抛异常：其余腿照样跑完并记指标，最后整批抛出——与串行时的对外语义一致")
+    @DisplayName("一家抛异常：其余家照样跑完并记指标，最后整批抛出——与串行时的对外语义一致")
     void oneFailingLegStillFailsTheBatchAfterOthersFinish() {
         AtomicInteger calls = new AtomicInteger();
-        Mockito.when(cache.getPriceResult(any(), any())).thenAnswer(inv -> {
-            Supplier s = inv.getArgument(1);
+        Mockito.when(cache.getPriceResult(any())).thenAnswer(inv -> {
+            PriceQuery s = inv.getArgument(0);
             calls.incrementAndGet();
-            if ("B".equals(s.getSHotelId())) {
+            if ("B".equals(s.supplierHotelId())) {
                 throw new IllegalStateException("B 的 Redis 炸了");
             }
-            return PricingResult.available(List.of(ProductRespDTO.builder().hotelId(s.getSHotelId()).productId("p").build()));
+            return PricingResult.available(List.of(Product.builder().hotelId(s.supplierHotelId()).productId("p").build()));
         });
         assertThrows(IllegalStateException.class, () -> controller.queryPrice(req("A", "B", "C")));
-        assertEquals(3, calls.get(), "别的腿不该因为 B 炸了就没跑");
+        assertEquals(3, calls.get(), "别家不该因为 B 炸了就没跑");
     }
 }

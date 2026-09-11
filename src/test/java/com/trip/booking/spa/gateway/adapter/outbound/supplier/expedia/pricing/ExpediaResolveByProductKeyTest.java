@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.checkprice.ExpediaCheckPriceServiceImpl;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaContractProfile;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaProductKeyDeriver;
@@ -56,18 +56,18 @@ class ExpediaResolveByProductKeyTest {
 
         ExpediaCheckPriceServiceImpl entry = new ExpediaCheckPriceServiceImpl() {
             @Override
-            protected LiveStock<QueryPriceResponse> fetchLiveStock(CheckPriceReq request, String salesEnvironment) {
+            protected LiveStock<QueryPriceResponse> fetchLiveStock(CheckPriceCommand request, String salesEnvironment) {
                 return LiveStock.of(stock);
             }
 
             @Override
-            protected CheckPriceRespDTO inspect(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceReq request) {
+            protected CheckPriceResult inspect(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceCommand request) {
                 return null;
             }
 
             @Override
-            protected CheckPriceRespDTO validate(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceReq request) {
-                return CheckPriceRespDTO.builder().outcome(CheckPriceOutcome.BOOKABLE).message(rate.getId())
+            protected CheckPriceResult validate(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceCommand request) {
+                return CheckPriceResult.builder().outcome(CheckPriceOutcome.BOOKABLE).message(rate.getId())
                         .offerId("offer").offerTtlSeconds(600L).build();
             }
         };
@@ -108,9 +108,9 @@ class ExpediaResolveByProductKeyTest {
     }
 
     /** 所点令牌 276999999 不在现货里——每个用例都是令牌已死的场景 */
-    private static CheckPriceReq request(String productKey, int seenPriceCents) {
-        return CheckPriceReq.builder()
-                .supplierId(10005).sHotelId(HOTEL).sProductId("276999999")
+    private static CheckPriceCommand request(String productKey, int seenPriceCents) {
+        return CheckPriceCommand.builder()
+                .supplierId(10005).supplierHotelId(HOTEL).supplierProductId("276999999")
                 .productKey(productKey).priceFlag("hotel_only")
                 .checkIn("2026-10-04").checkOut("2026-10-08")
                 .roomNum(1).adultCount(2).seenPrice(seenPriceCents)
@@ -121,7 +121,7 @@ class ExpediaResolveByProductKeyTest {
     /** 令牌死、键匹配、价格在容差内：换票成功，且多张票选最便宜的 */
     @Test
     void resolvesToCheapestEquivalent() {
-        CheckPriceRespDTO resp = entry(true, response(rate("A", "101.00"), rate("B", "99.00")))
+        CheckPriceResult resp = entry(true, response(rate("A", "101.00"), rate("B", "99.00")))
                 .checkPrice(request(KEY, 10000));
 
         assertEquals(CheckPriceOutcome.BOOKABLE, resp.getOutcome());
@@ -168,7 +168,7 @@ class ExpediaResolveByProductKeyTest {
         broken.setId("X");
         broken.setNonrefundable_date_ranges(List.of(new QueryPriceResponse.CancelPolicy()));
 
-        CheckPriceRespDTO resp = entry(true, response(broken, rate("B", "99.00"))).checkPrice(request(KEY, 10000));
+        CheckPriceResult resp = entry(true, response(broken, rate("B", "99.00"))).checkPrice(request(KEY, 10000));
 
         assertEquals(CheckPriceOutcome.BOOKABLE, resp.getOutcome());
         assertEquals("B", resp.getMessage());

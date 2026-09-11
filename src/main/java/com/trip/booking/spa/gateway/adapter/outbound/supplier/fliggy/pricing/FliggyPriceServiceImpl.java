@@ -1,15 +1,15 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Room;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.product.Meal;
+import com.trip.booking.spa.gateway.domain.product.PriceInfo;
+import com.trip.booking.spa.gateway.domain.product.ProductInfo;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.product.Room;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.checkprice.client.ValidateAccess;
@@ -71,49 +71,52 @@ public class FliggyPriceServiceImpl {
 
     // ---------- 查价 ----------
 
-    public PricingResult queryPrices(PriceReq request, Supplier supplier, CallPurpose purpose) {
+    public PricingResult queryPrices(PriceQuery request, CallPurpose purpose) {
         if (!properties.isConfigured()) {
             log.error("飞猪查价：凭证未配置（FLIGGY_APP_KEY/FLIGGY_SECRET/FLIGGY_SESSION），无法调用,sHotelId={}",
-                    supplier.getSHotelId());
+                    request.supplierHotelId());
             return PricingResult.indeterminate();
         }
-        request.setOccupancies(Occupancy.perRoom(request.getRoomNum(), request.getAdultNum(),
-                request.getChildNum(), request.getChildAges()));
+        // PriceQuery 不可变：占用串算好后带着走，不回写入参
+        request = request.toBuilder()
+                .occupancies(Occupancy.perRoom(request.roomNum(), request.adultNum(),
+                        request.childNum(), request.childAges()))
+                .build();
 
         ResponseResult<FliggyAriResponse> result = new AriAvailabilityAccess(properties)
-                .access(ariCall(supplier.getSHotelId(), request.getCheckIn(), request.getCheckout(),
-                        request.getAdultNum(), request.getChildNum(), request.getChildAges()), purpose);
+                .access(ariCall(request.supplierHotelId(), request.checkIn(), request.checkOut(),
+                        request.adultNum(), request.childNum(), request.childAges()), purpose);
         FliggyAriResponse resp = result == null ? null : result.getData();
         if (resp == null) {
-            log.warn("飞猪查价：调用未取得结果,sHotelId={},checkIn={}", supplier.getSHotelId(), request.getCheckIn());
+            log.warn("飞猪查价：调用未取得结果,sHotelId={},checkIn={}", request.supplierHotelId(), request.checkIn());
             return PricingResult.indeterminate();
         }
         if (resp.isHotelDelisted()) {
             // 资源已下架=明确无货(cursor 生产实证语义),折进不确定会无限重试下架店
-            log.info("飞猪查价：酒店已下架,sHotelId={}", supplier.getSHotelId());
+            log.info("飞猪查价：酒店已下架,sHotelId={}", request.supplierHotelId());
             return PricingResult.noInventory();
         }
         if (resp.isPlatformError()) {
-            reportPlatformError("查价", resp, supplier.getSHotelId());
+            reportPlatformError("查价", resp, request.supplierHotelId());
             return PricingResult.indeterminate();
         }
         if (resp.isEmptyResult()) {
             // 答了但没有：飞猪明确该住期无可售（与「没问出结果」分开，B7）
             return PricingResult.noInventory();
         }
-        return PricingResult.of(convertRates(resp.rates(), request, supplier.getSHotelId()));
+        return PricingResult.of(convertRates(resp.rates(), request, request.supplierHotelId()));
     }
 
-    List<ProductRespDTO> convertRates(List<JsonNode> rates, PriceReq request, String sHotelId) {
+    List<Product> convertRates(List<JsonNode> rates, PriceQuery request, String sHotelId) {
         // 一轮只读一次时钟：同一次转换里所有退改段对同一时刻判过期，避免跨秒时同批段判法不一
         return convertRates(rates, request, sHotelId, java.time.Instant.now());
     }
 
     /** 同上，但由调用方给时钟——过期判定随时间漂移，测试必须能钉住它（见 deriver 同款重载）。 */
-    List<ProductRespDTO> convertRates(List<JsonNode> rates, PriceReq request, String sHotelId,
+    List<Product> convertRates(List<JsonNode> rates, PriceQuery request, String sHotelId,
                                       java.time.Instant now) {
-        List<ProductRespDTO> products = new ArrayList<>();
-        String occupancy = request.getOccupancies().get(0);
+        List<Product> products = new ArrayList<>();
+        String occupancy = request.occupancies().get(0);
         int skippedNoRateKey = 0;
         int skippedNoPrice = 0;
         int skippedNoDayPrice = 0;
@@ -130,14 +133,14 @@ public class FliggyPriceServiceImpl {
                 skippedNoPrice++;
                 continue;
             }
-            List<PriceInfo> priceInfos = convertPriceInfos(rate, request.getCheckIn(), request.getCheckout());
+            List<PriceInfo> priceInfos = convertPriceInfos(rate, request.checkIn(), request.checkOut());
             if (priceInfos == null) {
                 skippedNoDayPrice++;
                 continue;
             }
             Meal meal = productKeyDeriver.convertMeal(rate.get("meals"));
             List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(
-                    request.getCheckIn(), rate.get("cancel_policy"), now);
+                    request.checkIn(), rate.get("cancel_policy"), now);
             String roomId = text(rate, "room_id");
             String roomName = text(rate, "room_name");
             // 产品名=卖法名（口径同艺龙 RatePlanName 回落房型名）：一个房型多个卖法，
@@ -147,7 +150,7 @@ public class FliggyPriceServiceImpl {
             ProductIdentity identity = productKeyDeriver.deriveIdentity(sHotelId, roomId, meal,
                     cancelPolicy, occupancy, inclusive);
             Integer exclusive = intOrNull(totalRate, "exclusive");
-            products.add(ProductRespDTO.builder()
+            products.add(Product.builder()
                     .hotelId(sHotelId)
                     .productId(rateKey)
                     .productKey(identity.productKey())
@@ -161,11 +164,11 @@ public class FliggyPriceServiceImpl {
                     .priceInfos(priceInfos)
                     .meal(meal)
                     .cancelPolicy(cancelPolicy)
-                    .maxOccupancy(request.getAdultNum())
+                    .maxOccupancy(request.adultNum())
                     .build());
         }
         log.info("飞猪查价：转换完成,hotelId={},checkIn={},报价总数={},出报={},跳过_缺票据={},跳过_缺总价={},跳过_缺逐日价={}",
-                sHotelId, request.getCheckIn(), rates.size(), products.size(), skippedNoRateKey, skippedNoPrice,
+                sHotelId, request.checkIn(), rates.size(), products.size(), skippedNoRateKey, skippedNoPrice,
                 skippedNoDayPrice);
         countDropped(DropReason.NO_SESSION_CREDENTIALS, skippedNoRateKey);
         countDropped(DropReason.NO_DAY_PRICE, skippedNoPrice + skippedNoDayPrice);
@@ -214,7 +217,7 @@ public class FliggyPriceServiceImpl {
     // ---------- 验价（现取现验）：流程在 FliggyCheckPriceServiceImpl（模板），这里只是钩子 ----------
 
     /** 凭证未配置即确定失败（网关无兜底），不调供应商 */
-    public CheckPriceRespDTO precondition() {
+    public CheckPriceResult precondition() {
         if (!properties.isConfigured()) {
             return outcome(CheckPriceOutcome.INDETERMINATE, "飞猪凭证未配置，未能确认该产品是否可订");
         }
@@ -225,7 +228,7 @@ public class FliggyPriceServiceImpl {
      * 验价即刷的转换（机制在 {@code AbstractCheckPriceFlow}）：口径与查价同源——
      * 下架/明确无货回空列表（打无货标记清僵尸价 B7）；平台或业务错误回 null 不动缓存（F-5.1）。
      */
-    public List<ProductRespDTO> freshProducts(FliggyAriResponse ari, PriceReq priceReq, String sHotelId) {
+    public List<Product> freshProducts(FliggyAriResponse ari, PriceQuery priceReq, String sHotelId) {
         if (ari.isHotelDelisted() || ari.isEmptyResult()) {
             return List.of();
         }
@@ -236,10 +239,10 @@ public class FliggyPriceServiceImpl {
     }
 
     /** 现取整店 ARI；终态口径与查价同源（下架/整店无售=SOLD_OUT，平台拒绝/无结果=不确定） */
-    public LiveStock<FliggyAriResponse> fetchLiveStock(CheckPriceReq request) {
+    public LiveStock<FliggyAriResponse> fetchLiveStock(CheckPriceCommand request) {
         ResponseResult<FliggyAriResponse> ariResult = new AriAvailabilityAccess(properties)
-                .access(ariCall(request.getSHotelId(), request.getCheckIn(), request.getCheckOut(),
-                        request.getAdultCount(), request.getChildNum(), request.getChildAges()),
+                .access(ariCall(request.supplierHotelId(), request.checkIn(), request.checkOut(),
+                        request.adultCount(), request.childNum(), request.childAges()),
                         CallPurpose.CHECK_PRICE);
         FliggyAriResponse ari = ariResult == null ? null : ariResult.getData();
         if (ari == null) {
@@ -247,13 +250,13 @@ public class FliggyPriceServiceImpl {
         }
         // 验价即刷的转换器（机制在 AbstractCheckPriceFlow）：闭包捕获这份原始 ARI，
         // 终态分支也带着它返回——下架/整店无售正是要落无货标记的时候（B7）
-        java.util.function.Function<PriceReq, List<ProductRespDTO>> fresh =
-                priceReq -> freshProducts(ari, priceReq, request.getSHotelId());
+        java.util.function.Function<PriceQuery, List<Product>> fresh =
+                priceReq -> freshProducts(ari, priceReq, request.supplierHotelId());
         if (ari.isHotelDelisted()) {
             return LiveStock.<FliggyAriResponse>terminal(outcome(CheckPriceOutcome.SOLD_OUT, "该酒店已被供应商下架")).freshConvertedBy(fresh);
         }
         if (ari.isPlatformError()) {
-            reportPlatformError("验价·现取", ari, request.getSHotelId());
+            reportPlatformError("验价·现取", ari, request.supplierHotelId());
             return LiveStock.<FliggyAriResponse>terminal(outcome(CheckPriceOutcome.INDETERMINATE, "供应商平台拒绝了请求，未能确认")).freshConvertedBy(fresh);
         }
         if (ari.isEmptyResult()) {
@@ -266,22 +269,22 @@ public class FliggyPriceServiceImpl {
      * 换票候选：与 {@link #convertRates} 同一套丢弃口径（缺票据/缺总价/缺逐日价的不算在售）、
      * 同一套身份派生，键相等才收；价格取 total_rate.inclusive，与查价透出的 totalPrice 同口径。
      */
-    public List<ResolveCandidate<JsonNode>> resolveCandidates(FliggyAriResponse ari, CheckPriceReq request) {
-        String occupancy = Occupancy.canonical(request.getAdultCount(), request.getChildNum(), request.getChildAges());
+    public List<ResolveCandidate<JsonNode>> resolveCandidates(FliggyAriResponse ari, CheckPriceCommand request) {
+        String occupancy = Occupancy.canonical(request.adultCount(), request.childNum(), request.childAges());
         List<ResolveCandidate<JsonNode>> equivalents = new ArrayList<>();
         for (JsonNode rate : ari.rates()) {
             if (StringUtils.isBlank(text(rate, "rate_key"))) {
                 continue;
             }
             Integer inclusive = intOrNull(rate.get("total_rate"), "inclusive");
-            if (inclusive == null || convertPriceInfos(rate, request.getCheckIn(), request.getCheckOut()) == null) {
+            if (inclusive == null || convertPriceInfos(rate, request.checkIn(), request.checkOut()) == null) {
                 continue;
             }
             Meal meal = productKeyDeriver.convertMeal(rate.get("meals"));
-            List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), rate.get("cancel_policy"));
-            ProductIdentity identity = productKeyDeriver.deriveIdentity(request.getSHotelId(), text(rate, "room_id"),
+            List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.checkIn(), rate.get("cancel_policy"));
+            ProductIdentity identity = productKeyDeriver.deriveIdentity(request.supplierHotelId(), text(rate, "room_id"),
                     meal, cancelPolicy, occupancy, inclusive);
-            if (request.getProductKey().equals(identity.productKey())) {
+            if (request.productKey().equals(identity.productKey())) {
                 equivalents.add(new ResolveCandidate<>(rate, inclusive));
             }
         }
@@ -289,7 +292,7 @@ public class FliggyPriceServiceImpl {
     }
 
     /** 下单前档：以现取同一响应里的 rate_key + request_trace_id 打 validate，通过才签句柄 */
-    public CheckPriceRespDTO validate(CheckPriceReq request, JsonNode fresh, FliggyAriResponse ari) {
+    public CheckPriceResult validate(CheckPriceCommand request, JsonNode fresh, FliggyAriResponse ari) {
         String freshRateKey = text(fresh, "rate_key");
         String traceId = ari.requestTraceId();
 
@@ -300,13 +303,13 @@ public class FliggyPriceServiceImpl {
             return outcome(CheckPriceOutcome.INDETERMINATE, "验价未取得结果，请稍后重试");
         }
         if (validate.isPlatformError()) {
-            reportPlatformError("验价", validate, request.getSHotelId());
+            reportPlatformError("验价", validate, request.supplierHotelId());
             return outcome(CheckPriceOutcome.INDETERMINATE, "供应商平台拒绝了请求，未能确认");
         }
         if (!validate.isSucc()) {
             // 业务层失败：官方码表空白，码义未核实一律不确定，绝不判无房
             log.warn("飞猪验价：业务层未通过,sHotelId={},rateKey={},bizErrorCode={}",
-                    request.getSHotelId(), freshRateKey, validate.bizErrorCode());
+                    request.supplierHotelId(), freshRateKey, validate.bizErrorCode());
             return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未确认该报价可订，请稍后重试");
         }
         String createKey = validate.createKey();
@@ -331,7 +334,7 @@ public class FliggyPriceServiceImpl {
         if (offerId == null) {
             return outcome(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
         }
-        return CheckPriceRespDTO.builder()
+        return CheckPriceResult.builder()
                 .outcome(CheckPriceOutcome.BOOKABLE)
                 .offerId(offerId)
                 .offerTtlSeconds(offerStore.ttlSecondsOf(SupplierSourceEnum.FLIGGY.getCode()))
@@ -339,7 +342,7 @@ public class FliggyPriceServiceImpl {
                 .totalPriceAfter(totalCents)
                 .currencyType(currency)
                 // 退改以验价时点的同一报价为准（现取现验，与查价同一响应）
-                .cancelPolicy(productKeyDeriver.convertCancelPolicy(request.getCheckIn(), fresh.get("cancel_policy")))
+                .cancelPolicy(productKeyDeriver.convertCancelPolicy(request.checkIn(), fresh.get("cancel_policy")))
                 .message("验价通过")
                 .build();
     }
@@ -354,7 +357,7 @@ public class FliggyPriceServiceImpl {
      * <p>不签句柄是硬约束（模板 {@code AbstractCheckPriceSyncSupportService} 只对 BOOKABLE
      * 要求句柄）：飞猪的 create_key 由 validate 签发，此档根本没调它。
      */
-    public CheckPriceRespDTO availabilityOnlyResp(CheckPriceReq request, JsonNode fresh) {
+    public CheckPriceResult availabilityOnlyResp(CheckPriceCommand request, JsonNode fresh) {
         JsonNode totalRate = fresh.get("total_rate");
         Integer inclusive = intOrNull(totalRate, "inclusive");
         if (inclusive == null) {
@@ -365,19 +368,19 @@ public class FliggyPriceServiceImpl {
             // 币种不许缺也不许猜：上游把美元数字当人民币用即 7 倍资损（SpaCurrencyConverter 同纪律）
             return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未给出币种，未能确认该产品");
         }
-        List<PriceInfo> priceInfos = convertPriceInfos(fresh, request.getCheckIn(), request.getCheckOut());
+        List<PriceInfo> priceInfos = convertPriceInfos(fresh, request.checkIn(), request.checkOut());
         if (priceInfos == null) {
             return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未给出每日价，未能确认该产品");
         }
         // salePrice 整单口径：ARI 的 total_rate 是单间价，多间须乘间数（与 BOOKABLE 档一致，
         // 那档的 validate 总价本就按 number_of_rooms 算）
-        int rooms = request.getRoomNum() == null ? 1 : request.getRoomNum();
+        int rooms = request.roomNum();
         int totalCents = inclusive * rooms;
         List<CancelPolicy> cancelPolicy =
-                productKeyDeriver.convertCancelPolicy(request.getCheckIn(), fresh.get("cancel_policy"));
+                productKeyDeriver.convertCancelPolicy(request.checkIn(), fresh.get("cancel_policy"));
         log.info("飞猪验价(仅现货)：有货但未验证可订性,sHotelId={},rateKey={},价格={}分{},退改条数={}",
-                request.getSHotelId(), text(fresh, "rate_key"), totalCents, currency, cancelPolicy.size());
-        return CheckPriceRespDTO.builder()
+                request.supplierHotelId(), text(fresh, "rate_key"), totalCents, currency, cancelPolicy.size());
+        return CheckPriceResult.builder()
                 .outcome(CheckPriceOutcome.AVAILABLE)
                 .salePrice(totalCents)
                 .subPrice(totalCents)
@@ -406,24 +409,24 @@ public class FliggyPriceServiceImpl {
         return new FliggyTopCall(METHOD_ARI, Map.of("availability_query", JsonUtils.writeObject2Json(query)));
     }
 
-    private FliggyTopCall validateCall(String rateKey, String traceId, CheckPriceReq request) {
-        int rooms = request.getRoomNum() == null ? 1 : request.getRoomNum();
+    private FliggyTopCall validateCall(String rateKey, String traceId, CheckPriceCommand request) {
+        int rooms = request.roomNum();
         List<Map<String, Object>> occupancies = new ArrayList<>();
         for (int i = 0; i < rooms; i++) {
             Map<String, Object> room = new LinkedHashMap<>();
             room.put("room_no", i + 1);
-            room.put("adult_num", request.getAdultCount());
-            room.put("children_num", request.getChildNum() == null ? 0 : request.getChildNum());
-            if (request.getChildNum() != null && request.getChildNum() > 0 && request.getChildAges() != null) {
-                room.put("children_ages", request.getChildAges().stream().map(String::valueOf).toList());
+            room.put("adult_num", request.adultCount());
+            room.put("children_num", request.childNum());
+            if (request.childNum() > 0 && request.childAges() != null) {
+                room.put("children_ages", request.childAges().stream().map(String::valueOf).toList());
             }
             occupancies.add(room);
         }
         Map<String, Object> req = new LinkedHashMap<>();
         req.put("rate_key", rateKey);
         req.put("number_of_rooms", rooms);
-        req.put("check_in", request.getCheckIn());
-        req.put("check_out", request.getCheckOut());
+        req.put("check_in", request.checkIn());
+        req.put("check_out", request.checkOut());
         req.put("occupancies", occupancies);
         req.put("distributor", properties.getDistributor());
         if (StringUtils.isNotBlank(traceId)) {
@@ -463,8 +466,8 @@ public class FliggyPriceServiceImpl {
         }
     }
 
-    private static CheckPriceRespDTO outcome(CheckPriceOutcome outcome, String message) {
-        return CheckPriceRespDTO.builder().outcome(outcome).message(message).build();
+    private static CheckPriceResult outcome(CheckPriceOutcome outcome, String message) {
+        return CheckPriceResult.builder().outcome(outcome).message(message).build();
     }
 
     private static String text(JsonNode node, String field) {

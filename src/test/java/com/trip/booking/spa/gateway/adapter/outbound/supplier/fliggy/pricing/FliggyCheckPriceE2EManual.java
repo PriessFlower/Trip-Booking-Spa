@@ -1,9 +1,9 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
@@ -88,7 +88,7 @@ class FliggyCheckPriceE2EManual {
     private static String checkOut;
 
     /** 查价拿到的参照产品：真 rate_key、真 productKey、真价 */
-    private static ProductRespDTO reference;
+    private static Product reference;
 
     @BeforeAll
     static void wireRealService() {
@@ -165,15 +165,14 @@ class FliggyCheckPriceE2EManual {
     @Order(1)
     @DisplayName("查价：真实调 ari.availability，取参照产品（rate_key / productKey / 价）")
     void queryPricesGivesReference() {
-        PriceReq req = PriceReq.builder().checkIn(checkIn).checkout(checkOut)
+        PriceQuery req = PriceQuery.builder().checkIn(checkIn).checkOut(checkOut)
                 .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
 
-        PricingResult result = service.queryPrices(req,
-                Supplier.builder().supplierId(10015).sHotelId(HOTEL).build(), CallPurpose.LIVE);
+        PricingResult result = service.queryPrices(req, CallPurpose.LIVE);
 
         assumeTrue(result.outcome() != PricingOutcome.INDETERMINATE, "飞猪未给出结果（网络/凭据），本轮跳过");
         assumeTrue(result.outcome() == PricingOutcome.AVAILABLE, "该店该住期无在售，本轮跳过");
-        List<ProductRespDTO> products = result.products();
+        List<Product> products = result.products();
         assertThat(products).isNotEmpty();
         reference = products.get(0);
         assertThat(reference.getProductKey()).isNotBlank();
@@ -187,7 +186,7 @@ class FliggyCheckPriceE2EManual {
     void availabilityWithLiveTokenIsAvailable() {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
 
-        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY, reference.getProductId()));
+        CheckPriceResult resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY, reference.getProductId()));
 
         assumeTrue(resp.getOutcome() != CheckPriceOutcome.INDETERMINATE, "飞猪未给出结果，跳过");
         assertThat(resp.getOutcome()).isEqualTo(CheckPriceOutcome.AVAILABLE);
@@ -202,7 +201,7 @@ class FliggyCheckPriceE2EManual {
     void availabilityWithDeadTokenIsResolved() {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
 
-        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY, DEAD_RATE_KEY));
+        CheckPriceResult resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY, DEAD_RATE_KEY));
 
         assumeTrue(resp.getOutcome() != CheckPriceOutcome.INDETERMINATE, "飞猪未给出结果，跳过");
         assertThat(resp.getOutcome())
@@ -218,7 +217,7 @@ class FliggyCheckPriceE2EManual {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
         props.setResolveEnabled(false);
         try {
-            CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY, DEAD_RATE_KEY));
+            CheckPriceResult resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY, DEAD_RATE_KEY));
 
             assumeTrue(resp.getOutcome() != CheckPriceOutcome.INDETERMINATE, "飞猪未给出结果，跳过");
             assertThat(resp.getOutcome()).isEqualTo(CheckPriceOutcome.RATE_DEAD);
@@ -233,7 +232,7 @@ class FliggyCheckPriceE2EManual {
     void bookableWithDeadTokenValidatesTheSwappedRate() {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
 
-        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.BOOKABLE, DEAD_RATE_KEY));
+        CheckPriceResult resp = flow.checkPrice(req(VerifyLevel.BOOKABLE, DEAD_RATE_KEY));
 
         assertThat(resp.getOutcome()).as("这一档打了验价，不该回 AVAILABLE").isNotEqualTo(CheckPriceOutcome.AVAILABLE);
         assertThat(resp.getOutcome()).as("换票应已救回；RATE_DEAD 即 resolve 未生效（%s）", resp.getMessage())
@@ -245,10 +244,10 @@ class FliggyCheckPriceE2EManual {
         assertThat(resp.getSalePrice()).isPositive();
     }
 
-    private static CheckPriceReq req(VerifyLevel level, String rateKey) {
-        return CheckPriceReq.builder()
-                .supplierId(10015).sHotelId(HOTEL)
-                .sProductId(rateKey)
+    private static CheckPriceCommand req(VerifyLevel level, String rateKey) {
+        return CheckPriceCommand.builder()
+                .supplierId(10015).supplierHotelId(HOTEL)
+                .supplierProductId(rateKey)
                 .productKey(reference.getProductKey())
                 .seenPrice(reference.getTotalPrice())
                 .checkIn(checkIn).checkOut(checkOut)
@@ -266,7 +265,7 @@ class FliggyCheckPriceE2EManual {
         String priceKey = "price:10015:" + HOTEL + ":2:" + checkIn;
         redisUtils.remove(priceKey);
 
-        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY, reference.getProductId()));
+        CheckPriceResult resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY, reference.getProductId()));
         assumeTrue(resp.getOutcome() != CheckPriceOutcome.INDETERMINATE, "飞猪未给出结果，跳过");
 
         // 回写是异步单线程池：轮询等它落地（上限 5s）

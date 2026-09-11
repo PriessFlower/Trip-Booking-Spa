@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.application.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
 import org.junit.jupiter.api.Test;
@@ -24,7 +24,7 @@ class AbstractProductSyncSupportServiceTest {
     /** 实现方绕过分态返回 null：不得当成无房 */
     @Test
     void reportsIndeterminateWhenImplementationReturnsNull() {
-        PricingResult result = new StubService(null).queryPrice(request(), supplier());
+        PricingResult result = new StubService(null).queryPrice(request());
 
         assertNotNull(result, "禁止返回 null——上游无从区分三态");
         assertEquals(PricingOutcome.INDETERMINATE, result.outcome());
@@ -34,7 +34,7 @@ class AbstractProductSyncSupportServiceTest {
     /** 抛异常同样不得当成无房——异常不等于「供应商说没有」 */
     @Test
     void reportsIndeterminateWhenImplementationThrows() {
-        PricingResult result = new ThrowingService().queryPrice(request(), supplier());
+        PricingResult result = new ThrowingService().queryPrice(request());
 
         assertEquals(PricingOutcome.INDETERMINATE, result.outcome());
     }
@@ -43,7 +43,7 @@ class AbstractProductSyncSupportServiceTest {
     @Test
     void keepsNoInventoryDecidedByAdapter() {
         PricingResult result = new StubService(PricingResult.noInventory())
-                .queryPrice(request(), supplier());
+                .queryPrice(request());
 
         assertEquals(PricingOutcome.NO_INVENTORY, result.outcome());
     }
@@ -51,8 +51,8 @@ class AbstractProductSyncSupportServiceTest {
     /** 有货照常透出 */
     @Test
     void keepsAvailable() {
-        PricingResult result = new StubService(PricingResult.available(List.of(new ProductRespDTO())))
-                .queryPrice(request(), supplier());
+        PricingResult result = new StubService(PricingResult.available(List.of(new Product())))
+                .queryPrice(request());
 
         assertEquals(PricingOutcome.AVAILABLE, result.outcome());
         assertEquals(1, result.products().size());
@@ -68,8 +68,8 @@ class AbstractProductSyncSupportServiceTest {
         assertEquals(PricingOutcome.NO_INVENTORY, PricingResult.available(null).outcome());
     }
 
-    private static PriceReq request() {
-        return PriceReq.builder().checkIn("2026-09-01").checkout("2026-09-02")
+    private static PriceQuery request() {
+        return PriceQuery.builder().supplierId(10010).supplierHotelId("91234567").checkIn("2026-09-01").checkOut("2026-09-02")
                 .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
     }
 
@@ -85,14 +85,14 @@ class AbstractProductSyncSupportServiceTest {
         }
 
         @Override
-        public PricingResult querySupplierPrice(PriceReq priceReq, Supplier supplier) {
+        public PricingResult querySupplierPrice(PriceQuery priceReq) {
             return result;
         }
     }
 
     private static class ThrowingService extends AbstractProductSyncSupportService {
         @Override
-        public PricingResult querySupplierPrice(PriceReq priceReq, Supplier supplier) {
+        public PricingResult querySupplierPrice(PriceQuery priceReq) {
             throw new IllegalStateException("供应商连接超时");
         }
     }

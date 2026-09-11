@@ -1,6 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.inbound.rest.controller;
 
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
@@ -23,11 +24,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 
 /**
- * 腿的词表必须穷尽（O-3.3）：正常腿按分态计，<b>异常出去的腿计 error</b>——不计的话
- * sum(腿) 少于真实腿数，出报率分母偏小、算出来偏高。反证已实跑：去掉 catch 里的
+ * 家的词表必须穷尽（O-3.3）：正常家按分态计，<b>异常出去的家计 error</b>——不计的话
+ * sum(家) 少于真实家数，出报率分母偏小、算出来偏高。反证已实跑：去掉 catch 里的
  * recordFailedLeg，errorLeg 断言红。
  */
-class SpaPriceLegMetricTest {
+class SpaPriceAskedMetricTest {
 
     private SpaController controller;
     private PriceCacheService priceCacheService;
@@ -58,19 +59,19 @@ class SpaPriceLegMetricTest {
     private static PriceReq req() {
         return PriceReq.builder().checkIn("2026-09-01").checkout("2026-09-02")
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
-                .suppliers(List.of(Supplier.builder().supplierId(10010).sHotelId("H1").build()))
+                .suppliers(List.of(Supplier.builder().supplierId(10010).sHotelId("H-1").build()))
                 .build();
     }
 
     private double leg(String source, String outcome) {
-        return registry.counter("spa_price_leg_count",
+        return registry.counter("spa_price_asked_count",
                 "supplier", "ELONG", "source", source, "outcome", outcome).count();
     }
 
     @Test
-    @DisplayName("缓存腿正常分态 → outcome=no_inventory 计一次")
+    @DisplayName("走缓存的那家正常分态 → outcome=no_inventory 计一次")
     void normalLegIsCounted() {
-        Mockito.when(priceCacheService.getPriceResult(any(), any()))
+        Mockito.when(priceCacheService.getPriceResult(any()))
                 .thenReturn(PricingResult.noInventory());
 
         controller.queryPrice(req());
@@ -81,7 +82,7 @@ class SpaPriceLegMetricTest {
     @Test
     @DisplayName("缓存读抛异常 → outcome=error 计一次，异常照常抛出")
     void errorLegIsCounted() {
-        Mockito.when(priceCacheService.getPriceResult(any(), any()))
+        Mockito.when(priceCacheService.getPriceResult(any()))
                 .thenThrow(new IllegalStateException("redis down"));
 
         assertThrows(IllegalStateException.class, () -> controller.queryPrice(req()));

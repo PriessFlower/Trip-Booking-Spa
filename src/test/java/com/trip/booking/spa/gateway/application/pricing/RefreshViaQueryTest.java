@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.application.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.application.pricing.AbstractCPSQueryPriceService.RefreshOutcome;
@@ -74,7 +74,7 @@ class RefreshViaQueryTest {
 
     static class StubRefresh extends AbstractCPSQueryPriceService<Row> {
         PricingResult next;
-        PriceReq seenRequest;
+        PriceQuery seenRequest;
 
         @Override
         protected RedissonClient redissonClient() {
@@ -141,7 +141,7 @@ class RefreshViaQueryTest {
         }
 
         @Override
-        protected PricingResult queryForRefresh(PriceReq request, Supplier supplier) {
+        protected PricingResult queryForRefresh(PriceQuery request) {
             seenRequest = request;
             return next;
         }
@@ -158,12 +158,12 @@ class RefreshViaQueryTest {
     void onSaleWritesTheCache() {
         PriceCacheService cache = Mockito.mock(PriceCacheService.class);
         StubRefresh flow = flowWith(cache);
-        flow.next = PricingResult.of(List.of(ProductRespDTO.builder().productId("P1").build()));
+        flow.next = PricingResult.of(List.of(Product.builder().productId("P1").build()));
 
         assertEquals(RefreshOutcome.ON_SALE, flow.refreshOne(new Row("H1"), "2"));
 
         ArgumentCaptor<List> products = ArgumentCaptor.forClass(List.class);
-        Mockito.verify(cache).productToCache(products.capture(), Mockito.any(), Mockito.any());
+        Mockito.verify(cache).productToCache(products.capture(), Mockito.any());
         assertEquals(1, products.getValue().size());
     }
 
@@ -177,7 +177,7 @@ class RefreshViaQueryTest {
         assertEquals(RefreshOutcome.EMPTY, flow.refreshOne(new Row("H1"), "1"));
 
         ArgumentCaptor<List> products = ArgumentCaptor.forClass(List.class);
-        Mockito.verify(cache).productToCache(products.capture(), Mockito.any(), Mockito.any());
+        Mockito.verify(cache).productToCache(products.capture(), Mockito.any());
         assertEquals(0, products.getValue().size());
     }
 
@@ -191,7 +191,7 @@ class RefreshViaQueryTest {
         assertEquals(RefreshOutcome.FAILED, flow.refreshOne(new Row("H1"), "1"));
 
         Mockito.verify(cache, Mockito.never())
-                .productToCache(Mockito.any(), Mockito.any(), Mockito.any());
+                .productToCache(Mockito.any(), Mockito.any());
     }
 
     @Test
@@ -203,7 +203,7 @@ class RefreshViaQueryTest {
 
         assertEquals(RefreshOutcome.FAILED, flow.refreshOne(new Row("H1"), "1"));
         Mockito.verify(cache, Mockito.never())
-                .productToCache(Mockito.any(), Mockito.any(), Mockito.any());
+                .productToCache(Mockito.any(), Mockito.any());
     }
 
     /**
@@ -220,10 +220,10 @@ class RefreshViaQueryTest {
         flow.refreshOne(new Row("H1"), "2");
 
         LocalDate today = LocalDate.now(BEIJING);
-        assertEquals(2, flow.seenRequest.getAdultNum());
-        assertEquals(1, flow.seenRequest.getRoomNum(), "缓存键不含间数、缓存价是单间口径");
-        assertEquals(today.plusDays(3).toString(), flow.seenRequest.getCheckIn());
-        assertEquals(today.plusDays(4).toString(), flow.seenRequest.getCheckout());
+        assertEquals(2, flow.seenRequest.adultNum());
+        assertEquals(1, flow.seenRequest.roomNum(), "缓存键不含间数、缓存价是单间口径");
+        assertEquals(today.plusDays(3).toString(), flow.seenRequest.checkIn());
+        assertEquals(today.plusDays(4).toString(), flow.seenRequest.checkOut());
     }
 
     @Test
@@ -235,9 +235,10 @@ class RefreshViaQueryTest {
 
         flow.refreshOne(new Row("H9"), "1");
 
-        ArgumentCaptor<Supplier> sp = ArgumentCaptor.forClass(Supplier.class);
-        Mockito.verify(cache).productToCache(Mockito.any(), Mockito.any(), sp.capture());
-        assertEquals(SupplierSourceEnum.FLIGGY.getCode(), sp.getValue().getSupplierId());
-        assertEquals("H9", sp.getValue().getSHotelId());
+        // 供应商坐标现在就在指令里，不再是并排的第二个参数
+        ArgumentCaptor<PriceQuery> pq = ArgumentCaptor.forClass(PriceQuery.class);
+        Mockito.verify(cache).productToCache(Mockito.any(), pq.capture());
+        assertEquals(SupplierSourceEnum.FLIGGY.getCode(), pq.getValue().supplierId());
+        assertEquals("H9", pq.getValue().supplierHotelId());
     }
 }

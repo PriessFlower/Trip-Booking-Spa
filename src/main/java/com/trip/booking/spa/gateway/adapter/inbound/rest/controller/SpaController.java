@@ -1,8 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.inbound.rest.controller;
 
 import java.util.concurrent.Future;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Callable;
 import java.util.HashMap;
@@ -13,19 +11,26 @@ import com.trip.booking.spa.gateway.domain.booking.OrderPresence;
 import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.BookingRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.OrderRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ResponseDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.BookingReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CancelReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.OrderQueryReq;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PushProductsReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.mapping.BookingMapping;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.mapping.CancelMapping;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.mapping.PricingMapping;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.mapping.OrderQueryMapping;
+import com.trip.booking.spa.gateway.domain.booking.BookingResult;
 import com.trip.booking.spa.gateway.domain.cancellation.CancelResult;
+import com.trip.booking.spa.gateway.domain.order.OrderQueryResult;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.service.ExpediaRegionService;
 import com.trip.booking.spa.gateway.application.booking.BookingSyncService;
@@ -38,6 +43,7 @@ import com.trip.booking.spa.gateway.application.pricing.ProductSyncService;
 import com.trip.booking.spa.bootstrap.NacosRuntimeConfig;
 import com.trip.booking.spa.platform.observability.MetricNames;
 import com.trip.booking.spa.platform.observability.MetricTags;
+import com.trip.booking.spa.platform.concurrent.ThreadPools;
 import com.trip.booking.spa.platform.observability.Monitor;
 
 import java.util.Locale;
@@ -62,6 +68,7 @@ import javax.annotation.Resource;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/client/spa")
@@ -84,50 +91,54 @@ public class SpaController {
      * 价格数据
      */
     @PostMapping(value = "/price")
-    public ResponseDTO<List<ProductRespDTO>> queryPrice(@RequestBody @Validated PriceReq priceReq) {
+    public ResponseDTO<List<Product>> queryPrice(@RequestBody @Validated PriceReq priceReq) {
         long startTime = System.currentTimeMillis();
-        List<ProductRespDTO> respDTOList = Lists.newArrayList();
+        List<Product> respDTOList = Lists.newArrayList();
         List<PricingOutcome> outcomes = Lists.newArrayList();
         List<Integer> cachePriceSuppliers = nacosRuntimeConfig.getCachePriceSuppliers();
         Map<Integer, List<String>> cachePriceHotels = nacosRuntimeConfig.getCachePriceHotels();
-        // 每条腿先定走缓存还是实时，并把「不支持实时查价」的供应商在派发前挑出来。
-        // 以前是串行走到那一腿才返回 unsupported；并行后必须先查，否则别的腿白跑
-        List<Supplier> suppliers = priceReq.getSuppliers();
-        List<Boolean> useCache = new ArrayList<>(suppliers.size());
+        // 每家先定走缓存还是实时，并把「不支持实时查价」的供应商在派发前挑出来。
+        // 以前是串行走到那一家才返回 unsupported；并行后必须先查，否则别家白跑
+        // JSON↔领域的翻译收在 PricingMapping：一次请求 × 一家供应商拆成一条指令，
+        // 每家往下只看得到自己那份坐标（①持有翻译，②③不识 JSON）
+        List<PriceQuery> queries = priceReq.getSuppliers().stream()
+                .map(supplier -> PricingMapping.toQuery(priceReq, supplier))
+                .collect(Collectors.toList());
+        List<Boolean> useCache = new ArrayList<>(queries.size());
         Map<Integer, ProductSyncService> liveServices = new HashMap<>();
-        for (Supplier supplier : suppliers) {
+        for (PriceQuery query : queries) {
             //如果没有传产品id并且配置了供应商查询缓存，则走缓存
             List<String> hotelIdList = cachePriceHotels.getOrDefault(
-                    supplier.getSupplierId(), Collections.emptyList());
-            boolean cache = StringUtils.isBlank(supplier.getSProductId())
-                    && cachePriceSuppliers.contains(supplier.getSupplierId())
+                    query.supplierId(), Collections.emptyList());
+            boolean cache = StringUtils.isBlank(query.supplierProductId())
+                    && cachePriceSuppliers.contains(query.supplierId())
                     //查询供应商是全量走缓存还是部分酒店走缓存
-                    && (CollectionUtils.isEmpty(hotelIdList) || hotelIdList.contains(supplier.getSHotelId()));
+                    && (CollectionUtils.isEmpty(hotelIdList) || hotelIdList.contains(query.supplierHotelId()));
             useCache.add(cache);
-            if (!cache && !liveServices.containsKey(supplier.getSupplierId())) {
+            if (!cache && !liveServices.containsKey(query.supplierId())) {
                 ProductSyncService hotelService = capabilityRegistry.find(
-                        supplier.getSupplierId(), Capability.PRICING, ProductSyncService.class);
+                        query.supplierId(), Capability.PRICING, ProductSyncService.class);
                 if (hotelService == null) {
-                    return unsupportedSupplierOperation(supplier.getSupplierId(), "price");
+                    return unsupportedSupplierOperation(query.supplierId(), "price");
                 }
-                liveServices.put(supplier.getSupplierId(), hotelService);
+                liveServices.put(query.supplierId(), hotelService);
             }
         }
 
-        // 多条腿并行，结果按下标归位。此前是串行 for：机器内实测 1 条腿 0.9s、5 条腿 4.6~5.0s
-        // 线性累加（2026-09-10），上游一页 5 家从美国机跨海过来必撞 5s 预算。各腿互不依赖，
-        // 缓存腿不占供应商额度，实时腿各自受自家限流器约束。
-        List<Leg> legs = runLegs(priceReq, suppliers, useCache, liveServices);
+        // 各供应商并行问价，结果按请求里的顺序归位。此前是串行 for：机器内实测 1 家 0.9s、
+        // 5 家 4.6~5.0s 线性累加（2026-09-10），上游一页 5 家从美国机跨海过来必撞 5s 预算。
+        // 各家互不依赖；走缓存的不占供应商额度，走实时的各自受自家限流器约束。
+        List<SupplierQuote> quotes = queryEachSupplier(queries, useCache, liveServices);
 
-        // 每腿记一次（O-3.4），失败腿照旧 recordFailedLeg 后整批抛出——与串行时的语义一致：
-        // 以前一腿抛就整批 500，现在也是，只是别的腿的指标不再因为它没被记
+        // 每家记一次（O-3.4），失败的那家照旧 recordFailedSupplier 后整批抛出——与串行时
+        // 语义一致：以前一家抛就整批 500，现在也是，只是别家的指标不再因为它没被记
         RuntimeException firstFailure = null;
-        for (Leg leg : legs) {
-            String source = leg.cache ? MetricTags.SOURCE_CACHE : MetricTags.SOURCE_LIVE;
-            if (leg.failure != null) {
-                recordFailedLeg(leg.supplier, source);
+        for (SupplierQuote quote : quotes) {
+            String source = quote.cache ? MetricTags.SOURCE_CACHE : MetricTags.SOURCE_LIVE;
+            if (quote.failure != null) {
+                recordFailedSupplier(quote.query, source);
                 if (firstFailure == null) {
-                    firstFailure = leg.failure;
+                    firstFailure = quote.failure;
                 }
                 continue;
             }
@@ -137,15 +148,15 @@ public class SpaController {
             //   两者皆无   → INDETERMINATE（这一片没刷过，或已过 TTL）
             // 此前三者塌成一态、一律回报「未能确认」。塌了之后：既诱发上游对确定无货的
             // 无谓重试，也让「刷价没覆盖到这个占用片」这类缺口在出价侧完全不可见
-            if (leg.cache) {
-                if (leg.result.outcome() == PricingOutcome.AVAILABLE) {
-                    respDTOList.addAll(leg.result.products());
+            if (quote.cache) {
+                if (quote.result.outcome() == PricingOutcome.AVAILABLE) {
+                    respDTOList.addAll(quote.result.products());
                 }
             } else {
-                respDTOList.addAll(leg.result.products());
+                respDTOList.addAll(quote.result.products());
             }
-            outcomes.add(leg.result.outcome());
-            recordPriceLeg(leg.supplier, source, leg.result);
+            outcomes.add(quote.result.outcome());
+            recordSupplierQuote(quote.query, source, quote.result);
         }
         if (firstFailure != null) {
             throw firstFailure;
@@ -160,62 +171,69 @@ public class SpaController {
      * 入口四件套里的请求数与出报数（O-4.2）——此前这个入口只有耗时，「出报率 36%」
      * 这个已知结论没法用指标复现，只能靠 grep 日志现算。
      *
-     * <p>腿 = 请求 × 供应商，每腿记一次（O-3.4），outcome 直接沿用 {@link PricingOutcome}
-     * 的分态结论，不另造词表。出报条数单独一个名字：它计的是产品条数，和「腿」不是
+     * <p>一次请求 × 一家供应商记一次（O-3.4），outcome 直接沿用 {@link PricingOutcome}
+     * 的分态结论，不另造词表。出报条数单独一个名字：它计的是产品条数，和「问了几家」不是
      * 同一个度量，混在一个 counter 里会把出报率算错。
+     *
+     * <p>指标名 2026-09-11 由 {@code spa_price_leg} 改为 {@code spa_price_asked}，
+     * Grafana 看板与 docs/observability.md 同步已改。按 O-5.3 指标名视同接口，
+     * <b>Prometheus 历史序列不接续</b>——跨改名点看趋势要查两个名字。
      */
-    /** 一条腿的答复：结果或异常二者只有一个非空 */
-    private record Leg(Supplier supplier, boolean cache, PricingResult result, RuntimeException failure) {
+    /** 各供应商并行问价的扇出池名：进 ThreadPools 注册表，水位由 PoolStatsSampler 推成 gauge */
+    private static final String QUOTE_POOL_NAME = "supplier-quote";
+
+    /** 一家供应商的答复：结果或异常二者只有一个非空 */
+    private record SupplierQuote(PriceQuery query, boolean cache, PricingResult result, RuntimeException failure) {
     }
 
     /**
-     * 并行跑各腿，<b>按请求顺序</b>归位。单腿不进线程池，走原路。
-     * 不设整体超时：各腿的耗时上限由各自的供应商客户端 / Redis 客户端超时管，这里只负责别再串行等。
+     * 并行问各家，<b>按请求顺序</b>归位。只有一家时不进线程池，走原路。
+     * 不设整体超时：各家的耗时上限由各自的供应商客户端 / Redis 客户端超时管，这里只负责别再串行等。
      */
-    private List<Leg> runLegs(PriceReq priceReq, List<Supplier> suppliers, List<Boolean> useCache,
+    private List<SupplierQuote> queryEachSupplier(List<PriceQuery> queries, List<Boolean> useCache,
                               Map<Integer, ProductSyncService> liveServices) {
-        if (suppliers.size() == 1) {
-            return List.of(oneLeg(priceReq, suppliers.get(0), useCache.get(0), liveServices));
+        if (queries.size() == 1) {
+            return List.of(querySupplier(queries.get(0), useCache.get(0), liveServices));
         }
-        List<Callable<Leg>> tasks = new ArrayList<>(suppliers.size());
-        for (int i = 0; i < suppliers.size(); i++) {
-            Supplier supplier = suppliers.get(i);
+        List<Callable<SupplierQuote>> tasks = new ArrayList<>(queries.size());
+        for (int i = 0; i < queries.size(); i++) {
+            PriceQuery query = queries.get(i);
             boolean cache = useCache.get(i);
-            tasks.add(() -> oneLeg(priceReq, supplier, cache, liveServices));
+            tasks.add(() -> querySupplier(query, cache, liveServices));
         }
-        List<Leg> out = new ArrayList<>(suppliers.size());
-        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
-            for (Future<Leg> f : pool.invokeAll(tasks)) {
+        List<SupplierQuote> out = new ArrayList<>(queries.size());
+        try {
+            for (Future<SupplierQuote> f : ThreadPools.virtualPerTask(QUOTE_POOL_NAME).invokeAll(tasks)) {
                 out.add(f.get());
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("查价被中断", e);
         } catch (ExecutionException e) {
-            // oneLeg 已把 RuntimeException 装进 Leg，走到这里只可能是 Error 级别的问题
-            throw new IllegalStateException("查价腿执行异常", e.getCause());
+            // querySupplier 已把 RuntimeException 装进 SupplierQuote，走到这里只可能是 Error 级别的问题
+            throw new IllegalStateException("查价并发执行异常", e.getCause());
         }
         return out;
     }
 
-    private Leg oneLeg(PriceReq priceReq, Supplier supplier, boolean cache,
+    private SupplierQuote querySupplier(PriceQuery query, boolean cache,
                        Map<Integer, ProductSyncService> liveServices) {
         try {
             PricingResult r = cache
-                    ? priceCacheService.getPriceResult(priceReq, supplier)
-                    : liveServices.get(supplier.getSupplierId()).queryPrice(priceReq, supplier);
-            return new Leg(supplier, cache, r, null);
+                    ? priceCacheService.getPriceResult(query)
+                    : liveServices.get(query.supplierId()).queryPrice(query);
+            return new SupplierQuote(query, cache, r, null);
         } catch (RuntimeException e) {
-            return new Leg(supplier, cache, null, e);
+            return new SupplierQuote(query, cache, null, e);
         }
     }
 
-    private static void recordPriceLeg(Supplier supplier, String source, PricingResult result) {
-        SupplierSourceEnum supplierEnum = SupplierSourceEnum.getEnum(supplier.getSupplierId());
+    private static void recordSupplierQuote(PriceQuery query, String source, PricingResult result) {
+        SupplierSourceEnum supplierEnum = SupplierSourceEnum.getEnum(query.supplierId());
         if (supplierEnum == null) {
             return;
         }
-        Monitor.recordOne(MetricNames.SPA_PRICE_LEG, MetricTags.leg(supplierEnum, source,
+        Monitor.recordOne(MetricNames.SPA_PRICE_ASKED, MetricTags.asked(supplierEnum, source,
                 result.outcome().name().toLowerCase(Locale.ROOT)));
         if (!result.products().isEmpty()) {
             Monitor.recordMany(MetricNames.SPA_PRICE_QUOTED,
@@ -223,14 +241,14 @@ public class SpaController {
         }
     }
 
-    /** 腿的词表必须穷尽（O-3.3）：异常出去的腿不计数，出报率分母就偏小、算出来偏高 */
-    private static void recordFailedLeg(Supplier supplier, String source) {
-        SupplierSourceEnum supplierEnum = SupplierSourceEnum.getEnum(supplier.getSupplierId());
+    /** 词表必须穷尽（O-3.3）：异常出去的那家不计数，出报率分母就偏小、算出来偏高 */
+    private static void recordFailedSupplier(PriceQuery query, String source) {
+        SupplierSourceEnum supplierEnum = SupplierSourceEnum.getEnum(query.supplierId());
         if (supplierEnum == null) {
             return;
         }
-        Monitor.recordOne(MetricNames.SPA_PRICE_LEG,
-                MetricTags.leg(supplierEnum, source, MetricNames.LEG_ERROR));
+        Monitor.recordOne(MetricNames.SPA_PRICE_ASKED,
+                MetricTags.asked(supplierEnum, source, MetricNames.OUTCOME_ERROR));
     }
 
     /**
@@ -238,14 +256,14 @@ public class SpaController {
      * {@code result} 是否为空，故 AVAILABLE/NO_INVENTORY 走 200+数组、INDETERMINATE 走
      * 200+{@code result=null}，与原先一致；新增的只有 {@code outcome} 一个字段。
      */
-    static ResponseDTO<List<ProductRespDTO>> toPriceResponse(PricingOutcome outcome,
-                                                             List<ProductRespDTO> products) {
+    static ResponseDTO<List<Product>> toPriceResponse(PricingOutcome outcome,
+                                                             List<Product> products) {
         if (outcome == PricingOutcome.AVAILABLE) {
             return ResponseDTO.success(products).withOutcome(outcome);
         }
         if (outcome == PricingOutcome.NO_INVENTORY) {
             // 「确实没有」是一个成功的回答，如实回空列表——上游据此可以告知旅客并停止重试
-            return ResponseDTO.success(Collections.<ProductRespDTO>emptyList()).withOutcome(outcome);
+            return ResponseDTO.success(Collections.<Product>emptyList()).withOutcome(outcome);
         }
         // 「没问出来」才算失败，且 result 必须保持 null：改成空数组会让上游把
         // 「未能确认」读成「确实没有」。errorMsg 也保持原文，避免踩到别处的字符串匹配
@@ -275,20 +293,22 @@ public class SpaController {
      * 验价
      */
     @PostMapping(value = "/check")
-    public ResponseDTO<CheckPriceRespDTO> checkPrice(@RequestBody @Validated CheckPriceReq checkPriceReq) {
+    public ResponseDTO<CheckPriceResult> checkPrice(@RequestBody @Validated CheckPriceReq checkPriceReq) {
 
         CheckPriceSyncService checkPriceSyncService = capabilityRegistry.find(checkPriceReq.getSupplierId(), Capability.CHECK_PRICE, CheckPriceSyncService.class);
         if (checkPriceSyncService == null) {
             return unsupportedSupplierOperation(checkPriceReq.getSupplierId(), "check");
         }
 
-        CheckPriceRespDTO checkPriceRespDTO = checkPriceSyncService.checkPrice(checkPriceReq);
+        // JSON↔领域的翻译收在 PricingMapping（①持有翻译，②③不识 JSON）
+        CheckPriceResult checkPriceRespDTO = checkPriceSyncService.checkPrice(
+                PricingMapping.toCommand(checkPriceReq));
 
         if (checkPriceRespDTO == null) {
             // 兜底：模板已保证非空，此处仅防实现绕过模板。不可表达为「不可订」，
             // 否则会把「我们不知道」说成「供应商说没有」
             log.error("checkPrice 返回空，按未能确认回报, sProductId={}", checkPriceReq.getSProductId());
-            checkPriceRespDTO = CheckPriceRespDTO.builder()
+            checkPriceRespDTO = CheckPriceResult.builder()
                     .outcome(CheckPriceOutcome.INDETERMINATE)
                     .message("验价未能确认该产品是否可订，请稍后重试")
                     .build();
@@ -313,17 +333,15 @@ public class SpaController {
             return unsupportedSupplierOperation(bookingReq.getSupplierId(), "booking");
         }
 
-        BookingRespDTO bookingRespDTO = bookingSyncService.booking(bookingReq);
+        // 下单已切领域模型：JSON↔领域的翻译收在 BookingMapping（①持有翻译，②③不识 JSON）
+        BookingResult result = bookingSyncService.booking(BookingMapping.toCommand(bookingReq));
 
-        if (bookingRespDTO == null) {
+        if (result == null) {
             // 兜底：模板已保证非空，此处仅防实现绕过模板。同样不可表达为失败
             log.error("booking 返回空，按结果不确定回报, orderId={}", bookingReq.getOrderId());
-            bookingRespDTO = BookingRespDTO.builder()
-                    .outcome(BookingOutcome.UNKNOWN)
-                    .orderId(bookingReq.getOrderId())
-                    .orderDesc("下单结果不确定，请查单确证")
-                    .build();
+            result = BookingResult.unknown(bookingReq.getOrderId(), "下单结果不确定，请查单确证");
         }
+        BookingRespDTO bookingRespDTO = BookingMapping.toDto(result);
 
         return ResponseDTO.success(bookingRespDTO);
 
@@ -360,19 +378,17 @@ public class SpaController {
             return unsupportedSupplierOperation(orderQueryReq.getSupplierId(), "order");
         }
 
-        OrderRespDTO orderRespDTO = orderQuerySyncService.orderQuery(orderQueryReq);
+        // 查单已切领域模型：JSON↔领域的翻译收在 OrderQueryMapping（①持有翻译，②③不识 JSON）
+        OrderQueryResult result = orderQuerySyncService.orderQuery(OrderQueryMapping.toCommand(orderQueryReq));
 
-        if (orderRespDTO == null) {
+        if (result == null) {
             // 兜底：模板已保证非空，此处仅防实现绕过模板。不可表达为「订单不存在」，
             // 否则上游会据此重新下单
             log.error("orderQuery 返回空，按未能确证回报, orderId={}", orderQueryReq.getOrderId());
-            orderRespDTO = OrderRespDTO.builder()
-                    .presence(OrderPresence.INDETERMINATE)
-                    .message("查单未能确证订单是否存在，请稍后重试查单")
-                    .build();
+            result = OrderQueryResult.indeterminate("查单未能确证订单是否存在，请稍后重试查单");
         }
 
-        return ResponseDTO.success(orderRespDTO);
+        return ResponseDTO.success(OrderQueryMapping.toDto(result));
 
     }
 

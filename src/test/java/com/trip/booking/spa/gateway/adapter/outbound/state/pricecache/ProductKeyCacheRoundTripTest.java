@@ -2,7 +2,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespCacheDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.BeanUtils;
@@ -22,7 +22,7 @@ class ProductKeyCacheRoundTripTest {
 
     @Test
     void productKeySurvivesCacheRoundTrip() {
-        ProductRespDTO source = ProductRespDTO.builder()
+        Product source = Product.builder()
                 .hotelId("4173").productId("392135581")
                 .productKey("0d9930908dfffe25b2a14a0dae0c5817e430942dd4e0230c2c5f9b8fdb1c573d")
                 .supplierId(10010).totalPrice(421285)
@@ -35,7 +35,7 @@ class ProductKeyCacheRoundTripTest {
 
         // 读侧:PriceCacheServiceImpl 116-118 行
         ProductRespCacheDTO loaded = JsonUtils.decodeJson(json, new TypeReference<>() {});
-        ProductRespDTO out = new ProductRespDTO();
+        Product out = new Product();
         BeanUtils.copyProperties(loaded, out);
 
         assertEquals(source.getProductKey(), out.getProductKey(),

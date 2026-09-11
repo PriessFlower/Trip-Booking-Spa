@@ -1,8 +1,8 @@
 package com.trip.booking.spa.gateway.application.booking;
 
 import com.trip.booking.spa.gateway.domain.booking.BookingOutcome;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.BookingRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.BookingReq;
+import com.trip.booking.spa.gateway.domain.booking.BookingCommand;
+import com.trip.booking.spa.gateway.domain.booking.BookingResult;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 
@@ -14,9 +14,12 @@ import lombok.extern.slf4j.Slf4j;
  * （独立项目，与网关这条路无关，§0.4），飞猪连配置项都没有，于是三家里只有一家
  * 真有闸，而"漏了"在编译期与运行期都不报错。凡是「新接一家必须记得写」的安全
  * 措施，都该长在骨架上（同 {@code AbstractCheckPriceFlow} 的理由）。
+ *
+ * <p>此前还有一道"实现方漏填 outcome 就按 UNKNOWN 处理"的运行期兜底，随本次切领域模型
+ * 删除：{@link BookingResult} 的三态由工厂钉死，漏填在构造上就不成立。
  */
 @Slf4j
-public abstract class AbstractBookingSyncSupportService<T> implements BookingSyncService {
+public abstract class AbstractBookingSyncSupportService implements BookingSyncService {
 
     /**
      * 安全护栏闸口的配置键名，进拦截日志（§3.8.4 拦截可定位）。
@@ -40,63 +43,43 @@ public abstract class AbstractBookingSyncSupportService<T> implements BookingSyn
     protected abstract boolean bookingAllowed();
 
     @Override
-    public BookingRespDTO booking(BookingReq bookingReq) {
+    public BookingResult booking(BookingCommand command) {
         try {
             // §3.8.3 关闸即停做功：判定在最外层，关闸后不解析凭据、不取句柄、不组装报文
             if (!bookingAllowed()) {
                 log.info("闸口 {} 关闭，拒绝下单,orderId={},sHotelId={}",
-                        bookingGateKey(), bookingReq.getOrderId(), bookingReq.getSHotelId());
-                return BookingRespDTO.builder()
-                        .outcome(BookingOutcome.FAILED)
-                        .orderId(bookingReq.getOrderId())
-                        .supplierErrorCode("booking_disabled")
-                        .supplierErrorMessage("下单未开通（安全护栏 " + bookingGateKey() + " 关闭）")
-                        .orderDesc("下单未开通（安全护栏关闭），供应商侧未发生任何动作")
-                        .build();
+                        bookingGateKey(), command.orderId(), command.supplierHotelId());
+                return BookingResult.failed(command.orderId(), "booking_disabled",
+                        "下单未开通（安全护栏 " + bookingGateKey() + " 关闭）",
+                        "下单未开通（安全护栏关闭），供应商侧未发生任何动作");
             }
-            T t = doBooking(bookingReq);
+            BookingResult result = doBooking(command);
 
-            log.info("BookingSyncService bookingReq : {}, bookingResp:{}", JsonUtils.writeObject2Json(bookingReq),
-                    JsonUtils.writeObject2Json(t));
+            log.info("BookingSyncService orderId={}, bookingResult:{}",
+                    command.orderId(), JsonUtils.writeObject2Json(result));
 
-            if (t == null) {
+            if (result == null) {
                 // 无响应不等于未下单：请求可能已送达供应商而响应丢失，须交上游查单确证
-                log.error("BookingSyncService doBooking 无响应，回报 UNKNOWN, orderId={}", bookingReq.getOrderId());
-                return unknown(bookingReq, "供应商无响应，结果不确定，请查单确证");
+                log.error("BookingSyncService doBooking 无响应，回报 UNKNOWN, orderId={}", command.orderId());
+                return BookingResult.unknown(command.orderId(), "供应商无响应，结果不确定，请查单确证");
             }
-
-            BookingRespDTO bookingRespDTO = bookingRespConvert(t);
-
-            if (bookingRespDTO == null) {
-                log.error("BookingSyncService bookingRespConvert 返回空，回报 UNKNOWN, orderId={}, 原始响应={}",
-                        bookingReq.getOrderId(), JsonUtils.writeObject2Json(t));
-                return unknown(bookingReq, "供应商响应无法解析，结果不确定，请查单确证");
-            }
-            if (bookingRespDTO.getOutcome() == null) {
-                // 实现方漏填三态即视为不确定，避免默认值悄悄退化成某一态
-                log.error("BookingSyncService 实现未填 outcome，按 UNKNOWN 处理, orderId={}", bookingReq.getOrderId());
-                bookingRespDTO.setOutcome(BookingOutcome.UNKNOWN);
-            }
-            if (bookingRespDTO.getOrderId() == null) {
-                bookingRespDTO.setOrderId(bookingReq.getOrderId());
-            }
-            return bookingRespDTO;
+            // 实现漏回显我方单号时补上；其余字段一律不动
+            return result.withOrderId(command.orderId());
         } catch (Exception e) {
             // 异常同样不足以断定未下单：连接在请求发出后中断，与请求根本没发出，在本地无从区分
-            log.error("BookingSyncService 异常，回报 UNKNOWN, orderId={}", bookingReq.getOrderId(), e);
-            return unknown(bookingReq, "下单过程异常，结果不确定，请查单确证：" + e.getClass().getSimpleName());
+            log.error("BookingSyncService 异常，回报 UNKNOWN, orderId={}", command.orderId(), e);
+            return BookingResult.unknown(command.orderId(),
+                    "下单过程异常，结果不确定，请查单确证：" + e.getClass().getSimpleName());
         }
     }
 
-    private BookingRespDTO unknown(BookingReq bookingReq, String desc) {
-        return BookingRespDTO.builder()
-                .outcome(BookingOutcome.UNKNOWN)
-                .orderId(bookingReq.getOrderId())
-                .orderDesc(desc)
-                .build();
-    }
-
-    public abstract T doBooking(BookingReq bookingReq);
-
-    public abstract BookingRespDTO bookingRespConvert(T t);
+    /**
+     * 向供应商下单并给出三态结论。
+     *
+     * <p>此前是 {@code doBooking} 产原始响应、{@code bookingRespConvert} 再转一道，
+     * 而三家的转换全是纯字段拷贝（飞猪那个甚至是恒等函数），两家还各自养了一个与
+     * {@link BookingResult} 同形的 {@code BookingOutcomeHolder}。同一形状写了四遍，
+     * 遂与取消能力同规收成一步。
+     */
+    protected abstract BookingResult doBooking(BookingCommand command);
 }

@@ -1,12 +1,12 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.catalog;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
+import com.trip.booking.spa.gateway.domain.product.Meal;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.observability.MetricNames;
 import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Room;
+import com.trip.booking.spa.gateway.domain.product.ProductInfo;
+import com.trip.booking.spa.gateway.domain.product.Room;
 import lombok.Builder;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;

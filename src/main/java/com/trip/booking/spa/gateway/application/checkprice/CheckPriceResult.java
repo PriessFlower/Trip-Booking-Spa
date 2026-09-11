@@ -1,6 +1,8 @@
 
-package com.trip.booking.spa.gateway.adapter.inbound.rest.dto;
+package com.trip.booking.spa.gateway.application.checkprice;
 
+import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
+import com.trip.booking.spa.gateway.domain.product.PriceInfo;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
 import lombok.*;
 
@@ -11,7 +13,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CheckPriceRespDTO {
+public class CheckPriceResult {
 
     /**
      * 验价结果分态，<b>上游必须先读本字段再读其余字段</b>。
@@ -76,7 +78,7 @@ public class CheckPriceRespDTO {
     /**
      * 验价时点的退改条款，仅 {@link CheckPriceOutcome#BOOKABLE} 时有值。
      *
-     * <p>与查价响应 {@code ProductRespDTO.cancelPolicy} 同结构、同口径，但<b>以验价时点
+     * <p>与查价响应 {@code Product.cancelPolicy} 同结构、同口径，但<b>以验价时点
      * 为准</b>——查价与验价之间条款可能已变，而下单要认的是这一份。上游据此向旅客展示
      * "几点前可免费取消"，并按 R-5.3 存入订单契约快照。
      *

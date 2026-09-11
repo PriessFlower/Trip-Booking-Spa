@@ -1,4 +1,4 @@
-package com.trip.booking.spa.gateway.application.cancellation;
+package com.trip.booking.spa.gateway.application;
 
 import org.junit.jupiter.api.Test;
 
@@ -12,22 +12,26 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 钉住取消能力的依赖方向：② 不识 ① 的 JSON。
+ * 钉住已解耦能力面的依赖方向：② 不识 ① 的 JSON。
  *
- * <p>五个能力接口此前全部直接吃 REST DTO（依赖方向倒挂：②依赖①），取消是第一个矫正的
- * 能力面——JSON↔领域的翻译收在 ① 的 CancelMapping，②③只说领域语言。本测试防的是
- * 下一个改动图省事把 {@code rest.dto} 重新 import 回来，让试点静默失效。
+ * <p>五个能力接口此前全部直接吃 REST DTO（依赖方向倒挂：②依赖①）。取消 → 查单 → 下单 → 查价 → 验价，五个能力面已全部矫正——JSON↔领域的翻译收在 ① 的 {@code *Mapping}，②③只说领域语言。本测试防的是
+ * 下一个改动图省事把 {@code rest.dto} 重新 import 回来，让已完成的解耦静默失效。
  *
- * <p>范围刻意只圈 cancellation 与 domain：其余四个能力尚未解耦（pricing/checkprice/
- * booking/order 仍吃 REST DTO），每解耦一个能力，把它的包加进 DECOUPLED_PACKAGES。
+ * <p><b>清单是增量的</b>：其余两个能力尚未解耦（pricing / checkprice 仍吃 REST DTO，且共用 Product，
+ * 须一起做），每解耦一个，把它的包加进 {@link #DECOUPLED_PACKAGES}。原名
+ * CancellationLayerBoundaryTest 随查单加入改为现名——它守的已不止取消一个能力。
  */
-class CancellationLayerBoundaryTest {
+class CapabilityLayerBoundaryTest {
 
     private static final Path MAIN = Path.of("src/main/java/com/trip/booking/spa");
 
     /** 已完成解耦的 ② 层能力包：不许 import adapter.inbound（rest 请求/DTO 均在其中） */
     private static final List<String> DECOUPLED_PACKAGES = List.of(
-            "gateway/application/cancellation");
+            "gateway/application/cancellation",
+            "gateway/application/order",
+            "gateway/application/booking",
+            "gateway/application/pricing",
+            "gateway/application/checkprice");
 
     @Test
     void decoupledCapabilitiesMustNotImportInboundRest() throws IOException {
@@ -35,7 +39,7 @@ class CancellationLayerBoundaryTest {
             List<String> offenders = offenders(MAIN.resolve(pkg),
                     "import com.trip.booking.spa.gateway.adapter.inbound");
             assertTrue(offenders.isEmpty(),
-                    pkg + " 已解耦，不许回头依赖 ① 的 REST 契约（翻译只在 CancelMapping）：" + offenders);
+                    pkg + " 已解耦，不许回头依赖 ① 的 REST 契约（翻译只在 ① 的 *Mapping）：" + offenders);
         }
     }
 

@@ -1,8 +1,8 @@
 package com.trip.booking.spa.gateway.application.checkprice;
 
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,11 +17,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 class AbstractCheckPriceSyncSupportServiceTest {
 
-    private static CheckPriceReq req() {
-        return CheckPriceReq.builder()
+    private static CheckPriceCommand req() {
+        return CheckPriceCommand.builder()
                 .supplierId(10005)
-                .sHotelId("10970375")
-                .sProductId("211857685")
+                .supplierHotelId("10970375")
+                .supplierProductId("211857685")
                 .checkIn("2026-09-25")
                 .checkOut("2026-09-26")
                 .roomNum(1)
@@ -32,7 +32,7 @@ class AbstractCheckPriceSyncSupportServiceTest {
     /** 供应商无响应不等于不可订 */
     @Test
     void nullSupplierResponseIsReportedAsIndeterminate() {
-        CheckPriceRespDTO resp = new StubCheckPriceService(Behaviour.RETURN_NULL).checkPrice(req());
+        CheckPriceResult resp = new StubCheckPriceService(Behaviour.RETURN_NULL).checkPrice(req());
 
         assertNotNull(resp, "兜底禁止返回 null：控制层会把它表达为接口错误，上游只能笼统当作验不过");
         assertEquals(CheckPriceOutcome.INDETERMINATE, resp.getOutcome());
@@ -41,7 +41,7 @@ class AbstractCheckPriceSyncSupportServiceTest {
     /** 抛异常同样不足以断定不可订 */
     @Test
     void exceptionIsReportedAsIndeterminate() {
-        CheckPriceRespDTO resp = new StubCheckPriceService(Behaviour.THROW).checkPrice(req());
+        CheckPriceResult resp = new StubCheckPriceService(Behaviour.THROW).checkPrice(req());
 
         assertNotNull(resp);
         assertEquals(CheckPriceOutcome.INDETERMINATE, resp.getOutcome());
@@ -50,7 +50,7 @@ class AbstractCheckPriceSyncSupportServiceTest {
     /** 转换器返回空属不可判 */
     @Test
     void unconvertibleResponseIsReportedAsIndeterminate() {
-        CheckPriceRespDTO resp = new StubCheckPriceService(Behaviour.CONVERT_TO_NULL).checkPrice(req());
+        CheckPriceResult resp = new StubCheckPriceService(Behaviour.CONVERT_TO_NULL).checkPrice(req());
 
         assertNotNull(resp);
         assertEquals(CheckPriceOutcome.INDETERMINATE, resp.getOutcome());
@@ -59,7 +59,7 @@ class AbstractCheckPriceSyncSupportServiceTest {
     /** 实现漏填分态时按 INDETERMINATE 兜底，避免默认值悄悄退化成「可订」 */
     @Test
     void missingOutcomeDefaultsToIndeterminate() {
-        CheckPriceRespDTO resp = new StubCheckPriceService(Behaviour.OMIT_OUTCOME).checkPrice(req());
+        CheckPriceResult resp = new StubCheckPriceService(Behaviour.OMIT_OUTCOME).checkPrice(req());
 
         assertEquals(CheckPriceOutcome.INDETERMINATE, resp.getOutcome(),
                 "漏填时若默认成可订，上游会去下一个必定失败的单");
@@ -68,7 +68,7 @@ class AbstractCheckPriceSyncSupportServiceTest {
     /** 供应商明确说满房时，实现有权判 SOLD_OUT，模板不得篡改 */
     @Test
     void soldOutIsPreserved() {
-        CheckPriceRespDTO resp = new StubCheckPriceService(Behaviour.SOLD_OUT).checkPrice(req());
+        CheckPriceResult resp = new StubCheckPriceService(Behaviour.SOLD_OUT).checkPrice(req());
 
         assertEquals(CheckPriceOutcome.SOLD_OUT, resp.getOutcome());
     }
@@ -79,7 +79,7 @@ class AbstractCheckPriceSyncSupportServiceTest {
      */
     @Test
     void rateDeadIsNotFoldedIntoIndeterminate() {
-        CheckPriceRespDTO resp = new StubCheckPriceService(Behaviour.RATE_DEAD).checkPrice(req());
+        CheckPriceResult resp = new StubCheckPriceService(Behaviour.RATE_DEAD).checkPrice(req());
 
         assertEquals(CheckPriceOutcome.RATE_DEAD, resp.getOutcome(),
                 "折叠成不确定会让上游反复重试一个必定失败的产品标识");
@@ -93,7 +93,7 @@ class AbstractCheckPriceSyncSupportServiceTest {
      */
     @Test
     void bookableWithoutOfferIdIsDemotedToIndeterminate() {
-        CheckPriceRespDTO resp = new StubCheckPriceService(Behaviour.BOOKABLE_WITHOUT_OFFER).checkPrice(req());
+        CheckPriceResult resp = new StubCheckPriceService(Behaviour.BOOKABLE_WITHOUT_OFFER).checkPrice(req());
 
         assertEquals(CheckPriceOutcome.INDETERMINATE, resp.getOutcome(),
                 "无句柄的「可订」不是可订：上游据此下单必失败，而彼时旅客已在等结果");
@@ -102,14 +102,14 @@ class AbstractCheckPriceSyncSupportServiceTest {
     /** 句柄没有剩余时效，上游无从判断该直接下单还是先重新验价 */
     @Test
     void bookableWithoutOfferTtlIsDemotedToIndeterminate() {
-        CheckPriceRespDTO resp = new StubCheckPriceService(Behaviour.BOOKABLE_WITHOUT_TTL).checkPrice(req());
+        CheckPriceResult resp = new StubCheckPriceService(Behaviour.BOOKABLE_WITHOUT_TTL).checkPrice(req());
 
         assertEquals(CheckPriceOutcome.INDETERMINATE, resp.getOutcome());
     }
 
     @Test
     void bookableIsPassedThrough() {
-        CheckPriceRespDTO resp = new StubCheckPriceService(Behaviour.BOOKABLE).checkPrice(req());
+        CheckPriceResult resp = new StubCheckPriceService(Behaviour.BOOKABLE).checkPrice(req());
 
         assertEquals(CheckPriceOutcome.BOOKABLE, resp.getOutcome());
         assertEquals("of_stub", resp.getOfferId());
@@ -129,7 +129,7 @@ class AbstractCheckPriceSyncSupportServiceTest {
         }
 
         @Override
-        public String doCheckPrice(CheckPriceReq checkPriceReq) {
+        public String doCheckPrice(CheckPriceCommand checkPriceReq) {
             switch (behaviour) {
                 case RETURN_NULL:
                     return null;
@@ -141,28 +141,28 @@ class AbstractCheckPriceSyncSupportServiceTest {
         }
 
         @Override
-        public CheckPriceRespDTO checkPriceRespConvert(String raw) {
+        public CheckPriceResult checkPriceRespConvert(String raw) {
             switch (behaviour) {
                 case CONVERT_TO_NULL:
                     return null;
                 case OMIT_OUTCOME:
-                    return CheckPriceRespDTO.builder().salePrice(188012).build();
+                    return CheckPriceResult.builder().salePrice(188012).build();
                 case SOLD_OUT:
-                    return CheckPriceRespDTO.builder().outcome(CheckPriceOutcome.SOLD_OUT).build();
+                    return CheckPriceResult.builder().outcome(CheckPriceOutcome.SOLD_OUT).build();
                 case RATE_DEAD:
-                    return CheckPriceRespDTO.builder().outcome(CheckPriceOutcome.RATE_DEAD).build();
+                    return CheckPriceResult.builder().outcome(CheckPriceOutcome.RATE_DEAD).build();
                 case BOOKABLE_WITHOUT_OFFER:
-                    return CheckPriceRespDTO.builder()
+                    return CheckPriceResult.builder()
                             .outcome(CheckPriceOutcome.BOOKABLE)
                             .offerTtlSeconds(600L)
                             .build();
                 case BOOKABLE_WITHOUT_TTL:
-                    return CheckPriceRespDTO.builder()
+                    return CheckPriceResult.builder()
                             .outcome(CheckPriceOutcome.BOOKABLE)
                             .offerId("of_stub")
                             .build();
                 default:
-                    return CheckPriceRespDTO.builder()
+                    return CheckPriceResult.builder()
                             .outcome(CheckPriceOutcome.BOOKABLE)
                             .offerId("of_stub")
                             .offerTtlSeconds(600L)

@@ -1,8 +1,8 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.product.PriceInfo;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
 import com.trip.booking.spa.gateway.domain.product.CancelClass;
@@ -59,18 +59,18 @@ class CacheOccupancyShardTest {
                 .thenReturn(Map.of());
     }
 
-    private static PriceReq req(int adults, Integer childNum, List<Integer> ages) {
-        return PriceReq.builder().checkIn(DATE).checkout("2026-09-02")
+    private static PriceQuery req(int adults, Integer childNum, List<Integer> ages) {
+        return PriceQuery.builder().supplierId(10010).supplierHotelId("H1").checkIn(DATE).checkOut("2026-09-02")
                 .roomNum(1).adultNum(adults)
                 .childNum(childNum == null ? 0 : childNum)
                 .childAges(ages == null ? List.of() : ages)
                 .build();
     }
 
-    private static ProductRespDTO productFor(String occupancy) {
+    private static Product productFor(String occupancy) {
         ProductIdentity id = ProductIdentity.of(10010, "acct", "H1", "R1",
                 MealSignature.known(true, false, false), CancelClass.FREE_CANCELLABLE, occupancy);
-        return ProductRespDTO.builder()
+        return Product.builder()
                 .hotelId("H1").productId("易腐票").productKey(id.productKey()).identity(id)
                 .priceInfos(List.of(PriceInfo.builder().date(DATE).price(29317).build()))
                 .build();
@@ -101,7 +101,7 @@ class CacheOccupancyShardTest {
     @Test
     @DisplayName("写入的键带占用片，且占用取自 identity（与 productKey 同源）")
     void writeShardsByIdentityOccupancy() {
-        service.productToCache(List.of(productFor("2")), req(2, 0, List.of()), sup());
+        service.productToCache(List.of(productFor("2")), req(2, 0, List.of()));
 
         assertTrue(writtenPriceKeys().contains("price:10010:H1:2:" + DATE),
                 "实际写入: " + writtenPriceKeys());
@@ -110,7 +110,7 @@ class CacheOccupancyShardTest {
     @Test
     @DisplayName("2 人查询不会读到 1 人那一片——这正是改造前把 1 人价报给 2 人的那条路")
     void twoAdultsNeverReadTheOnePersonShard() {
-        service.getPrice(req(2, 0, List.of()), Supplier.builder().supplierId(10010).sHotelId("H1").build());
+        service.getPrice(req(2, 0, List.of()));
 
         assertEquals(List.of("price:10010:H1:2:" + DATE), readKeys(), "2 人查询只许读 2 人片");
     }
@@ -118,7 +118,7 @@ class CacheOccupancyShardTest {
     @Test
     @DisplayName("带儿童的占用也各成一片")
     void childAgesFormTheirOwnShard() {
-        service.getPrice(req(2, 1, List.of(9)), Supplier.builder().supplierId(10010).sHotelId("H1").build());
+        service.getPrice(req(2, 1, List.of(9)));
 
         assertEquals(List.of("price:10010:H1:2-9:" + DATE), readKeys());
     }
@@ -126,11 +126,11 @@ class CacheOccupancyShardTest {
     @Test
     @DisplayName("写侧与读侧算出同一片——两处拼键必须不可能漂移")
     void writeAndReadAgreeOnTheSameShard() {
-        service.productToCache(List.of(productFor("2-9,4")), req(2, 2, List.of(9, 4)), sup());
+        service.productToCache(List.of(productFor("2-9,4")), req(2, 2, List.of(9, 4)));
         java.util.Set<String> written = writtenPriceKeys();
 
         Mockito.clearInvocations(redisUtils);
-        service.getPrice(req(2, 2, List.of(9, 4)), Supplier.builder().supplierId(10010).sHotelId("H1").build());
+        service.getPrice(req(2, 2, List.of(9, 4)));
         List<String> read = readKeys();
 
         assertTrue(written.containsAll(read),

@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.application.pricing.AbstractProductSyncSupportService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
@@ -20,8 +20,8 @@ public class ElongProductSyncServiceImpl extends AbstractProductSyncSupportServi
     private ElongPriceService elongPriceService;
 
     @Override
-    public PricingResult querySupplierPrice(PriceReq priceReq, Supplier supplier) {
+    public PricingResult querySupplierPrice(PriceQuery priceReq) {
         // 上游绕过缓存直接问现价这条路：上游请求在等，限流拿不到即如实失败
-        return elongPriceService.queryPrices(priceReq, supplier, CallPurpose.LIVE);
+        return elongPriceService.queryPrices(priceReq, CallPurpose.LIVE);
     }
 }

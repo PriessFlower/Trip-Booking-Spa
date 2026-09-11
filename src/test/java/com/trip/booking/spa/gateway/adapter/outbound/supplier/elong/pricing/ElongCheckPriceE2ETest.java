@@ -1,10 +1,10 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.product.PriceInfo;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.checkprice.ElongCheckPriceServiceImpl;
@@ -92,7 +92,7 @@ class ElongCheckPriceE2ETest {
     private static String checkOut;
 
     /** 查价拿到的参照产品，供后续两档验价复用——同数据 A/B 是本测试的核心 */
-    private static ProductRespDTO reference;
+    private static Product reference;
 
     @BeforeAll
     static void wireRealService() throws Exception {
@@ -177,10 +177,10 @@ class ElongCheckPriceE2ETest {
     @Order(1)
     @DisplayName("查价：真实调 hotel.detail，价格取结算口径且税费自洽")
     void queryPricesUsesSettlementBasis() {
-        PriceReq req = PriceReq.builder().checkIn(checkIn).checkout(checkOut)
+        PriceQuery req = PriceQuery.builder().checkIn(checkIn).checkOut(checkOut)
                 .roomNum(1).adultNum(1).childNum(0).childAges(new ArrayList<>()).build();
 
-        PricingResult result = service.queryPrices(req, supplier(), CallPurpose.LIVE);
+        PricingResult result = service.queryPrices(req, CallPurpose.LIVE);
 
         // 两级桶：真链路上通道层必须先扣用途桶、再扣接口桶。这条断言放在 assumeTrue 之前——
         // 扣格发生在调用之前，与艺龙给不给货无关；放在后面会被"无在售就跳过"吞掉
@@ -192,9 +192,9 @@ class ElongCheckPriceE2ETest {
         assumeTrue(result.outcome() == PricingOutcome.AVAILABLE,
                 "该店该住期无在售产品，本轮跳过");
 
-        List<ProductRespDTO> products = result.products();
+        List<Product> products = result.products();
         assertThat(products).isNotEmpty();
-        for (ProductRespDTO p : products) {
+        for (Product p : products) {
             assertThat(p.getProductKey()).as("productKey 必须派生出来").isNotBlank();
             assertThat(p.getProductId()).as("报价码不得与身份键同字段").isNotEqualTo(p.getProductKey());
             assertThat(p.getTotalPrice()).as("含税总额").isPositive();
@@ -220,7 +220,7 @@ class ElongCheckPriceE2ETest {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
 
         TAKEN.clear();
-        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY));
+        CheckPriceResult resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY));
 
         // 点订前的现取现验走 :CHECK_PRICE 而不是 :REFRESH——同一个 hotel.detail 接口，
         // 两路各占一个用途桶。这一路是客人在等，与后台刷价必须分开计额
@@ -246,7 +246,7 @@ class ElongCheckPriceE2ETest {
     void bookableLevelDeclaresTheSameBasisItShows() {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
 
-        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.BOOKABLE));
+        CheckPriceResult resp = flow.checkPrice(req(VerifyLevel.BOOKABLE));
 
         assertThat(resp.getOutcome()).as("四态之内，不得出现别的值")
                 .isIn(CheckPriceOutcome.BOOKABLE, CheckPriceOutcome.AVAILABLE,
@@ -282,7 +282,7 @@ class ElongCheckPriceE2ETest {
         // 前三个用例只在偏差恰好落在容差内时跑过，自纠正那条分支<b>一次都没走到</b>。
         // 而 MinRate 是我方传入的，抬高它必然撞 H001189——这是唯一能对着真实供应商
         // 验证自纠正的办法（此前该逻辑的唯一证据是白天那批 python 脚本，不是我方代码）
-        CheckPriceReq request = req(VerifyLevel.BOOKABLE);
+        CheckPriceCommand request = req(VerifyLevel.BOOKABLE);
 
         // 用途须与生产的验价路径一致（CHECK_PRICE）：不一致就扣到了别的桶上，
         // 这条用例验出来的排队行为便不是点订前那条路的行为
@@ -319,11 +319,11 @@ class ElongCheckPriceE2ETest {
         }
 
         Method validate = ElongPriceServiceImpl.class.getDeclaredMethod("validate",
-                CheckPriceReq.class, String.class,
+                CheckPriceCommand.class, String.class,
                 com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongRatePlan.class,
                 List.class);
         validate.setAccessible(true);
-        CheckPriceRespDTO resp = (CheckPriceRespDTO) validate.invoke(service, request, HOTEL, plan, tampered);
+        CheckPriceResult resp = (CheckPriceResult) validate.invoke(service, request, HOTEL, plan, tampered);
 
         assumeTrue(resp.getOutcome() != CheckPriceOutcome.INDETERMINATE
                         || !StringUtils.contains(resp.getMessage(), "未取得结果"),
@@ -350,7 +350,7 @@ class ElongCheckPriceE2ETest {
     void multiRoomBookableDeclaresRoomMultipliedTotal() {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
 
-        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.BOOKABLE, 2));
+        CheckPriceResult resp = flow.checkPrice(req(VerifyLevel.BOOKABLE, 2));
 
         // 针对 2026-08-23 高德 2 间真单（26082320295835a66d8b13dd）的拒因：TotalPrice
         // 漏乘间数 → H001188|每日价传参异常。修复后该码不允许复现；SOLD_OUT/RATE_DEAD
@@ -372,14 +372,14 @@ class ElongCheckPriceE2ETest {
                 .isCloseTo(resp.getSalePrice(), org.assertj.core.data.Percentage.withPercentage(2));
     }
 
-    private static CheckPriceReq req(VerifyLevel level) {
+    private static CheckPriceCommand req(VerifyLevel level) {
         return req(level, 1);
     }
 
-    private static CheckPriceReq req(VerifyLevel level, int roomNum) {
-        return CheckPriceReq.builder()
-                .supplierId(10010).sHotelId(HOTEL)
-                .sProductId(reference.getProductId())
+    private static CheckPriceCommand req(VerifyLevel level, int roomNum) {
+        return CheckPriceCommand.builder()
+                .supplierId(10010).supplierHotelId(HOTEL)
+                .supplierProductId(reference.getProductId())
                 .productKey(reference.getProductKey())
                 .seenPrice(reference.getTotalPrice())
                 .checkIn(checkIn).checkOut(checkOut)

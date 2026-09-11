@@ -115,8 +115,8 @@ public final class MetricTags {
         return tags;
     }
 
-    /** 查价入口的一条「请求×供应商」腿：source 答走了缓存还是实时，outcome 答分态结论 */
-    public static Map<String, Object> leg(SupplierSourceEnum supplier, String source, String outcome) {
+    /** 查价入口向一家供应商问的一次：source 答走了缓存还是实时，outcome 答分态结论 */
+    public static Map<String, Object> asked(SupplierSourceEnum supplier, String source, String outcome) {
         Map<String, Object> tags = of(supplier);
         tags.put(SOURCE, source);
         tags.put(OUTCOME, outcome);

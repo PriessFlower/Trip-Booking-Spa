@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.service;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaProductKeyDeriver;
 import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
@@ -77,7 +77,7 @@ public class ExpediaCatalogService {
      *
      * @param products 刷价转换后的产品；{@code productKey} 为空或含 UNKNOWN 的会被跳过
      */
-    public void upsert(List<ProductRespDTO> products) {
+    public void upsert(List<Product> products) {
         if (!catalogEnabled) {
             // 闸口的 REJECT 分支必须可检索(§3.8.4)。但本方法每轮被调数千次,逐次打会淹掉
             // 日志——故按开关状态只在翻转后打第一次。默认关的功能若完全无输出,
@@ -96,7 +96,7 @@ public class ExpediaCatalogService {
         int upserted = 0;
         int skippedUnknown = 0;
         int skippedNoKey = 0;
-        for (ProductRespDTO product : products) {
+        for (Product product : products) {
             // 两个成因必须分开计(§6.2.2):缺 productKey 是<b>派生失败</b>,矛头指向派生器或它的
             // 入参;UNKNOWN 是<b>解析覆盖不足</b>,矛头指向餐食/退改的表外取值。
             if (product.getIdentity() == null || StringUtils.isBlank(product.getProductKey())) {

@@ -1693,7 +1693,7 @@
             "uid": "spa-prom"
           },
           "refId": "A",
-          "expr": "sum by (supplier) (rate(spa_price_leg_count_total{job=\"trip-booking-spa\",outcome=\"available\"}[10m])) / sum by (supplier) (rate(spa_price_leg_count_total{job=\"trip-booking-spa\"}[10m]))",
+          "expr": "sum by (supplier) (rate(spa_price_asked_count_total{job=\"trip-booking-spa\",outcome=\"available\"}[10m])) / sum by (supplier) (rate(spa_price_asked_count_total{job=\"trip-booking-spa\"}[10m]))",
           "legendFormat": "{{supplier}}",
           "editorMode": "code",
           "range": true
@@ -1754,7 +1754,7 @@
             "uid": "spa-prom"
           },
           "refId": "A",
-          "expr": "sum by (supplier, source, outcome) (rate(spa_price_leg_count_total{job=\"trip-booking-spa\"}[10m]))",
+          "expr": "sum by (supplier, source, outcome) (rate(spa_price_asked_count_total{job=\"trip-booking-spa\"}[10m]))",
           "legendFormat": "{{supplier}} {{source}} {{outcome}}",
           "editorMode": "code",
           "range": true

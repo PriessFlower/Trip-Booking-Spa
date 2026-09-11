@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProductKeyDeriver;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProperties;
@@ -9,7 +9,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongNightlyRate;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongRatePlan;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,10 +52,10 @@ class ElongFreshPricesToCacheTest {
         ReflectionTestUtils.setField(service, "productKeyDeriver", deriver);
     }
 
-    private static CheckPriceReq checkReq() {
-        return CheckPriceReq.builder()
+    private static CheckPriceCommand checkReq() {
+        return CheckPriceCommand.builder()
                 .supplierId(10010)
-                .sHotelId("61835012").sProductId("whatever")
+                .supplierHotelId("61835012").supplierProductId("whatever")
                 .checkIn("2026-08-27").checkOut("2026-08-28")
                 .roomNum(1).adultCount(2).childNum(1).childAges(List.of(9))
                 .build();
@@ -100,12 +100,12 @@ class ElongFreshPricesToCacheTest {
     }
 
     /** 占用键随验价走（2 大 1 小 9 岁 → 2-9）；组装由模板做，这里只喂同形状的入参 */
-    private static PriceReq priceReq() {
-        PriceReq r = PriceReq.builder()
-                .checkIn("2026-08-27").checkout("2026-08-28")
+    private static PriceQuery priceReq() {
+        PriceQuery r = PriceQuery.builder()
+                .checkIn("2026-08-27").checkOut("2026-08-28")
                 .roomNum(1).adultNum(2).childNum(1).childAges(List.of(9)).build();
-        r.setOccupancies(com.trip.booking.spa.gateway.domain.product.Occupancy
-                .perRoom(1, 2, 1, List.of(9)));
+        r = r.toBuilder().occupancies(com.trip.booking.spa.gateway.domain.product.Occupancy
+                .perRoom(1, 2, 1, List.of(9))).build();
         return r;
     }
 
