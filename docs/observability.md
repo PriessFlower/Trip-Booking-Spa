@@ -144,7 +144,7 @@
 | 6 | 指标名/标签键无唯一出处 | O-2.4 | 7 个文件 | 已修（`MetricNames`/`MetricTags`/`CallStatus`） |
 | 7 | 指标无解释 | O-3.2 | 32 个埋点 + 看板 27 面板 | 部分：看板 description 已补全，埋点注释随迁移补在 `MetricNames` |
 | 8 | 覆盖率指标无消费方 | O-5.1 | `catalog_attribute_*` | 未修 |
-| 9 | 入口缺请求数/出报数 | O-4.2 | `SpaController` | 已修（`spa_price_leg`/`spa_price_quoted`，腿=请求×供应商） |
+| 9 | 入口缺请求数/出报数 | O-4.2 | `SpaController` | 已修（`spa_price_asked`/`spa_price_quoted`，每次请求每家记一次） |
 | 10 | 已算出的计数只落日志 | O-1.3 | 四处（见 O-1.3） | 未修（第 2 步） |
 | 11 | 静默丢弃无 reason | O-4.5、O-4.6 | 读侧 `PriceCacheServiceImpl.getPrice` 的 forEach 五个 `return`（全无落点）；艺龙查价三类跳过（有日志、无指标）；写侧 `productToCache` 两个 `continue` 是异常价拦截，拦截时有 `log.warn`、但无指标 | 读侧与艺龙转换已修（`quote_dropped`，stage/reason 见 `DropReason`）；写侧异常价拦截的指标待做 |
 | 12 | 看板未按业务分块 | O-4.1 | `spa-overview.json`（现按技术层分组） | 未修（第 3 步） |

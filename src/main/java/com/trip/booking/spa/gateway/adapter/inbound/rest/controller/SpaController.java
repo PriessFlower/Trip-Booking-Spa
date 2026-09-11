@@ -167,8 +167,9 @@ public class SpaController {
      * 的分态结论，不另造词表。出报条数单独一个名字：它计的是产品条数，和「问了几家」不是
      * 同一个度量，混在一个 counter 里会把出报率算错。
      *
-     * <p>指标名 {@code spa_price_leg} 保留 leg 这个词不改：它已被 Grafana 看板两个面板
-     * 与 docs/observability.md 引用，指标名视同接口（O-5.3），改名会断历史曲线。
+     * <p>指标名 2026-09-11 由 {@code spa_price_leg} 改为 {@code spa_price_asked}，
+     * Grafana 看板与 docs/observability.md 同步已改。按 O-5.3 指标名视同接口，
+     * <b>Prometheus 历史序列不接续</b>——跨改名点看趋势要查两个名字。
      */
     /** 各供应商并行问价的扇出池名：进 ThreadPools 注册表，水位由 PoolStatsSampler 推成 gauge */
     private static final String QUOTE_POOL_NAME = "supplier-quote";
@@ -224,7 +225,7 @@ public class SpaController {
         if (supplierEnum == null) {
             return;
         }
-        Monitor.recordOne(MetricNames.SPA_PRICE_LEG, MetricTags.leg(supplierEnum, source,
+        Monitor.recordOne(MetricNames.SPA_PRICE_ASKED, MetricTags.asked(supplierEnum, source,
                 result.outcome().name().toLowerCase(Locale.ROOT)));
         if (!result.products().isEmpty()) {
             Monitor.recordMany(MetricNames.SPA_PRICE_QUOTED,
@@ -238,8 +239,8 @@ public class SpaController {
         if (supplierEnum == null) {
             return;
         }
-        Monitor.recordOne(MetricNames.SPA_PRICE_LEG,
-                MetricTags.leg(supplierEnum, source, MetricNames.LEG_ERROR));
+        Monitor.recordOne(MetricNames.SPA_PRICE_ASKED,
+                MetricTags.asked(supplierEnum, source, MetricNames.OUTCOME_ERROR));
     }
 
     /**

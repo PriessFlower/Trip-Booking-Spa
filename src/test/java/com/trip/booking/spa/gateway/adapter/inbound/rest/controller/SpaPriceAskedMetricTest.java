@@ -27,7 +27,7 @@ import static org.mockito.ArgumentMatchers.any;
  * sum(家) 少于真实家数，出报率分母偏小、算出来偏高。反证已实跑：去掉 catch 里的
  * recordFailedLeg，errorLeg 断言红。
  */
-class SpaPriceLegMetricTest {
+class SpaPriceAskedMetricTest {
 
     private SpaController controller;
     private PriceCacheService priceCacheService;
@@ -63,7 +63,7 @@ class SpaPriceLegMetricTest {
     }
 
     private double leg(String source, String outcome) {
-        return registry.counter("spa_price_leg_count",
+        return registry.counter("spa_price_asked_count",
                 "supplier", "ELONG", "source", source, "outcome", outcome).count();
     }
 
