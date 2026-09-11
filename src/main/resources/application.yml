@@ -52,7 +52,10 @@ expedia:
   # 同上。Expedia 有沙箱,但"下不下单"与"打哪个端点"是两个独立护栏:
   # 本开关管前者,production-endpoint-enabled 管后者,两者都关才是完全静默。
   # 2026-09-07 由 true 改 false:网关侧的闸此前无人执行,把闸接上时才发现它是开着的。
-  booking-enabled: false
+  # 2026-09-11 复开:b2b 后台已上线 b2b.haowan2000.com,代理商要能走完下单。端点仍是沙箱
+  # (生产 EXPEDIA_API_HOST=test.ean.com),开它不产生真实订单与费用;真端点与本开关同时开
+  # 由 ExpediaRapidProperties 启动即拒,故"误连生产"这条路仍是堵死的。
+  booking-enabled: true
   production-endpoint-enabled: false
   user-agent: trip-booking-spa/0.0.1
 
