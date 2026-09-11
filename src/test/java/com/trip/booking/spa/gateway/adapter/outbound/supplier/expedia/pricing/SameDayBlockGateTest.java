@@ -83,6 +83,60 @@ class SameDayBlockGateTest {
         Mockito.verify(priceService).queryPrices(Mockito.any(), Mockito.any());
     }
 
+    /**
+     * 闸口只许看<b>该供应商自己的</b>酒店，不许从请求的 suppliers 列表里取。
+     *
+     * <p>此前取的是 {@code priceReq.getSuppliers().get(0)}——上游一次问多家时，
+     * Expedia 这条腿会拿<b>别家</b>的酒店号去比 Expedia 的名单，永远比不中，名单静默失效。
+     * 而紧接着的拦截日志打的又是该供应商的酒店号，看日志发现不了。
+     *
+     * <p>本组原有三条用例都把 suppliers 构造成与该供应商同一家酒店，两者恰好相等，故照不出这个 bug
+     * ——与 {@code PriceCacheService} javadoc 记的是同一种自证陷阱。
+     */
+    @Test
+    @DisplayName("多供应商且 Expedia 不在首位：仍按该供应商的酒店拦截")
+    void gateReadsThisLegNotTheFirstSupplier() {
+        ReflectionTestUtils.setField(service, "sameDayBlockEnabled", true);
+        String blocked = blockedHotelId();
+        PriceReq req = PriceReq.builder()
+                .checkIn(LocalDate.now().toString())
+                .checkout(LocalDate.now().plusDays(1).toString())
+                .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
+                // 首位是别家（艺龙），Expedia 排第二
+                .suppliers(List.of(
+                        Supplier.builder().supplierId(10010).sHotelId("ELONG-NOT-IN-LIST").build(),
+                        Supplier.builder().supplierId(10005).sHotelId(blocked).build()))
+                .build();
+
+        PricingResult r = service.querySupplierPrice(req,
+                Supplier.builder().supplierId(10005).sHotelId(blocked).build());
+
+        assertEquals(PricingOutcome.NO_INVENTORY, r.outcome(),
+                "闸口读错了供应商：拿首位那家的酒店号比 Expedia 名单，名单等于没有");
+        Mockito.verify(priceService, Mockito.never()).queryPrices(Mockito.any(), Mockito.any());
+    }
+
+    /**
+     * 刷价路径构造的 {@link PriceReq} <b>不带 suppliers</b>（酒店走另一个参数），
+     * 闸口若去读那个列表就是 NPE。同 {@code PriceCacheService} javadoc 记的纪律。
+     */
+    @Test
+    @DisplayName("请求不带 suppliers（刷价形状）也不得抛异常")
+    void requestWithoutSuppliersDoesNotBlowUp() {
+        ReflectionTestUtils.setField(service, "sameDayBlockEnabled", true);
+        String blocked = blockedHotelId();
+        PriceReq refreshShaped = PriceReq.builder()
+                .checkIn(LocalDate.now().toString())
+                .checkout(LocalDate.now().plusDays(1).toString())
+                .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
+                .build();
+
+        PricingResult r = service.querySupplierPrice(refreshShaped,
+                Supplier.builder().supplierId(10005).sHotelId(blocked).build());
+
+        assertEquals(PricingOutcome.NO_INVENTORY, r.outcome());
+    }
+
     @Test
     @DisplayName("非当天入住不受影响")
     void futureCheckInIsNeverBlocked() {

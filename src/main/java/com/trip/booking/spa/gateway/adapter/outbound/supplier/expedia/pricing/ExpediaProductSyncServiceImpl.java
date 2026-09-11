@@ -60,7 +60,7 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
         //
         // §3.8.6 真正要的是「不发版也能关掉」，那与名单放哪无关，故补的是上面那个开关。
         if (sameDayBlockEnabled
-                && ExpediaHelper.hotelIdList.contains(priceReq.getSuppliers().get(0).getSHotelId())
+                && ExpediaHelper.hotelIdList.contains(supplier.getSHotelId())
                 && LocalDate.parse(priceReq.getCheckIn()).equals(LocalDate.now()))
         {
             log.info("[gate] expedia.same-day-blocked-hotels 拦截: hotelId={}, checkIn={}",
