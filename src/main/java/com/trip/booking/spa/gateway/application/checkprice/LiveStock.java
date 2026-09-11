@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.application.checkprice;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 
 import java.util.List;
@@ -15,10 +15,10 @@ import java.util.function.Function;
 public final class LiveStock<S> {
 
     private final S stock;
-    private final CheckPriceRespDTO terminal;
-    private Function<PriceReq, List<ProductRespDTO>> freshConverter;
+    private final CheckPriceResult terminal;
+    private Function<PriceReq, List<Product>> freshConverter;
 
-    private LiveStock(S stock, CheckPriceRespDTO terminal) {
+    private LiveStock(S stock, CheckPriceResult terminal) {
         this.stock = stock;
         this.terminal = terminal;
     }
@@ -35,12 +35,12 @@ public final class LiveStock<S> {
      *
      * <p>不挂 = 该家没有验价即刷（如 Expedia），模板什么都不做。
      */
-    public LiveStock<S> freshConvertedBy(Function<PriceReq, List<ProductRespDTO>> converter) {
+    public LiveStock<S> freshConvertedBy(Function<PriceReq, List<Product>> converter) {
         this.freshConverter = converter;
         return this;
     }
 
-    public Function<PriceReq, List<ProductRespDTO>> freshConverter() {
+    public Function<PriceReq, List<Product>> freshConverter() {
         return freshConverter;
     }
 
@@ -51,7 +51,7 @@ public final class LiveStock<S> {
         return new LiveStock<>(stock, null);
     }
 
-    public static <S> LiveStock<S> terminal(CheckPriceRespDTO outcome) {
+    public static <S> LiveStock<S> terminal(CheckPriceResult outcome) {
         if (outcome == null || outcome.getOutcome() == null) {
             throw new IllegalArgumentException("终态必须带 outcome");
         }
@@ -66,7 +66,7 @@ public final class LiveStock<S> {
         return stock;
     }
 
-    public CheckPriceRespDTO terminal() {
+    public CheckPriceResult terminal() {
         return terminal;
     }
 }

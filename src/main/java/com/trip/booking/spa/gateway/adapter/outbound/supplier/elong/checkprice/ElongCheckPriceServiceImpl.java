@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.checkprice;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing.ElongPriceServiceImpl;
@@ -42,7 +42,7 @@ public class ElongCheckPriceServiceImpl extends AbstractCheckPriceFlow<ElongHote
     }
 
     @Override
-    protected CheckPriceRespDTO precondition(CheckPriceReq request) {
+    protected CheckPriceResult precondition(CheckPriceReq request) {
         return elongPriceService.precondition(request);
     }
 
@@ -67,17 +67,17 @@ public class ElongCheckPriceServiceImpl extends AbstractCheckPriceFlow<ElongHote
     }
 
     @Override
-    protected CheckPriceRespDTO inspect(PlanWithRoom found, ElongHotel hotel, CheckPriceReq request) {
+    protected CheckPriceResult inspect(PlanWithRoom found, ElongHotel hotel, CheckPriceReq request) {
         return elongPriceService.inspect(found, request);
     }
 
     @Override
-    protected CheckPriceRespDTO availabilityOnlyResp(PlanWithRoom found, ElongHotel hotel, CheckPriceReq request) {
+    protected CheckPriceResult availabilityOnlyResp(PlanWithRoom found, ElongHotel hotel, CheckPriceReq request) {
         return elongPriceService.availabilityOnlyResp(request, found.plan());
     }
 
     @Override
-    protected CheckPriceRespDTO validate(PlanWithRoom found, ElongHotel hotel, CheckPriceReq request) {
+    protected CheckPriceResult validate(PlanWithRoom found, ElongHotel hotel, CheckPriceReq request) {
         return elongPriceService.validate(request, hotel, found);
     }
 }

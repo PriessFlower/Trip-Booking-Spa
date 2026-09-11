@@ -3,7 +3,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespCacheDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
@@ -104,11 +104,11 @@ class DelistByHdelRealDataE2EManual {
             assertFalse(readA.isEmpty(), "A 读产出为空——dump 里的 quote 详情没配上");
 
             // ── 新写侧跑一轮：本轮在售 = 有 quote 的那批（其余 live field 即"本轮缺席"）──
-            List<ProductRespDTO> round = new ArrayList<>();
+            List<Product> round = new ArrayList<>();
             for (Map.Entry<String, String> q : quotes.entrySet()) {
                 ProductRespCacheDTO cached = JsonUtils.decodeJson(q.getValue(), new TypeReference<>() {
                 });
-                ProductRespDTO dto = new ProductRespDTO();
+                Product dto = new Product();
                 BeanUtils.copyProperties(cached, dto);
                 dto.setHotelId(hotelId);
                 dto.setProductKey(q.getKey());
@@ -144,9 +144,9 @@ class DelistByHdelRealDataE2EManual {
     }
 
     /** 读侧产出的可比快照：productKey →「总价|productId」 */
-    private static Map<String, String> snapshot(List<ProductRespDTO> products) {
+    private static Map<String, String> snapshot(List<Product> products) {
         Map<String, String> snap = new TreeMap<>();
-        for (ProductRespDTO p : products) {
+        for (Product p : products) {
             snap.put(p.getProductKey(), p.getTotalPrice() + "|" + p.getProductId());
         }
         return snap;

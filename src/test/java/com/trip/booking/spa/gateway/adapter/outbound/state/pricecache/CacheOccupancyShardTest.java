@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
@@ -67,10 +67,10 @@ class CacheOccupancyShardTest {
                 .build();
     }
 
-    private static ProductRespDTO productFor(String occupancy) {
+    private static Product productFor(String occupancy) {
         ProductIdentity id = ProductIdentity.of(10010, "acct", "H1", "R1",
                 MealSignature.known(true, false, false), CancelClass.FREE_CANCELLABLE, occupancy);
-        return ProductRespDTO.builder()
+        return Product.builder()
                 .hotelId("H1").productId("易腐票").productKey(id.productKey()).identity(id)
                 .priceInfos(List.of(PriceInfo.builder().date(DATE).price(29317).build()))
                 .build();

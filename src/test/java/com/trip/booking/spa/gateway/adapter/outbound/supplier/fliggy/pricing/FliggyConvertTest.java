@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyProductKeyDeriver;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyProperties;
@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
- * 查价转换：从原始 JSON 一路到 ProductRespDTO（读原始报文，不 new 中间对象）。
+ * 查价转换：从原始 JSON 一路到 Product（读原始报文，不 new 中间对象）。
  * 钉三件事：价格单位分原样透传+币种自带；身份与票据分列两字段（productKey ≠ rate_key）；
  * 丢弃分支必计 quote_dropped（O-4.5，O45 守护要求本包引用它）。
  */
@@ -68,10 +68,10 @@ class FliggyConvertTest {
                 + "]}]}}}";
         FliggyAriResponse resp = FliggyAriResponse.parse(raw);
 
-        List<ProductRespDTO> products = service.convertRates(resp.rates(), req(), "H1");
+        List<Product> products = service.convertRates(resp.rates(), req(), "H1");
 
         assertEquals(1, products.size());
-        ProductRespDTO p = products.get(0);
+        Product p = products.get(0);
         assertEquals("rk-1", p.getProductId());
         assertNotNull(p.getProductKey());
         assertEquals(25800, p.getTotalPrice());
@@ -107,10 +107,10 @@ class FliggyConvertTest {
         // 会在该时刻之后被 CancelClassifier 正确判为已过期而丢弃，测试随之腐烂
         // （2026-09-09 实测转红，代码一行没改）。判过期是被测行为的一部分，必须钉住。
         java.time.Instant asOf = java.time.OffsetDateTime.parse("2026-08-27T10:00:00+08:00").toInstant();
-        List<ProductRespDTO> products = service.convertRates(resp.rates(), req, "50363404", asOf);
+        List<Product> products = service.convertRates(resp.rates(), req, "50363404", asOf);
 
         assertEquals(2, products.size());
-        for (ProductRespDTO p : products) {
+        for (Product p : products) {
             assertNotNull(p.getPriceInfos(), "没有 priceInfos 的报价进不了价格缓存");
             assertEquals(1, p.getPriceInfos().size());
         }
@@ -127,7 +127,7 @@ class FliggyConvertTest {
         // 真实报文的 inclusive_amount 是数字串（"10524"），退改规则必须解析得出——
         // 丢光规则=cancelClass 恒 UNKNOWN：进不了目录，且上游按"退改从严"兜底
         //（艺龙 26,011 个可免费取消显示为不可退的同款事故）。首条 rate 有罚金 0 的段=免费窗
-        ProductRespDTO first = products.get(0);
+        Product first = products.get(0);
         assertEquals(3, first.getCancelPolicy().size());
         assertEquals("FREE_CANCELLABLE", first.getIdentity().cancelClass());
 
@@ -152,7 +152,7 @@ class FliggyConvertTest {
                 + "\"cancel_policy\":{\"code\":\"2\",\"rules\":[{\"onward\":\"2026-08-28 12:00:00\","
                 + "\"before\":\"2026-09-02 00:00:00\",\"inclusive_amount\":\"6814\",\"currency\":\"USD\"}]},"
                 + "\"meals\":{\"type\":0}}]}]}}}";
-        List<ProductRespDTO> products = service.convertRates(FliggyAriResponse.parse(raw).rates(), req(), "H1");
+        List<Product> products = service.convertRates(FliggyAriResponse.parse(raw).rates(), req(), "H1");
 
         assertEquals(1, products.size());
         assertEquals("NON_REFUNDABLE", products.get(0).getIdentity().cancelClass(),
@@ -172,7 +172,7 @@ class FliggyConvertTest {
                 .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
         twoNights.setOccupancies(List.of("2"));
 
-        List<ProductRespDTO> products = service.convertRates(resp.rates(), twoNights, "H1");
+        List<Product> products = service.convertRates(resp.rates(), twoNights, "H1");
 
         assertEquals(0, products.size());
         assertEquals(1.0, registry.counter("quote_dropped_count", "supplier", "FLIGGY",

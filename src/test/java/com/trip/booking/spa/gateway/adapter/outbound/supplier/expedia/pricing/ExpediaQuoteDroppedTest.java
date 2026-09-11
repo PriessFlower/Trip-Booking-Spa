@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.QueryPriceResponse;
 import com.trip.booking.spa.platform.observability.Monitor;
@@ -50,7 +50,7 @@ class ExpediaQuoteDroppedTest {
         PriceReq request = PriceReq.builder().checkIn("2026-09-01").checkout("2026-09-02")
                 .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
         request.setOccupancies(List.of("2"));
-        List<ProductRespDTO> out = new ArrayList<>();
+        List<Product> out = new ArrayList<>();
 
         service.convertRateResp("H1", "大床房", "R1", rate, "hotel_only", out, request);
 

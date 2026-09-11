@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
@@ -111,7 +111,7 @@ class FliggyProductToCacheTest {
         req.setOccupancies(List.of("2"));
         Supplier supplier = Supplier.builder().supplierId(10015).sHotelId("50363404").build();
 
-        List<ProductRespDTO> products = fliggyService.convertRates(resp.rates(), req, "50363404", asOf());
+        List<Product> products = fliggyService.convertRates(resp.rates(), req, "50363404", asOf());
         assertFalse(products.isEmpty());
         cacheService.productToCache(products, req, supplier);
 
@@ -139,7 +139,7 @@ class FliggyProductToCacheTest {
         req.setOccupancies(List.of("2"));
         Supplier supplier = Supplier.builder().supplierId(10015).sHotelId("50363404").build();
 
-        List<ProductRespDTO> products = fliggyService.convertRates(resp.rates(), req, "50363404", asOf());
+        List<Product> products = fliggyService.convertRates(resp.rates(), req, "50363404", asOf());
         cacheService.productToCache(products, req, supplier);
 
         ArgumentCaptor<java.util.HashMap<String, Object>> cap =
@@ -165,7 +165,7 @@ class FliggyProductToCacheTest {
         Supplier supplier = Supplier.builder().supplierId(10015).sHotelId("50363404").build();
 
         // 真实报文照常转换，再把逐日价摘掉——这就是修复前飞猪的形态（出报>0、priceInfos 空）
-        List<ProductRespDTO> products = fliggyService.convertRates(resp.rates(), req, "50363404");
+        List<Product> products = fliggyService.convertRates(resp.rates(), req, "50363404");
         assertFalse(products.isEmpty());
         products.forEach(p -> p.setPriceInfos(null));
 

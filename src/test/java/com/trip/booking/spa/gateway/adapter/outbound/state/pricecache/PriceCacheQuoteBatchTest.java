@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.platform.redis.RedisUtils;
@@ -56,7 +56,7 @@ class PriceCacheQuoteBatchTest {
                 RedisKeyUtils.buildQuoteKey(10005, "H1", "pk3"), "{\"productId\":\"P3\",\"hotelId\":\"H1\"}");
         Mockito.when(redisUtils.multiGet(any())).thenReturn(quotes);
 
-        List<ProductRespDTO> out = service.getPrice(req, sup, null);
+        List<Product> out = service.getPrice(req, sup, null);
 
         assertEquals(3, out.size());
         Mockito.verify(redisUtils, Mockito.times(1)).multiGet(any());

@@ -3,7 +3,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
@@ -175,7 +175,7 @@ class FliggyRefreshRealE2EManual {
         assertNotNull(refreshed, "查价未取得结果");
         assertNotEquals(PricingOutcome.INDETERMINATE, refreshed.outcome(),
                 "没问出结果——网络或凭据病（session 到期看 [auth-config] 日志）");
-        List<ProductRespDTO> products = refreshed.products();
+        List<Product> products = refreshed.products();
         cacheService.productToCache(products, req, supplier);
 
         assertFalse(products.isEmpty(), "新宿华盛顿 T+13 报全无货——极不寻常，先人工核实再怀疑测试");
@@ -210,13 +210,13 @@ class FliggyRefreshRealE2EManual {
         // ── 读侧全环：出价从缓存来、房型从档案回查来（对照表的接头就在这）。
         // UNKNOWN 成分的产品合法地无档案（R-5.4），房型缺席不删报价（R-1.6）——
         // 故断言"进了目录的那批必须回查得到房型"，而不是"第一条必须有"
-        List<ProductRespDTO> served = cacheService.getPrice(req, supplier);
+        List<Product> served = cacheService.getPrice(req, supplier);
         assertFalse(served.isEmpty(), "缓存出价为空——写读两侧键口径又漂了");
-        for (ProductRespDTO p : served) {
+        for (Product p : served) {
             assertTrue(p.getTotalPrice() > 0);
             assertEquals(64, p.getProductKey().length());
         }
-        ProductRespDTO archived = served.stream()
+        Product archived = served.stream()
                 .filter(p -> p.getRoom() != null && p.getRoom().getRoomId() != null)
                 .findFirst().orElse(null);
         assertNotNull(archived, "没有任何出价带房型——档案回查没接上,建档等于白建");

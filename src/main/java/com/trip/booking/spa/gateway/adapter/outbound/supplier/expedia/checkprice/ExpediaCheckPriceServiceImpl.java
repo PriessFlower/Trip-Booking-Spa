@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.checkprice;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing.ExpediaPriceServiceImpl;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaRapidProperties;
@@ -69,7 +69,7 @@ public class ExpediaCheckPriceServiceImpl extends AbstractCheckPriceFlow<QueryPr
     }
 
     @Override
-    protected CheckPriceRespDTO inspect(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceReq request) {
+    protected CheckPriceResult inspect(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceReq request) {
         return expediaPriceService.inspect(rate, request);
     }
 
@@ -79,14 +79,14 @@ public class ExpediaCheckPriceServiceImpl extends AbstractCheckPriceFlow<QueryPr
      * 接入曝光层前必须实现真正的仅现货应答并从清单删除，否则会与飞猪 2026-09-02 同款超时。
      */
     @Override
-    protected CheckPriceRespDTO availabilityOnlyResp(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceReq request) {
+    protected CheckPriceResult availabilityOnlyResp(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceReq request) {
         log.info("expedia验价：曝光档尚未实现仅现货应答，按完整验价处理,sHotelId={},sProductId={}",
                 request.getSHotelId(), request.getSProductId());
         return validate(rate, data, request);
     }
 
     @Override
-    protected CheckPriceRespDTO validate(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceReq request) {
+    protected CheckPriceResult validate(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceReq request) {
         return expediaPriceService.validate(request, rate);
     }
 }

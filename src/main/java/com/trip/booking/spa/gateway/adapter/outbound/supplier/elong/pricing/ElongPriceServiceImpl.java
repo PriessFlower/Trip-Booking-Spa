@@ -3,11 +3,11 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.domain.product.Meal;
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
 import com.trip.booking.spa.gateway.domain.product.ProductInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.domain.product.Room;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
@@ -150,7 +150,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             log.info("艺龙查价：该店当日无任何报价,sHotelId={},checkIn={}", sHotelId, request.getCheckIn());
             return PricingResult.noInventory();
         }
-        List<ProductRespDTO> products = convertPriceResp(hotel, request);
+        List<Product> products = convertPriceResp(hotel, request);
         if (products.isEmpty()) {
             // 供应商给了产品、但被我们三道过滤全部丢掉（停售/零库存、缺会话凭据、无每日价，
             // 分类计数见 convertPriceResp 的日志）。这里<b>不能</b>说 NO_INVENTORY：
@@ -172,8 +172,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         return n;
     }
 
-    private List<ProductRespDTO> convertPriceResp(ElongHotelDetailResponse.ElongHotel hotel, PriceReq request) {
-        List<ProductRespDTO> products = new ArrayList<>();
+    private List<Product> convertPriceResp(ElongHotelDetailResponse.ElongHotel hotel, PriceReq request) {
+        List<Product> products = new ArrayList<>();
         int totalPlans = 0;
         int skippedNotOnSale = 0;
         int skippedNoCredentials = 0;
@@ -216,7 +216,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         }
     }
 
-    private ProductRespDTO convertPlan(String hotelId, ElongHotelDetailResponse.ElongRoom room, ElongRatePlan plan,
+    private Product convertPlan(String hotelId, ElongHotelDetailResponse.ElongRoom room, ElongRatePlan plan,
                                        List<ElongDataValidateRequest.DayPrice> dayPrices, String occupancy, PriceReq request) {
         Meal meal = productKeyDeriver.convertMeal(plan);
         List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), plan.getPrepayResult());
@@ -228,7 +228,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         // （ElongOfferCredentials.ROOM_TYPE_ID），不进身份。resolveCandidates 的重派生必须同口径（F-3.3）。
         ProductIdentity identity = productKeyDeriver.deriveIdentity(
                 hotelId, room.getRoomId(), meal, cancelPolicy, occupancy, displayTotalCents);
-        ProductRespDTO product = ProductRespDTO.builder()
+        Product product = Product.builder()
                 .hotelId(hotelId)
                 // 报价标识=GoodsUniqId（会话级易腐，申报见 SupplierIdentityProfile.ELONG）；
                 // 身份=productKey，二者永不同字段
@@ -265,7 +265,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     // ---------- 验价钩子：流程在 ElongCheckPriceServiceImpl（模板），这里只是供应商侧的读法 ----------
 
     /** 凭证未配置即确定失败（网关无兜底），不调供应商 */
-    public CheckPriceRespDTO precondition(CheckPriceReq request) {
+    public CheckPriceResult precondition(CheckPriceReq request) {
         if (!properties.isConfigured()) {
             log.error("艺龙验价：凭证未配置（ELONG_USER/ELONG_APP_KEY/ELONG_SECRET），无法调用,sHotelId={}", request.getSHotelId());
             return outcome(CheckPriceOutcome.INDETERMINATE, "艺龙凭证未配置，未能确认该产品是否可订");
@@ -278,7 +278,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * {@link #toPricingResult}——异常价拦截、TTL 分档、无货落缓存全部继承刷价写路径。
      * INDETERMINATE → null = 不动缓存（F-5.1）。
      */
-    public List<ProductRespDTO> freshProducts(ElongHotelDetailResponse data, PriceReq priceReq, String sHotelId) {
+    public List<Product> freshProducts(ElongHotelDetailResponse data, PriceReq priceReq, String sHotelId) {
         PricingResult classified = toPricingResult(data, priceReq, sHotelId);
         return classified.outcome() == PricingOutcome.INDETERMINATE ? null : classified.products();
     }
@@ -297,7 +297,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         ElongHotelDetailResponse data = result.getData();
         // 验价即刷的转换器（机制在 AbstractCheckPriceFlow）：闭包捕获这份原始响应，
         // 终态分支也带着它返回——下架/整店无售正是要落无货标记的时候
-        java.util.function.Function<PriceReq, List<ProductRespDTO>> fresh =
+        java.util.function.Function<PriceReq, List<Product>> fresh =
                 priceReq -> freshProducts(data, priceReq, request.getSHotelId());
         if (!data.isSucc()) {
             log.warn("艺龙验价：现货查询返回业务错误,sHotelId={},sProductId={},code={}",
@@ -346,7 +346,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     }
 
     /** 找到票之后的自检：停售即死票；在售却缺验价凭据属响应自相矛盾，不确定 */
-    public CheckPriceRespDTO inspect(PlanWithRoom found, CheckPriceReq request) {
+    public CheckPriceResult inspect(PlanWithRoom found, CheckPriceReq request) {
         ElongRatePlan plan = found.plan();
         if (Boolean.FALSE.equals(plan.getStatus())) {
             log.info("艺龙验价：所点产品已停售,sHotelId={},sProductId={}", request.getSHotelId(), request.getSProductId());
@@ -366,7 +366,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     }
 
     /** 下单前档：以本会话凭据打 hotel.data.validate */
-    public CheckPriceRespDTO validate(CheckPriceReq request, ElongHotelDetailResponse.ElongHotel hotel, PlanWithRoom found) {
+    public CheckPriceResult validate(CheckPriceReq request, ElongHotelDetailResponse.ElongHotel hotel, PlanWithRoom found) {
         ElongRatePlan plan = found.plan();
         List<ElongDataValidateRequest.DayPrice> dayPrices = buildDayPrices(plan.getNightlyRates());
         if (dayPrices == null) {
@@ -377,7 +377,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     }
 
     /** 二段：以本会话凭据打 hotel.data.validate，并把结果归入确定的分态 */
-    private CheckPriceRespDTO validate(CheckPriceReq request, String hotelId, ElongRatePlan plan,
+    private CheckPriceResult validate(CheckPriceReq request, String hotelId, ElongRatePlan plan,
                                        List<ElongDataValidateRequest.DayPrice> dayPrices) {
         ElongDataValidateRequest validateRequest = buildValidateRequest(request, hotelId, plan, dayPrices);
         BigDecimal declaredTotalYuan = validateRequest.getDeclaredTotal();
@@ -447,7 +447,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * 验价业务错误码 → 三态。纪律：只有确证不因重试而改变的才判确定态；产品级死码必须
      * RATE_DEAD，绝不折叠进"不确定"——cursor 把 H001083 兜成可订导致建单暴死丢真单。
      */
-    private CheckPriceRespDTO classifyValidateError(CheckPriceReq request, ElongRatePlan plan,
+    private CheckPriceResult classifyValidateError(CheckPriceReq request, ElongRatePlan plan,
                                                     ElongDataValidateResponse data) {
         String errorCode = StringUtils.trimToEmpty(data.errorCode());
         String full = data.getCode() + "|" + (data.getResult() == null ? "" : StringUtils.trimToEmpty(data.getResult().getErrorMessage()));
@@ -507,7 +507,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * （供应商验后价）；未下发或与住期对不齐时回落本会话查价合计。签发不成即不可报可订
      * （报得出价却下不了单，比验价失败更糟）。
      */
-    private CheckPriceRespDTO buildBookableResp(CheckPriceReq request, String hotelId, ElongRatePlan plan,
+    private CheckPriceResult buildBookableResp(CheckPriceReq request, String hotelId, ElongRatePlan plan,
                                                 List<ElongDataValidateRequest.DayPrice> dayPrices,
                                                 BigDecimal declaredTotalYuan, ElongDataValidateResponse data) {
         int rooms = roomsOf(request);
@@ -550,7 +550,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         List<PriceInfo> priceInfos = validatedPriceInfos(data).orElseGet(() -> buildPriceInfos(dayPrices));
         log.info("艺龙验价：通过并签发句柄,sHotelId={},goodsUniqId={},salePrice={}分,offerId={},退改条数={},每日价条数={}",
                 hotelId, plan.getGoodsUniqId(), salePriceCents, offerId, cancelPolicy.size(), priceInfos.size());
-        return CheckPriceRespDTO.builder()
+        return CheckPriceResult.builder()
                 .outcome(CheckPriceOutcome.BOOKABLE)
                 .offerId(offerId)
                 .offerTtlSeconds(offerStore.ttlSecondsOf(SupplierSourceEnum.ELONG.getCode()))
@@ -581,7 +581,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * <p>价格与税费仍是 detail 口径（{@code Rate} 与 {@code Rate − MinRate}）；它只用于展示，
      * 真正对账的数在下单前那一档由验价响应给出。
      */
-    public CheckPriceRespDTO availabilityOnlyResp(CheckPriceReq request, ElongRatePlan plan) {
+    public CheckPriceResult availabilityOnlyResp(CheckPriceReq request, ElongRatePlan plan) {
         List<ElongDataValidateRequest.DayPrice> dayPrices = buildDayPrices(plan.getNightlyRates());
         if (dayPrices == null) {
             log.info("艺龙验价(仅现货)：所点产品缺每日价,sHotelId={},goodsUniqId={}",
@@ -596,7 +596,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         log.info("艺龙验价(仅现货)：有货但未验证可订性,sHotelId={},goodsUniqId={},价格={}分,退改条数={},房量限额={}",
                 request.getSHotelId(), plan.getGoodsUniqId(), totalCents, cancelPolicy.size(),
                 plan.getCurrentAlloment());
-        return CheckPriceRespDTO.builder()
+        return CheckPriceResult.builder()
                 .outcome(CheckPriceOutcome.AVAILABLE)
                 .salePrice(totalCents)
                 .subPrice(totalCents)
@@ -951,8 +951,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         return list == null ? List.of() : list;
     }
 
-    private CheckPriceRespDTO outcome(CheckPriceOutcome outcome, String message) {
-        return CheckPriceRespDTO.builder().outcome(outcome).message(message).build();
+    private CheckPriceResult outcome(CheckPriceOutcome outcome, String message) {
+        return CheckPriceResult.builder().outcome(outcome).message(message).build();
     }
 
     /** 现货产品及其所在物理房型（房名展示用） */

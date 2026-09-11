@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.service;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogMapper;
@@ -94,9 +94,9 @@ class ExpediaCatalogFromRefreshE2EManual {
 
             // ---------- A：闸口关 ----------
             ExpediaPriceServiceImpl priceServiceA = priceService(sessionA.getMapper(ProductCatalogMapper.class), false);
-            List<ProductRespDTO> quotedA = new ArrayList<>();
+            List<Product> quotedA = new ArrayList<>();
             for (String pid : propertyIds) {
-                List<ProductRespDTO> got = priceServiceA.queryPricesCache(priceReq(), supplier(pid));
+                List<Product> got = priceServiceA.queryPricesCache(priceReq(), supplier(pid));
                 if (got != null) {
                     quotedA.addAll(got);
                 }
@@ -111,9 +111,9 @@ class ExpediaCatalogFromRefreshE2EManual {
 
             // ---------- B：闸口开，同一批酒店、同一住期 ----------
             ExpediaPriceServiceImpl priceServiceB = priceService(sessionB.getMapper(ProductCatalogMapper.class), true);
-            List<ProductRespDTO> quotedB = new ArrayList<>();
+            List<Product> quotedB = new ArrayList<>();
             for (String pid : propertyIds) {
-                List<ProductRespDTO> got = priceServiceB.queryPricesCache(priceReq(), supplier(pid));
+                List<Product> got = priceServiceB.queryPricesCache(priceReq(), supplier(pid));
                 if (got != null) {
                     quotedB.addAll(got);
                 }

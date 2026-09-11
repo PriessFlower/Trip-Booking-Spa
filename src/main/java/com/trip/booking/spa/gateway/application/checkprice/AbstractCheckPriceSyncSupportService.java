@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.application.checkprice;
 
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -14,7 +14,7 @@ import org.apache.commons.lang3.StringUtils;
 public abstract class AbstractCheckPriceSyncSupportService<T> implements CheckPriceSyncService {
 
     @Override
-    public CheckPriceRespDTO checkPrice(CheckPriceReq checkPriceReq) {
+    public CheckPriceResult checkPrice(CheckPriceReq checkPriceReq) {
         try {
             T t = doCheckPrice(checkPriceReq);
 
@@ -28,7 +28,7 @@ public abstract class AbstractCheckPriceSyncSupportService<T> implements CheckPr
                 return indeterminate("验价无响应，未能确认该产品是否可订，请稍后重试");
             }
 
-            CheckPriceRespDTO respDTO = checkPriceRespConvert(t);
+            CheckPriceResult respDTO = checkPriceRespConvert(t);
 
             if (respDTO == null) {
                 log.error("CheckPriceSyncService checkPriceRespConvert 返回空，回报 INDETERMINATE, 原始响应={}",
@@ -65,8 +65,8 @@ public abstract class AbstractCheckPriceSyncSupportService<T> implements CheckPr
         }
     }
 
-    private CheckPriceRespDTO indeterminate(String message) {
-        return CheckPriceRespDTO.builder()
+    private CheckPriceResult indeterminate(String message) {
+        return CheckPriceResult.builder()
                 .outcome(CheckPriceOutcome.INDETERMINATE)
                 .message(message)
                 .build();
@@ -74,7 +74,7 @@ public abstract class AbstractCheckPriceSyncSupportService<T> implements CheckPr
 
     public abstract T doCheckPrice(CheckPriceReq checkPriceReq);
 
-    public abstract CheckPriceRespDTO checkPriceRespConvert(T t);
+    public abstract CheckPriceResult checkPriceRespConvert(T t);
 
 
 }

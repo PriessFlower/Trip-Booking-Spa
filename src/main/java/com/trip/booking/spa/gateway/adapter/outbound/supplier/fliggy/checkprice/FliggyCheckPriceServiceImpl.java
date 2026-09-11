@@ -1,8 +1,8 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.checkprice;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing.FliggyPriceServiceImpl;
@@ -43,7 +43,7 @@ public class FliggyCheckPriceServiceImpl extends AbstractCheckPriceFlow<FliggyAr
     }
 
     @Override
-    protected CheckPriceRespDTO precondition(CheckPriceReq request) {
+    protected CheckPriceResult precondition(CheckPriceReq request) {
         return fliggyPriceService.precondition();
     }
 
@@ -69,12 +69,12 @@ public class FliggyCheckPriceServiceImpl extends AbstractCheckPriceFlow<FliggyAr
     }
 
     @Override
-    protected CheckPriceRespDTO availabilityOnlyResp(JsonNode rate, FliggyAriResponse ari, CheckPriceReq request) {
+    protected CheckPriceResult availabilityOnlyResp(JsonNode rate, FliggyAriResponse ari, CheckPriceReq request) {
         return fliggyPriceService.availabilityOnlyResp(request, rate);
     }
 
     @Override
-    protected CheckPriceRespDTO validate(JsonNode rate, FliggyAriResponse ari, CheckPriceReq request) {
+    protected CheckPriceResult validate(JsonNode rate, FliggyAriResponse ari, CheckPriceReq request) {
         return fliggyPriceService.validate(request, rate, ari);
     }
 }

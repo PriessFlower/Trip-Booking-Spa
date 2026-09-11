@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.platform.redis.RedisUtils;
@@ -90,8 +90,8 @@ class PriceCacheServiceImplTest {
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).build();
     }
 
-    private static ProductRespDTO product(String productId, Integer price) {
-        ProductRespDTO.ProductRespDTOBuilder b = ProductRespDTO.builder().hotelId("H1").productId(productId);
+    private static Product product(String productId, Integer price) {
+        Product.ProductBuilder b = Product.builder().hotelId("H1").productId(productId);
         if (price != null) {
             b.priceInfos(List.of(PriceInfo.builder().date(DATE).price(price).build()));
         }
