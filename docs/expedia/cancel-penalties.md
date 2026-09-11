@@ -65,6 +65,6 @@
 
 UNKNOWN 的 103 条按住期分布 T+1 96 / T+13 1 / T+30 6，成因为按晚扣 92、比例<100% 9、
 混合载体 2。建档查价占位住期默认 +9 天（`ExpediaProductMappingService.syncProducts`），
-落在 T+13 档附近，故 UNKNOWN 对建档覆盖的实际影响约 0.1%。按晚扣一类待
-`CancelPolicy.deductsFullPrice(totalCents)` 合入后可进一步判定（该方法当前尚未合入，
-本次转换不依赖它）。
+落在 T+13 档附近，故 UNKNOWN 对建档覆盖的实际影响约 0.1%。按晚扣一类可由
+`CancelPolicy.deductsFullPrice(totalCents)` 进一步判定（该方法已于 2026-08-28 合入，
+`CancelClassifier` 在用；本次转换不依赖它）。
