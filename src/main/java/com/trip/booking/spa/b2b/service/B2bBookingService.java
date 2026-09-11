@@ -138,6 +138,10 @@ public class B2bBookingService {
                 node.set("hotelContact", contact);
             }
             ownerStore.find(orderId).ifPresent(owner -> setAmenities(node, owner.rateAmenities));
+            ObjectNode contentEn = propertyPolicies(propertyId);
+            if (contentEn != null) {
+                node.set("propertyContentEn", contentEn);
+            }
             String[] ids = bookedRoomIds(orderId);
             if (ids != null) {
                 ObjectNode roomEn = roomContent(propertyId, ids[0], ids[1], VOUCHER_LANGUAGE);
@@ -237,6 +241,36 @@ public class B2bBookingService {
             node.put("postalCode", address.path("postal_code").asText(null));
             node.put("countryCode", address.path("country_code").asText(null));
         }
+        return node;
+    }
+
+    /**
+     * 英文入住单上的酒店政策：入住说明、特别说明、酒店另收费用、其他须知。
+     *
+     * <p>与 bff 查单已带的 {@code propertyContent} 是同样的字段，区别只在语言——那份按展示语言
+     * （中文）取。入住单给的是境外前台与客人，政策印成中文等于白印。
+     *
+     * <p>字段挑选与 {@code BffBookingService#buildBookResult} 的 {@code propertyContent} 保持一致：
+     * 两份内容出现在同一张单据的中英两版上，挑的项不一样会被看成漏印。
+     *
+     * <p>取不到返回 null（该酒店英文静态内容未摄取），单据上该节整段不出现，不拿中文顶替。
+     */
+    private ObjectNode propertyPolicies(String propertyId) {
+        if (propertyId == null || propertyId.isBlank()) {
+            return null;
+        }
+        Optional<PropertyContentRepo.PropertySummary> found =
+                contentRepo.findById(propertyId, VOUCHER_LANGUAGE);
+        if (found.isEmpty() || found.get().raw == null) {
+            return null;
+        }
+        JsonNode raw = found.get().raw;
+        ObjectNode node = MAPPER.createObjectNode();
+        node.put("address", raw.path("address").path("line_1").asText(null));
+        node.set("checkinPolicy", raw.path("checkin"));
+        node.set("checkoutPolicy", raw.path("checkout"));
+        node.set("fees", raw.path("fees"));
+        node.set("policies", raw.path("policies"));
         return node;
     }
 

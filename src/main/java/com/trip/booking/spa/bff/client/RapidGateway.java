@@ -43,6 +43,13 @@ public class RapidGateway {
     private final BffProperties bffProperties;
     private final HttpClient httpClient;
 
+    /**
+     * 证据文件的写锁。查价从 2026-09-11 起零售价与打包价两趟并行发出，两个线程会往同一个
+     * {@code shopping.jsonl} 追加——单次追加可能被拆成多次系统调用，不串行化就会交错成
+     * 半行 JSON，而这份文件是 Site Review 的证据，坏一行就是坏一条证据。
+     */
+    private final Object evidenceLock = new Object();
+
     public RapidGateway(ExpediaRapidProperties rapidProperties,
                         ExpediaUtils expediaUtils,
                         BffProperties bffProperties) {
@@ -186,10 +193,12 @@ public class RapidGateway {
             if (reply.getTransportError() != null) {
                 line.put("transportError", reply.getTransportError().toString());
             }
-            Files.writeString(dir.resolve(tag + ".jsonl"),
-                    line.toString() + System.lineSeparator(),
-                    StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            synchronized (evidenceLock) {
+                Files.writeString(dir.resolve(tag + ".jsonl"),
+                        line.toString() + System.lineSeparator(),
+                        StandardCharsets.UTF_8,
+                        StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            }
         } catch (IOException e) {
             // 证据写入失败不阻断业务，但必须留痕
             log.error("evidence 写入失败 tag={}", tag, e);
