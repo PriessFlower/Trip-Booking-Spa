@@ -1,14 +1,14 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing;
 
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.BedCheckInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
+import com.trip.booking.spa.gateway.domain.product.BedCheckInfo;
+import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductInfo;
+import com.trip.booking.spa.gateway.domain.product.Meal;
+import com.trip.booking.spa.gateway.domain.product.PriceInfo;
+import com.trip.booking.spa.gateway.domain.product.ProductInfo;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Room;
+import com.trip.booking.spa.gateway.domain.product.Room;
 import com.trip.booking.spa.gateway.domain.shared.Money;
 import com.trip.booking.spa.gateway.domain.product.RefundType;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;

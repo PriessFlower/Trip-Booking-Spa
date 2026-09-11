@@ -1,8 +1,8 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
+import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
+import com.trip.booking.spa.gateway.domain.product.Meal;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.domain.product.CancelClass;
 import com.trip.booking.spa.gateway.domain.product.ProductIdentity;

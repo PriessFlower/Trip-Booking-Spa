@@ -1,13 +1,13 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
+import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductInfo;
+import com.trip.booking.spa.gateway.domain.product.Meal;
+import com.trip.booking.spa.gateway.domain.product.PriceInfo;
+import com.trip.booking.spa.gateway.domain.product.ProductInfo;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Room;
+import com.trip.booking.spa.gateway.domain.product.Room;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;

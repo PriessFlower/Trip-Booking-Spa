@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
+import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
+import com.trip.booking.spa.gateway.domain.product.Meal;
 import com.trip.booking.spa.gateway.domain.product.CancelClass;
 import com.trip.booking.spa.gateway.domain.product.RefundType;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.QueryPriceResponse;
