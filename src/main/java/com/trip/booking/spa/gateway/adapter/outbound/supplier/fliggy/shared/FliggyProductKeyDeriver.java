@@ -1,8 +1,8 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
+import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
+import com.trip.booking.spa.gateway.domain.product.Meal;
 import com.trip.booking.spa.gateway.domain.product.CancelClass;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.shared.CancelClassifier;
 import com.trip.booking.spa.gateway.domain.product.MealSignature;

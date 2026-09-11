@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
+import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProductKeyDeriver;

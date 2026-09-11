@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.catalog;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
+import com.trip.booking.spa.gateway.domain.product.Meal;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

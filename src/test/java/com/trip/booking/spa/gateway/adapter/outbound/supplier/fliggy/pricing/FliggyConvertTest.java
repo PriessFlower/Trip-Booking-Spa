@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfo;
+import com.trip.booking.spa.gateway.domain.product.PriceInfo;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyProductKeyDeriver;
@@ -133,7 +133,7 @@ class FliggyConvertTest {
 
         // 时间语义（时区实证见 FliggyRealPayloadTest）：免费段截止 2026-09-08 23:00 北京，
         // 距入住(09-10)日 24:00 = 49 小时——时区若按东京解释会差 1 小时（50），按 UTC 差 8
-        com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy freeSeg =
+        com.trip.booking.spa.gateway.domain.product.CancelPolicy freeSeg =
                 first.getCancelPolicy().get(2);
         assertEquals(0, freeSeg.getAmount());
         assertEquals(49, freeSeg.getBefore());

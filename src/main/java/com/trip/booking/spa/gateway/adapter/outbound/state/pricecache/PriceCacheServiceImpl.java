@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfo;
+import com.trip.booking.spa.gateway.domain.product.PriceInfo;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfoCache;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;

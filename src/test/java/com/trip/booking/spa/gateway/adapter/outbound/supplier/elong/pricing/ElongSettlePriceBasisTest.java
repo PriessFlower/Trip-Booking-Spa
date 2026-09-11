@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfo;
+import com.trip.booking.spa.gateway.domain.product.PriceInfo;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.request.ElongDataValidateRequest;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongNightlyRate;
 import org.junit.jupiter.api.DisplayName;

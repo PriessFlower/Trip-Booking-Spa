@@ -1,5 +1,12 @@
 package com.trip.booking.spa.gateway.adapter.inbound.rest.dto;
 
+import com.trip.booking.spa.gateway.domain.product.BedCheckInfo;
+import com.trip.booking.spa.gateway.domain.product.BookingRule;
+import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
+import com.trip.booking.spa.gateway.domain.product.Meal;
+import com.trip.booking.spa.gateway.domain.product.PriceInfo;
+import com.trip.booking.spa.gateway.domain.product.ProductInfo;
+import com.trip.booking.spa.gateway.domain.product.Room;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
