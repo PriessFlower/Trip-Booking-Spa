@@ -183,17 +183,21 @@ public final class MetricNames {
     public static final String QUERY_PRICE_FOR_SPA = "query_price_for_spa";
 
     /**
-     * 对外查价的一条「请求×供应商」腿。一个 HTTP 请求带 N 家供应商就是 N 条腿，每腿记一次。
+     * 对外查价向某一家供应商问了一次。一个 HTTP 请求带 N 家供应商就记 N 次。
      * 标签 supplier / source（cache|live）/ outcome（available|no_inventory|indeterminate
-     * 即 PricingOutcome 小写，外加 {@link #LEG_ERROR}=处理中抛异常）。
-     * 出报率 = available 腿 / 全部腿（O-4.2 的请求数与出报率）。
+     * 即 PricingOutcome 小写，外加 {@link #OUTCOME_ERROR}=处理中抛异常）。
+     * 出报率 = available 次数 / 全部次数（O-4.2 的请求数与出报率）。
+     *
+     * <p>2026-09-11 由 {@code spa_price_leg} 改名而来（旧名用「腿」这个内部比喻，读的人
+     * 得先知道「腿 = 请求 × 供应商」）。<b>Prometheus 里的历史序列不会自动接续</b>：
+     * 改名前的数据仍在旧名下，跨改名点的趋势要查两个名字。看板已同步改。
      */
-    public static final String SPA_PRICE_LEG = "spa_price_leg";
+    public static final String SPA_PRICE_ASKED = "spa_price_asked";
 
-    /** 腿的第四个 outcome：处理中抛异常（HTTP 报错出去）。不补上它，sum(腿) 就不等于腿总数（O-3.3） */
-    public static final String LEG_ERROR = "error";
+    /** 第四个 outcome：处理中抛异常（HTTP 报错出去）。不补上它，sum 就不等于总次数（O-3.3） */
+    public static final String OUTCOME_ERROR = "error";
 
-    /** 对外查价实际出报的产品条数。标签 supplier/source。与 spa_price_leg 相除得每腿平均条数 */
+    /** 对外查价实际出报的产品条数。标签 supplier/source。与 spa_price_asked 相除得每次平均条数 */
     public static final String SPA_PRICE_QUOTED = "spa_price_quoted";
 
     /**

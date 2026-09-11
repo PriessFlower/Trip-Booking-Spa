@@ -22,7 +22,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 
 /**
  * 读侧票据详情必须一次 MGET 取齐，不许每个产品一次 GET。
- * 2026-09-10 机器内实测单腿 0.5~0.9s、上游一页 5 家串行 4.6s，大头就是这 N 次往返。
+ * 2026-09-10 机器内实测只有一家 0.5~0.9s、上游一页 5 家串行 4.6s，大头就是这 N 次往返。
  */
 class PriceCacheQuoteBatchTest {
 
