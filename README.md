@@ -32,8 +32,3 @@ Expedia credentials are not stored in YAML. Copy the variable names from
 is the Rapid test endpoint and booking is disabled. The Static Content
 ingestion pipeline was retired on 2026-09-08; what remains of the snapshot
 table and who reads it is documented in `docs/expedia-static-data.md`.
-
-Legacy supplier beans currently inherit safe mock configuration from
-`application.yml`. Set `MOCK_SUPPLIER_BASE_URL` only when a local mock server is
-available; no former supplier endpoint or credential is retained in profile
-configuration.
