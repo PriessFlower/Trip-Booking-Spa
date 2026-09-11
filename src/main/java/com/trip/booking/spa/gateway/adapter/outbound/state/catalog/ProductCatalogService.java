@@ -1,7 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.catalog;
 
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.domain.product.CancelClass;
 import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierIdentityProfile;
@@ -55,9 +54,9 @@ public class ProductCatalogService {
      * 建档是增益路径：任何失败不得打断报价主路径（异常在此吞掉并告警）。
      *
      * @param products        一轮报价转换出的产品；identity 缺席或含 UNKNOWN 成分的会被跳过
-     * @param requestSupplier 请求方供应商——产品未带 supplierId 时的回落（口径同 productToCache）
+     * @param requestSupplierId 请求方供应商码——产品未带 supplierId 时的回落（口径同 productToCache）
      */
-    public void upsert(List<Product> products, Supplier requestSupplier) {
+    public void upsert(List<Product> products, int requestSupplierId) {
         try {
             if (products == null || products.isEmpty()) {
                 return;
@@ -65,7 +64,7 @@ public class ProductCatalogService {
             Map<Integer, List<Product>> bySupplier = new LinkedHashMap<>();
             for (Product product : products) {
                 Integer code = product.getSupplierId() != null ? product.getSupplierId()
-                        : (requestSupplier == null ? null : requestSupplier.getSupplierId());
+                        : (requestSupplierId > 0 ? requestSupplierId : null);
                 if (code == null) {
                     continue;
                 }

@@ -2,9 +2,8 @@ package com.trip.booking.spa.gateway.application.checkprice;
 
 import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
 import com.trip.booking.spa.gateway.domain.booking.VerifyLevel;
@@ -58,7 +57,7 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
     protected abstract ResolveProperties resolveProperties();
 
     /** 调供应商前的自检（凭证是否配置等）。返回非 null 即以之为终态；默认无 */
-    protected CheckPriceResult precondition(CheckPriceReq request) {
+    protected CheckPriceResult precondition(CheckPriceCommand request) {
         return null;
     }
 
@@ -66,21 +65,21 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
      * 要依次找票的售卖环境。默认一个（null）；仅当前一个环境<b>确证 RATE_DEAD</b> 才试下一个——
      * 不确定或已售罄时再查一遍既救不回也会掩盖成因（Expedia 零售→打包的口径）。
      */
-    protected List<String> salesEnvironments(CheckPriceReq request) {
+    protected List<String> salesEnvironments(CheckPriceCommand request) {
         return Collections.singletonList(null);
     }
 
     /** 现取现验（R-3.1）：重打一次现货接口。验价即刷等副作用也在这里 */
-    protected abstract LiveStock<S> fetchLiveStock(CheckPriceReq request, String salesEnvironment);
+    protected abstract LiveStock<S> fetchLiveStock(CheckPriceCommand request, String salesEnvironment);
 
     /** 按上游回传的令牌（sProductId）精确找票；找不到返回 null */
-    protected abstract C findByToken(S stock, CheckPriceReq request);
+    protected abstract C findByToken(S stock, CheckPriceCommand request);
 
     /**
      * 换票候选：现货里每条在售、可成交的报价，附<b>与查价同口径</b>派生的 productKey 与上游口径总价。
      * 只收 productKey 与请求相等的（硬门 R-3.2 由键相等保证）。
      */
-    protected abstract List<ResolveCandidate<C>> resolveCandidates(S stock, CheckPriceReq request);
+    protected abstract List<ResolveCandidate<C>> resolveCandidates(S stock, CheckPriceCommand request);
 
     /** 票的令牌，只用于日志 */
     protected abstract String tokenOf(C candidate);
@@ -89,18 +88,18 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
      * 找到票之后、分档之前的供应商自检（停售、缺验价凭据、床型不可选……）。
      * 返回非 null 即以之为终态；默认通过。
      */
-    protected CheckPriceResult inspect(C candidate, S stock, CheckPriceReq request) {
+    protected CheckPriceResult inspect(C candidate, S stock, CheckPriceCommand request) {
         return null;
     }
 
     /** 曝光档：只答「还在售」。必须回 AVAILABLE 且不签句柄——模板对 BOOKABLE 的句柄自洽检查在父类 */
-    protected abstract CheckPriceResult availabilityOnlyResp(C candidate, S stock, CheckPriceReq request);
+    protected abstract CheckPriceResult availabilityOnlyResp(C candidate, S stock, CheckPriceCommand request);
 
     /** 下单前档：真打供应商 validate，给出 BOOKABLE（带句柄）或确定的失败态 */
-    protected abstract CheckPriceResult validate(C candidate, S stock, CheckPriceReq request);
+    protected abstract CheckPriceResult validate(C candidate, S stock, CheckPriceCommand request);
 
     @Override
-    public final CheckPriceResult doCheckPrice(CheckPriceReq request) {
+    public final CheckPriceResult doCheckPrice(CheckPriceCommand request) {
         CheckPriceResult rejected = precondition(request);
         if (rejected != null) {
             return recorded(rejected);
@@ -120,7 +119,7 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
         return dto;
     }
 
-    private CheckPriceResult attempt(CheckPriceReq request, String salesEnvironment) {
+    private CheckPriceResult attempt(CheckPriceCommand request, String salesEnvironment) {
         LiveStock<S> live = fetchLiveStock(request, salesEnvironment);
         // 验价即刷：现取的这份现货验完即弃等于白白留着缓存陈价对外报。终态也要写——
         // 下架/整店无售正是要落无货标记的时候（挂了转换器才做，Expedia 没挂）
@@ -137,8 +136,8 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
         }
         if (found == null) {
             log.info("验价：所点报价已不在现货且未能换票,supplier={},sHotelId={},sProductId={},productKey={},salesEnvironment={}",
-                    supplier().getDesc(), request.getSHotelId(), request.getSProductId(),
-                    request.getProductKey(), salesEnvironment);
+                    supplier().getDesc(), request.supplierHotelId(), request.supplierProductId(),
+                    request.productKey(), salesEnvironment);
             return CheckPriceResult.builder().outcome(CheckPriceOutcome.RATE_DEAD)
                     .message("该产品已不在供应商当前报价中，请重新查价后再选择").build();
         }
@@ -146,7 +145,7 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
         if (rejected != null) {
             return rejected;
         }
-        if (request.getVerifyLevel() == VerifyLevel.AVAILABILITY) {
+        if (request.verifyLevel() == VerifyLevel.AVAILABILITY) {
             return availabilityOnlyResp(found, stock, request);
         }
         return validate(found, stock, request);
@@ -156,18 +155,18 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
      * 令牌死后按 productKey 在现货里换等价新票（resolve ②，docs/product-identity.md §3）。
      * 未换到的成因必须可区分（§6.2.2）：无键、闸口关、无基准、无等价票、超容差。
      */
-    private C resolve(S stock, CheckPriceReq request) {
+    private C resolve(S stock, CheckPriceCommand request) {
         String supplier = supplier().getDesc();
-        if (StringUtils.isBlank(request.getProductKey())) {
+        if (StringUtils.isBlank(request.productKey())) {
             log.info("验价：上游未携 productKey，无法换票,supplier={},sHotelId={},sProductId={}",
-                    supplier, request.getSHotelId(), request.getSProductId());
+                    supplier, request.supplierHotelId(), request.supplierProductId());
             return resolveMissed(MetricNames.RESOLVE_NO_PRODUCT_KEY);
         }
         ResolveProperties properties = resolveProperties();
         if (properties == null || !properties.isResolveEnabled()) {
             // §3.8.4：上游明确请求了换票（带 productKey）而被闸口拒绝，必须可检索
             log.info("闸口 supplier.{}.resolve-enabled 关闭，拒绝按 productKey 自动换票,sHotelId={},sProductId={}",
-                    supplier, request.getSHotelId(), request.getSProductId());
+                    supplier, request.supplierHotelId(), request.supplierProductId());
             return resolveMissed(MetricNames.RESOLVE_GATE_CLOSED);
         }
         List<ResolveCandidate<C>> equivalents = resolveCandidates(stock, request);
@@ -175,10 +174,10 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
             equivalents = new ArrayList<>();
         }
         // 容差基准：上游给了就用上游的；没给则反查本网关刷价时写入的原价（调用方未必持有价格）
-        Integer baseline = request.getSeenPrice() != null ? request.getSeenPrice() : lookupTotalPriceFromCache(request);
+        Integer baseline = request.seenPrice() != null ? request.seenPrice() : lookupTotalPriceFromCache(request);
         if (baseline == null) {
             log.info("验价：无容差基准价（上游未携且缓存反查不到），不自动换票,supplier={},sHotelId={},sProductId={}",
-                    supplier, request.getSHotelId(), request.getSProductId());
+                    supplier, request.supplierHotelId(), request.supplierProductId());
             return resolveMissed(MetricNames.RESOLVE_NO_BASELINE);
         }
         Optional<ResolveCandidate<C>> chosen = ResolveGate.pickCheapestWithinTolerance(equivalents,
@@ -186,7 +185,7 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
                 properties.getResolvePriceCapCents());
         if (chosen.isPresent()) {
             log.info("验价：令牌已死，按productKey换票成功,supplier={},原sProductId={},新令牌={},新价={}分,展示价={}分",
-                    supplier, request.getSProductId(), tokenOf(chosen.get().candidate()),
+                    supplier, request.supplierProductId(), tokenOf(chosen.get().candidate()),
                     chosen.get().priceCents(), baseline);
             Monitor.recordOne(MetricNames.CHECK_PRICE_RESOLVE,
                     MetricTags.outcomeOf(supplier(), MetricNames.RESOLVE_SWAPPED));
@@ -194,11 +193,11 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
         }
         if (equivalents.isEmpty()) {
             log.info("验价：resolve 未命中——现货中无同卖法等价报价,supplier={},sHotelId={},sProductId={},productKey={}",
-                    supplier, request.getSHotelId(), request.getSProductId(), request.getProductKey());
+                    supplier, request.supplierHotelId(), request.supplierProductId(), request.productKey());
             return resolveMissed(MetricNames.RESOLVE_NO_EQUIVALENT);
         }
         log.info("验价：存在等价报价但超出容差，拒绝自动换票,supplier={},sProductId={},展示价={}分,候选最低={}分",
-                supplier, request.getSProductId(), baseline,
+                supplier, request.supplierProductId(), baseline,
                 equivalents.stream().mapToInt(ResolveCandidate::priceCents).min().orElse(-1));
         return resolveMissed(MetricNames.RESOLVE_OVER_TOLERANCE);
     }
@@ -229,56 +228,58 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
      * <p><b>占用键随验价走</b>：客人问 2 大 1 小就回写 2-x 键，长尾占用按需成盘
      * （刷价任务只铺 1 人档）。任何失败只落日志与指标，绝不影响验价主流程。
      */
-    private void freshStockToCacheAsync(CheckPriceReq request,
-                                        java.util.function.Function<PriceReq, List<Product>> converter) {
+    private void freshStockToCacheAsync(CheckPriceCommand request,
+                                        java.util.function.Function<PriceQuery, List<Product>> converter) {
         ExecutorService pool = FRESH_POOLS.computeIfAbsent(supplier().getDesc(),
                 name -> ThreadPools.serialBounded(name + "-fresh-prices", 64, true));
         try {
             pool.execute(() -> freshStockToCache(request, converter));
         } catch (RejectedExecutionException e) {
             log.warn("验价即刷：回写队列满，本次丢弃(下轮刷价会补),supplier={},sHotelId={},checkIn={}",
-                    supplier().getDesc(), request.getSHotelId(), request.getCheckIn());
+                    supplier().getDesc(), request.supplierHotelId(), request.checkIn());
             Monitor.recordOne(MetricNames.CHECK_PRICE_FRESH_WRITE,
                     MetricTags.outcomeOf(supplier(), MetricNames.FRESH_REJECTED));
         }
     }
 
     /** 回写本体（同步，供测试直接驱动） */
-    final void freshStockToCache(CheckPriceReq request,
-                                 java.util.function.Function<PriceReq, List<Product>> converter) {
+    final void freshStockToCache(CheckPriceCommand request,
+                                 java.util.function.Function<PriceQuery, List<Product>> converter) {
         try {
-            PriceReq priceReq = PriceReq.builder()
-                    .checkIn(request.getCheckIn())
-                    .checkout(request.getCheckOut())
-                    .roomNum(request.getRoomNum() == null ? 1 : request.getRoomNum())
-                    .adultNum(request.getAdultCount())
-                    .childNum(request.getChildNum() == null ? 0 : request.getChildNum())
-                    .childAges(request.getChildAges() == null ? new ArrayList<>() : request.getChildAges())
+            PriceQuery priceReq = PriceQuery.builder()
+                    .supplierId(supplier().getCode())
+                    .supplierHotelId(request.supplierHotelId())
+                    .checkIn(request.checkIn())
+                    .checkOut(request.checkOut())
+                    .roomNum(request.roomNum())
+                    .adultNum(request.adultCount())
+                    .childNum(request.childNum())
+                    .childAges(request.childAges())
                     .build();
-            priceReq.setOccupancies(Occupancy.perRoom(priceReq.getRoomNum(), priceReq.getAdultNum(),
-                    priceReq.getChildNum(), priceReq.getChildAges()));
+            // 占用串依赖归一后的人数房数，故建好再补一次（PriceQuery 不可变）
+            priceReq = priceReq.toBuilder()
+                    .occupancies(Occupancy.perRoom(priceReq.roomNum(), priceReq.adultNum(),
+                            priceReq.childNum(), priceReq.childAges()))
+                    .build();
             List<Product> products = converter.apply(priceReq);
             if (products == null) {
                 // F-5.1：没问出结果不动缓存。§6.2.1 非常态走向必须可检索
                 log.info("验价即刷：未取得可用现货，不动缓存,supplier={},sHotelId={},occupancy={},checkIn={}",
-                        supplier().getDesc(), request.getSHotelId(), priceReq.getOccupancies().get(0),
-                        request.getCheckIn());
+                        supplier().getDesc(), request.supplierHotelId(), priceReq.occupancies().get(0),
+                        request.checkIn());
                 Monitor.recordOne(MetricNames.CHECK_PRICE_FRESH_WRITE,
                         MetricTags.outcomeOf(supplier(), MetricNames.FRESH_SKIPPED));
                 return;
             }
-            priceCacheService.productToCache(products, priceReq, Supplier.builder()
-                    .supplierId(supplier().getCode())
-                    .sHotelId(request.getSHotelId())
-                    .build());
+            priceCacheService.productToCache(products, priceReq);
             log.info("验价即刷：现货已回写缓存,supplier={},sHotelId={},occupancy={},checkIn={},产品={}条",
-                    supplier().getDesc(), request.getSHotelId(), priceReq.getOccupancies().get(0),
-                    request.getCheckIn(), products.size());
+                    supplier().getDesc(), request.supplierHotelId(), priceReq.occupancies().get(0),
+                    request.checkIn(), products.size());
             Monitor.recordOne(MetricNames.CHECK_PRICE_FRESH_WRITE,
                     MetricTags.outcomeOf(supplier(), MetricNames.FRESH_WRITTEN));
         } catch (Exception e) {
             log.warn("验价即刷：回写失败不影响验价,supplier={},sHotelId={},err={}",
-                    supplier().getDesc(), request.getSHotelId(), e.toString());
+                    supplier().getDesc(), request.supplierHotelId(), e.toString());
             Monitor.recordOne(MetricNames.CHECK_PRICE_FRESH_WRITE,
                     MetricTags.outcomeOf(supplier(), MetricNames.FRESH_ERROR));
         }
@@ -290,19 +291,17 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
      * 的单晚价当基准会小一个量级（2026-08-19）；缓存字段是 productKey 不是报价码，
      * 按报价码找恒 miss（2026-08-20）。查不到返回 null——无基准则不换票。
      */
-    Integer lookupTotalPriceFromCache(CheckPriceReq request) {
+    Integer lookupTotalPriceFromCache(CheckPriceCommand request) {
         try {
-            PriceReq priceReq = PriceReq.builder()
-                    .checkIn(request.getCheckIn()).checkout(request.getCheckOut())
-                    .roomNum(request.getRoomNum())
-                    .adultNum(request.getAdultCount()).childNum(request.getChildNum())
-                    .childAges(request.getChildAges() == null ? new ArrayList<>() : request.getChildAges())
-                    .build();
-            Supplier supplier = Supplier.builder()
+            PriceQuery priceReq = PriceQuery.builder()
                     .supplierId(supplier().getCode())
-                    .sHotelId(request.getSHotelId())
+                    .supplierHotelId(request.supplierHotelId())
+                    .checkIn(request.checkIn()).checkOut(request.checkOut())
+                    .roomNum(request.roomNum())
+                    .adultNum(request.adultCount()).childNum(request.childNum())
+                    .childAges(request.childAges())
                     .build();
-            List<Product> products = priceCacheService.getPrice(priceReq, supplier, request.getProductKey());
+            List<Product> products = priceCacheService.getPrice(priceReq, request.productKey());
             if (products == null || products.isEmpty()) {
                 return null;
             }
@@ -310,7 +309,7 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
             return total != null && total > 0 ? total : null;
         } catch (Exception e) {
             log.warn("验价：总价反查失败,supplier={},sHotelId={},sProductId={},err={}",
-                    supplier().getDesc(), request.getSHotelId(), request.getSProductId(), e.toString());
+                    supplier().getDesc(), request.supplierHotelId(), request.supplierProductId(), e.toString());
             return null;
         }
     }

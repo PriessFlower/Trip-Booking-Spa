@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogMapper;
@@ -106,14 +106,14 @@ class FliggyProductToCacheTest {
     void realPayloadPricesLandInPriceHash() throws Exception {
         String raw = Files.readString(Path.of("src/test/resources/fliggy/ari-availability-real-20260827.json"));
         FliggyAriResponse resp = FliggyAriResponse.parse(raw);
-        PriceReq req = PriceReq.builder().checkIn("2026-09-10").checkout("2026-09-11")
+        PriceQuery req = PriceQuery.builder().supplierId(10015).supplierHotelId("50363404").checkIn("2026-09-10").checkOut("2026-09-11")
                 .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
-        req.setOccupancies(List.of("2"));
+        req = req.toBuilder().occupancies(List.of("2")).build();
         Supplier supplier = Supplier.builder().supplierId(10015).sHotelId("50363404").build();
 
         List<Product> products = fliggyService.convertRates(resp.rates(), req, "50363404", asOf());
         assertFalse(products.isEmpty());
-        cacheService.productToCache(products, req, supplier);
+        cacheService.productToCache(products, req);
 
         ArgumentCaptor<Map<String, Map<String, String>>> cap = ArgumentCaptor.forClass(Map.class);
         Mockito.verify(redisUtils).batchHashMapSetWithExpire(cap.capture(), anyLong(), any(TimeUnit.class));
@@ -134,13 +134,13 @@ class FliggyProductToCacheTest {
     void realPayloadProductsLandInCatalog() throws Exception {
         String raw = Files.readString(Path.of("src/test/resources/fliggy/ari-availability-real-20260827.json"));
         FliggyAriResponse resp = FliggyAriResponse.parse(raw);
-        PriceReq req = PriceReq.builder().checkIn("2026-09-10").checkout("2026-09-11")
+        PriceQuery req = PriceQuery.builder().supplierId(10015).supplierHotelId("50363404").checkIn("2026-09-10").checkOut("2026-09-11")
                 .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
-        req.setOccupancies(List.of("2"));
+        req = req.toBuilder().occupancies(List.of("2")).build();
         Supplier supplier = Supplier.builder().supplierId(10015).sHotelId("50363404").build();
 
         List<Product> products = fliggyService.convertRates(resp.rates(), req, "50363404", asOf());
-        cacheService.productToCache(products, req, supplier);
+        cacheService.productToCache(products, req);
 
         ArgumentCaptor<java.util.HashMap<String, Object>> cap =
                 ArgumentCaptor.forClass(java.util.HashMap.class);
@@ -159,9 +159,9 @@ class FliggyProductToCacheTest {
     void quotesWithoutDayPricesAreCountedNotSilent() throws Exception {
         String raw = Files.readString(Path.of("src/test/resources/fliggy/ari-availability-real-20260827.json"));
         FliggyAriResponse resp = FliggyAriResponse.parse(raw);
-        PriceReq req = PriceReq.builder().checkIn("2026-09-10").checkout("2026-09-11")
+        PriceQuery req = PriceQuery.builder().supplierId(10015).supplierHotelId("50363404").checkIn("2026-09-10").checkOut("2026-09-11")
                 .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
-        req.setOccupancies(List.of("2"));
+        req = req.toBuilder().occupancies(List.of("2")).build();
         Supplier supplier = Supplier.builder().supplierId(10015).sHotelId("50363404").build();
 
         // 真实报文照常转换，再把逐日价摘掉——这就是修复前飞猪的形态（出报>0、priceInfos 空）
@@ -169,7 +169,7 @@ class FliggyProductToCacheTest {
         assertFalse(products.isEmpty());
         products.forEach(p -> p.setPriceInfos(null));
 
-        cacheService.productToCache(products, req, supplier);
+        cacheService.productToCache(products, req);
 
         assertEquals(products.size(), registry.counter("quote_dropped_count", "supplier", "FLIGGY",
                         "stage", "cache_write", "reason", "no_day_price").count(),

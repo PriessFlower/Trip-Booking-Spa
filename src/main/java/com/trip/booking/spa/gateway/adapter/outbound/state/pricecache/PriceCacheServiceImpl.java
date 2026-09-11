@@ -3,7 +3,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfoCache;
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespCacheDTO;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
@@ -124,16 +124,16 @@ public class PriceCacheServiceImpl implements PriceCacheService {
      * 拿请求参数另算一遍就又成了"两处拼、靠约定对齐"。identity 缺席（未派生键的供应商）
      * 才回落到请求参数。
      */
-    private static String occupancyOf(Product product, PriceReq request) {
+    private static String occupancyOf(Product product, PriceQuery request) {
         if (product.getIdentity() != null && StringUtils.isNotBlank(product.getIdentity().occupancy())) {
             return product.getIdentity().occupancy();
         }
-        return Occupancy.canonical(request.getAdultNum(), request.getChildNum(), request.getChildAges());
+        return Occupancy.canonical(request.adultNum(), request.childNum(), request.childAges());
     }
 
     @Override
-    public List<Product> getPrice(PriceReq priceReq, Supplier supplier) {
-        return getPrice(priceReq, supplier, null);
+    public List<Product> getPrice(PriceQuery priceReq) {
+        return getPrice(priceReq, null);
     }
 
     /**
@@ -149,12 +149,12 @@ public class PriceCacheServiceImpl implements PriceCacheService {
      * 有货优先——宁可多报也不能把在售说成无货。
      */
     @Override
-    public PricingResult getPriceResult(PriceReq priceReq, Supplier supplier) {
-        List<Product> products = getPrice(priceReq, supplier, null);
+    public PricingResult getPriceResult(PriceQuery priceReq) {
+        List<Product> products = getPrice(priceReq, null);
         if (products != null && !products.isEmpty()) {
             return PricingResult.available(products);
         }
-        return hasNoInventoryMark(priceReq, supplier)
+        return hasNoInventoryMark(priceReq)
                 ? PricingResult.noInventory() : PricingResult.indeterminate();
     }
 
@@ -164,17 +164,17 @@ public class PriceCacheServiceImpl implements PriceCacheService {
      * <p><b>要求住期内每一天都有标记</b>：与出价"每一天都得有价才报"同一口径。
      * 只有部分日期有标记，说明另一些日期压根没刷过，那整段就不能说成确定无货。
      */
-    private boolean hasNoInventoryMark(PriceReq priceReq, Supplier supplier) {
+    private boolean hasNoInventoryMark(PriceQuery priceReq) {
         try {
-            String occupancy = Occupancy.canonical(priceReq.getAdultNum(), priceReq.getChildNum(),
-                    priceReq.getChildAges());
-            List<String> dates = DateUtil.getDatesBetween(priceReq.getCheckIn(), priceReq.getCheckout());
+            String occupancy = Occupancy.canonical(priceReq.adultNum(), priceReq.childNum(),
+                    priceReq.childAges());
+            List<String> dates = DateUtil.getDatesBetween(priceReq.checkIn(), priceReq.checkOut());
             if (dates.isEmpty()) {
                 return false;
             }
             for (String date : dates) {
                 String v = redisUtils.hmGet(
-                        RedisKeyUtils.buildPriceKey(supplier.getSupplierId(), supplier.getSHotelId(), occupancy, date),
+                        RedisKeyUtils.buildPriceKey(priceReq.supplierId(), priceReq.supplierHotelId(), occupancy, date),
                         NO_INVENTORY_FIELD);
                 if (StringUtils.isBlank(v)) {
                     return false;
@@ -183,26 +183,26 @@ public class PriceCacheServiceImpl implements PriceCacheService {
             return true;
         } catch (Exception e) {
             // 读标记失败退回"未能确认"——它是更保守的那一态
-            log.warn("无货标记读取失败,sHotelId={},err={}", supplier.getSHotelId(), e.toString());
+            log.warn("无货标记读取失败,sHotelId={},err={}", priceReq.supplierHotelId(), e.toString());
             return false;
         }
     }
 
     @Override
-    public List<Product> getPrice(PriceReq priceReq, Supplier supplier, String cacheField) {
+    public List<Product> getPrice(PriceQuery priceReq, String cacheField) {
         List<Product> respDTOList = new ArrayList<>();
-        List<String> checkList = DateUtil.getDatesBetween(priceReq.getCheckIn(), priceReq.getCheckout());
+        List<String> checkList = DateUtil.getDatesBetween(priceReq.checkIn(), priceReq.checkOut());
         Map<String, List<PriceInfoCache>> productMap = new HashMap<>();
 
         // 占用必须进键：productKey 的成分里有占用，而本方法是把整个 Hash 端出来、
         // 里面有什么报什么——不按占用分片，刷价按 1 人刷出来的价就会被原样报给 2 人的查询
         // （实测同店同日 1 人 335.46 / 2 人 293.17）。分片后 2 人查询取到空片，如实无货
-        String occupancy = Occupancy.canonical(priceReq.getAdultNum(), priceReq.getChildNum(),
-                priceReq.getChildAges());
+        String occupancy = Occupancy.canonical(priceReq.adultNum(), priceReq.childNum(),
+                priceReq.childAges());
         List<String> keyList = new ArrayList<>();
         checkList.forEach(c -> {
             //price:supplierCode:sHotelId:occupancy:yyyy-MM-dd
-            String priceKey = RedisKeyUtils.buildPriceKey(supplier.getSupplierId(), supplier.getSHotelId(), occupancy, c);
+            String priceKey = RedisKeyUtils.buildPriceKey(priceReq.supplierId(), priceReq.supplierHotelId(), occupancy, c);
             keyList.add(priceKey);
         });
         //productMap--缓存字段(productKey),List<PriceInfo>
@@ -212,17 +212,17 @@ public class PriceCacheServiceImpl implements PriceCacheService {
         // 命中进程内缓存后零 IO。取不到的产品仍照常出价，只是没有房型/餐食——
         // 缺属性不该让整条报价消失（R-1.6：宁可少报信息，不可少报货）
         Map<String, ProductAttributeReader.ProductAttribute> attrMap =
-                productAttributeReader.batchGet(supplier.getSupplierId(), new ArrayList<>(productMap.keySet()));
+                productAttributeReader.batchGet(priceReq.supplierId(), new ArrayList<>(productMap.keySet()));
 
         // 下面 forEach 里的每个 return 都是丢一条报价。丢可以，静默不行（O-4.5）：
         // 这五个分支此前既无日志也无指标，出报率的扣分项只能靠 grep 和猜
-        SupplierSourceEnum supplierEnum = SupplierSourceEnum.getEnum(supplier.getSupplierId());
+        SupplierSourceEnum supplierEnum = SupplierSourceEnum.getEnum(priceReq.supplierId());
 
         // 票据详情一次 MGET 取齐。此前在下面的 forEach 里每个产品单独 GET 一次：
         // 一家店 22~72 个产品 = 22~72 次往返，2026-09-10 机器内实测单腿 0.5~0.9s 大头在此，
         // 上游一页 5 家串行就是 4.6s。键还是逐个产品的 quote 键，只是合成一次往返
         Map<String, String> quoteJsonByKey = redisUtils.multiGet(productMap.keySet().stream()
-                .map(k -> RedisKeyUtils.buildQuoteKey(supplier.getSupplierId(), supplier.getSHotelId(), k))
+                .map(k -> RedisKeyUtils.buildQuoteKey(priceReq.supplierId(), priceReq.supplierHotelId(), k))
                 .toList());
 
         // 使用已经收集的价格信息构建响应对象
@@ -261,7 +261,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
             }
             // 补充产品其他信息。key 是 productKey（见 cacheField），
             // 票据键随之为 quote:{supplierCode}:{sHotelId}:{productKey}
-            String priceInfoKey = RedisKeyUtils.buildQuoteKey(supplier.getSupplierId(), supplier.getSHotelId(), key);
+            String priceInfoKey = RedisKeyUtils.buildQuoteKey(priceReq.supplierId(), priceReq.supplierHotelId(), key);
             String priceInfoJson = quoteJsonByKey.get(priceInfoKey);
             if (StringUtils.isBlank(priceInfoJson)) {
                 // 详情缺席 = 拿不到可下单的票据（productId 只存在于详情里，依 R-2.1 不落库）。
@@ -275,14 +275,14 @@ public class PriceCacheServiceImpl implements PriceCacheService {
             respDTO.setTotalPrice(totalPrice);
             respDTO.setTotalTaxes(totalTaxes);
             respDTO.setRoomTotalPrice(roomTotalPrice);
-            respDTO.setSupplierId(supplier.getSupplierId());
+            respDTO.setSupplierId(priceReq.supplierId());
             // 票据取自详情（最近一轮刷价写入的那张），不是缓存字段名——字段名现在是
             // 跨次稳定的 productKey，拿它去下单会被供应商拒（它不是报价码）
             if (StringUtils.isBlank(respDTO.getProductId())) {
                 countDropped(supplierEnum, DropReason.PRODUCT_ID_MISSING);
                 return;
             }
-            respDTO.setHotelId(supplier.getSHotelId());
+            respDTO.setHotelId(priceReq.supplierHotelId());
             // 房型/餐食/产品名来自档案表，不再随每轮刷价重写进 Redis
             ProductAttributeReader.ProductAttribute attr = attrMap.get(key);
             if (attr != null) {
@@ -294,7 +294,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
             // 可能已经关了（未来日期的价能在缓存里活 16 小时）。只在写侧滤，对外照旧会承诺
             // 一个订不到的免费取消（2026-09-02 实测艺龙 14.3% 的"可免费取消"即此形态）
             respDTO.setCancelPolicy(CancelClassifier.liveSegments(
-                    respDTO.getCancelPolicy(), priceReq.getCheckIn(), Instant.now()));
+                    respDTO.getCancelPolicy(), priceReq.checkIn(), Instant.now()));
             List<PriceInfo> priceInfos = ModelConverterUtils.convert(value, PriceInfo.class);
             respDTO.setPriceInfos(priceInfos);
             respDTO.setStayPrice(stayPriceTotal);
@@ -352,19 +352,19 @@ public class PriceCacheServiceImpl implements PriceCacheService {
      * 严格限于本次问过的那一片（该供应商、该酒店、该占用、住期内每一天），没问过的占用片
      * 一个字节都不碰。
      */
-    private void markNoInventory(PriceReq request, Supplier supplier) {
-        String occupancy = Occupancy.canonical(request.getAdultNum(), request.getChildNum(),
-                request.getChildAges());
-        String hotelId = supplier == null ? null : supplier.getSHotelId();
+    private void markNoInventory(PriceQuery request) {
+        String occupancy = Occupancy.canonical(request.adultNum(), request.childNum(),
+                request.childAges());
+        String hotelId = request.supplierHotelId();
         if (StringUtils.isBlank(hotelId)) {
             // 拿不到酒店就无从标记。不猜、也不静默——否则"为什么没标记"在日志里没有答案
-            log.warn("无货标记：请求里没有酒店 id，跳过,checkIn={}", request.getCheckIn());
+            log.warn("无货标记：请求里没有酒店 id，跳过,checkIn={}", request.checkIn());
             return;
         }
         Map<String, Map<String, String>> dataMap = new HashMap<>();
         Map<String, Set<String>> staleFields = new HashMap<>();
-        for (String date : DateUtil.getDatesBetween(request.getCheckIn(), request.getCheckout())) {
-            String priceKey = RedisKeyUtils.buildPriceKey(supplier.getSupplierId(), hotelId, occupancy, date);
+        for (String date : DateUtil.getDatesBetween(request.checkIn(), request.checkOut())) {
+            String priceKey = RedisKeyUtils.buildPriceKey(request.supplierId(), hotelId, occupancy, date);
             dataMap.put(priceKey, Map.of(NO_INVENTORY_FIELD, "1"));
             Map<String, String> existing = redisUtils.hashMapGet(priceKey);
             if (MapUtils.isNotEmpty(existing)) {
@@ -384,7 +384,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
         }
         writeWithTieredTtl(dataMap);
         log.info("无货标记：已落缓存,hotelId={},occupancy={},checkIn={},checkOut={},共 {} 天,摘掉旧报价={}条",
-                hotelId, occupancy, request.getCheckIn(), request.getCheckout(), dataMap.size(), dropped);
+                hotelId, occupancy, request.checkIn(), request.checkOut(), dataMap.size(), dropped);
     }
 
     private void writeWithTieredTtl(Map<String, Map<String, String>> dataMap) {
@@ -425,17 +425,17 @@ public class PriceCacheServiceImpl implements PriceCacheService {
     }
 
     @Override
-    public void productToCache(List<Product> list, PriceReq request, Supplier supplier) {
+    public void productToCache(List<Product> list, PriceQuery request) {
         try {
             if (list == null || list.isEmpty()) {
                 // F-5.2：明确无货照常落缓存。原实现直接 return，于是「刷过且无货」这个
                 // 确定事实在 Redis 里与「压根没刷过」无从分辨，读侧只能一律报未能确认
-                markNoInventory(request, supplier);
+                markNoInventory(request);
                 return;
             }
             // 建档（R-2.6 写侧）：稳定成分落档案表，与写缓存同一份数据。放在裁剪之前——
             // 被裁掉的仍是真实卖法，档案该有它；失败不打断（服务内部已吞异常）
-            productCatalogService.upsert(list, supplier);
+            productCatalogService.upsert(list, request.supplierId());
 
             // F-3 裁剪：按 productKey 等价类留最低价的前 N 条。放在最前面——
             // 后续的下架判断依赖"谁进了 dataMap"，裁剪必须先于它发生，
@@ -459,7 +459,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
             // "确定无货"，比不拦截更糟。故单独记一份，供下方下架判断排除
             Map<String, Set<String>> interceptedMap = Maps.newHashMap();
 
-            List<String> dateSet = DateUtil.getDatesBetween(request.getCheckIn(), request.getCheckout());
+            List<String> dateSet = DateUtil.getDatesBetween(request.checkIn(), request.checkOut());
 
             for (Product productRespDTO : list) {
 
@@ -467,7 +467,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
                 String occupancy = occupancyOf(productRespDTO, request);
                 // 键的供应商成分取报价自己的 supplierId（谁产的报价算谁的），缺失回落请求方
                 int supplierCode = productRespDTO.getSupplierId() != null
-                        ? productRespDTO.getSupplierId() : supplier.getSupplierId();
+                        ? productRespDTO.getSupplierId() : request.supplierId();
                 dateSet.forEach(date -> {
                     String priceKey = RedisKeyUtils.buildPriceKey(supplierCode, productRespDTO.getHotelId(), occupancy, date); // price:supplierCode:hotelId:occupancy:date
                     //key 是产品Id value是价格

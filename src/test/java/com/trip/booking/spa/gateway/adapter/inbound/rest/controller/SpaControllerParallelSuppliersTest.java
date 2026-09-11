@@ -4,6 +4,7 @@ import com.trip.booking.spa.bootstrap.NacosRuntimeConfig;
 import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ResponseDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
@@ -55,11 +56,13 @@ class SpaControllerParallelSuppliersTest {
         SpringAppContextUtil.AppContext.setApplicationContextHolder(null);
     }
 
+    /** 控制器吃的是对外 JSON（① 的 PriceReq），拆成每家一条 PriceQuery 是它内部的事 */
     private static PriceReq req(String... hotelIds) {
         List<Supplier> sups = java.util.Arrays.stream(hotelIds)
                 .map(h -> Supplier.builder().supplierId(10005).sHotelId(h).build()).toList();
         return PriceReq.builder().checkIn("2026-09-30").checkout("2026-10-01")
-                .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).suppliers(sups).build();
+                .roomNum(1).adultNum(2).childNum(0).childAges(List.of())
+                .suppliers(sups).build();
     }
 
     @Test
@@ -68,14 +71,14 @@ class SpaControllerParallelSuppliersTest {
         CountDownLatch allStarted = new CountDownLatch(5);
         AtomicInteger peak = new AtomicInteger();
         AtomicInteger inFlight = new AtomicInteger();
-        Mockito.when(cache.getPriceResult(any(), any())).thenAnswer(inv -> {
-            Supplier s = inv.getArgument(1);
+        Mockito.when(cache.getPriceResult(any())).thenAnswer(inv -> {
+            PriceQuery s = inv.getArgument(0);
             peak.accumulateAndGet(inFlight.incrementAndGet(), Math::max);
             allStarted.countDown();
             // 要是串行，这里会等满 2 秒才超时——并行时 5 条家几乎同时到达
             allStarted.await(2, TimeUnit.SECONDS);
             inFlight.decrementAndGet();
-            return PricingResult.available(List.of(Product.builder().hotelId(s.getSHotelId()).productId("p-" + s.getSHotelId()).build()));
+            return PricingResult.available(List.of(Product.builder().hotelId(s.supplierHotelId()).productId("p-" + s.supplierHotelId()).build()));
         });
 
         ResponseDTO<List<Product>> resp = controller.queryPrice(req("A", "B", "C", "D", "E"));
@@ -88,7 +91,7 @@ class SpaControllerParallelSuppliersTest {
     @Test
     @DisplayName("只有一家不进线程池，行为与从前一致")
     void singleLegStaysInline() {
-        Mockito.when(cache.getPriceResult(any(), any())).thenReturn(PricingResult.available(
+        Mockito.when(cache.getPriceResult(any())).thenReturn(PricingResult.available(
                 List.of(Product.builder().hotelId("A").productId("p").build())));
         ResponseDTO<List<Product>> resp = controller.queryPrice(req("A"));
         assertEquals(1, resp.getResult().size());
@@ -99,13 +102,13 @@ class SpaControllerParallelSuppliersTest {
     @DisplayName("一家抛异常：其余家照样跑完并记指标，最后整批抛出——与串行时的对外语义一致")
     void oneFailingLegStillFailsTheBatchAfterOthersFinish() {
         AtomicInteger calls = new AtomicInteger();
-        Mockito.when(cache.getPriceResult(any(), any())).thenAnswer(inv -> {
-            Supplier s = inv.getArgument(1);
+        Mockito.when(cache.getPriceResult(any())).thenAnswer(inv -> {
+            PriceQuery s = inv.getArgument(0);
             calls.incrementAndGet();
-            if ("B".equals(s.getSHotelId())) {
+            if ("B".equals(s.supplierHotelId())) {
                 throw new IllegalStateException("B 的 Redis 炸了");
             }
-            return PricingResult.available(List.of(Product.builder().hotelId(s.getSHotelId()).productId("p").build()));
+            return PricingResult.available(List.of(Product.builder().hotelId(s.supplierHotelId()).productId("p").build()));
         });
         assertThrows(IllegalStateException.class, () -> controller.queryPrice(req("A", "B", "C")));
         assertEquals(3, calls.get(), "别家不该因为 B 炸了就没跑");

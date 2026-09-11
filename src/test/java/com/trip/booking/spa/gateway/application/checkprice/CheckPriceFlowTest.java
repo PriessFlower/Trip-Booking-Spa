@@ -2,9 +2,9 @@ package com.trip.booking.spa.gateway.application.checkprice;
 
 import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
 import com.trip.booking.spa.gateway.domain.booking.VerifyLevel;
@@ -70,7 +70,7 @@ class CheckPriceFlowTest {
         final List<String> calls = new ArrayList<>();
 
         /** 验价即刷：转换器返回什么由用例设定；null=不挂（该家没有即刷） */
-        java.util.function.Function<PriceReq, List<Product>> freshConverter;
+        java.util.function.Function<PriceQuery, List<Product>> freshConverter;
 
         StubFlow stock(String env, Map<String, Offer> stock) {
             LiveStock<Map<String, Offer>> live = LiveStock.of(stock);
@@ -92,34 +92,34 @@ class CheckPriceFlowTest {
         }
 
         @Override
-        protected CheckPriceResult precondition(CheckPriceReq request) {
+        protected CheckPriceResult precondition(CheckPriceCommand request) {
             calls.add("precondition");
             return precondition;
         }
 
         @Override
-        protected List<String> salesEnvironments(CheckPriceReq request) {
+        protected List<String> salesEnvironments(CheckPriceCommand request) {
             return environments;
         }
 
         @Override
-        protected LiveStock<Map<String, Offer>> fetchLiveStock(CheckPriceReq request, String salesEnvironment) {
+        protected LiveStock<Map<String, Offer>> fetchLiveStock(CheckPriceCommand request, String salesEnvironment) {
             calls.add("fetch:" + salesEnvironment);
             return stocks.get(salesEnvironment);
         }
 
         @Override
-        protected String findByToken(Map<String, Offer> stock, CheckPriceReq request) {
+        protected String findByToken(Map<String, Offer> stock, CheckPriceCommand request) {
             calls.add("find");
-            return stock.containsKey(request.getSProductId()) ? request.getSProductId() : null;
+            return stock.containsKey(request.supplierProductId()) ? request.supplierProductId() : null;
         }
 
         @Override
-        protected List<ResolveCandidate<String>> resolveCandidates(Map<String, Offer> stock, CheckPriceReq request) {
+        protected List<ResolveCandidate<String>> resolveCandidates(Map<String, Offer> stock, CheckPriceCommand request) {
             calls.add("candidates");
             List<ResolveCandidate<String>> out = new ArrayList<>();
             stock.forEach((token, offer) -> {
-                if (request.getProductKey().equals(offer.productKey())) {
+                if (request.productKey().equals(offer.productKey())) {
                     out.add(new ResolveCandidate<>(token, offer.priceCents()));
                 }
             });
@@ -132,28 +132,28 @@ class CheckPriceFlowTest {
         }
 
         @Override
-        protected CheckPriceResult inspect(String candidate, Map<String, Offer> stock, CheckPriceReq request) {
+        protected CheckPriceResult inspect(String candidate, Map<String, Offer> stock, CheckPriceCommand request) {
             calls.add("inspect:" + candidate);
             return inspection;
         }
 
         @Override
-        protected CheckPriceResult availabilityOnlyResp(String candidate, Map<String, Offer> stock, CheckPriceReq request) {
+        protected CheckPriceResult availabilityOnlyResp(String candidate, Map<String, Offer> stock, CheckPriceCommand request) {
             calls.add("availability:" + candidate);
             return CheckPriceResult.builder().outcome(CheckPriceOutcome.AVAILABLE).message(candidate).build();
         }
 
         @Override
-        protected CheckPriceResult validate(String candidate, Map<String, Offer> stock, CheckPriceReq request) {
+        protected CheckPriceResult validate(String candidate, Map<String, Offer> stock, CheckPriceCommand request) {
             calls.add("validate:" + candidate);
             return CheckPriceResult.builder().outcome(CheckPriceOutcome.BOOKABLE).message(candidate)
                     .offerId("offer-" + candidate).offerTtlSeconds(600L).build();
         }
     }
 
-    private static CheckPriceReq req(VerifyLevel level, String token, String productKey, Integer seenPrice) {
-        return CheckPriceReq.builder()
-                .supplierId(10015).sHotelId("50366597").sProductId(token).productKey(productKey)
+    private static CheckPriceCommand req(VerifyLevel level, String token, String productKey, Integer seenPrice) {
+        return CheckPriceCommand.builder()
+                .supplierId(10015).supplierHotelId("50366597").supplierProductId(token).productKey(productKey)
                 .checkIn("2026-09-30").checkOut("2026-10-01").roomNum(1).adultCount(1).childNum(0)
                 .seenPrice(seenPrice).verifyLevel(level)
                 .build();
@@ -265,7 +265,7 @@ class CheckPriceFlowTest {
     void baselineFallsBackToCache() {
         StubFlow flow = new StubFlow().stock(null, stockOf("T2", KEY, 10100));
         PriceCacheService cache = Mockito.mock(PriceCacheService.class);
-        Mockito.when(cache.getPrice(Mockito.any(), Mockito.any(), Mockito.eq(KEY)))
+        Mockito.when(cache.getPrice(Mockito.any(), Mockito.eq(KEY)))
                 .thenReturn(List.of(Product.builder().totalPrice(10000).build()));
         ReflectionTestUtils.setField(flow, "priceCacheService", cache);
 
@@ -280,7 +280,7 @@ class CheckPriceFlowTest {
     void noBaselineRefusesToSwap() {
         StubFlow flow = new StubFlow().stock(null, stockOf("T2", KEY, 9900));
         PriceCacheService cache = Mockito.mock(PriceCacheService.class);
-        Mockito.when(cache.getPrice(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(List.of());
+        Mockito.when(cache.getPrice(Mockito.any(), Mockito.any())).thenReturn(List.of());
         ReflectionTestUtils.setField(flow, "priceCacheService", cache);
 
         assertEquals(CheckPriceOutcome.RATE_DEAD,
@@ -379,15 +379,15 @@ class CheckPriceFlowTest {
 
         flow.freshStockToCache(req(VerifyLevel.AVAILABILITY, "T1", KEY, 10000), flow.freshConverter);
 
-        ArgumentCaptor<PriceReq> pr = ArgumentCaptor.forClass(PriceReq.class);
-        ArgumentCaptor<Supplier> sp = ArgumentCaptor.forClass(Supplier.class);
-        Mockito.verify(cache).productToCache(Mockito.anyList(), pr.capture(), sp.capture());
-        assertEquals("1", pr.getValue().getOccupancies().get(0),
+        ArgumentCaptor<PriceQuery> pr = ArgumentCaptor.forClass(PriceQuery.class);
+        Mockito.verify(cache).productToCache(Mockito.anyList(), pr.capture());
+        assertEquals("1", pr.getValue().occupancies().get(0),
                 "占用键必须随验价走——写成别的档即静默错键");
-        assertEquals("2026-09-30", pr.getValue().getCheckIn());
-        assertEquals("2026-10-01", pr.getValue().getCheckout(), "CheckPriceReq.checkOut → PriceReq.checkout");
-        assertEquals(SupplierSourceEnum.FLIGGY.getCode(), sp.getValue().getSupplierId());
-        assertEquals("50366597", sp.getValue().getSHotelId());
+        assertEquals("2026-09-30", pr.getValue().checkIn());
+        assertEquals("2026-10-01", pr.getValue().checkOut(), "验价的离店日必须原样传给查价指令");
+        // 供应商坐标现在就在指令里，不再是并排的第二个参数
+        assertEquals(SupplierSourceEnum.FLIGGY.getCode(), pr.getValue().supplierId());
+        assertEquals("50366597", pr.getValue().supplierHotelId());
     }
 
     @Test
@@ -399,7 +399,7 @@ class CheckPriceFlowTest {
         flow.freshStockToCache(req(VerifyLevel.AVAILABILITY, "T1", KEY, 10000), priceReq -> null);
 
         // 用 any() 而不是 anyList()：后者不匹配 null，会让"把 null 送进缓存"这个 bug 假绿
-        Mockito.verify(cache, Mockito.never()).productToCache(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.verify(cache, Mockito.never()).productToCache(Mockito.any(), Mockito.any());
     }
 
     @Test
@@ -411,7 +411,7 @@ class CheckPriceFlowTest {
         flow.freshStockToCache(req(VerifyLevel.AVAILABILITY, "T1", KEY, 10000), priceReq -> List.of());
 
         ArgumentCaptor<List> products = ArgumentCaptor.forClass(List.class);
-        Mockito.verify(cache).productToCache(products.capture(), Mockito.any(), Mockito.any());
+        Mockito.verify(cache).productToCache(products.capture(), Mockito.any());
         assertEquals(0, products.getValue().size());
     }
 
@@ -420,7 +420,7 @@ class CheckPriceFlowTest {
     void freshWriteFailureIsSwallowed() {
         PriceCacheService cache = cacheSpy();
         Mockito.doThrow(new RuntimeException("redis down"))
-                .when(cache).productToCache(Mockito.anyList(), Mockito.any(), Mockito.any());
+                .when(cache).productToCache(Mockito.anyList(), Mockito.any());
         StubFlow flow = flowWithCache(cache);
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> flow.freshStockToCache(
@@ -442,7 +442,7 @@ class CheckPriceFlowTest {
 
         assertEquals(CheckPriceOutcome.SOLD_OUT, resp.getOutcome());
         // 异步池：等回写落地（单线程池，提交即有序）
-        Mockito.verify(cache, Mockito.timeout(2000)).productToCache(Mockito.anyList(), Mockito.any(), Mockito.any());
+        Mockito.verify(cache, Mockito.timeout(2000)).productToCache(Mockito.anyList(), Mockito.any());
     }
 
     @Test
@@ -454,6 +454,6 @@ class CheckPriceFlowTest {
 
         flow.checkPrice(req(VerifyLevel.AVAILABILITY, "T1", KEY, 10000));
 
-        Mockito.verify(cache, Mockito.never()).productToCache(Mockito.anyList(), Mockito.any(), Mockito.any());
+        Mockito.verify(cache, Mockito.never()).productToCache(Mockito.anyList(), Mockito.any());
     }
 }

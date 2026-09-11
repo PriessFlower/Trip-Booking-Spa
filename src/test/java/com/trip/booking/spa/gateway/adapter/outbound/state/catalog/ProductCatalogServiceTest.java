@@ -90,7 +90,7 @@ class ProductCatalogServiceTest {
     @Test
     void everyColumnIsCopiedFromIdentityVerbatim() {
         Product p0 = elongProduct(breakfast(), freeCancel());
-        service.upsert(List.of(p0), elong());
+        service.upsert(List.of(p0), 10010);
 
         ArgumentCaptor<HashMap<String, Object>> cap = ArgumentCaptor.forClass(HashMap.class);
         Mockito.verify(mapper).upsertSupplierProductBase(cap.capture());
@@ -125,8 +125,8 @@ class ProductCatalogServiceTest {
         Meal fullBoard = new Meal();
         fullBoard.setCount(2); fullBoard.setLunchCount(2); fullBoard.setDinnerCount(2);
 
-        service.upsert(List.of(elongProduct(fullBoard, freeCancel())), elong());
-        service.upsert(List.of(elongProduct(breakfast(), freeCancel())), elong());
+        service.upsert(List.of(elongProduct(fullBoard, freeCancel())), 10010);
+        service.upsert(List.of(elongProduct(breakfast(), freeCancel())), 10010);
 
         ArgumentCaptor<HashMap<String, Object>> cap = ArgumentCaptor.forClass(HashMap.class);
         Mockito.verify(mapper, Mockito.times(2)).upsertSupplierProductBase(cap.capture());
@@ -141,14 +141,14 @@ class ProductCatalogServiceTest {
      */
     @Test
     void unknownCancelPolicyNeverEntersCatalog() {
-        service.upsert(List.of(elongProduct(breakfast(), List.of())), elong());
+        service.upsert(List.of(elongProduct(breakfast(), List.of())), 10010);
         Mockito.verify(mapper, Mockito.never()).upsertSupplierProductBase(Mockito.any());
     }
 
     /** 餐食解析不出 → m:UNKNOWN → 同样不进目录 */
     @Test
     void unknownMealNeverEntersCatalog() {
-        service.upsert(List.of(elongProduct(null, freeCancel())), elong());
+        service.upsert(List.of(elongProduct(null, freeCancel())), 10010);
         Mockito.verify(mapper, Mockito.never()).upsertSupplierProductBase(Mockito.any());
     }
 
@@ -160,7 +160,7 @@ class ProductCatalogServiceTest {
     void cancellableButAlwaysChargedIsUnknownToo() {
         List<CancelPolicy> allCharged = List.of(
                 CancelPolicy.builder().cancelType(1).type(RefundType.DEDUCT_BY_AMOUNT).amount(5000).before(36).build());
-        service.upsert(List.of(elongProduct(breakfast(), allCharged)), elong());
+        service.upsert(List.of(elongProduct(breakfast(), allCharged)), 10010);
         Mockito.verify(mapper, Mockito.never()).upsertSupplierProductBase(Mockito.any());
     }
 
@@ -178,8 +178,8 @@ class ProductCatalogServiceTest {
         List<CancelPolicy> fullAmount = List.of(CancelPolicy.builder()
                 .cancelType(1).type(RefundType.DEDUCT_BY_AMOUNT).value(200D).before(36).build());
 
-        service.upsert(List.of(elongProduct(breakfast(), fullPercent)), elong());
-        service.upsert(List.of(elongProduct(breakfast(), fullAmount)), elong());
+        service.upsert(List.of(elongProduct(breakfast(), fullPercent)), 10010);
+        service.upsert(List.of(elongProduct(breakfast(), fullAmount)), 10010);
 
         ArgumentCaptor<HashMap<String, Object>> cap = ArgumentCaptor.forClass(HashMap.class);
         Mockito.verify(mapper, Mockito.times(2)).upsertSupplierProductBase(cap.capture());
@@ -191,7 +191,7 @@ class ProductCatalogServiceTest {
     @Test
     @DisplayName("飞猪开关未配置 → 默认关,一个字节不写")
     void switchDefaultsOffPerSupplier() {
-        service.upsert(List.of(fliggyProduct()), fliggy());
+        service.upsert(List.of(fliggyProduct()), 10015);
         Mockito.verifyNoInteractions(mapper);
     }
 
@@ -215,7 +215,7 @@ class ProductCatalogServiceTest {
     void fliggyLandsThroughTheSameGenericPath() {
         environment.setProperty("supplier.fliggy.catalog-enabled", "true");
 
-        service.upsert(List.of(fliggyProduct()), fliggy());
+        service.upsert(List.of(fliggyProduct()), 10015);
 
         ArgumentCaptor<HashMap<String, Object>> cap = ArgumentCaptor.forClass(HashMap.class);
         Mockito.verify(mapper).upsertSupplierProductBase(cap.capture());
@@ -233,8 +233,7 @@ class ProductCatalogServiceTest {
     void legacySupplierCodeIsSkippedEntirely() {
         Product p = elongProduct(breakfast(), freeCancel());
         p.setSupplierId(9999);
-        assertDoesNotThrow(() -> service.upsert(List.of(p),
-                Supplier.builder().supplierId(9999).sHotelId("H1").build()));
+        assertDoesNotThrow(() -> service.upsert(List.of(p), 9999));
         Mockito.verifyNoInteractions(mapper);
     }
 
@@ -242,6 +241,6 @@ class ProductCatalogServiceTest {
     @Test
     void writeFailureNeverBreaksRefresh() {
         Mockito.when(mapper.upsertSupplierProductBase(Mockito.any())).thenThrow(new RuntimeException("db down"));
-        assertDoesNotThrow(() -> service.upsert(List.of(elongProduct(breakfast(), freeCancel())), elong()));
+        assertDoesNotThrow(() -> service.upsert(List.of(elongProduct(breakfast(), freeCancel())), 10010));
     }
 }

@@ -1,8 +1,8 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyProductKeyDeriver;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyProperties;
@@ -41,12 +41,13 @@ class FliggyFreshPricesTest {
         ReflectionTestUtils.setField(service, "productKeyDeriver", new FliggyProductKeyDeriver(properties));
     }
 
-    private static PriceReq req() {
-        PriceReq r = PriceReq.builder()
-                .checkIn("2026-09-10").checkout("2026-09-11")
+    private static PriceQuery req() {
+        PriceQuery r = PriceQuery.builder()
+                .supplierId(10015).supplierHotelId("10970375")
+                .checkIn("2026-09-10").checkOut("2026-09-11")
                 .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
-        r.setOccupancies(com.trip.booking.spa.gateway.domain.product.Occupancy
-                .perRoom(1, 2, 0, List.of()));
+        r = r.toBuilder().occupancies(com.trip.booking.spa.gateway.domain.product.Occupancy
+                .perRoom(1, 2, 0, List.of())).build();
         return r;
     }
 

@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 钉住已解耦能力面的依赖方向：② 不识 ① 的 JSON。
  *
- * <p>五个能力接口此前全部直接吃 REST DTO（依赖方向倒挂：②依赖①）。取消第一个，查单第二个，下单第三个——JSON↔领域的翻译收在 ① 的 {@code *Mapping}，②③只说领域语言。本测试防的是
+ * <p>五个能力接口此前全部直接吃 REST DTO（依赖方向倒挂：②依赖①）。取消 → 查单 → 下单 → 查价 → 验价，五个能力面已全部矫正——JSON↔领域的翻译收在 ① 的 {@code *Mapping}，②③只说领域语言。本测试防的是
  * 下一个改动图省事把 {@code rest.dto} 重新 import 回来，让已完成的解耦静默失效。
  *
  * <p><b>清单是增量的</b>：其余两个能力尚未解耦（pricing / checkprice 仍吃 REST DTO，且共用 Product，
@@ -29,7 +29,9 @@ class CapabilityLayerBoundaryTest {
     private static final List<String> DECOUPLED_PACKAGES = List.of(
             "gateway/application/cancellation",
             "gateway/application/order",
-            "gateway/application/booking");
+            "gateway/application/booking",
+            "gateway/application/pricing",
+            "gateway/application/checkprice");
 
     @Test
     void decoupledCapabilitiesMustNotImportInboundRest() throws IOException {

@@ -2,8 +2,8 @@ package com.trip.booking.spa.gateway.application.checkprice;
 
 import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
@@ -35,9 +35,9 @@ class CheckPriceFlowBaselineLookupTest {
 
     private static final String PRODUCT_KEY = "d".repeat(64);
 
-    private static CheckPriceReq req() {
-        return CheckPriceReq.builder()
-                .supplierId(10010).sHotelId("61832733").sProductId("P1").productKey(PRODUCT_KEY)
+    private static CheckPriceCommand req() {
+        return CheckPriceCommand.builder()
+                .supplierId(10010).supplierHotelId("61832733").supplierProductId("P1").productKey(PRODUCT_KEY)
                 .checkIn("2026-08-21").checkOut("2026-08-24")   // 3 晚
                 .roomNum(1).adultCount(2).childNum(0)
                 .build();
@@ -56,17 +56,17 @@ class CheckPriceFlowBaselineLookupTest {
             }
 
             @Override
-            protected LiveStock<Object> fetchLiveStock(CheckPriceReq request, String salesEnvironment) {
+            protected LiveStock<Object> fetchLiveStock(CheckPriceCommand request, String salesEnvironment) {
                 throw new UnsupportedOperationException();
             }
 
             @Override
-            protected Object findByToken(Object stock, CheckPriceReq request) {
+            protected Object findByToken(Object stock, CheckPriceCommand request) {
                 throw new UnsupportedOperationException();
             }
 
             @Override
-            protected List<ResolveCandidate<Object>> resolveCandidates(Object stock, CheckPriceReq request) {
+            protected List<ResolveCandidate<Object>> resolveCandidates(Object stock, CheckPriceCommand request) {
                 throw new UnsupportedOperationException();
             }
 
@@ -76,12 +76,12 @@ class CheckPriceFlowBaselineLookupTest {
             }
 
             @Override
-            protected CheckPriceResult availabilityOnlyResp(Object candidate, Object stock, CheckPriceReq request) {
+            protected CheckPriceResult availabilityOnlyResp(Object candidate, Object stock, CheckPriceCommand request) {
                 throw new UnsupportedOperationException();
             }
 
             @Override
-            protected CheckPriceResult validate(Object candidate, Object stock, CheckPriceReq request) {
+            protected CheckPriceResult validate(Object candidate, Object stock, CheckPriceCommand request) {
                 throw new UnsupportedOperationException();
             }
         };
@@ -91,7 +91,7 @@ class CheckPriceFlowBaselineLookupTest {
 
     private static PriceCacheService cacheReturning(List<Product> products) {
         PriceCacheService cache = Mockito.mock(PriceCacheService.class);
-        Mockito.when(cache.getPrice(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(products);
+        Mockito.when(cache.getPrice(Mockito.any(), Mockito.any())).thenReturn(products);
         return cache;
     }
 
@@ -102,10 +102,10 @@ class CheckPriceFlowBaselineLookupTest {
         Integer baseline = flowWith(cache, SupplierSourceEnum.ELONG).lookupTotalPriceFromCache(req());
 
         assertEquals(90000, baseline, "基准=出价口径的区间总价");
-        ArgumentCaptor<PriceReq> pr = ArgumentCaptor.forClass(PriceReq.class);
-        Mockito.verify(cache).getPrice(pr.capture(), Mockito.any(), Mockito.any());
-        assertEquals("2026-08-21", pr.getValue().getCheckIn(), "必须带客人的入住日");
-        assertEquals("2026-08-24", pr.getValue().getCheckout(), "必须带客人的离店日——3 晚不能按 1 晚取基准");
+        ArgumentCaptor<PriceQuery> pr = ArgumentCaptor.forClass(PriceQuery.class);
+        Mockito.verify(cache).getPrice(pr.capture(), Mockito.any());
+        assertEquals("2026-08-21", pr.getValue().checkIn(), "必须带客人的入住日");
+        assertEquals("2026-08-24", pr.getValue().checkOut(), "必须带客人的离店日——3 晚不能按 1 晚取基准");
     }
 
     /** 把断言改回 sProductId 即可复现 2026-08-20 的那半个改名 */
@@ -113,17 +113,17 @@ class CheckPriceFlowBaselineLookupTest {
     void baselineIsLookedUpByProductKeyNotByQuoteCode() {
         PriceCacheService cache = cacheReturning(List.of(Product.builder().productId("P1").totalPrice(90000).build()));
 
-        CheckPriceReq request = req();
+        CheckPriceCommand request = req();
         flowWith(cache, SupplierSourceEnum.ELONG).lookupTotalPriceFromCache(request);
 
+        ArgumentCaptor<PriceQuery> pq = ArgumentCaptor.forClass(PriceQuery.class);
         ArgumentCaptor<String> field = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<Supplier> sp = ArgumentCaptor.forClass(Supplier.class);
-        Mockito.verify(cache).getPrice(Mockito.any(), sp.capture(), field.capture());
+        Mockito.verify(cache).getPrice(pq.capture(), field.capture());
 
         assertEquals(PRODUCT_KEY, field.getValue(), "缓存字段是 productKey——写入侧就是按它写的");
-        assertNotEquals(request.getSProductId(), field.getValue(),
+        assertNotEquals(request.supplierProductId(), field.getValue(),
                 "拿易腐报价码当缓存字段就是恒 miss，只是miss得很安静");
-        assertNull(sp.getValue().getSProductId(),
+        assertNull(pq.getValue().supplierProductId(),
                 "限定条件只能有一个来源；sProductId 不再兼任缓存字段，避免两端各拼一次");
     }
 
@@ -134,10 +134,11 @@ class CheckPriceFlowBaselineLookupTest {
 
         flowWith(cache, SupplierSourceEnum.FLIGGY).lookupTotalPriceFromCache(req());
 
-        ArgumentCaptor<Supplier> sp = ArgumentCaptor.forClass(Supplier.class);
-        Mockito.verify(cache).getPrice(Mockito.any(), sp.capture(), Mockito.any());
-        assertEquals(SupplierSourceEnum.FLIGGY.getCode(), sp.getValue().getSupplierId());
-        assertEquals("61832733", sp.getValue().getSHotelId());
+        // 供应商坐标现在就在指令里，不再是并排的第二个参数
+        ArgumentCaptor<PriceQuery> pq = ArgumentCaptor.forClass(PriceQuery.class);
+        Mockito.verify(cache).getPrice(pq.capture(), Mockito.any());
+        assertEquals(SupplierSourceEnum.FLIGGY.getCode(), pq.getValue().supplierId());
+        assertEquals("61832733", pq.getValue().supplierHotelId());
     }
 
     /** 查不到基准就不换票——无锚不猜(R-1.6) */
@@ -150,7 +151,7 @@ class CheckPriceFlowBaselineLookupTest {
     @Test
     void cacheFailureIsSwallowed() {
         PriceCacheService cache = Mockito.mock(PriceCacheService.class);
-        Mockito.when(cache.getPrice(Mockito.any(), Mockito.any(), Mockito.any()))
+        Mockito.when(cache.getPrice(Mockito.any(), Mockito.any()))
                 .thenThrow(new RuntimeException("redis down"));
         assertNull(flowWith(cache, SupplierSourceEnum.ELONG).lookupTotalPriceFromCache(req()));
     }

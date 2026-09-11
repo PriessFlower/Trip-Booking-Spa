@@ -3,8 +3,8 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.checkprice.ElongCheckPriceServiceImpl;
@@ -177,10 +177,10 @@ class ElongCheckPriceE2ETest {
     @Order(1)
     @DisplayName("查价：真实调 hotel.detail，价格取结算口径且税费自洽")
     void queryPricesUsesSettlementBasis() {
-        PriceReq req = PriceReq.builder().checkIn(checkIn).checkout(checkOut)
+        PriceQuery req = PriceQuery.builder().checkIn(checkIn).checkOut(checkOut)
                 .roomNum(1).adultNum(1).childNum(0).childAges(new ArrayList<>()).build();
 
-        PricingResult result = service.queryPrices(req, supplier(), CallPurpose.LIVE);
+        PricingResult result = service.queryPrices(req, CallPurpose.LIVE);
 
         // 两级桶：真链路上通道层必须先扣用途桶、再扣接口桶。这条断言放在 assumeTrue 之前——
         // 扣格发生在调用之前，与艺龙给不给货无关；放在后面会被"无在售就跳过"吞掉
@@ -282,7 +282,7 @@ class ElongCheckPriceE2ETest {
         // 前三个用例只在偏差恰好落在容差内时跑过，自纠正那条分支<b>一次都没走到</b>。
         // 而 MinRate 是我方传入的，抬高它必然撞 H001189——这是唯一能对着真实供应商
         // 验证自纠正的办法（此前该逻辑的唯一证据是白天那批 python 脚本，不是我方代码）
-        CheckPriceReq request = req(VerifyLevel.BOOKABLE);
+        CheckPriceCommand request = req(VerifyLevel.BOOKABLE);
 
         // 用途须与生产的验价路径一致（CHECK_PRICE）：不一致就扣到了别的桶上，
         // 这条用例验出来的排队行为便不是点订前那条路的行为
@@ -319,7 +319,7 @@ class ElongCheckPriceE2ETest {
         }
 
         Method validate = ElongPriceServiceImpl.class.getDeclaredMethod("validate",
-                CheckPriceReq.class, String.class,
+                CheckPriceCommand.class, String.class,
                 com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongRatePlan.class,
                 List.class);
         validate.setAccessible(true);
@@ -372,14 +372,14 @@ class ElongCheckPriceE2ETest {
                 .isCloseTo(resp.getSalePrice(), org.assertj.core.data.Percentage.withPercentage(2));
     }
 
-    private static CheckPriceReq req(VerifyLevel level) {
+    private static CheckPriceCommand req(VerifyLevel level) {
         return req(level, 1);
     }
 
-    private static CheckPriceReq req(VerifyLevel level, int roomNum) {
-        return CheckPriceReq.builder()
-                .supplierId(10010).sHotelId(HOTEL)
-                .sProductId(reference.getProductId())
+    private static CheckPriceCommand req(VerifyLevel level, int roomNum) {
+        return CheckPriceCommand.builder()
+                .supplierId(10010).supplierHotelId(HOTEL)
+                .supplierProductId(reference.getProductId())
                 .productKey(reference.getProductKey())
                 .seenPrice(reference.getTotalPrice())
                 .checkIn(checkIn).checkOut(checkOut)

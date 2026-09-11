@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
@@ -20,7 +20,7 @@ public interface PriceCacheService {
 
     /** 取该店该住期缓存里的全部产品。不区分「没刷到」与「刷到了但无货」——需要区分时用
      * {@link #getPriceResult}。 */
-    List<Product> getPrice(PriceReq priceReq, Supplier supplier);
+    List<Product> getPrice(PriceQuery priceReq);
 
     /**
      * 取缓存并<b>如实分态</b>（F-5.1 / F-5.2）。
@@ -38,7 +38,7 @@ public interface PriceCacheService {
      * <p>做法依 F-5.2：刷价拿到 NO_INVENTORY 时照常落缓存（写无货标记），读到标记即
      * {@link PricingOutcome#NO_INVENTORY}，键整个不存在才是 INDETERMINATE。
      */
-    PricingResult getPriceResult(PriceReq priceReq, Supplier supplier);
+    PricingResult getPriceResult(PriceQuery priceReq);
 
     /**
      * 只取缓存字段等于 {@code cacheField} 的那一条。
@@ -50,13 +50,13 @@ public interface PriceCacheService {
      *
      * @param cacheField 缓存字段（productKey）；为空则等同于 {@link #getPrice}
      */
-    List<Product> getPrice(PriceReq priceReq, Supplier supplier, String cacheField);
+    List<Product> getPrice(PriceQuery priceReq, String cacheField);
 
     /**
      * 把一轮查价的产物落缓存。
      *
      * <p><b>{@code supplier} 必须显式传</b>，不可从 {@code request.getSuppliers()} 取：
-     * 刷价路径构造的 {@link PriceReq} <b>不带 suppliers</b>（酒店是另一个参数），
+     * 刷价路径构造的 {@link PriceQuery} <b>不带 suppliers</b>（酒店是另一个参数），
      * 从里面取到的是 null。2026-08-20 无货标记就栽在这里——单测自己构造了带 suppliers 的
      * 请求，真实调用方永远不会那样构造，于是标记一条都没写成、日志里只有一行
      * 「请求里没有酒店 id，跳过」。
@@ -64,6 +64,6 @@ public interface PriceCacheService {
      * <p>空列表不是"什么都不做"：它是「刷到了、供应商明确无在售」这个确定事实，
      * 依 F-5.2 照常落缓存（写无货标记）。
      */
-    void productToCache(List<Product> respDTOS, PriceReq request, Supplier supplier);
+    void productToCache(List<Product> respDTOS, PriceQuery request);
 
 }

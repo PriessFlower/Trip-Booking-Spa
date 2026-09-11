@@ -2,7 +2,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 
@@ -18,6 +18,6 @@ public interface ElongPriceService {
      * 查价。分态由本层判定——只有供应商明确回答无在售（{@code isEmptyResult}）才是
      * 「确定没有」，调用失败、业务错误码、凭据缺失一律「未能确认」。
      */
-    PricingResult queryPrices(PriceReq request, Supplier supplier, CallPurpose purpose);
+    PricingResult queryPrices(PriceQuery request, CallPurpose purpose);
 
 }

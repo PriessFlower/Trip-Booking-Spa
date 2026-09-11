@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing;
 
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ExpediaQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaQueryPriceTask;
@@ -165,15 +165,15 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
         // Expedia 是美国供应商，日期按 JVM 默认时区计——这是改动前的行为，未经核实故保留。
         // 艺龙那侧已显式指定 Asia/Shanghai（供应商口径），Expedia 的正确口径待与对接方确认
         LocalDate today = LocalDate.now();
-        PriceReq request = PriceReq.builder()
+        PriceQuery request = PriceQuery.builder()
                 .adultNum(Integer.parseInt(dimension)).childNum(0)
                 .childAges(new ArrayList<>())
                 .checkIn(today.plusDays(row.getDelayCheckIn()).toString())
-                .checkout(today.plusDays(row.getDelayCheckOut()).toString())
+                .checkOut(today.plusDays(row.getDelayCheckOut()).toString())
                 .roomNum(1).build();
         Supplier supplier = Supplier.builder().sHotelId(row.getShId()).build();
 
-        List<Product> products = expediaPriceService.queryPricesCache(request, supplier);
+        List<Product> products = expediaPriceService.queryPricesCache(request);
         if (products == null) {
             return RefreshOutcome.FAILED;
         }

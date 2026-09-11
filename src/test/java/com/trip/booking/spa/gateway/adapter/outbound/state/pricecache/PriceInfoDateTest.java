@@ -2,7 +2,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
 import com.trip.booking.spa.platform.redis.RedisUtils;
@@ -53,8 +53,8 @@ class PriceInfoDateTest {
                 .batchGet(Mockito.anyInt(), Mockito.anyList())).thenReturn(Map.of());
     }
 
-    private static PriceReq twoNights(int adults) {
-        return PriceReq.builder().checkIn(D1).checkout("2026-09-03")
+    private static PriceQuery twoNights(int adults) {
+        return PriceQuery.builder().supplierId(10010).supplierHotelId("H1").checkIn(D1).checkOut("2026-09-03")
                 .roomNum(1).adultNum(adults).childNum(0).childAges(List.of())
                 .build();
     }
@@ -84,7 +84,7 @@ class PriceInfoDateTest {
     void dateIsTheDateNotTheOccupancy() {
         givenTwoNightsCached("1");
 
-        List<Product> products = service.getPrice(twoNights(1), sup());
+        List<Product> products = service.getPrice(twoNights(1));
 
         assertEquals(1, products.size(), "应出一条产品");
         List<PriceInfo> infos = products.get(0).getPriceInfos();
@@ -102,10 +102,10 @@ class PriceInfoDateTest {
     @DisplayName("带儿童年龄的占用串不影响取日期")
     void multiPartOccupancyStillYieldsTheDate() {
         givenTwoNightsCached("2-9,4");
-        PriceReq req = PriceReq.builder().checkIn(D1).checkout("2026-09-03")
+        PriceQuery req = PriceQuery.builder().supplierId(10010).supplierHotelId("H1").checkIn(D1).checkOut("2026-09-03")
                 .roomNum(1).adultNum(2).childNum(2).childAges(List.of(9, 4)).build();
 
-        List<Product> products = service.getPrice(req, sup());
+        List<Product> products = service.getPrice(req);
 
         assertTrue(!products.isEmpty(), "应出产品");
         List<String> dates = products.get(0).getPriceInfos().stream().map(PriceInfo::getDate).sorted().toList();
@@ -117,7 +117,7 @@ class PriceInfoDateTest {
     void totalStillSumsTheNights() {
         givenTwoNightsCached("1");
 
-        List<Product> products = service.getPrice(twoNights(1), sup());
+        List<Product> products = service.getPrice(twoNights(1));
 
         assertEquals(65940 + 59609, products.get(0).getTotalPrice());
     }

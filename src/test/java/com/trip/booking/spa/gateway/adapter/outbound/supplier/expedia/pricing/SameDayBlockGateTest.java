@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaHelper;
 import com.trip.booking.spa.platform.observability.RecordLogService;
@@ -41,16 +41,16 @@ class SameDayBlockGateTest {
         priceService = Mockito.mock(ExpediaPriceService.class);
         ReflectionTestUtils.setField(service, "expediaPriceService", priceService);
         ReflectionTestUtils.setField(service, "redisRecordLogServiceImpl", Mockito.mock(RecordLogService.class));
-        Mockito.when(priceService.queryPrices(Mockito.any(), Mockito.any()))
+        Mockito.when(priceService.queryPrices(Mockito.any()))
                 .thenReturn(PricingResult.noInventory());
     }
 
-    private PriceReq sameDayReq(String hotelId) {
-        return PriceReq.builder()
+    private static PriceQuery sameDayQuery(String hotelId) {
+        return PriceQuery.builder()
+                .supplierId(10005).supplierHotelId(hotelId)
                 .checkIn(LocalDate.now().toString())
-                .checkout(LocalDate.now().plusDays(1).toString())
+                .checkOut(LocalDate.now().plusDays(1).toString())
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
-                .suppliers(List.of(Supplier.builder().supplierId(10005).sHotelId(hotelId).build()))
                 .build();
     }
 
@@ -60,12 +60,11 @@ class SameDayBlockGateTest {
         ReflectionTestUtils.setField(service, "sameDayBlockEnabled", true);
         String hotelId = blockedHotelId();
 
-        PricingResult r = service.querySupplierPrice(sameDayReq(hotelId),
-                Supplier.builder().supplierId(10005).sHotelId(hotelId).build());
+        PricingResult r = service.querySupplierPrice(sameDayQuery(hotelId));
 
         assertEquals(PricingOutcome.NO_INVENTORY, r.outcome(),
                 "闸口拒绝归入无可售——重试无用，报未能确认只会诱发无谓重试");
-        Mockito.verify(priceService, Mockito.never()).queryPrices(Mockito.any(), Mockito.any());
+        Mockito.verify(priceService, Mockito.never()).queryPrices(Mockito.any());
     }
 
     /**
@@ -77,64 +76,30 @@ class SameDayBlockGateTest {
         ReflectionTestUtils.setField(service, "sameDayBlockEnabled", false);
         String hotelId = blockedHotelId();
 
-        service.querySupplierPrice(sameDayReq(hotelId),
-                Supplier.builder().supplierId(10005).sHotelId(hotelId).build());
+        service.querySupplierPrice(sameDayQuery(hotelId));
 
-        Mockito.verify(priceService).queryPrices(Mockito.any(), Mockito.any());
+        Mockito.verify(priceService).queryPrices(Mockito.any());
     }
 
     /**
-     * 闸口只许看<b>该供应商自己的</b>酒店，不许从请求的 suppliers 列表里取。
+     * 闸口只许看该供应商自己的酒店。
      *
-     * <p>此前取的是 {@code priceReq.getSuppliers().get(0)}——上游一次问多家时，
-     * Expedia 这条腿会拿<b>别家</b>的酒店号去比 Expedia 的名单，永远比不中，名单静默失效。
-     * 而紧接着的拦截日志打的又是该供应商的酒店号，看日志发现不了。
-     *
-     * <p>本组原有三条用例都把 suppliers 构造成与该供应商同一家酒店，两者恰好相等，故照不出这个 bug
-     * ——与 {@code PriceCacheService} javadoc 记的是同一种自证陷阱。
+     * <p>#237 修的是「取了请求里第一个供应商的酒店号」，而 2026-09-11 的查价解耦之后
+     * <b>这个错已经写不出来</b>：{@link PriceQuery} 结构上只装一家供应商的坐标，
+     * 不存在「列表里第几个」这回事。本用例钉住这条结构保证——若日后有人往查价指令里
+     * 塞回一个供应商列表，它会失败。
      */
     @Test
-    @DisplayName("多供应商且 Expedia 不在首位：仍按该供应商的酒店拦截")
-    void gateReadsThisLegNotTheFirstSupplier() {
-        ReflectionTestUtils.setField(service, "sameDayBlockEnabled", true);
+    @DisplayName("查价指令结构上只带一家供应商，取错家无从写起")
+    void queryCarriesExactlyOneSupplier() {
         String blocked = blockedHotelId();
-        PriceReq req = PriceReq.builder()
-                .checkIn(LocalDate.now().toString())
-                .checkout(LocalDate.now().plusDays(1).toString())
-                .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
-                // 首位是别家（艺龙），Expedia 排第二
-                .suppliers(List.of(
-                        Supplier.builder().supplierId(10010).sHotelId("ELONG-NOT-IN-LIST").build(),
-                        Supplier.builder().supplierId(10005).sHotelId(blocked).build()))
-                .build();
+        PriceQuery q = sameDayQuery(blocked);
 
-        PricingResult r = service.querySupplierPrice(req,
-                Supplier.builder().supplierId(10005).sHotelId(blocked).build());
-
-        assertEquals(PricingOutcome.NO_INVENTORY, r.outcome(),
-                "闸口读错了供应商：拿首位那家的酒店号比 Expedia 名单，名单等于没有");
-        Mockito.verify(priceService, Mockito.never()).queryPrices(Mockito.any(), Mockito.any());
-    }
-
-    /**
-     * 刷价路径构造的 {@link PriceReq} <b>不带 suppliers</b>（酒店走另一个参数），
-     * 闸口若去读那个列表就是 NPE。同 {@code PriceCacheService} javadoc 记的纪律。
-     */
-    @Test
-    @DisplayName("请求不带 suppliers（刷价形状）也不得抛异常")
-    void requestWithoutSuppliersDoesNotBlowUp() {
-        ReflectionTestUtils.setField(service, "sameDayBlockEnabled", true);
-        String blocked = blockedHotelId();
-        PriceReq refreshShaped = PriceReq.builder()
-                .checkIn(LocalDate.now().toString())
-                .checkout(LocalDate.now().plusDays(1).toString())
-                .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
-                .build();
-
-        PricingResult r = service.querySupplierPrice(refreshShaped,
-                Supplier.builder().supplierId(10005).sHotelId(blocked).build());
-
-        assertEquals(PricingOutcome.NO_INVENTORY, r.outcome());
+        assertEquals(blocked, q.supplierHotelId());
+        assertTrue(java.util.Arrays.stream(PriceQuery.class.getDeclaredFields())
+                        .noneMatch(f -> java.util.List.class.isAssignableFrom(f.getType())
+                                && f.getName().toLowerCase().contains("supplier")),
+                "PriceQuery 不得带供应商列表：一次请求 × 一家供应商是它的定义");
     }
 
     @Test
@@ -142,15 +107,14 @@ class SameDayBlockGateTest {
     void futureCheckInIsNeverBlocked() {
         ReflectionTestUtils.setField(service, "sameDayBlockEnabled", true);
         String hotelId = blockedHotelId();
-        PriceReq req = PriceReq.builder()
+        PriceQuery req = PriceQuery.builder()
                 .checkIn(LocalDate.now().plusDays(3).toString())
-                .checkout(LocalDate.now().plusDays(4).toString())
+                .checkOut(LocalDate.now().plusDays(4).toString())
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
-                .suppliers(List.of(Supplier.builder().supplierId(10005).sHotelId(hotelId).build()))
                 .build();
 
-        service.querySupplierPrice(req, Supplier.builder().supplierId(10005).sHotelId(hotelId).build());
+        service.querySupplierPrice(req);
 
-        Mockito.verify(priceService).queryPrices(Mockito.any(), Mockito.any());
+        Mockito.verify(priceService).queryPrices(Mockito.any());
     }
 }

@@ -2,8 +2,8 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.checkprice;
 
 import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing.ElongPriceServiceImpl;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing.ElongPriceServiceImpl.PlanWithRoom;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProperties;
@@ -42,22 +42,22 @@ public class ElongCheckPriceServiceImpl extends AbstractCheckPriceFlow<ElongHote
     }
 
     @Override
-    protected CheckPriceResult precondition(CheckPriceReq request) {
+    protected CheckPriceResult precondition(CheckPriceCommand request) {
         return elongPriceService.precondition(request);
     }
 
     @Override
-    protected LiveStock<ElongHotel> fetchLiveStock(CheckPriceReq request, String salesEnvironment) {
+    protected LiveStock<ElongHotel> fetchLiveStock(CheckPriceCommand request, String salesEnvironment) {
         return elongPriceService.fetchLiveStock(request);
     }
 
     @Override
-    protected PlanWithRoom findByToken(ElongHotel hotel, CheckPriceReq request) {
-        return elongPriceService.findPlan(hotel, request.getSProductId());
+    protected PlanWithRoom findByToken(ElongHotel hotel, CheckPriceCommand request) {
+        return elongPriceService.findPlan(hotel, request.supplierProductId());
     }
 
     @Override
-    protected List<ResolveCandidate<PlanWithRoom>> resolveCandidates(ElongHotel hotel, CheckPriceReq request) {
+    protected List<ResolveCandidate<PlanWithRoom>> resolveCandidates(ElongHotel hotel, CheckPriceCommand request) {
         return elongPriceService.resolveCandidates(hotel, request);
     }
 
@@ -67,17 +67,17 @@ public class ElongCheckPriceServiceImpl extends AbstractCheckPriceFlow<ElongHote
     }
 
     @Override
-    protected CheckPriceResult inspect(PlanWithRoom found, ElongHotel hotel, CheckPriceReq request) {
+    protected CheckPriceResult inspect(PlanWithRoom found, ElongHotel hotel, CheckPriceCommand request) {
         return elongPriceService.inspect(found, request);
     }
 
     @Override
-    protected CheckPriceResult availabilityOnlyResp(PlanWithRoom found, ElongHotel hotel, CheckPriceReq request) {
+    protected CheckPriceResult availabilityOnlyResp(PlanWithRoom found, ElongHotel hotel, CheckPriceCommand request) {
         return elongPriceService.availabilityOnlyResp(request, found.plan());
     }
 
     @Override
-    protected CheckPriceResult validate(PlanWithRoom found, ElongHotel hotel, CheckPriceReq request) {
+    protected CheckPriceResult validate(PlanWithRoom found, ElongHotel hotel, CheckPriceCommand request) {
         return elongPriceService.validate(request, hotel, found);
     }
 }

@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,7 +34,7 @@ class E2EReflectionTargetsExistTest {
                         + "它默认跳过，不改就等于那条用例永久坏掉且无人知道");
 
         assertDoesNotThrow(() -> ElongPriceServiceImpl.class.getDeclaredMethod("validate",
-                        CheckPriceReq.class, String.class,
+                        CheckPriceCommand.class, String.class,
                         com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response
                                 .ElongRatePlan.class,
                         List.class),

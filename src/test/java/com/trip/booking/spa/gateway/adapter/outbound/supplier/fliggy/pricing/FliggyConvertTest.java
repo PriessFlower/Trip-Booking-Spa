@@ -2,7 +2,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyProductKeyDeriver;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyProperties;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.model.FliggyAriResponse;
@@ -49,10 +49,10 @@ class FliggyConvertTest {
         ReflectionTestUtils.setField(Monitor.class, "monitorService", null);
     }
 
-    private static PriceReq req() {
-        PriceReq req = PriceReq.builder().checkIn("2026-09-01").checkout("2026-09-02")
+    private static PriceQuery req() {
+        PriceQuery req = PriceQuery.builder().supplierId(10015).supplierHotelId("50363404").checkIn("2026-09-01").checkOut("2026-09-02")
                 .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
-        req.setOccupancies(List.of("2"));
+        req = req.toBuilder().occupancies(List.of("2")).build();
         return req;
     }
 
@@ -99,9 +99,9 @@ class FliggyConvertTest {
         String raw = java.nio.file.Files.readString(
                 java.nio.file.Path.of("src/test/resources/fliggy/ari-availability-real-20260827.json"));
         FliggyAriResponse resp = FliggyAriResponse.parse(raw);
-        PriceReq req = PriceReq.builder().checkIn("2026-09-10").checkout("2026-09-11")
+        PriceQuery req = PriceQuery.builder().supplierId(10015).supplierHotelId("50363404").checkIn("2026-09-10").checkOut("2026-09-11")
                 .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
-        req.setOccupancies(List.of("2"));
+        req = req.toBuilder().occupancies(List.of("2")).build();
 
         // 时钟钉在报文抓取当日：本夹具的免费窗截止 2026-09-08 23:00 北京，用真实时间跑
         // 会在该时刻之后被 CancelClassifier 正确判为已过期而丢弃，测试随之腐烂
@@ -168,9 +168,9 @@ class FliggyConvertTest {
                 + "\"total_rate\":{\"inclusive\":\"25800\",\"currency\":\"USD\"},"
                 + "\"meals\":{\"type\":0}}]}]}}}";
         FliggyAriResponse resp = FliggyAriResponse.parse(raw);
-        PriceReq twoNights = PriceReq.builder().checkIn("2026-09-01").checkout("2026-09-03")
+        PriceQuery twoNights = PriceQuery.builder().supplierId(10015).supplierHotelId("50363404").checkIn("2026-09-01").checkOut("2026-09-03")
                 .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
-        twoNights.setOccupancies(List.of("2"));
+        twoNights = twoNights.toBuilder().occupancies(List.of("2")).build();
 
         List<Product> products = service.convertRates(resp.rates(), twoNights, "H1");
 

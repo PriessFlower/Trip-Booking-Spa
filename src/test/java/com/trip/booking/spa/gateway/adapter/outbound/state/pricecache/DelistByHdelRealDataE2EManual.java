@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespCacheDTO;
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
 import com.trip.booking.spa.platform.redis.RedisUtils;
@@ -95,12 +95,12 @@ class DelistByHdelRealDataE2EManual {
             quotes.forEach((field, json) ->
                     template.opsForValue().set("quote:10010:" + hotelId + ":" + field, json, 3, TimeUnit.DAYS));
 
-            PriceReq req = PriceReq.builder().checkIn(date).checkout(checkout)
+            PriceQuery req = PriceQuery.builder().checkIn(date).checkOut(checkout)
                     .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).build();
             Supplier sup = Supplier.builder().supplierId(10010).sHotelId(hotelId).build();
 
             // ── A：墓碑在场时的读侧产出 ──
-            Map<String, String> readA = snapshot(service.getPrice(req, sup));
+            Map<String, String> readA = snapshot(service.getPrice(req));
             assertFalse(readA.isEmpty(), "A 读产出为空——dump 里的 quote 详情没配上");
 
             // ── 新写侧跑一轮：本轮在售 = 有 quote 的那批（其余 live field 即"本轮缺席"）──
@@ -121,10 +121,10 @@ class DelistByHdelRealDataE2EManual {
                         .roomPrice(priceJson.get("roomPrice")).build()));
                 round.add(dto);
             }
-            service.productToCache(round, req, sup);
+            service.productToCache(round, req);
 
             // ── B：读侧产出必须与 A 逐字段相等 ──
-            assertEquals(readA, snapshot(service.getPrice(req, sup)),
+            assertEquals(readA, snapshot(service.getPrice(req)),
                     "换了下架方式，读侧产出必须一字不差");
 
             // ── 缓存状态：墓碑与缺席者全部消失，且再无 price:0 ──
