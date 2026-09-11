@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongDataValidateResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongRatePlan;
@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ElongDayPriceMismatchClassifyTest {
 
-    private static CheckPriceRespDTO classify(String responseJson) throws Exception {
+    private static CheckPriceResult classify(String responseJson) throws Exception {
         ElongDataValidateResponse data = JsonUtils.readValue(responseJson, ElongDataValidateResponse.class);
         ElongRatePlan plan = new ElongRatePlan();
         plan.setGoodsUniqId("61582324A20A69427977A0Atest");
@@ -36,7 +36,7 @@ class ElongDayPriceMismatchClassifyTest {
         Method m = ElongPriceServiceImpl.class.getDeclaredMethod("classifyValidateError",
                 CheckPriceReq.class, ElongRatePlan.class, ElongDataValidateResponse.class);
         m.setAccessible(true);
-        return (CheckPriceRespDTO) m.invoke(new ElongPriceServiceImpl(), req, plan, data);
+        return (CheckPriceResult) m.invoke(new ElongPriceServiceImpl(), req, plan, data);
     }
 
     private static String rejected(String code) {
@@ -47,7 +47,7 @@ class ElongDayPriceMismatchClassifyTest {
     @Test
     @DisplayName("H001189 走专属分支：落 INDETERMINATE，且文案点名成因")
     void perDayMismatchIsIndeterminate() throws Exception {
-        CheckPriceRespDTO resp = classify(rejected("H001189|每日价传参异常，2026-08-24价格异常"));
+        CheckPriceResult resp = classify(rejected("H001189|每日价传参异常，2026-08-24价格异常"));
 
         assertThat(resp.getOutcome()).isEqualTo(CheckPriceOutcome.INDETERMINATE);
         assertThat(resp.getMessage()).contains("H001189");
@@ -83,7 +83,7 @@ class ElongDayPriceMismatchClassifyTest {
     @Test
     @DisplayName("真正未核实的码仍走兜底，不被 H001189 分支误吞")
     void unknownCodesStillFallThrough() throws Exception {
-        CheckPriceRespDTO resp = classify(rejected("H009999|某个没见过的码"));
+        CheckPriceResult resp = classify(rejected("H009999|某个没见过的码"));
 
         assertThat(resp.getOutcome()).isEqualTo(CheckPriceOutcome.INDETERMINATE);
         assertThat(resp.getMessage()).contains("H009999");

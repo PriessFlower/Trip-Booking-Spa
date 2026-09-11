@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.application.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
@@ -51,7 +51,7 @@ class AbstractProductSyncSupportServiceTest {
     /** 有货照常透出 */
     @Test
     void keepsAvailable() {
-        PricingResult result = new StubService(PricingResult.available(List.of(new ProductRespDTO())))
+        PricingResult result = new StubService(PricingResult.available(List.of(new Product())))
                 .queryPrice(request(), supplier());
 
         assertEquals(PricingOutcome.AVAILABLE, result.outcome());

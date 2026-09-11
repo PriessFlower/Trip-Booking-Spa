@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.application.checkprice;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
@@ -48,7 +48,7 @@ import java.util.concurrent.RejectedExecutionException;
  * @param <C> 票：现货里的一条报价
  */
 @Slf4j
-public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyncSupportService<CheckPriceRespDTO> {
+public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyncSupportService<CheckPriceResult> {
 
     @Resource
     private PriceCacheService priceCacheService;
@@ -58,7 +58,7 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
     protected abstract ResolveProperties resolveProperties();
 
     /** 调供应商前的自检（凭证是否配置等）。返回非 null 即以之为终态；默认无 */
-    protected CheckPriceRespDTO precondition(CheckPriceReq request) {
+    protected CheckPriceResult precondition(CheckPriceReq request) {
         return null;
     }
 
@@ -89,23 +89,23 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
      * 找到票之后、分档之前的供应商自检（停售、缺验价凭据、床型不可选……）。
      * 返回非 null 即以之为终态；默认通过。
      */
-    protected CheckPriceRespDTO inspect(C candidate, S stock, CheckPriceReq request) {
+    protected CheckPriceResult inspect(C candidate, S stock, CheckPriceReq request) {
         return null;
     }
 
     /** 曝光档：只答「还在售」。必须回 AVAILABLE 且不签句柄——模板对 BOOKABLE 的句柄自洽检查在父类 */
-    protected abstract CheckPriceRespDTO availabilityOnlyResp(C candidate, S stock, CheckPriceReq request);
+    protected abstract CheckPriceResult availabilityOnlyResp(C candidate, S stock, CheckPriceReq request);
 
     /** 下单前档：真打供应商 validate，给出 BOOKABLE（带句柄）或确定的失败态 */
-    protected abstract CheckPriceRespDTO validate(C candidate, S stock, CheckPriceReq request);
+    protected abstract CheckPriceResult validate(C candidate, S stock, CheckPriceReq request);
 
     @Override
-    public final CheckPriceRespDTO doCheckPrice(CheckPriceReq request) {
-        CheckPriceRespDTO rejected = precondition(request);
+    public final CheckPriceResult doCheckPrice(CheckPriceReq request) {
+        CheckPriceResult rejected = precondition(request);
         if (rejected != null) {
             return recorded(rejected);
         }
-        CheckPriceRespDTO last = null;
+        CheckPriceResult last = null;
         for (String salesEnvironment : salesEnvironments(request)) {
             last = attempt(request, salesEnvironment);
             if (last.getOutcome() != CheckPriceOutcome.RATE_DEAD) {
@@ -116,11 +116,11 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
     }
 
     @Override
-    public final CheckPriceRespDTO checkPriceRespConvert(CheckPriceRespDTO dto) {
+    public final CheckPriceResult checkPriceRespConvert(CheckPriceResult dto) {
         return dto;
     }
 
-    private CheckPriceRespDTO attempt(CheckPriceReq request, String salesEnvironment) {
+    private CheckPriceResult attempt(CheckPriceReq request, String salesEnvironment) {
         LiveStock<S> live = fetchLiveStock(request, salesEnvironment);
         // 验价即刷：现取的这份现货验完即弃等于白白留着缓存陈价对外报。终态也要写——
         // 下架/整店无售正是要落无货标记的时候（挂了转换器才做，Expedia 没挂）
@@ -139,10 +139,10 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
             log.info("验价：所点报价已不在现货且未能换票,supplier={},sHotelId={},sProductId={},productKey={},salesEnvironment={}",
                     supplier().getDesc(), request.getSHotelId(), request.getSProductId(),
                     request.getProductKey(), salesEnvironment);
-            return CheckPriceRespDTO.builder().outcome(CheckPriceOutcome.RATE_DEAD)
+            return CheckPriceResult.builder().outcome(CheckPriceOutcome.RATE_DEAD)
                     .message("该产品已不在供应商当前报价中，请重新查价后再选择").build();
         }
-        CheckPriceRespDTO rejected = inspect(found, stock, request);
+        CheckPriceResult rejected = inspect(found, stock, request);
         if (rejected != null) {
             return rejected;
         }
@@ -230,7 +230,7 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
      * （刷价任务只铺 1 人档）。任何失败只落日志与指标，绝不影响验价主流程。
      */
     private void freshStockToCacheAsync(CheckPriceReq request,
-                                        java.util.function.Function<PriceReq, List<ProductRespDTO>> converter) {
+                                        java.util.function.Function<PriceReq, List<Product>> converter) {
         ExecutorService pool = FRESH_POOLS.computeIfAbsent(supplier().getDesc(),
                 name -> ThreadPools.serialBounded(name + "-fresh-prices", 64, true));
         try {
@@ -245,7 +245,7 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
 
     /** 回写本体（同步，供测试直接驱动） */
     final void freshStockToCache(CheckPriceReq request,
-                                 java.util.function.Function<PriceReq, List<ProductRespDTO>> converter) {
+                                 java.util.function.Function<PriceReq, List<Product>> converter) {
         try {
             PriceReq priceReq = PriceReq.builder()
                     .checkIn(request.getCheckIn())
@@ -257,7 +257,7 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
                     .build();
             priceReq.setOccupancies(Occupancy.perRoom(priceReq.getRoomNum(), priceReq.getAdultNum(),
                     priceReq.getChildNum(), priceReq.getChildAges()));
-            List<ProductRespDTO> products = converter.apply(priceReq);
+            List<Product> products = converter.apply(priceReq);
             if (products == null) {
                 // F-5.1：没问出结果不动缓存。§6.2.1 非常态走向必须可检索
                 log.info("验价即刷：未取得可用现货，不动缓存,supplier={},sHotelId={},occupancy={},checkIn={}",
@@ -302,7 +302,7 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
                     .supplierId(supplier().getCode())
                     .sHotelId(request.getSHotelId())
                     .build();
-            List<ProductRespDTO> products = priceCacheService.getPrice(priceReq, supplier, request.getProductKey());
+            List<Product> products = priceCacheService.getPrice(priceReq, supplier, request.getProductKey());
             if (products == null || products.isEmpty()) {
                 return null;
             }
@@ -315,7 +315,7 @@ public abstract class AbstractCheckPriceFlow<S, C> extends AbstractCheckPriceSyn
         }
     }
 
-    private CheckPriceRespDTO recorded(CheckPriceRespDTO resp) {
+    private CheckPriceResult recorded(CheckPriceResult resp) {
         CheckPriceOutcome outcome = resp == null ? CheckPriceOutcome.INDETERMINATE : resp.getOutcome();
         String tag = outcome == null ? "indeterminate" : outcome.name().toLowerCase(Locale.ROOT);
         Monitor.recordOne(MetricNames.CHECK_PRICE_OUTCOME, MetricTags.outcomeOf(supplier(), tag));

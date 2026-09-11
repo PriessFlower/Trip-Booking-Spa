@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.application.checkprice;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
@@ -76,12 +76,12 @@ class CheckPriceFlowBaselineLookupTest {
             }
 
             @Override
-            protected CheckPriceRespDTO availabilityOnlyResp(Object candidate, Object stock, CheckPriceReq request) {
+            protected CheckPriceResult availabilityOnlyResp(Object candidate, Object stock, CheckPriceReq request) {
                 throw new UnsupportedOperationException();
             }
 
             @Override
-            protected CheckPriceRespDTO validate(Object candidate, Object stock, CheckPriceReq request) {
+            protected CheckPriceResult validate(Object candidate, Object stock, CheckPriceReq request) {
                 throw new UnsupportedOperationException();
             }
         };
@@ -89,7 +89,7 @@ class CheckPriceFlowBaselineLookupTest {
         return flow;
     }
 
-    private static PriceCacheService cacheReturning(List<ProductRespDTO> products) {
+    private static PriceCacheService cacheReturning(List<Product> products) {
         PriceCacheService cache = Mockito.mock(PriceCacheService.class);
         Mockito.when(cache.getPrice(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(products);
         return cache;
@@ -97,7 +97,7 @@ class CheckPriceFlowBaselineLookupTest {
 
     @Test
     void baselineUsesSameDateRangeAsPricing() {
-        PriceCacheService cache = cacheReturning(List.of(ProductRespDTO.builder().productId("P1").totalPrice(90000).build()));
+        PriceCacheService cache = cacheReturning(List.of(Product.builder().productId("P1").totalPrice(90000).build()));
 
         Integer baseline = flowWith(cache, SupplierSourceEnum.ELONG).lookupTotalPriceFromCache(req());
 
@@ -111,7 +111,7 @@ class CheckPriceFlowBaselineLookupTest {
     /** 把断言改回 sProductId 即可复现 2026-08-20 的那半个改名 */
     @Test
     void baselineIsLookedUpByProductKeyNotByQuoteCode() {
-        PriceCacheService cache = cacheReturning(List.of(ProductRespDTO.builder().productId("P1").totalPrice(90000).build()));
+        PriceCacheService cache = cacheReturning(List.of(Product.builder().productId("P1").totalPrice(90000).build()));
 
         CheckPriceReq request = req();
         flowWith(cache, SupplierSourceEnum.ELONG).lookupTotalPriceFromCache(request);
@@ -130,7 +130,7 @@ class CheckPriceFlowBaselineLookupTest {
     /** 反查按实现方申报的供应商限定——飞猪的基准不能去艺龙的缓存里找 */
     @Test
     void baselineIsScopedToTheDeclaredSupplier() {
-        PriceCacheService cache = cacheReturning(List.of(ProductRespDTO.builder().productId("P1").totalPrice(90000).build()));
+        PriceCacheService cache = cacheReturning(List.of(Product.builder().productId("P1").totalPrice(90000).build()));
 
         flowWith(cache, SupplierSourceEnum.FLIGGY).lookupTotalPriceFromCache(req());
 

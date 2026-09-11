@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.application.pricing;
 
 import com.trip.booking.spa.platform.concurrent.ThreadPools;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
@@ -146,7 +146,7 @@ public abstract class AbstractCPSQueryPriceService<T extends RefreshTaskRow> {
         if (result == null || result.outcome() == PricingOutcome.INDETERMINATE) {
             return RefreshOutcome.FAILED;
         }
-        List<ProductRespDTO> products = result.products();
+        List<Product> products = result.products();
         priceCacheService.productToCache(products, request, supplier);
         return products.isEmpty() ? RefreshOutcome.EMPTY : RefreshOutcome.ON_SALE;
     }

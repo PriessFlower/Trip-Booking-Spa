@@ -2,7 +2,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.state.catalog;
 
 import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
 import com.trip.booking.spa.gateway.domain.product.Meal;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.domain.product.Room;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProductKeyDeriver;
@@ -64,9 +64,9 @@ class ProductCatalogServiceTest {
      * 产品必须携带 identity——建档只照抄它（R-2.8）。identity 用与生产同一条路径
      * （deriver）算出，而不是手工拼，否则测试就成了"自己发明一套成分"。
      */
-    private ProductRespDTO elongProduct(Meal meal, List<CancelPolicy> cancel) {
+    private Product elongProduct(Meal meal, List<CancelPolicy> cancel) {
         ProductIdentity identity = elongDeriver.deriveIdentity("61832733", "0033", meal, cancel, "2", 20000);
-        return ProductRespDTO.builder()
+        return Product.builder()
                 .hotelId("61832733").productId("62022758A19A7133205")
                 .productKey(identity.productKey()).identity(identity)
                 .room(Room.builder().roomId("0033").roomName("大床房").build())
@@ -89,7 +89,7 @@ class ProductCatalogServiceTest {
     /** 落库的每一列都必须原样来自 identity（R-2.8），且成分不得降维（R-2.7） */
     @Test
     void everyColumnIsCopiedFromIdentityVerbatim() {
-        ProductRespDTO p0 = elongProduct(breakfast(), freeCancel());
+        Product p0 = elongProduct(breakfast(), freeCancel());
         service.upsert(List.of(p0), elong());
 
         ArgumentCaptor<HashMap<String, Object>> cap = ArgumentCaptor.forClass(HashMap.class);
@@ -195,11 +195,11 @@ class ProductCatalogServiceTest {
         Mockito.verifyNoInteractions(mapper);
     }
 
-    private ProductRespDTO fliggyProduct() {
+    private Product fliggyProduct() {
         Meal meal = new Meal(); meal.count = 0; meal.lunchCount = 0; meal.dinnerCount = 0;
         ProductIdentity identity = fliggyDeriver.deriveIdentity("50363404", "143328954",
                 meal, freeCancel(), "2", 20000);
-        return ProductRespDTO.builder()
+        return Product.builder()
                 .hotelId("50363404").productId("V3|rate-key-1")
                 .productKey(identity.productKey()).identity(identity)
                 .supplierId(10015)
@@ -231,7 +231,7 @@ class ProductCatalogServiceTest {
     /** 枚举外的旧代码供应商：无申报无开关键，静默跳过不抛 */
     @Test
     void legacySupplierCodeIsSkippedEntirely() {
-        ProductRespDTO p = elongProduct(breakfast(), freeCancel());
+        Product p = elongProduct(breakfast(), freeCancel());
         p.setSupplierId(9999);
         assertDoesNotThrow(() -> service.upsert(List.of(p),
                 Supplier.builder().supplierId(9999).sHotelId("H1").build()));

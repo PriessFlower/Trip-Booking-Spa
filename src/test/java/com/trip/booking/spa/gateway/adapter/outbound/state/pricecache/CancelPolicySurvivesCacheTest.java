@@ -2,7 +2,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
 import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
@@ -77,7 +77,7 @@ class CancelPolicySurvivesCacheTest {
     @Test
     @DisplayName("写：退改条款要真的进缓存载荷")
     void policyIsWrittenIntoTheQuote() {
-        ProductRespDTO p = ProductRespDTO.builder()
+        Product p = Product.builder()
                 .hotelId("H1").productId("易腐票").productKey("k".repeat(64))
                 .cancelPolicy(freeCancel())
                 .priceInfos(List.of(PriceInfo.builder().date(DATE).price(29317).build()))
@@ -115,7 +115,7 @@ class CancelPolicySurvivesCacheTest {
                         "cancelPolicy", List.of(java.util.Map.of(
                                 "cancelType", 1, "before", 36, "type", "NO_DEDUCTION"))))));
 
-        List<ProductRespDTO> out = service.getPrice(req(), sup());
+        List<Product> out = service.getPrice(req(), sup());
 
         assertEquals(1, out.size());
         List<CancelPolicy> policy = out.get(0).getCancelPolicy();

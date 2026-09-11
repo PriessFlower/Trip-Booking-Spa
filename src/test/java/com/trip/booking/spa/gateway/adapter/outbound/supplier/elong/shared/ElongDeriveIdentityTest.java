@@ -3,7 +3,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
 import com.trip.booking.spa.gateway.domain.product.Meal;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.domain.product.CancelClass;
 import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.domain.product.RefundType;
@@ -80,7 +80,7 @@ class ElongDeriveIdentityTest {
     @DisplayName("identity 不进对外 JSON")
     void identityIsNotSerialised() throws Exception {
         ProductIdentity id = deriver.deriveIdentity("26978218", "0013", meal(1, 0, 0), freeCancel(), "2", 20000);
-        ProductRespDTO dto = ProductRespDTO.builder()
+        Product dto = Product.builder()
                 .hotelId("26978218").productId("易腐报价码").productKey(id.productKey()).identity(id).build();
 
         String json = new ObjectMapper().writeValueAsString(dto);

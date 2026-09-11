@@ -2,11 +2,11 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.domain.product.Meal;
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
 import com.trip.booking.spa.gateway.domain.product.ProductInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.domain.product.Room;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
@@ -104,15 +104,15 @@ public class FliggyPriceServiceImpl {
         return PricingResult.of(convertRates(resp.rates(), request, supplier.getSHotelId()));
     }
 
-    List<ProductRespDTO> convertRates(List<JsonNode> rates, PriceReq request, String sHotelId) {
+    List<Product> convertRates(List<JsonNode> rates, PriceReq request, String sHotelId) {
         // 一轮只读一次时钟：同一次转换里所有退改段对同一时刻判过期，避免跨秒时同批段判法不一
         return convertRates(rates, request, sHotelId, java.time.Instant.now());
     }
 
     /** 同上，但由调用方给时钟——过期判定随时间漂移，测试必须能钉住它（见 deriver 同款重载）。 */
-    List<ProductRespDTO> convertRates(List<JsonNode> rates, PriceReq request, String sHotelId,
+    List<Product> convertRates(List<JsonNode> rates, PriceReq request, String sHotelId,
                                       java.time.Instant now) {
-        List<ProductRespDTO> products = new ArrayList<>();
+        List<Product> products = new ArrayList<>();
         String occupancy = request.getOccupancies().get(0);
         int skippedNoRateKey = 0;
         int skippedNoPrice = 0;
@@ -147,7 +147,7 @@ public class FliggyPriceServiceImpl {
             ProductIdentity identity = productKeyDeriver.deriveIdentity(sHotelId, roomId, meal,
                     cancelPolicy, occupancy, inclusive);
             Integer exclusive = intOrNull(totalRate, "exclusive");
-            products.add(ProductRespDTO.builder()
+            products.add(Product.builder()
                     .hotelId(sHotelId)
                     .productId(rateKey)
                     .productKey(identity.productKey())
@@ -214,7 +214,7 @@ public class FliggyPriceServiceImpl {
     // ---------- 验价（现取现验）：流程在 FliggyCheckPriceServiceImpl（模板），这里只是钩子 ----------
 
     /** 凭证未配置即确定失败（网关无兜底），不调供应商 */
-    public CheckPriceRespDTO precondition() {
+    public CheckPriceResult precondition() {
         if (!properties.isConfigured()) {
             return outcome(CheckPriceOutcome.INDETERMINATE, "飞猪凭证未配置，未能确认该产品是否可订");
         }
@@ -225,7 +225,7 @@ public class FliggyPriceServiceImpl {
      * 验价即刷的转换（机制在 {@code AbstractCheckPriceFlow}）：口径与查价同源——
      * 下架/明确无货回空列表（打无货标记清僵尸价 B7）；平台或业务错误回 null 不动缓存（F-5.1）。
      */
-    public List<ProductRespDTO> freshProducts(FliggyAriResponse ari, PriceReq priceReq, String sHotelId) {
+    public List<Product> freshProducts(FliggyAriResponse ari, PriceReq priceReq, String sHotelId) {
         if (ari.isHotelDelisted() || ari.isEmptyResult()) {
             return List.of();
         }
@@ -247,7 +247,7 @@ public class FliggyPriceServiceImpl {
         }
         // 验价即刷的转换器（机制在 AbstractCheckPriceFlow）：闭包捕获这份原始 ARI，
         // 终态分支也带着它返回——下架/整店无售正是要落无货标记的时候（B7）
-        java.util.function.Function<PriceReq, List<ProductRespDTO>> fresh =
+        java.util.function.Function<PriceReq, List<Product>> fresh =
                 priceReq -> freshProducts(ari, priceReq, request.getSHotelId());
         if (ari.isHotelDelisted()) {
             return LiveStock.<FliggyAriResponse>terminal(outcome(CheckPriceOutcome.SOLD_OUT, "该酒店已被供应商下架")).freshConvertedBy(fresh);
@@ -289,7 +289,7 @@ public class FliggyPriceServiceImpl {
     }
 
     /** 下单前档：以现取同一响应里的 rate_key + request_trace_id 打 validate，通过才签句柄 */
-    public CheckPriceRespDTO validate(CheckPriceReq request, JsonNode fresh, FliggyAriResponse ari) {
+    public CheckPriceResult validate(CheckPriceReq request, JsonNode fresh, FliggyAriResponse ari) {
         String freshRateKey = text(fresh, "rate_key");
         String traceId = ari.requestTraceId();
 
@@ -331,7 +331,7 @@ public class FliggyPriceServiceImpl {
         if (offerId == null) {
             return outcome(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
         }
-        return CheckPriceRespDTO.builder()
+        return CheckPriceResult.builder()
                 .outcome(CheckPriceOutcome.BOOKABLE)
                 .offerId(offerId)
                 .offerTtlSeconds(offerStore.ttlSecondsOf(SupplierSourceEnum.FLIGGY.getCode()))
@@ -354,7 +354,7 @@ public class FliggyPriceServiceImpl {
      * <p>不签句柄是硬约束（模板 {@code AbstractCheckPriceSyncSupportService} 只对 BOOKABLE
      * 要求句柄）：飞猪的 create_key 由 validate 签发，此档根本没调它。
      */
-    public CheckPriceRespDTO availabilityOnlyResp(CheckPriceReq request, JsonNode fresh) {
+    public CheckPriceResult availabilityOnlyResp(CheckPriceReq request, JsonNode fresh) {
         JsonNode totalRate = fresh.get("total_rate");
         Integer inclusive = intOrNull(totalRate, "inclusive");
         if (inclusive == null) {
@@ -377,7 +377,7 @@ public class FliggyPriceServiceImpl {
                 productKeyDeriver.convertCancelPolicy(request.getCheckIn(), fresh.get("cancel_policy"));
         log.info("飞猪验价(仅现货)：有货但未验证可订性,sHotelId={},rateKey={},价格={}分{},退改条数={}",
                 request.getSHotelId(), text(fresh, "rate_key"), totalCents, currency, cancelPolicy.size());
-        return CheckPriceRespDTO.builder()
+        return CheckPriceResult.builder()
                 .outcome(CheckPriceOutcome.AVAILABLE)
                 .salePrice(totalCents)
                 .subPrice(totalCents)
@@ -463,8 +463,8 @@ public class FliggyPriceServiceImpl {
         }
     }
 
-    private static CheckPriceRespDTO outcome(CheckPriceOutcome outcome, String message) {
-        return CheckPriceRespDTO.builder().outcome(outcome).message(message).build();
+    private static CheckPriceResult outcome(CheckPriceOutcome outcome, String message) {
+        return CheckPriceResult.builder().outcome(outcome).message(message).build();
     }
 
     private static String text(JsonNode node, String field) {

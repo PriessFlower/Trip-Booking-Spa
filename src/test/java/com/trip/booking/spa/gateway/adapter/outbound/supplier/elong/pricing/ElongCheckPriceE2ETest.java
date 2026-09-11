@@ -1,8 +1,8 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
@@ -92,7 +92,7 @@ class ElongCheckPriceE2ETest {
     private static String checkOut;
 
     /** 查价拿到的参照产品，供后续两档验价复用——同数据 A/B 是本测试的核心 */
-    private static ProductRespDTO reference;
+    private static Product reference;
 
     @BeforeAll
     static void wireRealService() throws Exception {
@@ -192,9 +192,9 @@ class ElongCheckPriceE2ETest {
         assumeTrue(result.outcome() == PricingOutcome.AVAILABLE,
                 "该店该住期无在售产品，本轮跳过");
 
-        List<ProductRespDTO> products = result.products();
+        List<Product> products = result.products();
         assertThat(products).isNotEmpty();
-        for (ProductRespDTO p : products) {
+        for (Product p : products) {
             assertThat(p.getProductKey()).as("productKey 必须派生出来").isNotBlank();
             assertThat(p.getProductId()).as("报价码不得与身份键同字段").isNotEqualTo(p.getProductKey());
             assertThat(p.getTotalPrice()).as("含税总额").isPositive();
@@ -220,7 +220,7 @@ class ElongCheckPriceE2ETest {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
 
         TAKEN.clear();
-        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY));
+        CheckPriceResult resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY));
 
         // 点订前的现取现验走 :CHECK_PRICE 而不是 :REFRESH——同一个 hotel.detail 接口，
         // 两路各占一个用途桶。这一路是客人在等，与后台刷价必须分开计额
@@ -246,7 +246,7 @@ class ElongCheckPriceE2ETest {
     void bookableLevelDeclaresTheSameBasisItShows() {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
 
-        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.BOOKABLE));
+        CheckPriceResult resp = flow.checkPrice(req(VerifyLevel.BOOKABLE));
 
         assertThat(resp.getOutcome()).as("四态之内，不得出现别的值")
                 .isIn(CheckPriceOutcome.BOOKABLE, CheckPriceOutcome.AVAILABLE,
@@ -323,7 +323,7 @@ class ElongCheckPriceE2ETest {
                 com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongRatePlan.class,
                 List.class);
         validate.setAccessible(true);
-        CheckPriceRespDTO resp = (CheckPriceRespDTO) validate.invoke(service, request, HOTEL, plan, tampered);
+        CheckPriceResult resp = (CheckPriceResult) validate.invoke(service, request, HOTEL, plan, tampered);
 
         assumeTrue(resp.getOutcome() != CheckPriceOutcome.INDETERMINATE
                         || !StringUtils.contains(resp.getMessage(), "未取得结果"),
@@ -350,7 +350,7 @@ class ElongCheckPriceE2ETest {
     void multiRoomBookableDeclaresRoomMultipliedTotal() {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
 
-        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.BOOKABLE, 2));
+        CheckPriceResult resp = flow.checkPrice(req(VerifyLevel.BOOKABLE, 2));
 
         // 针对 2026-08-23 高德 2 间真单（26082320295835a66d8b13dd）的拒因：TotalPrice
         // 漏乘间数 → H001188|每日价传参异常。修复后该码不允许复现；SOLD_OUT/RATE_DEAD

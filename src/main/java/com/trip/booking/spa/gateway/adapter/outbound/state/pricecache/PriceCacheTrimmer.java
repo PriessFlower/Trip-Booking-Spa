@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
@@ -71,13 +71,13 @@ public class PriceCacheTrimmer {
      * 等同于不裁——<b>宁可多存也不能误裁</b>：没有键就无从判断谁与谁等价，
      * 此时裁剪等于随机丢弃卖法。
      */
-    public List<ProductRespDTO> trim(List<ProductRespDTO> products) {
+    public List<Product> trim(List<Product> products) {
         if (keepPerKey <= 0 || products == null || products.size() <= 1) {
             return products;
         }
         // LinkedHashMap 保证输出顺序稳定，便于比对日志与排障
-        Map<String, List<ProductRespDTO>> byKey = new LinkedHashMap<>();
-        for (ProductRespDTO product : products) {
+        Map<String, List<Product>> byKey = new LinkedHashMap<>();
+        for (Product product : products) {
             String groupKey = StringUtils.isNotBlank(product.getProductKey())
                     ? product.getProductKey()
                     : "no-key:" + product.getProductId();
@@ -88,16 +88,16 @@ public class PriceCacheTrimmer {
             return products;
         }
 
-        List<ProductRespDTO> kept = new ArrayList<>();
+        List<Product> kept = new ArrayList<>();
         int dropped = 0;
-        for (Map.Entry<String, List<ProductRespDTO>> entry : byKey.entrySet()) {
-            List<ProductRespDTO> group = entry.getValue();
+        for (Map.Entry<String, List<Product>> entry : byKey.entrySet()) {
+            List<Product> group = entry.getValue();
             if (group.size() <= keepPerKey) {
                 kept.addAll(group);
                 continue;
             }
             // 价格升序；缺价的排最后、不占保留名额（F-3.4）
-            group.sort(Comparator.comparing(ProductRespDTO::getTotalPrice,
+            group.sort(Comparator.comparing(Product::getTotalPrice,
                     Comparator.nullsLast(Comparator.naturalOrder())));
             kept.addAll(group.subList(0, keepPerKey));
             dropped += group.size() - keepPerKey;

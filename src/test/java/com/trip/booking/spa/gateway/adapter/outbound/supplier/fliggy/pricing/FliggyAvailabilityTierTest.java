@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyProductKeyDeriver;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyProperties;
@@ -61,7 +61,7 @@ class FliggyAvailabilityTierTest {
     @Test
     @DisplayName("真实 ari 报价 → 曝光档：AVAILABLE + 带价带币种带退改，且不签句柄")
     void availabilityTierAnswersFromFreshAriWithoutHandle() {
-        CheckPriceRespDTO resp = service.availabilityOnlyResp(req(1), rate);
+        CheckPriceResult resp = service.availabilityOnlyResp(req(1), rate);
 
         assertEquals(CheckPriceOutcome.AVAILABLE, resp.getOutcome());
         assertEquals("USD", resp.getCurrencyType(), "币种必须原样带出——上游按它换汇，缺了就是 7 倍资损");
@@ -84,7 +84,7 @@ class FliggyAvailabilityTierTest {
         com.fasterxml.jackson.databind.node.ObjectNode stripped = rate.deepCopy();
         ((com.fasterxml.jackson.databind.node.ObjectNode) stripped.get("total_rate")).remove("currency");
 
-        CheckPriceRespDTO resp = service.availabilityOnlyResp(req(1), stripped);
+        CheckPriceResult resp = service.availabilityOnlyResp(req(1), stripped);
 
         assertEquals(CheckPriceOutcome.INDETERMINATE, resp.getOutcome());
         assertTrue(resp.getMessage().contains("币种"));

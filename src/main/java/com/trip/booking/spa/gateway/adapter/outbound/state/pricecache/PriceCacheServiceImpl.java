@@ -2,7 +2,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfoCache;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespCacheDTO;
@@ -112,7 +112,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
      * <p>productKey 缺席时退回 productId：不是所有供应商都派生了键，退回可保住报价
      * （多晚查询对这部分仍不可用，属已知缺口），好过整条不报（R-1.6）。
      */
-    private static String cacheField(ProductRespDTO product) {
+    private static String cacheField(Product product) {
         return StringUtils.isNotBlank(product.getProductKey())
                 ? product.getProductKey() : product.getProductId();
     }
@@ -124,7 +124,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
      * 拿请求参数另算一遍就又成了"两处拼、靠约定对齐"。identity 缺席（未派生键的供应商）
      * 才回落到请求参数。
      */
-    private static String occupancyOf(ProductRespDTO product, PriceReq request) {
+    private static String occupancyOf(Product product, PriceReq request) {
         if (product.getIdentity() != null && StringUtils.isNotBlank(product.getIdentity().occupancy())) {
             return product.getIdentity().occupancy();
         }
@@ -132,7 +132,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
     }
 
     @Override
-    public List<ProductRespDTO> getPrice(PriceReq priceReq, Supplier supplier) {
+    public List<Product> getPrice(PriceReq priceReq, Supplier supplier) {
         return getPrice(priceReq, supplier, null);
     }
 
@@ -150,7 +150,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
      */
     @Override
     public PricingResult getPriceResult(PriceReq priceReq, Supplier supplier) {
-        List<ProductRespDTO> products = getPrice(priceReq, supplier, null);
+        List<Product> products = getPrice(priceReq, supplier, null);
         if (products != null && !products.isEmpty()) {
             return PricingResult.available(products);
         }
@@ -189,8 +189,8 @@ public class PriceCacheServiceImpl implements PriceCacheService {
     }
 
     @Override
-    public List<ProductRespDTO> getPrice(PriceReq priceReq, Supplier supplier, String cacheField) {
-        List<ProductRespDTO> respDTOList = new ArrayList<>();
+    public List<Product> getPrice(PriceReq priceReq, Supplier supplier, String cacheField) {
+        List<Product> respDTOList = new ArrayList<>();
         List<String> checkList = DateUtil.getDatesBetween(priceReq.getCheckIn(), priceReq.getCheckout());
         Map<String, List<PriceInfoCache>> productMap = new HashMap<>();
 
@@ -227,7 +227,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
 
         // 使用已经收集的价格信息构建响应对象
         productMap.forEach((key, value) -> {
-            ProductRespDTO respDTO = new ProductRespDTO();
+            Product respDTO = new Product();
 //            System.out.println("sProductId----"+key);
 //            System.out.println("List<PriceInfo>----"+ JSON.toJSON(value));
             //计算报价总价 产品信息中totalprice可能是不正确的
@@ -425,7 +425,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
     }
 
     @Override
-    public void productToCache(List<ProductRespDTO> list, PriceReq request, Supplier supplier) {
+    public void productToCache(List<Product> list, PriceReq request, Supplier supplier) {
         try {
             if (list == null || list.isEmpty()) {
                 // F-5.2：明确无货照常落缓存。原实现直接 return，于是「刷过且无货」这个
@@ -461,7 +461,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
 
             List<String> dateSet = DateUtil.getDatesBetween(request.getCheckIn(), request.getCheckout());
 
-            for (ProductRespDTO productRespDTO : list) {
+            for (Product productRespDTO : list) {
 
                 //获取全部日期报价
                 String occupancy = occupancyOf(productRespDTO, request);
@@ -572,7 +572,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
     /**
      * 组装价格信息。
      *
-     * @param cacheField 非空则只取该字段（{@link #cacheField(ProductRespDTO)}，即 productKey）；
+     * @param cacheField 非空则只取该字段（{@link #cacheField(Product)}，即 productKey）；
      *                   为空则取该店该日期下的全部字段
      **/
     private void fetchAndProcessPriceInfo(Map<String, List<PriceInfoCache>> productMap, String cacheField, List<String> keySet) {
@@ -674,7 +674,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
      * @param: [productRespDTO, priceInfo]
      * @return: java.lang.String
      **/
-    private String convertPriceJsonStr(ProductRespDTO productRespDTO, PriceInfo priceInfo) {
+    private String convertPriceJsonStr(Product productRespDTO, PriceInfo priceInfo) {
 
         // 使用 Map 构建 JSON 数据
         Map<String, Integer> jsonMap = new HashMap<>();

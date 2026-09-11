@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
 import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProductKeyDeriver;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongNightlyRate;
@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ElongAvailabilityOnlyTest {
 
-    private static CheckPriceRespDTO invoke(ElongRatePlan plan, VerifyLevel level) throws Exception {
+    private static CheckPriceResult invoke(ElongRatePlan plan, VerifyLevel level) throws Exception {
         ElongPriceServiceImpl svc = new ElongPriceServiceImpl();
         Field deriver = ElongPriceServiceImpl.class.getDeclaredField("productKeyDeriver");
         deriver.setAccessible(true);
@@ -47,7 +47,7 @@ class ElongAvailabilityOnlyTest {
         Method m = ElongPriceServiceImpl.class.getDeclaredMethod(
                 "availabilityOnlyResp", CheckPriceReq.class, ElongRatePlan.class);
         m.setAccessible(true);
-        return (CheckPriceRespDTO) m.invoke(svc, req, plan);
+        return (CheckPriceResult) m.invoke(svc, req, plan);
     }
 
     private static ElongRatePlan plan(Integer allotment) {
@@ -68,7 +68,7 @@ class ElongAvailabilityOnlyTest {
     @Test
     @DisplayName("回 AVAILABLE，绝不回 BOOKABLE——没验价就没有可订的证据")
     void reportsAvailableNotBookable() throws Exception {
-        CheckPriceRespDTO resp = invoke(plan(2), VerifyLevel.AVAILABILITY);
+        CheckPriceResult resp = invoke(plan(2), VerifyLevel.AVAILABILITY);
         assertThat(resp.getOutcome()).isEqualTo(CheckPriceOutcome.AVAILABLE);
         assertThat(resp.getOutcome()).isNotEqualTo(CheckPriceOutcome.BOOKABLE);
     }
@@ -76,7 +76,7 @@ class ElongAvailabilityOnlyTest {
     @Test
     @DisplayName("offerId 必须为 null——现货里的马甲到下单时必已过期，签了会诱导上游拿必死凭据建单")
     void neverIssuesAnOfferHandle() throws Exception {
-        CheckPriceRespDTO resp = invoke(plan(2), VerifyLevel.AVAILABILITY);
+        CheckPriceResult resp = invoke(plan(2), VerifyLevel.AVAILABILITY);
         assertThat(resp.getOfferId()).isNull();
         assertThat(resp.getOfferTtlSeconds()).isNull();
     }
@@ -84,7 +84,7 @@ class ElongAvailabilityOnlyTest {
     @Test
     @DisplayName("价格取 Rate、税费为 Rate−MinRate，与查价面同源")
     void priceUsesSettlementBasis() throws Exception {
-        CheckPriceRespDTO resp = invoke(plan(2), VerifyLevel.AVAILABILITY);
+        CheckPriceResult resp = invoke(plan(2), VerifyLevel.AVAILABILITY);
         assertThat(resp.getSalePrice()).isEqualTo(18540);
         assertThat(resp.getPriceInfos()).hasSize(1);
         assertThat(resp.getPriceInfos().get(0).getRoomPrice()).isEqualTo(16197);
@@ -103,7 +103,7 @@ class ElongAvailabilityOnlyTest {
     void missingNightlyRateIsIndeterminate() throws Exception {
         ElongRatePlan p = plan(2);
         p.setNightlyRates(List.of());
-        CheckPriceRespDTO resp = invoke(p, VerifyLevel.AVAILABILITY);
+        CheckPriceResult resp = invoke(p, VerifyLevel.AVAILABILITY);
         assertThat(resp.getOutcome()).isEqualTo(CheckPriceOutcome.INDETERMINATE);
         assertThat(resp.getOfferId()).isNull();
     }
@@ -111,7 +111,7 @@ class ElongAvailabilityOnlyTest {
     @Test
     @DisplayName("退改取 detail 的 PrepayResult；解析不出即空列表，不猜")
     void cancelPolicyComesFromPrepayResultAndIsNeverGuessed() throws Exception {
-        CheckPriceRespDTO resp = invoke(plan(2), VerifyLevel.AVAILABILITY);
+        CheckPriceResult resp = invoke(plan(2), VerifyLevel.AVAILABILITY);
         List<CancelPolicy> policies = resp.getCancelPolicy();
         assertThat(policies).isNotNull().isEmpty();
     }

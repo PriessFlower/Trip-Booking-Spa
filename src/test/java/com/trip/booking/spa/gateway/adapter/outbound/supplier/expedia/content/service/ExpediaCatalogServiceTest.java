@@ -3,7 +3,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.s
 import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
 import com.trip.booking.spa.gateway.domain.product.Meal;
 import com.trip.booking.spa.gateway.domain.product.ProductInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.domain.product.Room;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaContractProfile;
@@ -52,11 +52,11 @@ class ExpediaCatalogServiceTest {
      * 用与生产同一条路径（deriver）算 identity，而不是手工拼成分——手工拼的话
      * 测试就成了"自己发明一套成分"，守不住真实链路。
      */
-    private ProductRespDTO product(Meal meal, List<CancelPolicy> cancel) {
+    private Product product(Meal meal, List<CancelPolicy> cancel) {
         ExpediaProductKeyDeriver deriver =
                 (ExpediaProductKeyDeriver) ReflectionTestUtils.getField(service, "productKeyDeriver");
         ProductIdentity identity = deriver.deriveIdentity("15714685", "200414414", meal, cancel, "2");
-        return ProductRespDTO.builder()
+        return Product.builder()
                 .hotelId("15714685").productId("rate-abc-123")
                 .productKey(identity.productKey()).identity(identity)
                 .room(Room.builder().roomId("200414414").roomName("Standard Room").build())
@@ -86,7 +86,7 @@ class ExpediaCatalogServiceTest {
     /** 落库的每一列都必须<b>原样</b>来自 identity（R-2.8），成分不得降维（R-2.7） */
     @Test
     void everyColumnIsCopiedFromIdentityVerbatim() {
-        ProductRespDTO p0 = product(breakfast(), freeCancel());
+        Product p0 = product(breakfast(), freeCancel());
         service.upsert(List.of(p0));
 
         ArgumentCaptor<HashMap<String, Object>> cap = ArgumentCaptor.forClass(HashMap.class);
@@ -193,7 +193,7 @@ class ExpediaCatalogServiceTest {
     /** 缺 identity 的产品跳过，且不得把整批带崩 */
     @Test
     void productWithoutIdentityIsSkipped() {
-        ProductRespDTO broken = ProductRespDTO.builder().hotelId("15714685").build();
+        Product broken = Product.builder().hotelId("15714685").build();
         service.upsert(List.of(broken, product(breakfast(), freeCancel())));
         Mockito.verify(mapper, Mockito.times(1)).upsertSupplierProductBase(Mockito.any());
     }

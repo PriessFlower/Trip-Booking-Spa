@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaHelper;
@@ -44,7 +44,7 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
         if (StringUtils.isNotBlank(supplier.getSProductId())) {
             // 单产品路径：内部把「验价失败」「所点报价不在响应中」「调用失败」一律折成 null，
             // 无从分辨，故一律落未能确认——不可说成无房（待做：与 checkPrices 一样按响应分态）
-            List<ProductRespDTO> products = expediaPriceService.queryProductPrice(priceReq, supplier);
+            List<Product> products = expediaPriceService.queryProductPrice(priceReq, supplier);
             return CollectionUtils.isEmpty(products)
                     ? PricingResult.indeterminate() : PricingResult.available(products);
         }

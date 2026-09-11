@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 
@@ -20,7 +20,7 @@ public interface PriceCacheService {
 
     /** 取该店该住期缓存里的全部产品。不区分「没刷到」与「刷到了但无货」——需要区分时用
      * {@link #getPriceResult}。 */
-    List<ProductRespDTO> getPrice(PriceReq priceReq, Supplier supplier);
+    List<Product> getPrice(PriceReq priceReq, Supplier supplier);
 
     /**
      * 取缓存并<b>如实分态</b>（F-5.1 / F-5.2）。
@@ -50,7 +50,7 @@ public interface PriceCacheService {
      *
      * @param cacheField 缓存字段（productKey）；为空则等同于 {@link #getPrice}
      */
-    List<ProductRespDTO> getPrice(PriceReq priceReq, Supplier supplier, String cacheField);
+    List<Product> getPrice(PriceReq priceReq, Supplier supplier, String cacheField);
 
     /**
      * 把一轮查价的产物落缓存。
@@ -64,6 +64,6 @@ public interface PriceCacheService {
      * <p>空列表不是"什么都不做"：它是「刷到了、供应商明确无在售」这个确定事实，
      * 依 F-5.2 照常落缓存（写无货标记）。
      */
-    void productToCache(List<ProductRespDTO> respDTOS, PriceReq request, Supplier supplier);
+    void productToCache(List<Product> respDTOS, PriceReq request, Supplier supplier);
 
 }

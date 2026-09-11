@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -26,14 +26,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PriceCacheKeyedByProductKeyTest {
 
     /** 反射调用私有的 cacheField，避免为测试放宽可见性 */
-    private static String cacheField(ProductRespDTO product) throws Exception {
-        Method m = PriceCacheServiceImpl.class.getDeclaredMethod("cacheField", ProductRespDTO.class);
+    private static String cacheField(Product product) throws Exception {
+        Method m = PriceCacheServiceImpl.class.getDeclaredMethod("cacheField", Product.class);
         m.setAccessible(true);
         return (String) m.invoke(null, product);
     }
 
-    private static ProductRespDTO product(String productId, String productKey) {
-        ProductRespDTO p = new ProductRespDTO();
+    private static Product product(String productId, String productKey) {
+        Product p = new Product();
         p.setProductId(productId);
         p.setProductKey(productKey);
         return p;
@@ -44,8 +44,8 @@ class PriceCacheKeyedByProductKeyTest {
     void sameSellingAcrossDatesSharesTheSameField() throws Exception {
         String sellingKey = "a".repeat(64);
         // 生产实测的形态：同一卖法，两天各自一次调用，报价码完全不同
-        ProductRespDTO day1 = product("10422034A4A212169223A0Ae8c3c9307890f862740f74b18b408aa6", sellingKey);
-        ProductRespDTO day2 = product("10422034A26A212169223A0Acef9ae4828f7825979cc97f169e3d1cb", sellingKey);
+        Product day1 = product("10422034A4A212169223A0Ae8c3c9307890f862740f74b18b408aa6", sellingKey);
+        Product day2 = product("10422034A26A212169223A0Acef9ae4828f7825979cc97f169e3d1cb", sellingKey);
 
         assertNotEquals(day1.getProductId(), day2.getProductId(),
                 "前提：易腐报价码逐次轮换，两天本就不同");
@@ -56,7 +56,7 @@ class PriceCacheKeyedByProductKeyTest {
     @Test
     @DisplayName("字段名取 productKey，不取 productId")
     void fieldIsTheProductKey() throws Exception {
-        ProductRespDTO p = product("perishable-ticket-001", "b".repeat(64));
+        Product p = product("perishable-ticket-001", "b".repeat(64));
         assertEquals("b".repeat(64), cacheField(p));
         assertNotEquals(p.getProductId(), cacheField(p),
                 "拿易腐码当字段名正是本次事故的成因");
@@ -74,8 +74,8 @@ class PriceCacheKeyedByProductKeyTest {
     @DisplayName("回归：用 productId 当字段名时，多晚交集为空——本测试证明旧实现确实卖不出多晚")
     void oldBehaviourProducesEmptyIntersection() {
         String sellingKey = "c".repeat(64);
-        ProductRespDTO day1 = product("ticket-day1", sellingKey);
-        ProductRespDTO day2 = product("ticket-day2", sellingKey);
+        Product day1 = product("ticket-day1", sellingKey);
+        Product day2 = product("ticket-day2", sellingKey);
 
         // 旧实现：字段名 = productId
         Set<String> byProductId = new LinkedHashSet<>();

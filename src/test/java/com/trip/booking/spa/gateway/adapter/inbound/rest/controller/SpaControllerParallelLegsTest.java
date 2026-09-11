@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.inbound.rest.controller;
 
 import com.trip.booking.spa.bootstrap.NacosRuntimeConfig;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ResponseDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
@@ -75,13 +75,13 @@ class SpaControllerParallelLegsTest {
             // 要是串行，这里会等满 2 秒才超时——并行时 5 条腿几乎同时到达
             allStarted.await(2, TimeUnit.SECONDS);
             inFlight.decrementAndGet();
-            return PricingResult.available(List.of(ProductRespDTO.builder().hotelId(s.getSHotelId()).productId("p-" + s.getSHotelId()).build()));
+            return PricingResult.available(List.of(Product.builder().hotelId(s.getSHotelId()).productId("p-" + s.getSHotelId()).build()));
         });
 
-        ResponseDTO<List<ProductRespDTO>> resp = controller.queryPrice(req("A", "B", "C", "D", "E"));
+        ResponseDTO<List<Product>> resp = controller.queryPrice(req("A", "B", "C", "D", "E"));
 
         assertEquals(List.of("A", "B", "C", "D", "E"),
-                resp.getResult().stream().map(ProductRespDTO::getHotelId).toList(), "结果按请求顺序归位");
+                resp.getResult().stream().map(Product::getHotelId).toList(), "结果按请求顺序归位");
         assertTrue(peak.get() >= 5, "五条腿应同时在飞，实测峰值 " + peak.get());
     }
 
@@ -89,8 +89,8 @@ class SpaControllerParallelLegsTest {
     @DisplayName("单腿不进线程池，行为与从前一致")
     void singleLegStaysInline() {
         Mockito.when(cache.getPriceResult(any(), any())).thenReturn(PricingResult.available(
-                List.of(ProductRespDTO.builder().hotelId("A").productId("p").build())));
-        ResponseDTO<List<ProductRespDTO>> resp = controller.queryPrice(req("A"));
+                List.of(Product.builder().hotelId("A").productId("p").build())));
+        ResponseDTO<List<Product>> resp = controller.queryPrice(req("A"));
         assertEquals(1, resp.getResult().size());
         assertEquals(Thread.currentThread().getName(), Thread.currentThread().getName());
     }
@@ -105,7 +105,7 @@ class SpaControllerParallelLegsTest {
             if ("B".equals(s.getSHotelId())) {
                 throw new IllegalStateException("B 的 Redis 炸了");
             }
-            return PricingResult.available(List.of(ProductRespDTO.builder().hotelId(s.getSHotelId()).productId("p").build()));
+            return PricingResult.available(List.of(Product.builder().hotelId(s.getSHotelId()).productId("p").build()));
         });
         assertThrows(IllegalStateException.class, () -> controller.queryPrice(req("A", "B", "C")));
         assertEquals(3, calls.get(), "别的腿不该因为 B 炸了就没跑");

@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.application.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
@@ -158,7 +158,7 @@ class RefreshViaQueryTest {
     void onSaleWritesTheCache() {
         PriceCacheService cache = Mockito.mock(PriceCacheService.class);
         StubRefresh flow = flowWith(cache);
-        flow.next = PricingResult.of(List.of(ProductRespDTO.builder().productId("P1").build()));
+        flow.next = PricingResult.of(List.of(Product.builder().productId("P1").build()));
 
         assertEquals(RefreshOutcome.ON_SALE, flow.refreshOne(new Row("H1"), "2"));
 

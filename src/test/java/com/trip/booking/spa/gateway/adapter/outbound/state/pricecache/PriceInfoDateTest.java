@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
@@ -84,7 +84,7 @@ class PriceInfoDateTest {
     void dateIsTheDateNotTheOccupancy() {
         givenTwoNightsCached("1");
 
-        List<ProductRespDTO> products = service.getPrice(twoNights(1), sup());
+        List<Product> products = service.getPrice(twoNights(1), sup());
 
         assertEquals(1, products.size(), "应出一条产品");
         List<PriceInfo> infos = products.get(0).getPriceInfos();
@@ -105,7 +105,7 @@ class PriceInfoDateTest {
         PriceReq req = PriceReq.builder().checkIn(D1).checkout("2026-09-03")
                 .roomNum(1).adultNum(2).childNum(2).childAges(List.of(9, 4)).build();
 
-        List<ProductRespDTO> products = service.getPrice(req, sup());
+        List<Product> products = service.getPrice(req, sup());
 
         assertTrue(!products.isEmpty(), "应出产品");
         List<String> dates = products.get(0).getPriceInfos().stream().map(PriceInfo::getDate).sorted().toList();
@@ -117,7 +117,7 @@ class PriceInfoDateTest {
     void totalStillSumsTheNights() {
         givenTwoNightsCached("1");
 
-        List<ProductRespDTO> products = service.getPrice(twoNights(1), sup());
+        List<Product> products = service.getPrice(twoNights(1), sup());
 
         assertEquals(65940 + 59609, products.get(0).getTotalPrice());
     }

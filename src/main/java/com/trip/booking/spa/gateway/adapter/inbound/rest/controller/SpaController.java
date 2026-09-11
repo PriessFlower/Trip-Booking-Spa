@@ -11,9 +11,9 @@ import com.trip.booking.spa.gateway.domain.booking.OrderPresence;
 import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.BookingRespDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.OrderRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ResponseDTO;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.BookingReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CancelReq;
@@ -87,9 +87,9 @@ public class SpaController {
      * 价格数据
      */
     @PostMapping(value = "/price")
-    public ResponseDTO<List<ProductRespDTO>> queryPrice(@RequestBody @Validated PriceReq priceReq) {
+    public ResponseDTO<List<Product>> queryPrice(@RequestBody @Validated PriceReq priceReq) {
         long startTime = System.currentTimeMillis();
-        List<ProductRespDTO> respDTOList = Lists.newArrayList();
+        List<Product> respDTOList = Lists.newArrayList();
         List<PricingOutcome> outcomes = Lists.newArrayList();
         List<Integer> cachePriceSuppliers = nacosRuntimeConfig.getCachePriceSuppliers();
         Map<Integer, List<String>> cachePriceHotels = nacosRuntimeConfig.getCachePriceHotels();
@@ -244,14 +244,14 @@ public class SpaController {
      * {@code result} 是否为空，故 AVAILABLE/NO_INVENTORY 走 200+数组、INDETERMINATE 走
      * 200+{@code result=null}，与原先一致；新增的只有 {@code outcome} 一个字段。
      */
-    static ResponseDTO<List<ProductRespDTO>> toPriceResponse(PricingOutcome outcome,
-                                                             List<ProductRespDTO> products) {
+    static ResponseDTO<List<Product>> toPriceResponse(PricingOutcome outcome,
+                                                             List<Product> products) {
         if (outcome == PricingOutcome.AVAILABLE) {
             return ResponseDTO.success(products).withOutcome(outcome);
         }
         if (outcome == PricingOutcome.NO_INVENTORY) {
             // 「确实没有」是一个成功的回答，如实回空列表——上游据此可以告知旅客并停止重试
-            return ResponseDTO.success(Collections.<ProductRespDTO>emptyList()).withOutcome(outcome);
+            return ResponseDTO.success(Collections.<Product>emptyList()).withOutcome(outcome);
         }
         // 「没问出来」才算失败，且 result 必须保持 null：改成空数组会让上游把
         // 「未能确认」读成「确实没有」。errorMsg 也保持原文，避免踩到别处的字符串匹配
@@ -281,20 +281,20 @@ public class SpaController {
      * 验价
      */
     @PostMapping(value = "/check")
-    public ResponseDTO<CheckPriceRespDTO> checkPrice(@RequestBody @Validated CheckPriceReq checkPriceReq) {
+    public ResponseDTO<CheckPriceResult> checkPrice(@RequestBody @Validated CheckPriceReq checkPriceReq) {
 
         CheckPriceSyncService checkPriceSyncService = capabilityRegistry.find(checkPriceReq.getSupplierId(), Capability.CHECK_PRICE, CheckPriceSyncService.class);
         if (checkPriceSyncService == null) {
             return unsupportedSupplierOperation(checkPriceReq.getSupplierId(), "check");
         }
 
-        CheckPriceRespDTO checkPriceRespDTO = checkPriceSyncService.checkPrice(checkPriceReq);
+        CheckPriceResult checkPriceRespDTO = checkPriceSyncService.checkPrice(checkPriceReq);
 
         if (checkPriceRespDTO == null) {
             // 兜底：模板已保证非空，此处仅防实现绕过模板。不可表达为「不可订」，
             // 否则会把「我们不知道」说成「供应商说没有」
             log.error("checkPrice 返回空，按未能确认回报, sProductId={}", checkPriceReq.getSProductId());
-            checkPriceRespDTO = CheckPriceRespDTO.builder()
+            checkPriceRespDTO = CheckPriceResult.builder()
                     .outcome(CheckPriceOutcome.INDETERMINATE)
                     .message("验价未能确认该产品是否可订，请稍后重试")
                     .build();
