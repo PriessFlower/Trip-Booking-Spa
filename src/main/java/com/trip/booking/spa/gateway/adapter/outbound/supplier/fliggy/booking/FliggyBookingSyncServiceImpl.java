@@ -1,7 +1,5 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.booking;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.BookingRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.BookingReq;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.Offer;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.booking.client.CreateOrderAccess;
@@ -10,7 +8,8 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.Flig
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyTopCall;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.model.FliggyCreateResponse;
 import com.trip.booking.spa.gateway.application.booking.AbstractBookingSyncSupportService;
-import com.trip.booking.spa.gateway.domain.booking.BookingOutcome;
+import com.trip.booking.spa.gateway.domain.booking.BookingCommand;
+import com.trip.booking.spa.gateway.domain.booking.BookingResult;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
 import com.trip.booking.spa.platform.observability.MetricNames;
@@ -35,7 +34,7 @@ import java.util.Map;
  */
 @Slf4j
 @Service("fliggyBookingSyncService")
-public class FliggyBookingSyncServiceImpl extends AbstractBookingSyncSupportService<BookingRespDTO> {
+public class FliggyBookingSyncServiceImpl extends AbstractBookingSyncSupportService {
 
     private static final String METHOD_CREATE = "taobao.xhotel.order.international.distribution.create";
 
@@ -55,105 +54,87 @@ public class FliggyBookingSyncServiceImpl extends AbstractBookingSyncSupportServ
     }
 
     @Override
-    public BookingRespDTO doBooking(BookingReq req) {
+    protected BookingResult doBooking(BookingCommand command) {
         if (!properties.isConfigured()) {
-            return failed(req.getOrderId(), "credentials_missing", "飞猪凭证未配置，供应商侧未发生任何动作");
+            return BookingResult.failed(command.orderId(), "credentials_missing", "飞猪凭证未配置，供应商侧未发生任何动作", "飞猪凭证未配置，供应商侧未发生任何动作");
         }
-        if (StringUtils.isBlank(req.getOfferId())) {
-            return failed(req.getOrderId(), "missing_offer_id", "缺少 offerId，请先验价并回传该报价句柄");
+        if (StringUtils.isBlank(command.offerId())) {
+            return BookingResult.failed(command.orderId(), "missing_offer_id", "缺少 offerId，请先验价并回传该报价句柄", "缺少 offerId，请先验价并回传该报价句柄");
         }
-        Offer offer = offerStore.resolve(req.getOfferId());
+        Offer offer = offerStore.resolve(command.offerId());
         if (offer == null) {
-            return failed(req.getOrderId(), "offer_unresolvable", "报价已过期或不存在，请重新验价后下单");
+            return BookingResult.failed(command.orderId(), "offer_unresolvable", "报价已过期或不存在，请重新验价后下单", "报价已过期或不存在，请重新验价后下单");
         }
         if (!Integer.valueOf(SupplierSourceEnum.FLIGGY.getCode()).equals(offer.getSupplierId())) {
-            return failed(req.getOrderId(), "offer_supplier_mismatch", "报价句柄不属于飞猪，请核对供应商");
+            return BookingResult.failed(command.orderId(), "offer_supplier_mismatch", "报价句柄不属于飞猪，请核对供应商", "报价句柄不属于飞猪，请核对供应商");
         }
         for (String key : FliggyOfferCredentials.REQUIRED_FOR_BOOKING) {
             if (StringUtils.isBlank(offer.credential(key))) {
-                return failed(req.getOrderId(), "offer_credential_missing",
-                        "报价句柄内容不完整（缺 " + key + "），请重新验价后下单");
+                String msg = "报价句柄内容不完整（缺 " + key + "），请重新验价后下单";
+                return BookingResult.failed(command.orderId(), "offer_credential_missing", msg, msg);
             }
         }
-        if (StringUtils.isAllBlank(req.getPersonName(), req.getContactName())
-                || StringUtils.isBlank(req.getContactPhone())) {
+        if (StringUtils.isAllBlank(command.personName(), command.contactName())
+                || StringUtils.isBlank(command.contactPhone())) {
             // 参数缺失是确定性失败,不许滑进 UNKNOWN 让上游白跑一次反查
-            return failed(req.getOrderId(), "missing_guest_or_contact",
+            return BookingResult.failed(command.orderId(), "missing_guest_or_contact",
+                    "缺少入住人姓名或联系人电话，供应商侧未发生任何动作",
                     "缺少入住人姓名或联系人电话，供应商侧未发生任何动作");
         }
 
         ResponseResult<FliggyCreateResponse> result = new CreateOrderAccess(properties)
-                .access(createCall(req, offer), CallPurpose.ORDER);
+                .access(createCall(command, offer), CallPurpose.ORDER);
         FliggyCreateResponse resp = result == null ? null : result.getData();
         if (resp == null) {
             // 没拿到回应≠没成单：超时的下单可能已在供应商侧生效
-            return unknown(req.getOrderId(), null, "下单未取得结果，请凭我方单号反查确证");
+            return BookingResult.unknown(command.orderId(), null, "下单未取得结果，请凭我方单号反查确证", "下单未取得结果，请凭我方单号反查确证");
         }
         if (resp.isPlatformError()) {
             if (resp.isCredentialFailure()) {
                 Monitor.recordOne(MetricNames.SUPPLIER_AUTH_CONFIG, MetricTags.of(SupplierSourceEnum.FLIGGY));
                 log.error("[auth-config] 飞猪下单：我方凭据/配置病，供应商无辜、重试无效、需人工处理。"
-                        + "platformError={},orderId={}", resp.platformError(), req.getOrderId());
+                        + "platformError={},orderId={}", resp.platformError(), command.orderId());
             }
             // 平台网关拒绝=请求未达业务，供应商侧未发生——确定性失败，修正后可重试
-            return failed(req.getOrderId(), resp.metricErrorCode(), "供应商平台拒绝了请求：" + resp.platformError());
+            return BookingResult.failed(command.orderId(), resp.metricErrorCode(), "供应商平台拒绝了请求：" + resp.platformError(), "供应商平台拒绝了请求：" + resp.platformError());
         }
         if (resp.isSucc()) {
-            offerStore.consume(req.getOfferId());
-            return BookingRespDTO.builder()
-                    .outcome(BookingOutcome.SUCCESS)
-                    .orderId(req.getOrderId())
-                    .sOrderId(resp.fliggyOrderId())
-                    .orderDesc("下单成功")
-                    .build();
+            offerStore.consume(command.offerId());
+            return BookingResult.success(command.orderId(), resp.fliggyOrderId(), null, "下单成功");
         }
         // 业务层失败：官方码表空白，无法证明请求未在供应商侧生效——UNKNOWN，绝不擅判失败
-        log.warn("飞猪下单：业务层未通过,orderId={},bizErrorCode={}", req.getOrderId(), resp.bizErrorCode());
-        return unknown(req.getOrderId(), resp.metricErrorCode(), "供应商未确认下单结果，请凭我方单号反查确证");
+        log.warn("飞猪下单：业务层未通过,orderId={},bizErrorCode={}", command.orderId(), resp.bizErrorCode());
+        return BookingResult.unknown(command.orderId(), resp.metricErrorCode(), "供应商未确认下单结果，请凭我方单号反查确证", "供应商未确认下单结果，请凭我方单号反查确证");
     }
 
-    @Override
-    public BookingRespDTO bookingRespConvert(BookingRespDTO dto) {
-        return dto;
-    }
-
-    private FliggyTopCall createCall(BookingReq req, Offer offer) {
-        int rooms = req.getRoomNum() == null ? 1 : req.getRoomNum();
+    private FliggyTopCall createCall(BookingCommand command, Offer offer) {
+        int rooms = command.roomNum() == null ? 1 : command.roomNum();
         // customers：按间号分组（cursor 生产同构）。契约只给一位入住人姓名，各间同名占位
         Map<String, Object> customers = new LinkedHashMap<>();
         for (int i = 1; i <= rooms; i++) {
             customers.put(String.valueOf(i), List.of(Map.of(
-                    "name", StringUtils.defaultIfBlank(req.getPersonName(), req.getContactName()),
+                    "name", StringUtils.defaultIfBlank(command.personName(), command.contactName()),
                     "customer_type", "1")));
         }
         Map<String, Object> createReq = new LinkedHashMap<>();
         createReq.put("hotel_contact", Map.of(
-                "name", StringUtils.defaultIfBlank(req.getContactName(), req.getPersonName()),
-                "phone", StringUtils.defaultString(req.getContactPhone())));
+                "name", StringUtils.defaultIfBlank(command.contactName(), command.personName()),
+                "phone", StringUtils.defaultString(command.contactPhone())));
         createReq.put("number_of_rooms", rooms);
         createReq.put("customers", customers);
         createReq.put("create_key", offer.credential(FliggyOfferCredentials.CREATE_KEY));
         createReq.put("rate_key", offer.credential(FliggyOfferCredentials.RATE_KEY));
         createReq.put("total_room_price",
                 Integer.parseInt(offer.credential(FliggyOfferCredentials.TOTAL_ROOM_PRICE_CENTS)));
-        createReq.put("out_order_id", req.getOrderId());
+        createReq.put("out_order_id", command.orderId());
         createReq.put("distributor", properties.getDistributor());
-        createReq.put("check_in", req.getCheckIn());
-        createReq.put("check_out", req.getCheckOut());
+        createReq.put("check_in", command.checkIn());
+        createReq.put("check_out", command.checkOut());
         // 到店时间窗与 cursor 生产同款；官方示例带时刻,纯日期形态待首单实测校正
         createReq.put("hotel_arrival_time", Map.of(
-                "earliest_arrival_time", req.getCheckIn() + " 14:00:00",
-                "latest_arrival_time", req.getCheckIn() + " 18:00:00"));
+                "earliest_arrival_time", command.checkIn() + " 14:00:00",
+                "latest_arrival_time", command.checkIn() + " 18:00:00"));
         return new FliggyTopCall(METHOD_CREATE, Map.of("create_req", JsonUtils.writeObject2Json(createReq)));
     }
 
-    private static BookingRespDTO failed(String orderId, String code, String message) {
-        return BookingRespDTO.builder().outcome(BookingOutcome.FAILED).orderId(orderId)
-                .supplierErrorCode(code).supplierErrorMessage(message).orderDesc(message).build();
-    }
-
-    private static BookingRespDTO unknown(String orderId, String code, String message) {
-        return BookingRespDTO.builder().outcome(BookingOutcome.UNKNOWN).orderId(orderId)
-                .supplierErrorCode(code).supplierErrorMessage(message).orderDesc(message).build();
-    }
 }
