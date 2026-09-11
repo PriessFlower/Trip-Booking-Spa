@@ -2,7 +2,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
 import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
 import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProductKeyDeriver;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongNightlyRate;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongRatePlan;
@@ -37,15 +37,15 @@ class ElongAvailabilityOnlyTest {
         deriver.setAccessible(true);
         deriver.set(svc, new ElongProductKeyDeriver());
 
-        CheckPriceReq req = CheckPriceReq.builder()
-                .supplierId(10010).sHotelId("61497910").sProductId("G1")
+        CheckPriceCommand req = CheckPriceCommand.builder()
+                .supplierId(10010).supplierHotelId("61497910").supplierProductId("G1")
                 .checkIn("2026-08-24").checkOut("2026-08-25")
                 .roomNum(1).adultCount(1).childNum(0)
                 .verifyLevel(level)
                 .build();
 
         Method m = ElongPriceServiceImpl.class.getDeclaredMethod(
-                "availabilityOnlyResp", CheckPriceReq.class, ElongRatePlan.class);
+                "availabilityOnlyResp", CheckPriceCommand.class, ElongRatePlan.class);
         m.setAccessible(true);
         return (CheckPriceResult) m.invoke(svc, req, plan);
     }

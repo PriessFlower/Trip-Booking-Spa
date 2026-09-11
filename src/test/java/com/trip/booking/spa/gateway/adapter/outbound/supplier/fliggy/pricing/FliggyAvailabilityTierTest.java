@@ -2,7 +2,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyProductKeyDeriver;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyProperties;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.model.FliggyAriResponse;
@@ -45,10 +45,10 @@ class FliggyAvailabilityTierTest {
         rate = FliggyAriResponse.parse(raw).rates().get(0);
     }
 
-    private CheckPriceReq req(int rooms) {
-        return CheckPriceReq.builder()
+    private CheckPriceCommand req(int rooms) {
+        return CheckPriceCommand.builder()
                 .supplierId(10015)
-                .sHotelId("50363404")
+                .supplierHotelId("50363404")
                 .checkIn("2026-09-10")
                 .checkOut("2026-09-11")
                 .roomNum(rooms)

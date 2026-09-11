@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.checkprice;
 
 import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing.ExpediaPriceServiceImpl;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaRapidProperties;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.QueryPriceResponse;
@@ -44,22 +44,22 @@ public class ExpediaCheckPriceServiceImpl extends AbstractCheckPriceFlow<QueryPr
     }
 
     @Override
-    protected List<String> salesEnvironments(CheckPriceReq request) {
+    protected List<String> salesEnvironments(CheckPriceCommand request) {
         return expediaPriceService.salesEnvironments(request);
     }
 
     @Override
-    protected LiveStock<QueryPriceResponse> fetchLiveStock(CheckPriceReq request, String salesEnvironment) {
+    protected LiveStock<QueryPriceResponse> fetchLiveStock(CheckPriceCommand request, String salesEnvironment) {
         return expediaPriceService.fetchLiveStock(request, salesEnvironment);
     }
 
     @Override
-    protected QueryPriceResponse.Rates findByToken(QueryPriceResponse data, CheckPriceReq request) {
-        return expediaPriceService.findRate(data, request.getSProductId());
+    protected QueryPriceResponse.Rates findByToken(QueryPriceResponse data, CheckPriceCommand request) {
+        return expediaPriceService.findRate(data, request.supplierProductId());
     }
 
     @Override
-    protected List<ResolveCandidate<QueryPriceResponse.Rates>> resolveCandidates(QueryPriceResponse data, CheckPriceReq request) {
+    protected List<ResolveCandidate<QueryPriceResponse.Rates>> resolveCandidates(QueryPriceResponse data, CheckPriceCommand request) {
         return expediaPriceService.resolveCandidates(data, request);
     }
 
@@ -69,7 +69,7 @@ public class ExpediaCheckPriceServiceImpl extends AbstractCheckPriceFlow<QueryPr
     }
 
     @Override
-    protected CheckPriceResult inspect(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceReq request) {
+    protected CheckPriceResult inspect(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceCommand request) {
         return expediaPriceService.inspect(rate, request);
     }
 
@@ -79,14 +79,14 @@ public class ExpediaCheckPriceServiceImpl extends AbstractCheckPriceFlow<QueryPr
      * 接入曝光层前必须实现真正的仅现货应答并从清单删除，否则会与飞猪 2026-09-02 同款超时。
      */
     @Override
-    protected CheckPriceResult availabilityOnlyResp(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceReq request) {
+    protected CheckPriceResult availabilityOnlyResp(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceCommand request) {
         log.info("expedia验价：曝光档尚未实现仅现货应答，按完整验价处理,sHotelId={},sProductId={}",
-                request.getSHotelId(), request.getSProductId());
+                request.supplierHotelId(), request.supplierProductId());
         return validate(rate, data, request);
     }
 
     @Override
-    protected CheckPriceResult validate(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceReq request) {
+    protected CheckPriceResult validate(QueryPriceResponse.Rates rate, QueryPriceResponse data, CheckPriceCommand request) {
         return expediaPriceService.validate(request, rate);
     }
 }

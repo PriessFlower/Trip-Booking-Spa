@@ -2,8 +2,7 @@ package com.trip.booking.spa.gateway.application.pricing;
 
 import com.trip.booking.spa.platform.concurrent.ThreadPools;
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -110,7 +109,7 @@ public abstract class AbstractCPSQueryPriceService<T extends RefreshTaskRow> {
      * 默认抛异常：只有走 {@code refreshViaQuery} 的实现才需要它（Expedia 刷价出口另有形状，
      * 见其 {@code refreshOne}）。
      */
-    protected PricingResult queryForRefresh(PriceReq request, Supplier supplier) {
+    protected PricingResult queryForRefresh(PriceQuery request) {
         throw new UnsupportedOperationException("未实现 queryForRefresh：该家的 refreshOne 应自建流程");
     }
 
@@ -132,22 +131,23 @@ public abstract class AbstractCPSQueryPriceService<T extends RefreshTaskRow> {
      */
     protected final RefreshOutcome refreshViaQuery(T row, String dimension) {
         LocalDate today = LocalDate.now(supplierZone());
-        PriceReq request = PriceReq.builder()
+        // 供应商坐标就在指令里：刷价不再构造「不带供应商的请求」——那个形状是
+        // PriceCacheService javadoc 记的 2026-08-20 事故之源，也是 #237 的温床
+        PriceQuery request = PriceQuery.builder()
+                .supplierId(supplier().getCode())
+                .supplierHotelId(row.getShId())
                 .adultNum(Integer.parseInt(dimension)).childNum(0)
                 .childAges(new ArrayList<>())
                 .checkIn(today.plusDays(row.getDelayCheckIn()).toString())
-                .checkout(today.plusDays(row.getDelayCheckOut()).toString())
+                .checkOut(today.plusDays(row.getDelayCheckOut()).toString())
                 .roomNum(1).build();
-        Supplier supplier = Supplier.builder()
-                .supplierId(supplier().getCode())
-                .sHotelId(row.getShId()).build();
 
-        PricingResult result = queryForRefresh(request, supplier);
+        PricingResult result = queryForRefresh(request);
         if (result == null || result.outcome() == PricingOutcome.INDETERMINATE) {
             return RefreshOutcome.FAILED;
         }
         List<Product> products = result.products();
-        priceCacheService.productToCache(products, request, supplier);
+        priceCacheService.productToCache(products, request);
         return products.isEmpty() ? RefreshOutcome.EMPTY : RefreshOutcome.ON_SALE;
     }
 

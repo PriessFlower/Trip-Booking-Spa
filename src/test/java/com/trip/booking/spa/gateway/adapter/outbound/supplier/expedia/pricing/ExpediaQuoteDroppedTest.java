@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing;
 
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.QueryPriceResponse;
 import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.observability.MonitorService;
@@ -47,9 +47,9 @@ class ExpediaQuoteDroppedTest {
         ExpediaPriceServiceImpl service = new ExpediaPriceServiceImpl();
         QueryPriceResponse.Rates rate = new QueryPriceResponse.Rates();
         rate.setOccupancy_pricing(Map.of());
-        PriceReq request = PriceReq.builder().checkIn("2026-09-01").checkout("2026-09-02")
+        PriceQuery request = PriceQuery.builder().supplierId(10005).supplierHotelId("H1").checkIn("2026-09-01").checkOut("2026-09-02")
                 .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
-        request.setOccupancies(List.of("2"));
+        request = request.toBuilder().occupancies(List.of("2")).build();
         List<Product> out = new ArrayList<>();
 
         service.convertRateResp("H1", "大床房", "R1", rate, "hotel_only", out, request);

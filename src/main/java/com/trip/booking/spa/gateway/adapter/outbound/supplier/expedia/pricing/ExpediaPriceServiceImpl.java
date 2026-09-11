@@ -11,8 +11,8 @@ import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.domain.product.Room;
 import com.trip.booking.spa.gateway.domain.shared.Money;
 import com.trip.booking.spa.gateway.domain.product.RefundType;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
@@ -158,18 +158,18 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     private com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.service.ExpediaCatalogService expediaCatalogService;
 
     @Override
-    public PricingResult queryPrices(PriceReq request, Supplier supplier) {
+    public PricingResult queryPrices(PriceQuery request) {
         ResponseResult<QueryPriceResponse> resultOnly = null;
         ResponseResult<QueryPriceResponse> resultPackage = null;
         QueryPriceResponse.HotelPrice hotelPriceOnly = null;
         QueryPriceResponse.HotelPrice hotelPricePackage = null;
 
-        QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder().property_id(supplier.getSHotelId()).checkin(request.getCheckIn()).checkout(request.getCheckout()).currency(StringUtils.isBlank(request.getCurrency()) ? DEFAULT_QUOTE_CURRENCY : request.getCurrency()).sales_environment("hotel_only").build();
+        QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder().property_id(request.supplierHotelId()).checkin(request.checkIn()).checkout(request.checkOut()).currency(StringUtils.isBlank(request.currency()) ? DEFAULT_QUOTE_CURRENCY : request.currency()).sales_environment("hotel_only").build();
         List<String> occupancies = new ArrayList<>();
-        for (int i = 0; i < request.getRoomNum(); i++) {
+        for (int i = 0; i < request.roomNum(); i++) {
             String childrenList = "";
-            if (null != request.getChildNum() && 0 != request.getChildNum() && CollectionUtils.isNotEmpty(request.getChildAges())) {
-                for (Integer childAge : request.getChildAges()) {
+            if (0 != request.childNum() && CollectionUtils.isNotEmpty(request.childAges())) {
+                for (Integer childAge : request.childAges()) {
                     if (StringUtils.isBlank(childrenList)) {
                         childrenList = "-" + childAge;
                     } else {
@@ -177,16 +177,17 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                     }
                 }
             }
-            occupancies.add(request.getAdultNum() + childrenList);
+            occupancies.add(request.adultNum() + childrenList);
         }
         queryPriceRequest.setOccupancies(occupancies);
-        request.setOccupancies(occupancies);
-        if ("en-US".equals(request.getLanguage())) {
-            if ("hotel_only".equals(request.getPriceFlag())) {
+        // PriceQuery 不可变：占用串算好后带着走，不回写入参
+        request = request.toBuilder().occupancies(occupancies).build();
+        if ("en-US".equals(request.language())) {
+            if ("hotel_only".equals(request.priceFlag())) {
                 //先查询零售价
                 queryPriceRequest.setSales_environment("hotel_only");
                 resultOnly = new QueryProductAccess(host, "en-US", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest, CallPurpose.LIVE);
-            } else if ("hotel_package".equals(request.getPriceFlag())) {
+            } else if ("hotel_package".equals(request.priceFlag())) {
                 //查询打包价
                 queryPriceRequest.setSales_environment("hotel_package");
                 resultPackage = new QueryProductAccess(host, "en-US", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest, CallPurpose.LIVE);
@@ -199,11 +200,11 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                 resultPackage = new QueryProductAccess(host, "en-US", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest, CallPurpose.LIVE);
             }
         } else {
-            if ("hotel_only".equals(request.getPriceFlag())) {
+            if ("hotel_only".equals(request.priceFlag())) {
                 //先查询零售价
                 queryPriceRequest.setSales_environment("hotel_only");
                 resultOnly = new QueryProductAccess(host, "zh-CN", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest, CallPurpose.LIVE);
-            } else if ("hotel_package".equals(request.getPriceFlag())) {
+            } else if ("hotel_package".equals(request.priceFlag())) {
                 //查询打包价
                 queryPriceRequest.setSales_environment("hotel_package");
                 resultPackage = new QueryProductAccess(host, "zh-CN", expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest, CallPurpose.LIVE);
@@ -257,7 +258,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
      */
     private List<Product> convertSeparated(QueryPriceResponse.HotelPrice hotelPriceOnly,
                                                   QueryPriceResponse.HotelPrice hotelPricePackage,
-                                                  PriceReq request) {
+                                                  PriceQuery request) {
         List<Product> productRespDTOS = new ArrayList<>();
         if (null != hotelPriceOnly) {
             productRespDTOS.addAll(convertPriceResp(hotelPriceOnly, "hotel_only", request));
@@ -268,7 +269,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         return productRespDTOS;
     }
 
-    private List<Product> convertPriceResp(QueryPriceResponse.HotelPrice hotelPrice, String salesType, PriceReq request) {
+    private List<Product> convertPriceResp(QueryPriceResponse.HotelPrice hotelPrice, String salesType, PriceQuery request) {
         List<Product> productRespDTOS = new ArrayList<>();
         hotelPrice.getRooms().forEach(room -> {
             convertRoomResp(hotelPrice.getProperty_id(), room, salesType, productRespDTOS, request);
@@ -276,7 +277,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         return productRespDTOS;
     }
 
-    private void convertRoomResp(String hotelId, QueryPriceResponse.Rooms room, String salesType, List<Product> productRespDTOS, PriceReq request) {
+    private void convertRoomResp(String hotelId, QueryPriceResponse.Rooms room, String salesType, List<Product> productRespDTOS, PriceQuery request) {
         if (CollectionUtils.isNotEmpty(room.getRates())) {
             for (QueryPriceResponse.Rates rate : room.getRates()) {
                 convertRateResp(hotelId, room.getRoom_name(), room.getId(), rate, salesType, productRespDTOS, request);
@@ -285,26 +286,26 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     }
 
     // 包私有以便直测丢弃分支（同艺龙 toPricingResult 的先例）
-    void convertRateResp(String hotelId, String roomName, String roomId, QueryPriceResponse.Rates rate, String salesType, List<Product> productRespDTOS, PriceReq request) {
-        if (!rate.getOccupancy_pricing().containsKey(request.getOccupancies().get(0))) {
+    void convertRateResp(String hotelId, String roomName, String roomId, QueryPriceResponse.Rates rate, String salesType, List<Product> productRespDTOS, PriceQuery request) {
+        if (!rate.getOccupancy_pricing().containsKey(request.occupancies().get(0))) {
             // 供应商给了这条 rate，但没有本次占用档的价——丢弃必须可数（O-4.5）：
             // 此前这里无日志无计数，Expedia 被过滤的报价无声消失，「丢在哪」只能 grep 和猜
             log.info("expedia查价：rate 缺所查占用档的价，弃之,hotelId={},rateId={},occupancy={}",
-                    hotelId, rate.getId(), request.getOccupancies().get(0));
+                    hotelId, rate.getId(), request.occupancies().get(0));
             Monitor.recordOne(MetricNames.QUOTE_DROPPED, MetricTags.dropped(
                     SupplierSourceEnum.EXPEDIA, FunnelStage.CONVERT, DropReason.NO_OCCUPANCY_PRICING));
             return;
         }
-        QueryPriceResponse.Occupancy_pricing occupancyPricing = rate.getOccupancy_pricing().get(request.getOccupancies().get(0));
+        QueryPriceResponse.Occupancy_pricing occupancyPricing = rate.getOccupancy_pricing().get(request.occupancies().get(0));
         List<QueryPriceResponse.CancelPolicy> cancelPolicies = rate.getCancel_penalties();
         int sumCommission = calcCommissionCents(occupancyPricing);
         int totalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()));
         int roomTotalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()));
-        Meal meal = productKeyDeriver.convertMeal(request.getAdultNum(), rate.getAmenities());
-        List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) : productKeyDeriver.convertCancelPolicy(request.getCheckIn(), cancelPolicies);
+        Meal meal = productKeyDeriver.convertMeal(request.adultNum(), rate.getAmenities());
+        List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) : productKeyDeriver.convertCancelPolicy(request.checkIn(), cancelPolicies);
         // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍
-        ProductIdentity identity = productKeyDeriver.deriveIdentity(hotelId, roomId, meal, cancelPolicy, request.getOccupancies().get(0));
-        Product productRespDTO = Product.builder().hotelId(hotelId).productId(rate.getId()).productKey(identity.productKey()).identity(identity).supplierId(SupplierSourceEnum.EXPEDIA.getCode()).room(Room.builder().roomName(roomName).roomId(roomId).build()).productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomName).build()).currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency()).totalPrice(totalPrice - sumCommission).roomTotalPrice(roomTotalPrice - sumCommission).brokerage(sumCommission).stayPrice(buildStayPrice(occupancyPricing.getStay())).priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn(), sumCommission)).meal(meal).cancelPolicy(cancelPolicy).maxOccupancy(request.getAdultNum()).priceFlag(salesType).distribution(rate.getSale_scenario().getDistribution()).build();
+        ProductIdentity identity = productKeyDeriver.deriveIdentity(hotelId, roomId, meal, cancelPolicy, request.occupancies().get(0));
+        Product productRespDTO = Product.builder().hotelId(hotelId).productId(rate.getId()).productKey(identity.productKey()).identity(identity).supplierId(SupplierSourceEnum.EXPEDIA.getCode()).room(Room.builder().roomName(roomName).roomId(roomId).build()).productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(roomName).build()).currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency()).totalPrice(totalPrice - sumCommission).roomTotalPrice(roomTotalPrice - sumCommission).brokerage(sumCommission).stayPrice(buildStayPrice(occupancyPricing.getStay())).priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.checkIn(), sumCommission)).meal(meal).cancelPolicy(cancelPolicy).maxOccupancy(request.adultNum()).priceFlag(salesType).distribution(rate.getSale_scenario().getDistribution()).build();
         productRespDTO.setTotalTaxes(productRespDTO.getTotalPrice() - productRespDTO.getRoomTotalPrice());
         productRespDTOS.add(productRespDTO);
     }
@@ -367,14 +368,14 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     }
 
     @Override
-    public List<Product> queryProductPrice(PriceReq request, Supplier supplier) {
+    public List<Product> queryProductPrice(PriceQuery request) {
 
-        QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder().property_id(supplier.getSHotelId()).checkin(request.getCheckIn()).checkout(request.getCheckout()).currency(StringUtils.isBlank(request.getCurrency()) ? DEFAULT_QUOTE_CURRENCY : request.getCurrency()).build();
+        QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder().property_id(request.supplierHotelId()).checkin(request.checkIn()).checkout(request.checkOut()).currency(StringUtils.isBlank(request.currency()) ? DEFAULT_QUOTE_CURRENCY : request.currency()).build();
         List<String> occupancies = new ArrayList<>();
-        for (int i = 0; i < request.getRoomNum(); i++) {
+        for (int i = 0; i < request.roomNum(); i++) {
             String childrenList = "";
-            if (null != request.getChildNum() && 0 != request.getChildNum() && CollectionUtils.isNotEmpty(request.getChildAges())) {
-                for (Integer childAge : request.getChildAges()) {
+            if (0 != request.childNum() && CollectionUtils.isNotEmpty(request.childAges())) {
+                for (Integer childAge : request.childAges()) {
                     if (StringUtils.isBlank(childrenList)) {
                         childrenList = "-" + childAge;
                     } else {
@@ -382,40 +383,41 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                     }
                 }
             }
-            occupancies.add(request.getAdultNum() + childrenList);
+            occupancies.add(request.adultNum() + childrenList);
         }
         queryPriceRequest.setOccupancies(occupancies);
-        request.setOccupancies(occupancies);
+        // PriceQuery 不可变：占用串算好后带着走，不回写入参
+        request = request.toBuilder().occupancies(occupancies).build();
         // 缺省优先零售价(hotel_only，常态且无捆绑限制)，第一趟未命中再回退打包价(hotel_package)
-        queryPriceRequest.setSales_environment(StringUtils.isBlank(request.getPriceFlag()) ? "hotel_only" : request.getPriceFlag());
-        ResponseResult<QueryPriceResponse> resultPackage = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest, CallPurpose.LIVE);
+        queryPriceRequest.setSales_environment(StringUtils.isBlank(request.priceFlag()) ? "hotel_only" : request.priceFlag());
+        ResponseResult<QueryPriceResponse> resultPackage = new QueryProductAccess(host, StringUtils.isBlank(request.language()) ? "zh-CN" : request.language(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest, CallPurpose.LIVE);
         boolean isHave = true;
         if (resultPackage != null && resultPackage.isSucc() && null != resultPackage.getData() && CollectionUtils.isNotEmpty(resultPackage.getData().getHotelPrices())) {
             QueryPriceResponse.HotelPrice hotelPrice = resultPackage.getData().getHotelPrices().get(0);
             for (QueryPriceResponse.Rooms room : hotelPrice.getRooms()) {
                 for (QueryPriceResponse.Rates rate : room.getRates()) {
-                    if (supplier.getSProductId().equals(rate.getId())) {
+                    if (request.supplierProductId().equals(rate.getId())) {
                         isHave = false;
                         ArrayList<BedCheckInfo> bedCheckInfos = new ArrayList<>();
                         for (String bedId : rate.getBed_groups().keySet()) {
                             QueryPriceResponse.Bed_groups bedGroups = rate.getBed_groups().get(bedId);
                             bedCheckInfos.add(BedCheckInfo.builder().bedId(bedGroups.getId()).bedType(bedGroups.getDescription()).checkHref(bedGroups.getLinks().getPrice_check().getHref()).build());
                         }
-                        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedCheckInfos.get(0).getCheckHref()), CallPurpose.LIVE);
+                        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.language()) ? "zh-CN" : request.language(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedCheckInfos.get(0).getCheckHref()), CallPurpose.LIVE);
                         if (!checkPriceResult.isSucc() || null == checkPriceResult.getData() || "sold_out".equals(checkPriceResult.getData().getStatus())) {
                             log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(checkPriceResult));
                             return null;
                         }
-                        QueryPriceResponse.Occupancy_pricing occupancyPricing = checkPriceResult.getData().getOccupancy_pricing().get(request.getOccupancies().get(0));
+                        QueryPriceResponse.Occupancy_pricing occupancyPricing = checkPriceResult.getData().getOccupancy_pricing().get(request.occupancies().get(0));
                         int sumCommission = calcCommissionCents(occupancyPricing);
                         int totalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()));
                         int roomTotalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()));
                         List<QueryPriceResponse.CancelPolicy> cancelPolicies = rate.getCancel_penalties();
-                        Meal meal = productKeyDeriver.convertMeal(request.getAdultNum(), rate.getAmenities());
-                        List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) : productKeyDeriver.convertCancelPolicy(request.getCheckIn(), cancelPolicies);
+                        Meal meal = productKeyDeriver.convertMeal(request.adultNum(), rate.getAmenities());
+                        List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) : productKeyDeriver.convertCancelPolicy(request.checkIn(), cancelPolicies);
                         // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍
-                        ProductIdentity identity = productKeyDeriver.deriveIdentity(hotelPrice.getProperty_id(), room.getId(), meal, cancelPolicy, request.getOccupancies().get(0));
-                        Product productRespDTO = Product.builder().hotelId(hotelPrice.getProperty_id()).productId(rate.getId()).productKey(identity.productKey()).identity(identity).supplierId(SupplierSourceEnum.EXPEDIA.getCode()).room(Room.builder().roomName(room.getRoom_name()).roomId(room.getId()).build()).productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(room.getRoom_name()).build()).currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency()).totalPrice(totalPrice - sumCommission).stayPrice(buildStayPrice(occupancyPricing.getStay())).storePayPrice(null == occupancyPricing.getTotals().getProperty_fees() ? 0 : Money.toCents(new BigDecimal(occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getValue()))).storePayCurrency(null == occupancyPricing.getTotals().getProperty_fees() ? request.getCurrency() : occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getCurrency()).roomTotalPrice(roomTotalPrice - sumCommission).brokerage(sumCommission).priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn(), sumCommission)).meal(meal).cancelPolicy(cancelPolicy).maxOccupancy(request.getAdultNum()).priceFlag(queryPriceRequest.getSales_environment()).distribution(rate.getSale_scenario().getDistribution()).bedCheckInfos(bedCheckInfos).build();
+                        ProductIdentity identity = productKeyDeriver.deriveIdentity(hotelPrice.getProperty_id(), room.getId(), meal, cancelPolicy, request.occupancies().get(0));
+                        Product productRespDTO = Product.builder().hotelId(hotelPrice.getProperty_id()).productId(rate.getId()).productKey(identity.productKey()).identity(identity).supplierId(SupplierSourceEnum.EXPEDIA.getCode()).room(Room.builder().roomName(room.getRoom_name()).roomId(room.getId()).build()).productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(room.getRoom_name()).build()).currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency()).totalPrice(totalPrice - sumCommission).stayPrice(buildStayPrice(occupancyPricing.getStay())).storePayPrice(null == occupancyPricing.getTotals().getProperty_fees() ? 0 : Money.toCents(new BigDecimal(occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getValue()))).storePayCurrency(null == occupancyPricing.getTotals().getProperty_fees() ? request.currency() : occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getCurrency()).roomTotalPrice(roomTotalPrice - sumCommission).brokerage(sumCommission).priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.checkIn(), sumCommission)).meal(meal).cancelPolicy(cancelPolicy).maxOccupancy(request.adultNum()).priceFlag(queryPriceRequest.getSales_environment()).distribution(rate.getSale_scenario().getDistribution()).bedCheckInfos(bedCheckInfos).build();
                         productRespDTO.setTotalTaxes(productRespDTO.getTotalPrice() - productRespDTO.getRoomTotalPrice());
                         return Arrays.asList(productRespDTO);
                     }
@@ -423,34 +425,34 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             }
         }
         if (isHave) {
-            queryPriceRequest.setSales_environment(StringUtils.isBlank(request.getPriceFlag()) ? "hotel_package" : request.getPriceFlag());
-            ResponseResult<QueryPriceResponse> onlyResult = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest, CallPurpose.LIVE);
+            queryPriceRequest.setSales_environment(StringUtils.isBlank(request.priceFlag()) ? "hotel_package" : request.priceFlag());
+            ResponseResult<QueryPriceResponse> onlyResult = new QueryProductAccess(host, StringUtils.isBlank(request.language()) ? "zh-CN" : request.language(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest, CallPurpose.LIVE);
             if (onlyResult != null && onlyResult.isSucc() && null != onlyResult.getData() && CollectionUtils.isNotEmpty(onlyResult.getData().getHotelPrices())) {
                 QueryPriceResponse.HotelPrice hotelPrice = onlyResult.getData().getHotelPrices().get(0);
                 for (QueryPriceResponse.Rooms room : hotelPrice.getRooms()) {
                     for (QueryPriceResponse.Rates rate : room.getRates()) {
-                        if (supplier.getSProductId().equals(rate.getId())) {
+                        if (request.supplierProductId().equals(rate.getId())) {
                             isHave = false;
                             ArrayList<BedCheckInfo> bedCheckInfos = new ArrayList<>();
                             for (String bedId : rate.getBed_groups().keySet()) {
                                 QueryPriceResponse.Bed_groups bedGroups = rate.getBed_groups().get(bedId);
                                 bedCheckInfos.add(BedCheckInfo.builder().bedId(bedGroups.getId()).bedType(bedGroups.getDescription()).checkHref(bedGroups.getLinks().getPrice_check().getHref()).build());
                             }
-                            ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedCheckInfos.get(0).getCheckHref()), CallPurpose.LIVE);
+                            ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.language()) ? "zh-CN" : request.language(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedCheckInfos.get(0).getCheckHref()), CallPurpose.LIVE);
                             if (!checkPriceResult.isSucc() || null == checkPriceResult.getData() || "sold_out".equals(checkPriceResult.getData().getStatus())) {
                                 log.info("expedia验价失败,request:{},response:{}", JsonUtils.writeObject2Json(request), JsonUtils.writeObject2Json(checkPriceResult));
                                 return null;
                             }
-                            QueryPriceResponse.Occupancy_pricing occupancyPricing = checkPriceResult.getData().getOccupancy_pricing().get(request.getOccupancies().get(0));
+                            QueryPriceResponse.Occupancy_pricing occupancyPricing = checkPriceResult.getData().getOccupancy_pricing().get(request.occupancies().get(0));
                             int sumCommission = calcCommissionCents(occupancyPricing);
                             int totalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getInclusive().getRequest_currency().getValue()));
                             int roomTotalPrice = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getExclusive().getRequest_currency().getValue()));
                             List<QueryPriceResponse.CancelPolicy> cancelPolicies = rate.getCancel_penalties();
-                            Meal meal = productKeyDeriver.convertMeal(request.getAdultNum(), rate.getAmenities());
-                            List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) : productKeyDeriver.convertCancelPolicy(request.getCheckIn(), cancelPolicies);
+                            Meal meal = productKeyDeriver.convertMeal(request.adultNum(), rate.getAmenities());
+                            List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(rate.getNonrefundable_date_ranges()) ? List.of(CancelPolicy.builder().cancelType(0).build()) : productKeyDeriver.convertCancelPolicy(request.checkIn(), cancelPolicies);
                             // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍
-                            ProductIdentity identity = productKeyDeriver.deriveIdentity(hotelPrice.getProperty_id(), room.getId(), meal, cancelPolicy, request.getOccupancies().get(0));
-                            Product productRespDTO = Product.builder().hotelId(hotelPrice.getProperty_id()).productId(rate.getId()).productKey(identity.productKey()).identity(identity).supplierId(SupplierSourceEnum.EXPEDIA.getCode()).room(Room.builder().roomName(room.getRoom_name()).roomId(room.getId()).build()).productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(room.getRoom_name()).build()).currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency()).totalPrice(totalPrice - sumCommission).stayPrice(buildStayPrice(occupancyPricing.getStay())).storePayPrice(null == occupancyPricing.getTotals().getProperty_fees() ? 0 : Money.toCents(new BigDecimal(occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getValue()))).storePayCurrency(null == occupancyPricing.getTotals().getProperty_fees() ? request.getCurrency() : occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getCurrency()).roomTotalPrice(roomTotalPrice - sumCommission).brokerage(sumCommission).priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.getCheckIn(), sumCommission)).meal(meal).cancelPolicy(cancelPolicy).maxOccupancy(request.getAdultNum()).priceFlag(queryPriceRequest.getSales_environment()).distribution(rate.getSale_scenario().getDistribution()).bedCheckInfos(bedCheckInfos).build();
+                            ProductIdentity identity = productKeyDeriver.deriveIdentity(hotelPrice.getProperty_id(), room.getId(), meal, cancelPolicy, request.occupancies().get(0));
+                            Product productRespDTO = Product.builder().hotelId(hotelPrice.getProperty_id()).productId(rate.getId()).productKey(identity.productKey()).identity(identity).supplierId(SupplierSourceEnum.EXPEDIA.getCode()).room(Room.builder().roomName(room.getRoom_name()).roomId(room.getId()).build()).productInfo(ProductInfo.builder().inventory(1).productStatus(1).productName(room.getRoom_name()).build()).currencyType(occupancyPricing.getTotals().getInclusive().getRequest_currency().getCurrency()).totalPrice(totalPrice - sumCommission).stayPrice(buildStayPrice(occupancyPricing.getStay())).storePayPrice(null == occupancyPricing.getTotals().getProperty_fees() ? 0 : Money.toCents(new BigDecimal(occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getValue()))).storePayCurrency(null == occupancyPricing.getTotals().getProperty_fees() ? request.currency() : occupancyPricing.getTotals().getProperty_fees().getBillable_currency().getCurrency()).roomTotalPrice(roomTotalPrice - sumCommission).brokerage(sumCommission).priceInfos(buildQueryPriceInfos(occupancyPricing.getNightly(), request.checkIn(), sumCommission)).meal(meal).cancelPolicy(cancelPolicy).maxOccupancy(request.adultNum()).priceFlag(queryPriceRequest.getSales_environment()).distribution(rate.getSale_scenario().getDistribution()).bedCheckInfos(bedCheckInfos).build();
                             productRespDTO.setTotalTaxes(productRespDTO.getTotalPrice() - productRespDTO.getRoomTotalPrice());
                             return Arrays.asList(productRespDTO);
                         }
@@ -468,19 +470,19 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
      * 要依次找票的售卖环境：上游指定了 priceFlag 就只按它查；未指定先零售、零售侧确证
      * RATE_DEAD 才换打包价再找一次（不确定或已售罄时再查既救不回也会掩盖成因）。
      */
-    public List<String> salesEnvironments(CheckPriceReq request) {
-        if (StringUtils.isNotBlank(request.getPriceFlag())) {
-            return List.of(request.getPriceFlag());
+    public List<String> salesEnvironments(CheckPriceCommand request) {
+        if (StringUtils.isNotBlank(request.priceFlag())) {
+            return List.of(request.priceFlag());
         }
         return List.of(SALES_ENV_HOTEL_ONLY, SALES_ENV_HOTEL_PACKAGE);
     }
 
     /** 现取：在指定售卖环境下重打一次查价 */
-    public LiveStock<QueryPriceResponse> fetchLiveStock(CheckPriceReq request, String salesEnvironment) {
-        QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder().property_id(request.getSHotelId()).checkin(request.getCheckIn()).checkout(request.getCheckOut()).currency(StringUtils.isBlank(request.getCurrency()) ? DEFAULT_QUOTE_CURRENCY : request.getCurrency()).build();
+    public LiveStock<QueryPriceResponse> fetchLiveStock(CheckPriceCommand request, String salesEnvironment) {
+        QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder().property_id(request.supplierHotelId()).checkin(request.checkIn()).checkout(request.checkOut()).currency(StringUtils.isBlank(request.currency()) ? DEFAULT_QUOTE_CURRENCY : request.currency()).build();
         queryPriceRequest.setOccupancies(buildOccupancies(request));
         queryPriceRequest.setSales_environment(salesEnvironment);
-        ResponseResult<QueryPriceResponse> result = new QueryProductAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest, CallPurpose.CHECK_PRICE);
+        ResponseResult<QueryPriceResponse> result = new QueryProductAccess(host, StringUtils.isBlank(request.language()) ? "zh-CN" : request.language(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(queryPriceRequest, CallPurpose.CHECK_PRICE);
         if (result == null || !result.isSucc() || null == result.getData()
                 || CollectionUtils.isEmpty(result.getData().getHotelPrices())) {
             log.warn("expedia查价未取得结果,salesEnvironment={},request:{}", salesEnvironment, JsonUtils.writeObject2Json(request));
@@ -493,7 +495,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
      * 换票候选：对每条现货报价按<b>与查价时完全相同的口径</b>重派生 productKey，键相等才收
      * （硬门 R-3.2 由键相等保证）；价格=含税价 − 佣金，与查价透出的 totalPrice 同一算法。
      */
-    public List<ResolveCandidate<QueryPriceResponse.Rates>> resolveCandidates(QueryPriceResponse data, CheckPriceReq request) {
+    public List<ResolveCandidate<QueryPriceResponse.Rates>> resolveCandidates(QueryPriceResponse data, CheckPriceCommand request) {
         String occupancy = buildOccupancies(request).get(0);
         List<ResolveCandidate<QueryPriceResponse.Rates>> equivalents = new ArrayList<>();
         QueryPriceResponse.HotelPrice hotelPrice = data.getHotelPrices().get(0);
@@ -510,12 +512,12 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                 if (pricing == null || pricing.getTotals() == null || pricing.getTotals().getInclusive() == null) {
                     continue;
                 }
-                Meal meal = productKeyDeriver.convertMeal(request.getAdultCount(), candidate.getAmenities());
+                Meal meal = productKeyDeriver.convertMeal(request.adultCount(), candidate.getAmenities());
                 List<CancelPolicy> cancelPolicy = CollectionUtils.isNotEmpty(candidate.getNonrefundable_date_ranges())
                         ? List.of(CancelPolicy.builder().cancelType(0).build())
-                        : productKeyDeriver.convertCancelPolicy(request.getCheckIn(), candidate.getCancel_penalties());
+                        : productKeyDeriver.convertCancelPolicy(request.checkIn(), candidate.getCancel_penalties());
                 String key = productKeyDeriver.deriveProductKey(hotelPrice.getProperty_id(), room.getId(), meal, cancelPolicy, occupancy);
-                if (!request.getProductKey().equals(key)) {
+                if (!request.productKey().equals(key)) {
                     continue;
                 }
                 int priceCents = Money.toCents(new BigDecimal(
@@ -528,9 +530,9 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     }
 
     /** 找到票之后的自检：所选床型已不可选即死票 */
-    public CheckPriceResult inspect(QueryPriceResponse.Rates rate, CheckPriceReq request) {
-        if (null == pickBedGroup(rate, request.getBedId())) {
-            log.info("expedia验价：所选床型已不可选,sProductId={},bedId={}", request.getSProductId(), request.getBedId());
+    public CheckPriceResult inspect(QueryPriceResponse.Rates rate, CheckPriceCommand request) {
+        if (null == pickBedGroup(rate, request.bedId())) {
+            log.info("expedia验价：所选床型已不可选,sProductId={},bedId={}", request.supplierProductId(), request.bedId());
             return outcome(CheckPriceOutcome.RATE_DEAD, "所选床型已不可选，请重新查价后再选择");
         }
         return null;
@@ -540,12 +542,12 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
      * 下单前档：打 price_check 并归入确定的分态。原实现对「所点产品不在响应里」「床型不可选」
      * 「已售罄」「调用失败」一律返回 null，上游无从区分该重新查价、告知满房还是稍后重试。
      */
-    public CheckPriceResult validate(CheckPriceReq request, QueryPriceResponse.Rates rate) {
+    public CheckPriceResult validate(CheckPriceCommand request, QueryPriceResponse.Rates rate) {
         String occupancy = buildOccupancies(request).get(0);
-        QueryPriceResponse.Bed_groups bedGroups = pickBedGroup(rate, request.getBedId());
-        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.getLanguage()) ? "zh-CN" : request.getLanguage(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedGroups.getLinks().getPrice_check().getHref()), CallPurpose.CHECK_PRICE);
+        QueryPriceResponse.Bed_groups bedGroups = pickBedGroup(rate, request.bedId());
+        ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.language()) ? "zh-CN" : request.language(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedGroups.getLinks().getPrice_check().getHref()), CallPurpose.CHECK_PRICE);
         if (checkPriceResult == null || !checkPriceResult.isSucc() || null == checkPriceResult.getData()) {
-            log.warn("expedia验价未取得结果,sProductId={},response:{}", request.getSProductId(), JsonUtils.writeObject2Json(checkPriceResult));
+            log.warn("expedia验价未取得结果,sProductId={},response:{}", request.supplierProductId(), JsonUtils.writeObject2Json(checkPriceResult));
             return outcome(CheckPriceOutcome.INDETERMINATE, "验价调用未取得结果，未能确认该产品是否可订，请稍后重试");
         }
         if (STATUS_SOLD_OUT.equals(checkPriceResult.getData().getStatus())) {
@@ -553,7 +555,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             return outcome(CheckPriceOutcome.SOLD_OUT, "该产品已售罄");
         }
 
-        checkPriceResult.getData().setAdultCount(request.getAdultCount());
+        checkPriceResult.getData().setAdultCount(request.adultCount());
         QueryPriceResponse.Occupancy_pricing occupancyPricing =
                 checkPriceResult.getData().getOccupancy_pricing() == null ? null
                         : checkPriceResult.getData().getOccupancy_pricing().get(occupancy);
@@ -562,19 +564,19 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             // 供应商说可订却没给出本次占用的价格，属响应自相矛盾：既不能报可订（没有价），
             // 也不能报不可订（供应商并未这么说）
             log.error("expedia验价：响应缺少本次占用的价格,sProductId={},occupancy={}",
-                    request.getSProductId(), occupancy);
+                    request.supplierProductId(), occupancy);
             return outcome(CheckPriceOutcome.INDETERMINATE, "验价响应缺少本次占用的价格，未能确认该产品是否可订");
         }
         return buildCheckPriceResp(checkPriceResult.getData(), occupancyPricing);
     }
 
     /** 占用串：一间房一项，格式为「成人数-儿童年龄,儿童年龄」 */
-    private List<String> buildOccupancies(CheckPriceReq request) {
+    private List<String> buildOccupancies(CheckPriceCommand request) {
         List<String> occupancies = new ArrayList<>();
-        for (int i = 0; i < request.getRoomNum(); i++) {
+        for (int i = 0; i < request.roomNum(); i++) {
             String childrenList = "";
-            if (null != request.getChildNum() && 0 != request.getChildNum() && CollectionUtils.isNotEmpty(request.getChildAges())) {
-                for (Integer childAge : request.getChildAges()) {
+            if (0 != request.childNum() && CollectionUtils.isNotEmpty(request.childAges())) {
+                for (Integer childAge : request.childAges()) {
                     if (StringUtils.isBlank(childrenList)) {
                         childrenList = "-" + childAge;
                     } else {
@@ -582,7 +584,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                     }
                 }
             }
-            occupancies.add(request.getAdultCount() + childrenList);
+            occupancies.add(request.adultCount() + childrenList);
         }
         return occupancies;
     }
@@ -627,13 +629,13 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
 
 
     @Override
-    public List<Product> queryPricesCache(PriceReq request, Supplier supplier) {
-        QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder().property_id(supplier.getSHotelId()).checkin(request.getCheckIn()).checkout(request.getCheckout()).currency(StringUtils.isBlank(request.getCurrency()) ? DEFAULT_QUOTE_CURRENCY : request.getCurrency()).sales_environment("hotel_only").build();
+    public List<Product> queryPricesCache(PriceQuery request) {
+        QueryPriceRequest queryPriceRequest = contractProfile.newRequestBuilder().property_id(request.supplierHotelId()).checkin(request.checkIn()).checkout(request.checkOut()).currency(StringUtils.isBlank(request.currency()) ? DEFAULT_QUOTE_CURRENCY : request.currency()).sales_environment("hotel_only").build();
         List<String> occupancies = new ArrayList<>();
-        for (int i = 0; i < request.getRoomNum(); i++) {
+        for (int i = 0; i < request.roomNum(); i++) {
             String childrenList = "";
-            if (null != request.getChildNum() && 0 != request.getChildNum() && CollectionUtils.isNotEmpty(request.getChildAges())) {
-                for (Integer childAge : request.getChildAges()) {
+            if (0 != request.childNum() && CollectionUtils.isNotEmpty(request.childAges())) {
+                for (Integer childAge : request.childAges()) {
                     if (StringUtils.isBlank(childrenList)) {
                         childrenList = "-" + childAge;
                     } else {
@@ -641,10 +643,11 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
                     }
                 }
             }
-            occupancies.add(request.getAdultNum() + childrenList);
+            occupancies.add(request.adultNum() + childrenList);
         }
         queryPriceRequest.setOccupancies(occupancies);
-        request.setOccupancies(occupancies);
+        // PriceQuery 不可变：占用串算好后带着走，不回写入参
+        request = request.toBuilder().occupancies(occupancies).build();
 
         // 缓存只刷零售价：当前渠道以 standalone 售卖为主；且缓存结构(price:hotelId:date 的 field=productId)
         // 无售卖类型维度，同一 rateId 的打包价会覆盖零售价。待渠道开卖打包价时，
@@ -666,7 +669,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         List<Product> productRespDTOList = convertPriceResp(resultOnly.getData().getHotelPrices().get(0), "hotel_only", request);
 
         //插入缓存
-        priceCacheService.productToCache(productRespDTOList, request, supplier);
+        priceCacheService.productToCache(productRespDTOList, request);
         // 建档(R-2.6):稳定事实落库,与写缓存同一处、同一份数据,不额外调供应商。
         // 开关默认关;失败不打断刷价(服务内部已吞异常)
         expediaCatalogService.upsert(productRespDTOList);

@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
 import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongDataValidateResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongRatePlan;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
@@ -30,11 +30,11 @@ class ElongDayPriceMismatchClassifyTest {
         ElongDataValidateResponse data = JsonUtils.readValue(responseJson, ElongDataValidateResponse.class);
         ElongRatePlan plan = new ElongRatePlan();
         plan.setGoodsUniqId("61582324A20A69427977A0Atest");
-        CheckPriceReq req = CheckPriceReq.builder().supplierId(10010).sHotelId("61534233")
+        CheckPriceCommand req = CheckPriceCommand.builder().supplierId(10010).supplierHotelId("61534233")
                 .checkIn("2026-08-24").checkOut("2026-08-25").roomNum(1).adultCount(1).build();
 
         Method m = ElongPriceServiceImpl.class.getDeclaredMethod("classifyValidateError",
-                CheckPriceReq.class, ElongRatePlan.class, ElongDataValidateResponse.class);
+                CheckPriceCommand.class, ElongRatePlan.class, ElongDataValidateResponse.class);
         m.setAccessible(true);
         return (CheckPriceResult) m.invoke(new ElongPriceServiceImpl(), req, plan, data);
     }

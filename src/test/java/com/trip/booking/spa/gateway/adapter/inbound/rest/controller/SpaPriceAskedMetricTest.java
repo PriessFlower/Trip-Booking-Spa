@@ -1,6 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.inbound.rest.controller;
 
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
@@ -58,7 +59,7 @@ class SpaPriceAskedMetricTest {
     private static PriceReq req() {
         return PriceReq.builder().checkIn("2026-09-01").checkout("2026-09-02")
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
-                .suppliers(List.of(Supplier.builder().supplierId(10010).sHotelId("H1").build()))
+                .suppliers(List.of(Supplier.builder().supplierId(10010).sHotelId("H-1").build()))
                 .build();
     }
 
@@ -70,7 +71,7 @@ class SpaPriceAskedMetricTest {
     @Test
     @DisplayName("走缓存的那家正常分态 → outcome=no_inventory 计一次")
     void normalLegIsCounted() {
-        Mockito.when(priceCacheService.getPriceResult(any(), any()))
+        Mockito.when(priceCacheService.getPriceResult(any()))
                 .thenReturn(PricingResult.noInventory());
 
         controller.queryPrice(req());
@@ -81,7 +82,7 @@ class SpaPriceAskedMetricTest {
     @Test
     @DisplayName("缓存读抛异常 → outcome=error 计一次，异常照常抛出")
     void errorLegIsCounted() {
-        Mockito.when(priceCacheService.getPriceResult(any(), any()))
+        Mockito.when(priceCacheService.getPriceResult(any()))
                 .thenThrow(new IllegalStateException("redis down"));
 
         assertThrows(IllegalStateException.class, () -> controller.queryPrice(req()));

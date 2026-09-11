@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.service;
 
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
@@ -96,7 +96,7 @@ class ExpediaCatalogFromRefreshE2EManual {
             ExpediaPriceServiceImpl priceServiceA = priceService(sessionA.getMapper(ProductCatalogMapper.class), false);
             List<Product> quotedA = new ArrayList<>();
             for (String pid : propertyIds) {
-                List<Product> got = priceServiceA.queryPricesCache(priceReq(), supplier(pid));
+                List<Product> got = priceServiceA.queryPricesCache(priceReq());
                 if (got != null) {
                     quotedA.addAll(got);
                 }
@@ -113,7 +113,7 @@ class ExpediaCatalogFromRefreshE2EManual {
             ExpediaPriceServiceImpl priceServiceB = priceService(sessionB.getMapper(ProductCatalogMapper.class), true);
             List<Product> quotedB = new ArrayList<>();
             for (String pid : propertyIds) {
-                List<Product> got = priceServiceB.queryPricesCache(priceReq(), supplier(pid));
+                List<Product> got = priceServiceB.queryPricesCache(priceReq());
                 if (got != null) {
                     quotedB.addAll(got);
                 }
@@ -176,11 +176,11 @@ class ExpediaCatalogFromRefreshE2EManual {
         return svc;
     }
 
-    private static PriceReq priceReq() {
+    private static PriceQuery priceReq() {
         LocalDate checkIn = LocalDate.now().plusDays(9);
-        return PriceReq.builder()
+        return PriceQuery.builder()
                 .adultNum(2).childNum(0).childAges(new ArrayList<>())
-                .checkIn(checkIn.toString()).checkout(checkIn.plusDays(1).toString())
+                .checkIn(checkIn.toString()).checkOut(checkIn.plusDays(1).toString())
                 .roomNum(1).build();
     }
 

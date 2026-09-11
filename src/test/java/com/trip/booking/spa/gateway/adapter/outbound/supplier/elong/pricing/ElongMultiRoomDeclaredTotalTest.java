@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.request.ElongDataValidateRequest;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongRatePlan;
 import com.trip.booking.spa.platform.util.JsonUtils;
@@ -27,8 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ElongMultiRoomDeclaredTotalTest {
 
     private static JsonNode wireJson(Integer roomNum) throws Exception {
-        CheckPriceReq req = CheckPriceReq.builder().supplierId(10010).sHotelId("61540701")
-                .sProductId("61588914A32Atest").checkIn("2026-08-23").checkOut("2026-08-25")
+        CheckPriceCommand req = CheckPriceCommand.builder().supplierId(10010).supplierHotelId("61540701")
+                .supplierProductId("61588914A32Atest").checkIn("2026-08-23").checkOut("2026-08-25")
                 .roomNum(roomNum).adultCount(1).build();
         ElongRatePlan plan = new ElongRatePlan();
         plan.setHotelCode("40673708");

@@ -2,8 +2,8 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
 import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
@@ -165,11 +165,10 @@ class FliggyCheckPriceE2EManual {
     @Order(1)
     @DisplayName("查价：真实调 ari.availability，取参照产品（rate_key / productKey / 价）")
     void queryPricesGivesReference() {
-        PriceReq req = PriceReq.builder().checkIn(checkIn).checkout(checkOut)
+        PriceQuery req = PriceQuery.builder().checkIn(checkIn).checkOut(checkOut)
                 .roomNum(1).adultNum(2).childNum(0).childAges(List.of()).build();
 
-        PricingResult result = service.queryPrices(req,
-                Supplier.builder().supplierId(10015).sHotelId(HOTEL).build(), CallPurpose.LIVE);
+        PricingResult result = service.queryPrices(req, CallPurpose.LIVE);
 
         assumeTrue(result.outcome() != PricingOutcome.INDETERMINATE, "飞猪未给出结果（网络/凭据），本轮跳过");
         assumeTrue(result.outcome() == PricingOutcome.AVAILABLE, "该店该住期无在售，本轮跳过");
@@ -245,10 +244,10 @@ class FliggyCheckPriceE2EManual {
         assertThat(resp.getSalePrice()).isPositive();
     }
 
-    private static CheckPriceReq req(VerifyLevel level, String rateKey) {
-        return CheckPriceReq.builder()
-                .supplierId(10015).sHotelId(HOTEL)
-                .sProductId(rateKey)
+    private static CheckPriceCommand req(VerifyLevel level, String rateKey) {
+        return CheckPriceCommand.builder()
+                .supplierId(10015).supplierHotelId(HOTEL)
+                .supplierProductId(rateKey)
                 .productKey(reference.getProductKey())
                 .seenPrice(reference.getTotalPrice())
                 .checkIn(checkIn).checkOut(checkOut)

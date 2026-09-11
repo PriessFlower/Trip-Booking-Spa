@@ -2,7 +2,7 @@ package com.trip.booking.spa.gateway.application.checkprice;
 
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
 import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,11 +17,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 class AbstractCheckPriceSyncSupportServiceTest {
 
-    private static CheckPriceReq req() {
-        return CheckPriceReq.builder()
+    private static CheckPriceCommand req() {
+        return CheckPriceCommand.builder()
                 .supplierId(10005)
-                .sHotelId("10970375")
-                .sProductId("211857685")
+                .supplierHotelId("10970375")
+                .supplierProductId("211857685")
                 .checkIn("2026-09-25")
                 .checkOut("2026-09-26")
                 .roomNum(1)
@@ -129,7 +129,7 @@ class AbstractCheckPriceSyncSupportServiceTest {
         }
 
         @Override
-        public String doCheckPrice(CheckPriceReq checkPriceReq) {
+        public String doCheckPrice(CheckPriceCommand checkPriceReq) {
             switch (behaviour) {
                 case RETURN_NULL:
                     return null;

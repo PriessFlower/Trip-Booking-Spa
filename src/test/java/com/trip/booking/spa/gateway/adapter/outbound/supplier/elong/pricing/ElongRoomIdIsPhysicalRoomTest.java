@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProductKeyDeriver;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProperties;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongHotelDetailResponse;
@@ -66,11 +66,12 @@ class ElongRoomIdIsPhysicalRoomTest {
         return plan;
     }
 
-    private static PriceReq priceReq() {
-        PriceReq r = PriceReq.builder()
-                .checkIn("2026-09-10").checkout("2026-09-11")
+    private static PriceQuery priceReq() {
+        PriceQuery r = PriceQuery.builder()
+                .supplierId(10010).supplierHotelId("61835012")
+                .checkIn("2026-09-10").checkOut("2026-09-11")
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).build();
-        r.setOccupancies(com.trip.booking.spa.gateway.domain.product.Occupancy.perRoom(1, 1, 0, List.of()));
+        r = r.toBuilder().occupancies(com.trip.booking.spa.gateway.domain.product.Occupancy.perRoom(1, 1, 0, List.of())).build();
         return r;
     }
 

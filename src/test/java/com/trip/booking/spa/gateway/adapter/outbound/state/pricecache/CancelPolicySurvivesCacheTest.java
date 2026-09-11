@@ -3,7 +3,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
 import com.trip.booking.spa.gateway.domain.product.PriceInfo;
 import com.trip.booking.spa.gateway.domain.product.Product;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
 import com.trip.booking.spa.gateway.domain.product.RefundType;
@@ -61,8 +61,8 @@ class CancelPolicySurvivesCacheTest {
         return Supplier.builder().supplierId(10010).sHotelId("H1").build();
     }
 
-    private static PriceReq req() {
-        return PriceReq.builder().checkIn(DATE).checkout("2026-09-02")
+    private static PriceQuery req() {
+        return PriceQuery.builder().supplierId(10010).supplierHotelId("H1").checkIn(DATE).checkOut("2026-09-02")
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).build();
     }
 
@@ -83,7 +83,7 @@ class CancelPolicySurvivesCacheTest {
                 .priceInfos(List.of(PriceInfo.builder().date(DATE).price(29317).build()))
                 .build();
 
-        service.productToCache(List.of(p), req(), sup());
+        service.productToCache(List.of(p), req());
 
         ArgumentCaptor<String> keyCap = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> valCap = ArgumentCaptor.forClass(String.class);
@@ -115,7 +115,7 @@ class CancelPolicySurvivesCacheTest {
                         "cancelPolicy", List.of(java.util.Map.of(
                                 "cancelType", 1, "before", 36, "type", "NO_DEDUCTION"))))));
 
-        List<Product> out = service.getPrice(req(), sup());
+        List<Product> out = service.getPrice(req());
 
         assertEquals(1, out.size());
         List<CancelPolicy> policy = out.get(0).getCancelPolicy();
