@@ -22,8 +22,10 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.OrderQueryReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PushProductsReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.mapping.BookingMapping;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.mapping.CancelMapping;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.mapping.OrderQueryMapping;
+import com.trip.booking.spa.gateway.domain.booking.BookingResult;
 import com.trip.booking.spa.gateway.domain.cancellation.CancelResult;
 import com.trip.booking.spa.gateway.domain.order.OrderQueryResult;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
@@ -317,17 +319,15 @@ public class SpaController {
             return unsupportedSupplierOperation(bookingReq.getSupplierId(), "booking");
         }
 
-        BookingRespDTO bookingRespDTO = bookingSyncService.booking(bookingReq);
+        // 下单已切领域模型：JSON↔领域的翻译收在 BookingMapping（①持有翻译，②③不识 JSON）
+        BookingResult result = bookingSyncService.booking(BookingMapping.toCommand(bookingReq));
 
-        if (bookingRespDTO == null) {
+        if (result == null) {
             // 兜底：模板已保证非空，此处仅防实现绕过模板。同样不可表达为失败
             log.error("booking 返回空，按结果不确定回报, orderId={}", bookingReq.getOrderId());
-            bookingRespDTO = BookingRespDTO.builder()
-                    .outcome(BookingOutcome.UNKNOWN)
-                    .orderId(bookingReq.getOrderId())
-                    .orderDesc("下单结果不确定，请查单确证")
-                    .build();
+            result = BookingResult.unknown(bookingReq.getOrderId(), "下单结果不确定，请查单确证");
         }
+        BookingRespDTO bookingRespDTO = BookingMapping.toDto(result);
 
         return ResponseDTO.success(bookingRespDTO);
 

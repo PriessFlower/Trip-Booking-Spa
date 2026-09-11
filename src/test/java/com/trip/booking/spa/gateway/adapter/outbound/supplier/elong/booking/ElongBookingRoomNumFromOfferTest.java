@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.booking;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.BookingReq;
+import com.trip.booking.spa.gateway.domain.booking.BookingCommand;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.Offer;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongOfferCredentials;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProperties;
@@ -48,7 +48,8 @@ class ElongBookingRoomNumFromOfferTest {
             credentials.put(ElongOfferCredentials.ROOM_NUM, offerRooms);
         }
         Offer offer = Offer.builder().supplierId(10010).credentials(credentials).build();
-        BookingReq req = BookingReq.builder().supplierId(10010).orderId("26082320295835a66d8b13dd")
+        BookingCommand command = BookingCommand.builder().supplierId(10010)
+                .orderId("26082320295835a66d8b13dd")
                 .personName("luo/fang、ou/kunqiong").contactName("luo/fang").contactPhone("13688341880")
                 .checkIn("2026-08-23").checkOut("2026-08-25").roomNum(reqRooms)
                 .totalPrice(167700).settlePrice(167700).build();
@@ -58,9 +59,9 @@ class ElongBookingRoomNumFromOfferTest {
         propsField.setAccessible(true);
         propsField.set(service, new ElongProperties());
         Method m = ElongBookingSyncServiceImpl.class.getDeclaredMethod("buildRequest",
-                BookingReq.class, Offer.class);
+                BookingCommand.class, Offer.class);
         m.setAccessible(true);
-        ElongOrderCreateRequest built = (ElongOrderCreateRequest) m.invoke(service, req, offer);
+        ElongOrderCreateRequest built = (ElongOrderCreateRequest) m.invoke(service, command, offer);
         return JsonUtils.readTree(JsonUtils.writeObject2Json(built));
     }
 
