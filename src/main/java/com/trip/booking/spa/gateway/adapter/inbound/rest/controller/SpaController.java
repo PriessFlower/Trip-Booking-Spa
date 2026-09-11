@@ -25,7 +25,9 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PushProductsReq;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.mapping.CancelMapping;
+import com.trip.booking.spa.gateway.adapter.inbound.rest.mapping.OrderQueryMapping;
 import com.trip.booking.spa.gateway.domain.cancellation.CancelResult;
+import com.trip.booking.spa.gateway.domain.order.OrderQueryResult;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.service.ExpediaRegionService;
 import com.trip.booking.spa.gateway.application.booking.BookingSyncService;
@@ -360,19 +362,17 @@ public class SpaController {
             return unsupportedSupplierOperation(orderQueryReq.getSupplierId(), "order");
         }
 
-        OrderRespDTO orderRespDTO = orderQuerySyncService.orderQuery(orderQueryReq);
+        // 查单已切领域模型：JSON↔领域的翻译收在 OrderQueryMapping（①持有翻译，②③不识 JSON）
+        OrderQueryResult result = orderQuerySyncService.orderQuery(OrderQueryMapping.toCommand(orderQueryReq));
 
-        if (orderRespDTO == null) {
+        if (result == null) {
             // 兜底：模板已保证非空，此处仅防实现绕过模板。不可表达为「订单不存在」，
             // 否则上游会据此重新下单
             log.error("orderQuery 返回空，按未能确证回报, orderId={}", orderQueryReq.getOrderId());
-            orderRespDTO = OrderRespDTO.builder()
-                    .presence(OrderPresence.INDETERMINATE)
-                    .message("查单未能确证订单是否存在，请稍后重试查单")
-                    .build();
+            result = OrderQueryResult.indeterminate("查单未能确证订单是否存在，请稍后重试查单");
         }
 
-        return ResponseDTO.success(orderRespDTO);
+        return ResponseDTO.success(OrderQueryMapping.toDto(result));
 
     }
 
