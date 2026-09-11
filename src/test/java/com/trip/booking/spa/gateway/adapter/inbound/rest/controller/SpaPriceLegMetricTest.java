@@ -23,8 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 
 /**
- * 腿的词表必须穷尽（O-3.3）：正常腿按分态计，<b>异常出去的腿计 error</b>——不计的话
- * sum(腿) 少于真实腿数，出报率分母偏小、算出来偏高。反证已实跑：去掉 catch 里的
+ * 家的词表必须穷尽（O-3.3）：正常家按分态计，<b>异常出去的家计 error</b>——不计的话
+ * sum(家) 少于真实家数，出报率分母偏小、算出来偏高。反证已实跑：去掉 catch 里的
  * recordFailedLeg，errorLeg 断言红。
  */
 class SpaPriceLegMetricTest {
@@ -68,7 +68,7 @@ class SpaPriceLegMetricTest {
     }
 
     @Test
-    @DisplayName("缓存腿正常分态 → outcome=no_inventory 计一次")
+    @DisplayName("走缓存的那家正常分态 → outcome=no_inventory 计一次")
     void normalLegIsCounted() {
         Mockito.when(priceCacheService.getPriceResult(any(), any()))
                 .thenReturn(PricingResult.noInventory());

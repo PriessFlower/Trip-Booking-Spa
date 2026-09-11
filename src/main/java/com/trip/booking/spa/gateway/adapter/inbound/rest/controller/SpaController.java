@@ -93,8 +93,8 @@ public class SpaController {
         List<PricingOutcome> outcomes = Lists.newArrayList();
         List<Integer> cachePriceSuppliers = nacosRuntimeConfig.getCachePriceSuppliers();
         Map<Integer, List<String>> cachePriceHotels = nacosRuntimeConfig.getCachePriceHotels();
-        // 每条腿先定走缓存还是实时，并把「不支持实时查价」的供应商在派发前挑出来。
-        // 以前是串行走到那一腿才返回 unsupported；并行后必须先查，否则别的腿白跑
+        // 每家先定走缓存还是实时，并把「不支持实时查价」的供应商在派发前挑出来。
+        // 以前是串行走到那一家才返回 unsupported；并行后必须先查，否则别家白跑
         List<Supplier> suppliers = priceReq.getSuppliers();
         List<Boolean> useCache = new ArrayList<>(suppliers.size());
         Map<Integer, ProductSyncService> liveServices = new HashMap<>();
@@ -117,20 +117,20 @@ public class SpaController {
             }
         }
 
-        // 多条腿并行，结果按下标归位。此前是串行 for：机器内实测 1 条腿 0.9s、5 条腿 4.6~5.0s
-        // 线性累加（2026-09-10），上游一页 5 家从美国机跨海过来必撞 5s 预算。各腿互不依赖，
-        // 缓存腿不占供应商额度，实时腿各自受自家限流器约束。
-        List<Leg> legs = runLegs(priceReq, suppliers, useCache, liveServices);
+        // 各供应商并行问价，结果按请求里的顺序归位。此前是串行 for：机器内实测 1 家 0.9s、
+        // 5 家 4.6~5.0s 线性累加（2026-09-10），上游一页 5 家从美国机跨海过来必撞 5s 预算。
+        // 各家互不依赖；走缓存的不占供应商额度，走实时的各自受自家限流器约束。
+        List<SupplierQuote> quotes = queryEachSupplier(priceReq, suppliers, useCache, liveServices);
 
-        // 每腿记一次（O-3.4），失败腿照旧 recordFailedLeg 后整批抛出——与串行时的语义一致：
-        // 以前一腿抛就整批 500，现在也是，只是别的腿的指标不再因为它没被记
+        // 每家记一次（O-3.4），失败的那家照旧 recordFailedSupplier 后整批抛出——与串行时
+        // 语义一致：以前一家抛就整批 500，现在也是，只是别家的指标不再因为它没被记
         RuntimeException firstFailure = null;
-        for (Leg leg : legs) {
-            String source = leg.cache ? MetricTags.SOURCE_CACHE : MetricTags.SOURCE_LIVE;
-            if (leg.failure != null) {
-                recordFailedLeg(leg.supplier, source);
+        for (SupplierQuote quote : quotes) {
+            String source = quote.cache ? MetricTags.SOURCE_CACHE : MetricTags.SOURCE_LIVE;
+            if (quote.failure != null) {
+                recordFailedSupplier(quote.supplier, source);
                 if (firstFailure == null) {
-                    firstFailure = leg.failure;
+                    firstFailure = quote.failure;
                 }
                 continue;
             }
@@ -140,15 +140,15 @@ public class SpaController {
             //   两者皆无   → INDETERMINATE（这一片没刷过，或已过 TTL）
             // 此前三者塌成一态、一律回报「未能确认」。塌了之后：既诱发上游对确定无货的
             // 无谓重试，也让「刷价没覆盖到这个占用片」这类缺口在出价侧完全不可见
-            if (leg.cache) {
-                if (leg.result.outcome() == PricingOutcome.AVAILABLE) {
-                    respDTOList.addAll(leg.result.products());
+            if (quote.cache) {
+                if (quote.result.outcome() == PricingOutcome.AVAILABLE) {
+                    respDTOList.addAll(quote.result.products());
                 }
             } else {
-                respDTOList.addAll(leg.result.products());
+                respDTOList.addAll(quote.result.products());
             }
-            outcomes.add(leg.result.outcome());
-            recordPriceLeg(leg.supplier, source, leg.result);
+            outcomes.add(quote.result.outcome());
+            recordSupplierQuote(quote.supplier, source, quote.result);
         }
         if (firstFailure != null) {
             throw firstFailure;
@@ -163,60 +163,63 @@ public class SpaController {
      * 入口四件套里的请求数与出报数（O-4.2）——此前这个入口只有耗时，「出报率 36%」
      * 这个已知结论没法用指标复现，只能靠 grep 日志现算。
      *
-     * <p>腿 = 请求 × 供应商，每腿记一次（O-3.4），outcome 直接沿用 {@link PricingOutcome}
-     * 的分态结论，不另造词表。出报条数单独一个名字：它计的是产品条数，和「腿」不是
+     * <p>一次请求 × 一家供应商记一次（O-3.4），outcome 直接沿用 {@link PricingOutcome}
+     * 的分态结论，不另造词表。出报条数单独一个名字：它计的是产品条数，和「问了几家」不是
      * 同一个度量，混在一个 counter 里会把出报率算错。
+     *
+     * <p>指标名 {@code spa_price_leg} 保留 leg 这个词不改：它已被 Grafana 看板两个面板
+     * 与 docs/observability.md 引用，指标名视同接口（O-5.3），改名会断历史曲线。
      */
-    /** 查价扇出池名：进 ThreadPools 注册表，水位由 PoolStatsSampler 推成 gauge */
-    private static final String LEG_POOL_NAME = "price-leg";
+    /** 各供应商并行问价的扇出池名：进 ThreadPools 注册表，水位由 PoolStatsSampler 推成 gauge */
+    private static final String QUOTE_POOL_NAME = "supplier-quote";
 
-    /** 一条腿的答复：结果或异常二者只有一个非空 */
-    private record Leg(Supplier supplier, boolean cache, PricingResult result, RuntimeException failure) {
+    /** 一家供应商的答复：结果或异常二者只有一个非空 */
+    private record SupplierQuote(Supplier supplier, boolean cache, PricingResult result, RuntimeException failure) {
     }
 
     /**
-     * 并行跑各腿，<b>按请求顺序</b>归位。单腿不进线程池，走原路。
-     * 不设整体超时：各腿的耗时上限由各自的供应商客户端 / Redis 客户端超时管，这里只负责别再串行等。
+     * 并行问各家，<b>按请求顺序</b>归位。只有一家时不进线程池，走原路。
+     * 不设整体超时：各家的耗时上限由各自的供应商客户端 / Redis 客户端超时管，这里只负责别再串行等。
      */
-    private List<Leg> runLegs(PriceReq priceReq, List<Supplier> suppliers, List<Boolean> useCache,
+    private List<SupplierQuote> queryEachSupplier(PriceReq priceReq, List<Supplier> suppliers, List<Boolean> useCache,
                               Map<Integer, ProductSyncService> liveServices) {
         if (suppliers.size() == 1) {
-            return List.of(oneLeg(priceReq, suppliers.get(0), useCache.get(0), liveServices));
+            return List.of(querySupplier(priceReq, suppliers.get(0), useCache.get(0), liveServices));
         }
-        List<Callable<Leg>> tasks = new ArrayList<>(suppliers.size());
+        List<Callable<SupplierQuote>> tasks = new ArrayList<>(suppliers.size());
         for (int i = 0; i < suppliers.size(); i++) {
             Supplier supplier = suppliers.get(i);
             boolean cache = useCache.get(i);
-            tasks.add(() -> oneLeg(priceReq, supplier, cache, liveServices));
+            tasks.add(() -> querySupplier(priceReq, supplier, cache, liveServices));
         }
-        List<Leg> out = new ArrayList<>(suppliers.size());
+        List<SupplierQuote> out = new ArrayList<>(suppliers.size());
         try {
-            for (Future<Leg> f : ThreadPools.virtualPerTask(LEG_POOL_NAME).invokeAll(tasks)) {
+            for (Future<SupplierQuote> f : ThreadPools.virtualPerTask(QUOTE_POOL_NAME).invokeAll(tasks)) {
                 out.add(f.get());
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("查价被中断", e);
         } catch (ExecutionException e) {
-            // oneLeg 已把 RuntimeException 装进 Leg，走到这里只可能是 Error 级别的问题
-            throw new IllegalStateException("查价腿执行异常", e.getCause());
+            // querySupplier 已把 RuntimeException 装进 SupplierQuote，走到这里只可能是 Error 级别的问题
+            throw new IllegalStateException("查价并发执行异常", e.getCause());
         }
         return out;
     }
 
-    private Leg oneLeg(PriceReq priceReq, Supplier supplier, boolean cache,
+    private SupplierQuote querySupplier(PriceReq priceReq, Supplier supplier, boolean cache,
                        Map<Integer, ProductSyncService> liveServices) {
         try {
             PricingResult r = cache
                     ? priceCacheService.getPriceResult(priceReq, supplier)
                     : liveServices.get(supplier.getSupplierId()).queryPrice(priceReq, supplier);
-            return new Leg(supplier, cache, r, null);
+            return new SupplierQuote(supplier, cache, r, null);
         } catch (RuntimeException e) {
-            return new Leg(supplier, cache, null, e);
+            return new SupplierQuote(supplier, cache, null, e);
         }
     }
 
-    private static void recordPriceLeg(Supplier supplier, String source, PricingResult result) {
+    private static void recordSupplierQuote(Supplier supplier, String source, PricingResult result) {
         SupplierSourceEnum supplierEnum = SupplierSourceEnum.getEnum(supplier.getSupplierId());
         if (supplierEnum == null) {
             return;
@@ -229,8 +232,8 @@ public class SpaController {
         }
     }
 
-    /** 腿的词表必须穷尽（O-3.3）：异常出去的腿不计数，出报率分母就偏小、算出来偏高 */
-    private static void recordFailedLeg(Supplier supplier, String source) {
+    /** 词表必须穷尽（O-3.3）：异常出去的那家不计数，出报率分母就偏小、算出来偏高 */
+    private static void recordFailedSupplier(Supplier supplier, String source) {
         SupplierSourceEnum supplierEnum = SupplierSourceEnum.getEnum(supplier.getSupplierId());
         if (supplierEnum == null) {
             return;

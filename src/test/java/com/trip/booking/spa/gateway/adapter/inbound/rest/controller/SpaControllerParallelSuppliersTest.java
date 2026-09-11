@@ -30,10 +30,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 
 /**
- * /client/spa/price 的多条腿要并行且按请求顺序归位。
- * 2026-09-10 机器内实测：串行 for 下 1 条腿 0.9s、5 条腿 4.6~5.0s 线性累加；上游一页 5 家从美国机跨海过来必撞 5s。
+ * /client/spa/price 的多条家要并行且按请求顺序归位。
+ * 2026-09-10 机器内实测：串行 for 下 1 条家 0.9s、5 条家 4.6~5.0s 线性累加；上游一页 5 家从美国机跨海过来必撞 5s。
  */
-class SpaControllerParallelLegsTest {
+class SpaControllerParallelSuppliersTest {
 
     private final SpaController controller = new SpaController();
     private PriceCacheService cache;
@@ -63,7 +63,7 @@ class SpaControllerParallelLegsTest {
     }
 
     @Test
-    @DisplayName("5 条腿真的同时在跑，且结果按请求顺序归位")
+    @DisplayName("5 条家真的同时在跑，且结果按请求顺序归位")
     void legsRunConcurrentlyAndKeepOrder() throws Exception {
         CountDownLatch allStarted = new CountDownLatch(5);
         AtomicInteger peak = new AtomicInteger();
@@ -72,7 +72,7 @@ class SpaControllerParallelLegsTest {
             Supplier s = inv.getArgument(1);
             peak.accumulateAndGet(inFlight.incrementAndGet(), Math::max);
             allStarted.countDown();
-            // 要是串行，这里会等满 2 秒才超时——并行时 5 条腿几乎同时到达
+            // 要是串行，这里会等满 2 秒才超时——并行时 5 条家几乎同时到达
             allStarted.await(2, TimeUnit.SECONDS);
             inFlight.decrementAndGet();
             return PricingResult.available(List.of(Product.builder().hotelId(s.getSHotelId()).productId("p-" + s.getSHotelId()).build()));
@@ -82,11 +82,11 @@ class SpaControllerParallelLegsTest {
 
         assertEquals(List.of("A", "B", "C", "D", "E"),
                 resp.getResult().stream().map(Product::getHotelId).toList(), "结果按请求顺序归位");
-        assertTrue(peak.get() >= 5, "五条腿应同时在飞，实测峰值 " + peak.get());
+        assertTrue(peak.get() >= 5, "五家应同时在飞，实测峰值 " + peak.get());
     }
 
     @Test
-    @DisplayName("单腿不进线程池，行为与从前一致")
+    @DisplayName("只有一家不进线程池，行为与从前一致")
     void singleLegStaysInline() {
         Mockito.when(cache.getPriceResult(any(), any())).thenReturn(PricingResult.available(
                 List.of(Product.builder().hotelId("A").productId("p").build())));
@@ -96,7 +96,7 @@ class SpaControllerParallelLegsTest {
     }
 
     @Test
-    @DisplayName("一条腿抛异常：其余腿照样跑完并记指标，最后整批抛出——与串行时的对外语义一致")
+    @DisplayName("一家抛异常：其余家照样跑完并记指标，最后整批抛出——与串行时的对外语义一致")
     void oneFailingLegStillFailsTheBatchAfterOthersFinish() {
         AtomicInteger calls = new AtomicInteger();
         Mockito.when(cache.getPriceResult(any(), any())).thenAnswer(inv -> {
@@ -108,6 +108,6 @@ class SpaControllerParallelLegsTest {
             return PricingResult.available(List.of(Product.builder().hotelId(s.getSHotelId()).productId("p").build()));
         });
         assertThrows(IllegalStateException.class, () -> controller.queryPrice(req("A", "B", "C")));
-        assertEquals(3, calls.get(), "别的腿不该因为 B 炸了就没跑");
+        assertEquals(3, calls.get(), "别家不该因为 B 炸了就没跑");
     }
 }
