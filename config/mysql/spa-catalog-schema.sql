@@ -198,3 +198,28 @@ CREATE TABLE IF NOT EXISTS dida_query_price_task (
     UNIQUE KEY uk_hotel_stay (sh_id, delay_check_in, delay_check_out),
     KEY idx_priority_last (priority_level_number, last_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='道旅查价预热任务队列';
+
+-- 差旅无忧查价预热任务队列（与 elong/fliggy/dida 的同名表同构）。速率不由本表控制，由 Nacos
+-- ratelimit.qps 的 GLOBAL_LIMIT:CLWY:*:REFRESH 约束。
+-- 一行 = 一次 GetPrice 报价档调用（不传 RatePlanId）：该档天然是整店口径，一次带回该店该住期
+-- 的全部房型与价格计划，故批的单位就是店，没有合批这个选项。
+-- 播种口径：差旅无忧可卖清单（酒店静态接口的 HotelId），住期 T+0..2 各 1 晚起步，扩住期改 delay 列。
+CREATE TABLE IF NOT EXISTS clwy_query_price_task (
+    id                    BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    sh_id                 VARCHAR(64)  NOT NULL COMMENT '差旅无忧酒店id（HotelId）',
+    delay_check_in        INT          NOT NULL DEFAULT 0 COMMENT '入住日期偏移(天)',
+    delay_check_out       INT          NOT NULL DEFAULT 1 COMMENT '离店日期偏移(天)',
+    query_count           INT          NOT NULL DEFAULT 0 COMMENT '已查价次数',
+    create_time           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    last_time             DATETIME     NULL COMMENT '最近一次查价时间',
+    priority_level_number INT          NOT NULL DEFAULT 0 COMMENT '优先级(0=T+0~2 1=T+3~7 2=T+8~30,无货态=业务档+10)',
+    temporary_upgrade     INT          NOT NULL DEFAULT 0 COMMENT '临时提升优先级 0否 1是',
+    upgrade_deadline      DATETIME     NULL COMMENT '临时优先级截止时间',
+    PRIMARY KEY (id),
+    -- 播种幂等靠这把唯一键，不靠脚本自己记（飞猪那张表没有，播种脚本只能自建幂等闸）。
+    -- 取三列而不是 (sh_id, delay_check_in)：同一入住偏移将来可能要铺不同住期长度（1 晚与 2 晚），
+    -- 两列会把它们判成重复。趁表还是空的先加上。
+    UNIQUE KEY uk_hotel_stay (sh_id, delay_check_in, delay_check_out),
+    KEY idx_priority_last (priority_level_number, last_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='差旅无忧查价预热任务队列';

@@ -27,6 +27,8 @@ public enum SupplierSourceEnum {
     FLIGGY(10015, "fliggy"),
     /** 2026-09-08 一批查价+验价+刷价+建档，2026-09-13 二批下单+查单+取消；下单闸 dida.booking-enabled 默认关 */
     DIDA(10020, "dida"),
+    /** 接入中（2026-09-14 开工）：一批为查价+验价+刷价+建档，下单/查单/取消待二批。差旅无忧（xiangdo 开放平台） */
+    CLWY(10025, "clwy"),
     ;
 
     SupplierSourceEnum(int code, String desc) {

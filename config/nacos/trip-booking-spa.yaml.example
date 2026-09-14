@@ -56,6 +56,27 @@ task:
     # 每行按这些成人数各查一次。飞猪价格与人数相关(rate_key 按占用签发),默认主流 2 人
     occupancies: "2"
 
+  clwy-cps:
+    # 差旅无忧刷价（消费 clwy_query_price_task，逐店查询）。误开=与 cursor 侧仍在跑的
+    # 差旅无忧刷价叠加打同一个 wid，撞对方未公开的额度；误关=缓存价陈旧，不资损
+    # （下单前必经验价）。本家没有频控错误码——失败只有 code=500 加一句文案，超额长什么样
+    # 我们没见过，放量只能看 supplier_io_access{supplier="CLWY"} 的失败率抬升。
+    enabled: false
+    cron: '0 3/10 * * * ?'    # 与艺龙(0/10)、飞猪(5/10)、道旅(8/10)错开，仅启动时读取
+    batch-size: 200
+    concurrency: 1
+    # 慢档(无货档)：小批长周期，只为探测满房回归与重新上架
+    slow-batch-size: 100
+    slow-concurrency: 1
+    # 住期档：0=T+0~2(batch-size/concurrency)、1=T+3~7(mid)、2=T+8~30(far)
+    mid-batch-size: 200
+    mid-concurrency: 1
+    far-batch-size: 200
+    far-concurrency: 1
+    # 每行按这些成人数各查一次。本家 AdultCount 是「每间房」人数且进请求，
+    # 缺哪一档那一档的查询就恒空；高德按 2 人问价，故默认 2 人
+    occupancies: "2"
+
   dida-cps:
     # 道旅刷价（消费 dida_query_price_task，逐店查询）。误开=与 cursor 侧仍在跑的道旅刷价
     # 叠加打同一个 ClientID，撞 2022（超过流量限制）；误关=缓存价陈旧，不资损（下单前必经验价）。
@@ -181,6 +202,18 @@ ratelimit:
     "[GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_CREATE_ORDER]": 1
     "[GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_QUERY_ORDER]": 2
     "[GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_CANCEL_ORDER]": 1
+    # 差旅无忧（CLWY）：官方文档未公布任何 QPS 数值（14 篇接口页均无，2026-09-14 查阅），
+    # 也没有频控专用码——它只有 200/500 两个码，撞限也只会表现为 500。故没有直接的
+    # "撞限了没有"信号，只能看 supplier_io_access{supplier="CLWY",status="rejected"} 的异常抬升。
+    # ⚠️ 额度与 tg-trip-cursor 共用同一个 Wid，两边的量是叠加的，放量前先确认 cursor 侧速率。
+    "[GLOBAL_LIMIT:CLWY:SPA_SUPPLIER_API_PRODUCT_PRICES]": 4
+    "[GLOBAL_LIMIT:CLWY:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH]": 2
+    "[GLOBAL_LIMIT:CLWY:SPA_SUPPLIER_API_PRODUCT_PRICES:CHECK_PRICE]": 1
+    "[GLOBAL_LIMIT:CLWY:SPA_SUPPLIER_API_PRODUCT_PRICES:LIVE]": 1
+    "[GLOBAL_LIMIT:CLWY:SPA_SUPPLIER_API_ORDER_PRICE]": 2
+    # 取令牌：每实例每 50 分钟一次，量极小；配它是因为它也走通道层那道唯一闸门（§3.3），
+    # 不配会落到 default-qps 上——那个值远大于实际需要，等于没限
+    "[GLOBAL_LIMIT:CLWY:SPA_SUPPLIER_API_AUTH_TOKEN]": 1
 
 # ── supplier / expedia：静态数据摄取总开关 ──────────────────
 # ── cache：我方自建缓存 ────────────────────────────────────
@@ -337,6 +370,25 @@ supplier:
     # 故关闭状态下"旧列表点击"绝大多数会直接 RATE_DEAD。改后需重启容器方生效。
     resolve-enabled: false
     # 换票容差双门（R-3.3）：比例门与绝对帽同时成立才换，口径与另两家一致
+    resolve-price-tolerance: 0.02
+    resolve-price-cap-cents: 2000
+
+  clwy:
+    # 产品建档(R-2.6)：语义与另几家的 catalog-enabled 同，由公共 ProductCatalogService 按家读。
+    # 默认关——先看刷价跑起来的量再决定。
+    catalog-enabled: false
+
+    # 客人国籍（ISO 3166-1 alpha-2）。官方 05-product-price：CountryCode「报价、验价、下单
+    # 该值必须保持一致」，不一致可能拿到另一套价。我方客源为中国大陆，故 CN。
+    country-code: CN
+
+    # 报价币种兜底。本家的每日价自带 currency，以报文为准；本值只在报文没给币种时兜底。
+    currency: CNY
+
+    # resolve 管线开关（docs/product-identity.md §3）。
+    # ⚠️ 本家比另几家更依赖它：报价码是分代轮换的（cursor 取证：60 天 58 次重放仅 4 次成功、
+    # 93% 撞 No Availability），关掉它绝大多数「旧列表点击」会直接 RATE_DEAD。不资损，但可订率塌。
+    resolve-enabled: false
     resolve-price-tolerance: 0.02
     resolve-price-cap-cents: 2000
 
