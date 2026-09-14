@@ -188,9 +188,6 @@ ratelimit:
     "[GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_QUERY_ORDER]": 10
     # 取消与下单同档（5）：取消量远小于查价，给高值只会在异常时放大重复提交
     "[GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_API_CANCEL_ORDER]": 5
-    # 静态数据摄取的分块下载（ChunkedFileAccess，CallPurpose.CONTENT 阻塞排队）。
-    # 20 是 2026-08-25 之前 default-qps 的生效值，显式登记以保持摄取速度不变
-    "[GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_FILE_DOWNLOAD]": 20
     "[GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES]": 6
     "[GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH]": 4
     "[GLOBAL_LIMIT:ELONG:SPA_SUPPLIER_API_PRODUCT_PRICES:CHECK_PRICE]": 1
@@ -417,7 +414,7 @@ supplier:
 
     # resolve 管线开关（docs/product-identity.md §3）。
     # ⚠️ 本家比另几家更依赖它：报价码是分代轮换的（cursor 取证：60 天 58 次重放仅 4 次成功、
-    # 93% 撞 No Availability），关掉它绝大多数「旧列表点击」会直接 RATE_DEAD。不资损，但可订率塌。
+    # 93% 撞 No Availability），关掉它绝大多数「旧列表点击」会直接 RATE_DEAD。不资损，但可订率大幅下降。
     resolve-enabled: false
     resolve-price-tolerance: 0.02
     resolve-price-cap-cents: 2000

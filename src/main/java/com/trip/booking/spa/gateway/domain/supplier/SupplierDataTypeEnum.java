@@ -6,13 +6,11 @@ package com.trip.booking.spa.gateway.domain.supplier;
  *
  */
 public enum SupplierDataTypeEnum {
-	STATIC_DATA("静态数据"),
 	PRODUCT_PRICE("产品报价"),
 	CHECK_PRICE("order报价"),
 	CREATE_ORDER("创建订单"),
 	CANCEL_ORDER("取消订单"),
 	QUERY_ORDER("查询订单"),
-	CHANNEL_CALLBACK("渠道接口回调"),
 	/** 鉴权令牌（会话型供应商换 token，如 clwy 的 JWT） */
 	AUTH_TOKEN("鉴权令牌")
 	;

@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
  * <p><b>一行 = 一次报价档调用</b>：本家的 GetPrice 不传 RatePlanId 时是整店口径，一次带回该店
  * 该住期的全部房型与价格计划，故批的单位天然就是店，没有合批这个选项。
  *
- * <p><b>令牌续期寄生在业务调用里</b>：刷价这条路的用途是 {@link CallPurpose#REFRESH}，
+ * <p><b>令牌续期发生在业务调用内部</b>：刷价这条路的用途是 {@link CallPurpose#REFRESH}，
  * 续期也会按 REFRESH 去扣令牌桶（用途由调用方透传，见 {@code ClwyTokenProvider#token}）。
  * 若写死成前台口径，续期那一下会快速失败，连带那一行刷价白白失败一次。
  *

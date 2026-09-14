@@ -7,7 +7,7 @@ package com.trip.booking.spa.platform.observability;
  * {@code _value}，Prometheus 再给 counter 追加 {@code _total}（O-2.2）。
  *
  * <p>名字里也<b>不含</b>供应商与接口这类维度，它们进标签（O-2.1）。反面是撤掉的两处：
- * {@code ChunkedFileAccess} 曾用 {@code JOINER.join(supplier, 接口, tag)} 拼名字，
+ * 撤掉的 {@code ChunkedFileAccess} 曾用 {@code JOINER.join(supplier, 接口, tag)} 拼名字，
  * 9 供应商 × 20 接口 × 6 后缀最多产生 1080 个独立指标名；艺龙验价曾按结果拆成
  * {@code elong_validate_day_price_mismatch} / {@code _retry_ok} / {@code _retry_failed}
  * 三个名字，于是「对齐失败率」这一个问题要查三个指标才能回答。
@@ -33,27 +33,6 @@ public final class MetricNames {
 
     /** 供应商原始查询（未经本仓转换的那一跳）耗时与次数 */
     public static final String SUPPLIER_IO_ORIGINAL_QUERY = "supplier_io_original_query";
-
-    /** 供应商大文件下载。标签 supplier/interface/status，此前维度拼在名字里 */
-    public static final String SUPPLIER_FILE_ACCESS = "supplier_file_access";
-
-    /** 大文件下载的字节数（KB）。标签 supplier/interface */
-    public static final String SUPPLIER_FILE_BYTES = "supplier_file_bytes";
-
-    /** 大文件下载中重试过的分块数 */
-    public static final String SUPPLIER_FILE_CHUNK_RETRY = "supplier_file_chunk_retry";
-
-    /** 下载方式：分块并发 */
-    public static final String FILE_CHUNKED = "chunked";
-
-    /** 下载方式：单连接 */
-    public static final String FILE_SINGLE = "single";
-
-    /** 分块下载失败、回落单连接 */
-    public static final String FILE_FALLBACK = "fallback";
-
-    /** 下载失败 */
-    public static final String FILE_ERROR = "error";
 
     /**
      * 向某供应商发起的一次实时查价。标签 supplier/status。
