@@ -32,8 +32,6 @@ import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
 import com.trip.booking.spa.platform.observability.DropReason;
 import com.trip.booking.spa.platform.observability.FunnelStage;
-import com.trip.booking.spa.platform.observability.MetricNames;
-import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import lombok.extern.slf4j.Slf4j;
@@ -44,9 +42,9 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.shared.StayDates;
 
 /**
  * 差旅无忧查价：供应商响应 → 可售产品。验价那几个钩子在 {@code ClwyCheckPriceServiceImpl}，
@@ -131,7 +129,7 @@ public class ClwyPriceServiceImpl implements ClwyPriceService {
         if (hotel == null || CollectionUtils.isEmpty(hotel.getRoomTypeList())) {
             return products;
         }
-        int nights = nightsOf(request.checkIn(), request.checkOut());
+        int nights = StayDates.nights(request.checkIn(), request.checkOut());
         int rooms = Math.max(1, request.roomNum());
         String occupancy = request.occupancies() == null || request.occupancies().isEmpty()
                 ? null : request.occupancies().get(0);
@@ -312,21 +310,13 @@ public class ClwyPriceServiceImpl implements ClwyPriceService {
                 ? roomType.getRoomTypeNameCn() : roomType.getRoomTypeNameEn();
     }
 
+    /**
+     * 本类的丢弃计数：只绑定"是哪一家、丢在哪一层"，怎么记在 {@link Monitor#recordDropped}。
+     * 这个切分就是 §4.1.3 的判据——换一家供应商要改的只有这两个常量。
+     */
     private static void countDropped(DropReason reason, int count) {
-        if (count > 0) {
-            Monitor.recordMany(MetricNames.QUOTE_DROPPED,
-                    MetricTags.dropped(SupplierSourceEnum.CLWY, FunnelStage.CONVERT, reason), count);
-        }
+        Monitor.recordDropped(SupplierSourceEnum.CLWY, FunnelStage.CONVERT, reason, count);
     }
-
-    static int nightsOf(String checkIn, String checkOut) {
-        try {
-            return (int) ChronoUnit.DAYS.between(LocalDate.parse(checkIn), LocalDate.parse(checkOut));
-        } catch (Exception e) {
-            return 0;
-        }
-    }
-
 
     // ── 验价链路的钩子（编排在 AbstractCheckPriceFlow，供应商侧的读法在这里）─────────────
 
@@ -334,10 +324,10 @@ public class ClwyPriceServiceImpl implements ClwyPriceService {
     public CheckPriceResult precondition(CheckPriceCommand request) {
         if (!properties.isConfigured()) {
             log.error("clwy 验价：凭证未配置,sHotelId={}", request.supplierHotelId());
-            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商凭证未配置，未能确认该产品是否可订");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "供应商凭证未配置，未能确认该产品是否可订");
         }
         if (StringUtils.isBlank(request.supplierHotelId())) {
-            return outcome(CheckPriceOutcome.INDETERMINATE, "酒店标识为空，未能确认该产品是否可订");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "酒店标识为空，未能确认该产品是否可订");
         }
         return null;
     }
@@ -364,7 +354,7 @@ public class ClwyPriceServiceImpl implements ClwyPriceService {
         if (data == null) {
             log.warn("clwy 验价：现货查询未取得结果,sHotelId={},sProductId={}",
                     request.supplierHotelId(), request.supplierProductId());
-            return LiveStock.terminal(outcome(CheckPriceOutcome.INDETERMINATE,
+            return LiveStock.terminal(CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE,
                     "现货查询未取得结果，未能确认该产品是否可订，请稍后重试"));
         }
         // 验价即刷：闭包捕获这份现货，终态分支也带着它返回——整店无售正是要落无货标记的时候
@@ -375,13 +365,13 @@ public class ClwyPriceServiceImpl implements ClwyPriceService {
                     ? CheckPriceOutcome.SOLD_OUT : CheckPriceOutcome.INDETERMINATE;
             log.info("clwy 验价：现货查询业务失败,sHotelId={},code={},message={},判定={}",
                     request.supplierHotelId(), data.getCode(), data.getMessage(), terminal);
-            return LiveStock.<ClwyHotel>terminal(outcome(terminal, terminal == CheckPriceOutcome.SOLD_OUT
+            return LiveStock.<ClwyHotel>terminal(CheckPriceResult.of(terminal, terminal == CheckPriceOutcome.SOLD_OUT
                     ? "该酒店该住期已售罄" : "现货查询失败，未能确认该产品是否可订")).freshConvertedBy(fresh);
         }
         ClwyHotel hotel = data.firstHotel();
         if (hotel == null || CollectionUtils.isEmpty(hotel.getRoomTypeList())) {
             log.info("clwy 验价：该店该住期无在售产品,sHotelId={}", request.supplierHotelId());
-            return LiveStock.<ClwyHotel>terminal(outcome(CheckPriceOutcome.SOLD_OUT,
+            return LiveStock.<ClwyHotel>terminal(CheckPriceResult.of(CheckPriceOutcome.SOLD_OUT,
                     "该酒店该住期已无在售产品")).freshConvertedBy(fresh);
         }
         return LiveStock.of(hotel).freshConvertedBy(fresh);
@@ -414,7 +404,7 @@ public class ClwyPriceServiceImpl implements ClwyPriceService {
         if (hotel == null || CollectionUtils.isEmpty(hotel.getRoomTypeList())) {
             return candidates;
         }
-        int nights = nightsOf(request.checkIn(), request.checkOut());
+        int nights = StayDates.nights(request.checkIn(), request.checkOut());
         int rooms = Math.max(1, request.roomNum());
         String occupancy = Occupancy.perRoom(rooms, request.adultCount() == null ? 1 : request.adultCount(),
                 request.childNum(), request.childAges() == null ? List.of() : request.childAges()).get(0);
@@ -459,7 +449,7 @@ public class ClwyPriceServiceImpl implements ClwyPriceService {
         String currency = singleCurrency(days);
         Integer totalCents = currency == null ? null : totalCents(days, Math.max(1, request.roomNum()), currency);
         if (totalCents == null || totalCents <= 0) {
-            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未给出可用价格，未能确认该产品");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "供应商未给出可用价格，未能确认该产品");
         }
         List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(
                 request.checkIn(), candidate.plan().getCancellationPenalties(), candidate.plan().getCityTimeZone());
@@ -499,7 +489,7 @@ public class ClwyPriceServiceImpl implements ClwyPriceService {
         if (data == null) {
             log.warn("clwy 试单：未取得结果,sHotelId={},ratePlanId={}",
                     request.supplierHotelId(), candidate.ratePlanId());
-            return outcome(CheckPriceOutcome.INDETERMINATE, "试单未取得结果，未能确认该产品是否可订，请稍后重试");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "试单未取得结果，未能确认该产品是否可订，请稍后重试");
         }
         if (!data.isSucc()) {
             // 试单阶段的 No Availability：整店现货刚刚还在（能走到这一步就说明找到了票），
@@ -508,20 +498,20 @@ public class ClwyPriceServiceImpl implements ClwyPriceService {
                     ? CheckPriceOutcome.RATE_DEAD : CheckPriceOutcome.INDETERMINATE;
             log.info("clwy 试单：业务失败,sHotelId={},ratePlanId={},code={},message={},判定={}",
                     request.supplierHotelId(), candidate.ratePlanId(), data.getCode(), data.getMessage(), terminal);
-            return outcome(terminal, terminal == CheckPriceOutcome.RATE_DEAD
+            return CheckPriceResult.of(terminal, terminal == CheckPriceOutcome.RATE_DEAD
                     ? "该产品已不可订，请重新查价后再选择" : "试单未取得确定结果，未能确认该产品是否可订");
         }
         ClwyPlan confirmed = findPlan(data.firstHotel(), candidate.ratePlanId());
         if (confirmed == null) {
             log.info("clwy 试单：响应未回传所点报价，判为死票,sHotelId={},ratePlanId={}",
                     request.supplierHotelId(), candidate.ratePlanId());
-            return outcome(CheckPriceOutcome.RATE_DEAD, "该产品已不可订，请重新查价后再选择");
+            return CheckPriceResult.of(CheckPriceOutcome.RATE_DEAD, "该产品已不可订，请重新查价后再选择");
         }
         String rateKey = StringUtils.trimToNull(data.getRateKey());
         if (rateKey == null) {
             log.error("clwy 试单：未回 RateKey，无法下单,sHotelId={},ratePlanId={}",
                     request.supplierHotelId(), candidate.ratePlanId());
-            return outcome(CheckPriceOutcome.INDETERMINATE, "试单未取得下单校验码，未能确认该产品是否可订");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "试单未取得下单校验码，未能确认该产品是否可订");
         }
         return buildBookable(request, confirmed, rateKey);
     }
@@ -534,7 +524,7 @@ public class ClwyPriceServiceImpl implements ClwyPriceService {
         if (totalCents == null || totalCents <= 0) {
             log.error("clwy 试单：验后价缺失或币种不一,sHotelId={},ratePlanId={}",
                     request.supplierHotelId(), confirmed.ratePlanId());
-            return outcome(CheckPriceOutcome.INDETERMINATE, "试单未回可用价格，未能确认该产品是否可订");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "试单未回可用价格，未能确认该产品是否可订");
         }
         java.util.Map<String, String> credentials = new java.util.HashMap<>();
         credentials.put(ClwyOfferCredentials.RATE_KEY, rateKey);
@@ -546,7 +536,7 @@ public class ClwyPriceServiceImpl implements ClwyPriceService {
         credentials.put(ClwyOfferCredentials.ROOM_NUM, String.valueOf(rooms));
         credentials.put(ClwyOfferCredentials.ADULT_COUNT,
                 String.valueOf(request.adultCount() == null ? 1 : request.adultCount()));
-        credentials.put(ClwyOfferCredentials.CHILD_AGES, childAgesCsv(request.childAges()));
+        credentials.put(ClwyOfferCredentials.CHILD_AGES, Occupancy.childAgesCsv(request.childAges()));
         credentials.put(ClwyOfferCredentials.DECLARED_TOTAL,
                 BigDecimal.valueOf(totalCents).movePointLeft(2).toPlainString());
         credentials.put(ClwyOfferCredentials.CURRENCY, currency);
@@ -557,7 +547,7 @@ public class ClwyPriceServiceImpl implements ClwyPriceService {
                 tag == null || tag == 0 ? "" : String.valueOf(tag));
         String offerId = offerStore.issue(SupplierSourceEnum.CLWY.getCode(), credentials);
         if (StringUtils.isBlank(offerId)) {
-            return outcome(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
         }
         List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(
                 request.checkIn(), confirmed.plan().getCancellationPenalties(), confirmed.plan().getCityTimeZone());
@@ -573,15 +563,6 @@ public class ClwyPriceServiceImpl implements ClwyPriceService {
                 .cancelPolicy(cancelPolicy)
                 .priceInfos(buildPriceInfos(days))
                 .build();
-    }
-
-    private static String childAgesCsv(List<Integer> ages) {
-        return CollectionUtils.isEmpty(ages) ? ""
-                : ages.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
-    }
-
-    private static CheckPriceResult outcome(CheckPriceOutcome outcome, String message) {
-        return CheckPriceResult.builder().outcome(outcome).message(message).build();
     }
 
     /** 仅供测试构造场景使用 */

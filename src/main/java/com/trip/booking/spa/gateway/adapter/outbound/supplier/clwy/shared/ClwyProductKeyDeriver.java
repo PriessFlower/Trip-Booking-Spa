@@ -39,9 +39,6 @@ import java.util.List;
 @Component
 public class ClwyProductKeyDeriver {
 
-    /** {@code before} 的下限，语义是"此后一直"（同 CancelPolicy#before 的 >24 约束） */
-    private static final int MIN_BEFORE = 25;
-
     @Resource
     private ClwyProperties properties;
 
@@ -179,7 +176,7 @@ public class ClwyProductKeyDeriver {
         ZoneId zone = zoneOffset == null ? ZoneOffset.UTC : zoneOffset;
         BigDecimal firstAmount = sorted.get(0).getAmount();
         if (firstAmount.signum() > 0) {
-            Integer before = hoursBeforeCheckInEnd(instantOf(sorted.get(0), zoneOffset), checkIn, zone);
+            Integer before = CancelClassifier.beforeHours(instantOf(sorted.get(0), zoneOffset), checkIn, zone);
             if (before == null) {
                 return List.of();
             }
@@ -187,8 +184,8 @@ public class ClwyProductKeyDeriver {
         }
         for (int i = 0; i < sorted.size(); i++) {
             ClwyCancellationPenalty next = i + 1 < sorted.size() ? sorted.get(i + 1) : null;
-            Integer before = next == null ? MIN_BEFORE
-                    : hoursBeforeCheckInEnd(instantOf(next, zoneOffset), checkIn, zone);
+            Integer before = next == null ? CancelClassifier.MIN_BEFORE
+                    : CancelClassifier.beforeHours(instantOf(next, zoneOffset), checkIn, zone);
             if (before == null) {
                 return List.of();
             }
@@ -262,19 +259,6 @@ public class ClwyProductKeyDeriver {
     private static CancelPolicy free(int before, String zoneLabel) {
         return CancelPolicy.builder().cancelType(1).timeZone(zoneLabel).before(before)
                 .type(RefundType.NO_DEDUCTION).build();
-    }
-
-    /** 某时刻距「入住日 24:00（酒店当地）」的小时数（下限 25） */
-    private static Integer hoursBeforeCheckInEnd(Instant at, String checkIn, ZoneId zone) {
-        if (at == null) {
-            return null;
-        }
-        try {
-            Instant checkInEnd = LocalDate.parse(checkIn).plusDays(1).atStartOfDay(zone).toInstant();
-            return Math.max(MIN_BEFORE, (int) Math.ceil(Duration.between(at, checkInEnd).toMinutes() / 60.0));
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     private static boolean positive(Integer count) {

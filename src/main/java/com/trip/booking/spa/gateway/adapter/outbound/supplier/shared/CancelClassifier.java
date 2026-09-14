@@ -40,6 +40,13 @@ public final class CancelClassifier {
     /** 回落基准时区：{@code before} 的口径本就以北京时间的入住日界为基准 */
     private static final ZoneId FALLBACK_ZONE = ZoneId.of("Asia/Shanghai");
 
+    /**
+     * {@code before} 的下限，语义是"此后一直"（{@link CancelPolicy#getBefore()} 要求 > 24）。
+     *
+     * <p>末段没有截止时刻，用这个哨兵值表达；{@link #isExpired} 读到它时也据此还原。
+     */
+    public static final int MIN_BEFORE = 25;
+
     private CancelClassifier() {
     }
 
@@ -123,6 +130,31 @@ public final class CancelClassifier {
     private static Instant checkInEndOf(CancelPolicy policy, String checkIn) {
         try {
             return LocalDate.parse(checkIn).plusDays(1).atStartOfDay(zoneOf(policy)).toInstant();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 由绝对时刻算出 {@code before}（正向），与 {@link #deadlineOf} 恰好互逆。
+     *
+     * <p><b>两个方向必须同住一处</b>：此前正向算法在道旅、差旅无忧、美团各有一份私有拷贝，
+     * 而反向算法只在本类——同一个口径分散在四处，改一处就会静默错位。本类已经因为
+     * "三家各抄一份 classifyCancel、同一个漏抄了三遍"付过一次代价（见类注释），不再重演。
+     *
+     * @param at      段的截止时刻
+     * @param checkIn 入住日 yyyy-MM-dd
+     * @param zone    入住日界按哪个时区算（各家不同：道旅/美团北京，差旅无忧按城市偏移）
+     * @return 距入住日 24:00 的小时数，下限 {@link #MIN_BEFORE}；算不出返回 null
+     */
+    public static Integer beforeHours(Instant at, String checkIn, ZoneId zone) {
+        if (at == null || checkIn == null) {
+            return null;
+        }
+        try {
+            Instant checkInEnd = LocalDate.parse(checkIn).plusDays(1)
+                    .atStartOfDay(zone == null ? FALLBACK_ZONE : zone).toInstant();
+            return Math.max(MIN_BEFORE, (int) Math.ceil(Duration.between(at, checkInEnd).toMinutes() / 60.0));
         } catch (Exception e) {
             return null;
         }

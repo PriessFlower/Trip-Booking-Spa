@@ -158,8 +158,13 @@ class MetricVocabularyArchRulesTest {
      *
      * <p>丢弃发生在各家转换循环内部，模板看不见被扔的报价，无法上提——只能查账：
      * 从包路径推供应商（同 {@code EveryLiveLimitKeyIsRegisteredTest} 的先例），
-     * 该家树下没有任何 {@code QUOTE_DROPPED} 引用即红。新家接入忘了记账，构建过不去。
+     * 该家树下没有任何丢弃记账即红。新家接入忘了记账，构建过不去。
      * 若某家的转换确实一条不丢，在其 pricing 包内注释说明并把该家加入豁免清单。
+     *
+     * <p><b>判据看的是"有没有记"，不是"怎么记"</b>（2026-09-14 改）：原先找的是
+     * {@code QUOTE_DROPPED} 这个常量名，而丢弃指标的构造已统一收进
+     * {@code Monitor.recordDropped}，各家不再出现该常量——照旧找常量会把六家全判成没记账。
+     * 现在认 {@code recordDropped}，常量名也继续认（万一将来又有人直接拼）。
      */
     @Test
     void O45_everyPricingFamilyCountsDrops() throws IOException {
@@ -171,7 +176,10 @@ class MetricVocabularyArchRulesTest {
                     .forEach(family -> {
                         try (Stream<Path> sources = Files.walk(family)) {
                             boolean counted = sources.filter(p -> p.toString().endsWith(".java"))
-                                    .anyMatch(p -> read(p).contains("QUOTE_DROPPED"));
+                                    .anyMatch(p -> {
+                                        String code = read(p);
+                                        return code.contains("recordDropped") || code.contains("QUOTE_DROPPED");
+                                    });
                             if (!counted) {
                                 violations.add(family.getFileName().toString());
                             }
@@ -182,7 +190,7 @@ class MetricVocabularyArchRulesTest {
         }
         assertTrue(violations.isEmpty(),
                 "这些供应商有查价能力却不计报价丢弃（O-4.5）——转换循环里被扔的报价会无声消失，"
-                        + "「丢在哪」只能靠 grep 和猜。在其转换丢弃分支打 QUOTE_DROPPED：" + violations);
+                        + "「丢在哪」只能靠 grep 和猜。在其转换丢弃分支调 Monitor.recordDropped：" + violations);
     }
 
     private static List<String> declaredMetricNames() {

@@ -16,6 +16,16 @@ import java.util.List;
 public class CheckPriceResult {
 
     /**
+     * 只有分态与说辞的结果——所有"没能确认"与"确定订不到"的分支都长这样。
+     *
+     * <p>收进契约类本身，是因为它<b>换一家供应商也不用改</b>（§4.1.3 首要判据）：
+     * 此前艺龙之外的四家各写了一份逐字相同的私有 {@code outcome(...)}。
+     */
+    public static CheckPriceResult of(CheckPriceOutcome outcome, String message) {
+        return CheckPriceResult.builder().outcome(outcome).message(message).build();
+    }
+
+    /**
      * 验价结果分态，<b>上游必须先读本字段再读其余字段</b>。
      *
      * <p>仅 {@link CheckPriceOutcome#BOOKABLE} 时价格与 {@link #offerId} 才有意义。

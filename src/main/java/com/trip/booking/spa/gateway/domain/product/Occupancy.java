@@ -36,6 +36,23 @@ public final class Occupancy {
         return occupancy.toString();
     }
 
+    /**
+     * 儿童年龄的逗号串（{@code "6,12"}），无儿童为<b>空串不是 null</b>——句柄凭据与部分供应商
+     * 的请求体都要求该字段存在，null 会变成字面量 "null" 发出去。
+     *
+     * <p>顺序即供应商口径，不排序（同 {@link #canonical}）。
+     */
+    public static String childAgesCsv(List<Integer> childAges) {
+        if (childAges == null || childAges.isEmpty()) {
+            return "";
+        }
+        StringBuilder csv = new StringBuilder();
+        for (int i = 0; i < childAges.size(); i++) {
+            csv.append(i == 0 ? "" : ",").append(childAges.get(i));
+        }
+        return csv.toString();
+    }
+
     /** 每间一条，共 {@code roomNum} 条——各家供应商的请求体都要求逐间列出 */
     public static List<String> perRoom(Integer roomNum, Integer adults, Integer childNum, List<Integer> childAges) {
         String one = canonical(adults, childNum, childAges);

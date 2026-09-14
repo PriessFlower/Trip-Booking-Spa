@@ -34,8 +34,6 @@ import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
 import com.trip.booking.spa.platform.observability.DropReason;
 import com.trip.booking.spa.platform.observability.FunnelStage;
-import com.trip.booking.spa.platform.observability.MetricNames;
-import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import lombok.extern.slf4j.Slf4j;
@@ -46,9 +44,9 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.shared.StayDates;
 
 /**
  * 美团查价：供应商响应 → 可售产品。验价那几个钩子在 {@code MeituanCheckPriceServiceImpl}，
@@ -130,7 +128,7 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
         if (hotel == null || CollectionUtils.isEmpty(hotel.getGoodsList())) {
             return products;
         }
-        int nights = nightsOf(request.checkIn(), request.checkOut());
+        int nights = StayDates.nights(request.checkIn(), request.checkOut());
         int rooms = Math.max(1, request.roomNum());
         String occupancy = request.occupancies() == null || request.occupancies().isEmpty()
                 ? null : request.occupancies().get(0);
@@ -264,31 +262,23 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
         return StringUtils.isNotBlank(goods.getGoodsName()) ? goods.getGoodsName() : goods.getGoodsNameEn();
     }
 
+    /**
+     * 本类的丢弃计数：只绑定"是哪一家、丢在哪一层"，怎么记在 {@link Monitor#recordDropped}。
+     * 这个切分就是 §4.1.3 的判据——换一家供应商要改的只有这两个常量。
+     */
     private static void countDropped(DropReason reason, int count) {
-        if (count > 0) {
-            Monitor.recordMany(MetricNames.QUOTE_DROPPED,
-                    MetricTags.dropped(SupplierSourceEnum.MEITUAN, FunnelStage.CONVERT, reason), count);
-        }
+        Monitor.recordDropped(SupplierSourceEnum.MEITUAN, FunnelStage.CONVERT, reason, count);
     }
-
-    static int nightsOf(String checkIn, String checkOut) {
-        try {
-            return (int) ChronoUnit.DAYS.between(LocalDate.parse(checkIn), LocalDate.parse(checkOut));
-        } catch (Exception e) {
-            return 0;
-        }
-    }
-
 
     // ────────── 验价钩子（流程在 AbstractCheckPriceFlow，供应商侧的读法在这里）──────────
 
     public CheckPriceResult precondition(CheckPriceCommand request) {
         if (!properties.isConfigured()) {
             log.error("美团验价：凭证未配置,sHotelId={}", request.supplierHotelId());
-            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商凭证未配置，未能确认该产品是否可订");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "供应商凭证未配置，未能确认该产品是否可订");
         }
         if (StringUtils.isBlank(request.supplierHotelId())) {
-            return outcome(CheckPriceOutcome.INDETERMINATE, "酒店标识为空，未能确认该产品是否可订");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "酒店标识为空，未能确认该产品是否可订");
         }
         return null;
     }
@@ -300,7 +290,7 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
         if (data == null) {
             log.warn("美团验价：现货查询未取得结果,sHotelId={},sProductId={}",
                     request.supplierHotelId(), request.supplierProductId());
-            return LiveStock.terminal(outcome(CheckPriceOutcome.INDETERMINATE,
+            return LiveStock.terminal(CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE,
                     "现货查询未取得结果，未能确认该产品是否可订，请稍后重试"));
         }
         MeituanHotelGoods hotel = data.hotelOf(request.supplierHotelId());
@@ -311,12 +301,12 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
         if (!data.isSucc()) {
             log.info("美团验价：现货查询业务失败,sHotelId={},code={},message={}",
                     request.supplierHotelId(), data.getCode(), data.getMessage());
-            return LiveStock.terminal(outcome(CheckPriceOutcome.INDETERMINATE,
+            return LiveStock.terminal(CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE,
                     "现货查询失败，未能确认该产品是否可订"));
         }
         if (hotel == null || CollectionUtils.isEmpty(hotel.getGoodsList())) {
             log.info("美团验价：该店该住期无在售产品,sHotelId={}", request.supplierHotelId());
-            return LiveStock.<MeituanHotelGoods>terminal(outcome(CheckPriceOutcome.SOLD_OUT,
+            return LiveStock.<MeituanHotelGoods>terminal(CheckPriceResult.of(CheckPriceOutcome.SOLD_OUT,
                     "该酒店该住期已无在售产品")).freshConvertedBy(fresh);
         }
         return LiveStock.of(hotel).freshConvertedBy(fresh);
@@ -341,7 +331,7 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
         if (hotel == null || CollectionUtils.isEmpty(hotel.getGoodsList())) {
             return candidates;
         }
-        int nights = nightsOf(request.checkIn(), request.checkOut());
+        int nights = StayDates.nights(request.checkIn(), request.checkOut());
         int rooms = Math.max(1, request.roomNum());
         Instant now = Instant.now();
         String occupancy = Occupancy.perRoom(rooms, request.adultCount() == null ? 1 : request.adultCount(),
@@ -377,7 +367,7 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
         List<MeituanPriceModel> days = candidate.getPriceModelList();
         Integer totalCents = CollectionUtils.isEmpty(days) ? null : totalCents(days, rooms);
         if (totalCents == null || totalCents <= 0) {
-            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未给出可用价格，未能确认该产品");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "供应商未给出可用价格，未能确认该产品");
         }
         List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(
                 request.checkIn(), candidate.getRefundable(), candidate.getCpApply(), rooms, true, Instant.now());
@@ -415,7 +405,7 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
                 .checkoutDate(request.checkOut())
                 .numberOfAdults(request.adultCount() == null ? 1 : request.adultCount())
                 .numberOfChildren(request.childNum())
-                .childrenAges(childAgesCsv(request.childAges()))
+                .childrenAges(Occupancy.childAgesCsv(request.childAges()))
                 .roomNum(rooms)
                 .currencyCode(properties.getCurrency())
                 .clientNationality(properties.getClientNationality())
@@ -426,14 +416,14 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
         if (data == null) {
             log.warn("美团 下单前校验：未取得结果,sHotelId={},goodsId={}",
                     request.supplierHotelId(), candidate.getGoodsId());
-            return outcome(CheckPriceOutcome.INDETERMINATE, "校验未取得结果，未能确认该产品是否可订，请稍后重试");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "校验未取得结果，未能确认该产品是否可订，请稍后重试");
         }
         if (!data.isSucc()) {
             CheckPriceOutcome terminal = terminalOf(data.getCode());
             log.info("美团 下单前校验：业务失败,sHotelId={},goodsId={},roomNum={},code={},message={},判定={}",
                     request.supplierHotelId(), candidate.getGoodsId(), rooms,
                     data.getCode(), data.getMessage(), terminal);
-            return outcome(terminal, message(terminal));
+            return CheckPriceResult.of(terminal, message(terminal));
         }
         return buildBookable(request, candidate, data.getResult(), rooms);
     }
@@ -469,7 +459,7 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
         if (totalCents == null || totalCents <= 0) {
             log.error("美团 下单前校验：校验通过却无可用价格,sHotelId={},goodsId={}",
                     request.supplierHotelId(), candidate.getGoodsId());
-            return outcome(CheckPriceOutcome.INDETERMINATE, "校验未回可用价格，未能确认该产品是否可订");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "校验未回可用价格，未能确认该产品是否可订");
         }
         java.util.Map<String, String> credentials = new java.util.HashMap<>();
         credentials.put(MeituanOfferCredentials.HOTEL_ID, request.supplierHotelId());
@@ -481,14 +471,14 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
         credentials.put(MeituanOfferCredentials.ADULT_COUNT,
                 String.valueOf(request.adultCount() == null ? 1 : request.adultCount()));
         credentials.put(MeituanOfferCredentials.CHILD_COUNT, String.valueOf(request.childNum()));
-        credentials.put(MeituanOfferCredentials.CHILD_AGES, childAgesCsv(request.childAges()));
+        credentials.put(MeituanOfferCredentials.CHILD_AGES, Occupancy.childAgesCsv(request.childAges()));
         credentials.put(MeituanOfferCredentials.DECLARED_TOTAL,
                 BigDecimal.valueOf(totalCents).movePointLeft(2).toPlainString());
         credentials.put(MeituanOfferCredentials.CURRENCY, properties.getCurrency());
         credentials.put(MeituanOfferCredentials.CLIENT_NATIONALITY, properties.getClientNationality());
         String offerId = offerStore.issue(SupplierSourceEnum.MEITUAN.getCode(), credentials);
         if (StringUtils.isBlank(offerId)) {
-            return outcome(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
         }
         // 校验档的罚金已是「全部间数」口径（实测 1 间 15098/25164、2 间 30146/50244），
         // 故 penaltyPerRoom=false——再乘一次间数就是把罚金说成两倍
@@ -519,14 +509,6 @@ public class MeituanPriceServiceImpl implements MeituanPriceService {
                 .childNum(request.childNum())
                 .childAges(request.childAges() == null ? List.of() : request.childAges())
                 .build();
-    }
-
-    private static String childAgesCsv(List<Integer> childAges) {
-        return CollectionUtils.isEmpty(childAges) ? "" : StringUtils.join(childAges, ",");
-    }
-
-    private static CheckPriceResult outcome(CheckPriceOutcome outcome, String message) {
-        return CheckPriceResult.builder().outcome(outcome).message(message).build();
     }
 
     /** 仅供测试构造场景使用 */

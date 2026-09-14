@@ -39,9 +39,6 @@ import java.util.List;
 @Component
 public class MeituanProductKeyDeriver {
 
-    /** {@code before} 的下限，语义是"此后一直"（同 CancelPolicy#before 的 >24 约束） */
-    private static final int MIN_BEFORE = 25;
-
     /** 退改截止时间的时区：官方把 {@code endDate} 标为北京时间 */
     private static final ZoneId BEIJING = ZoneId.of("Asia/Shanghai");
 
@@ -151,7 +148,7 @@ public class MeituanProductKeyDeriver {
         int multiplier = penaltyPerRoom ? Math.max(1, rooms) : 1;
         List<CancelPolicy> policies = new ArrayList<>();
         for (MeituanCpApply item : sorted) {
-            Integer before = hoursBeforeCheckInEnd(endOf(item), checkIn);
+            Integer before = CancelClassifier.beforeHours(endOf(item), checkIn, BEIJING);
             if (before == null) {
                 return List.of();
             }
@@ -164,7 +161,7 @@ public class MeituanProductKeyDeriver {
         }
         // 末段之后不可取消：这是本家阶梯的隐含收尾，不写出来就等于说"末段截止后仍按末段罚"
         policies.add(CancelPolicy.builder().cancelType(0).timeZone(BEIJING.getId())
-                .before(MIN_BEFORE).build());
+                .before(CancelClassifier.MIN_BEFORE).build());
         // 过期段不许流出：截止时刻已过的段行使不了，既不能对外承诺，也不该参与判类
         return CancelClassifier.liveSegments(policies, checkIn, now);
     }
@@ -177,18 +174,6 @@ public class MeituanProductKeyDeriver {
         }
         try {
             return LocalDateTime.parse(raw, END_DATE).atZone(BEIJING).toInstant();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private static Integer hoursBeforeCheckInEnd(Instant at, String checkIn) {
-        if (at == null) {
-            return null;
-        }
-        try {
-            Instant checkInEnd = LocalDate.parse(checkIn).plusDays(1).atStartOfDay(BEIJING).toInstant();
-            return Math.max(MIN_BEFORE, (int) Math.ceil(Duration.between(at, checkInEnd).toMinutes() / 60.0));
         } catch (Exception e) {
             return null;
         }

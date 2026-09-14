@@ -112,13 +112,13 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         if (StringUtils.isBlank(bookHref)) {
             // 供应商说可订却没给下单链接，属响应自相矛盾，不可报可订
             log.error("expedia验价通过但未返回下单链接，无法签发报价句柄");
-            return outcome(CheckPriceOutcome.INDETERMINATE, "验价响应缺少下单链接，未能确认该产品是否可订");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "验价响应缺少下单链接，未能确认该产品是否可订");
         }
         String offerId = offerStore.issue(SupplierSourceEnum.EXPEDIA.getCode(),
                 Map.of(ExpediaOfferCredentials.BOOK_HREF, bookHref));
         if (StringUtils.isBlank(offerId)) {
             // 句柄签发不成属我方原因，重试可能成功
-            return outcome(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
         }
         int inclusiveCents = Money.toCents(new BigDecimal(occupancyPricing.getTotals().getInclusive()
                 .getRequest_currency().getValue()));
@@ -292,8 +292,8 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             // 此前这里无日志无计数，Expedia 被过滤的报价无声消失，「丢在哪」只能 grep 和猜
             log.info("expedia查价：rate 缺所查占用档的价，弃之,hotelId={},rateId={},occupancy={}",
                     hotelId, rate.getId(), request.occupancies().get(0));
-            Monitor.recordOne(MetricNames.QUOTE_DROPPED, MetricTags.dropped(
-                    SupplierSourceEnum.EXPEDIA, FunnelStage.CONVERT, DropReason.NO_OCCUPANCY_PRICING));
+            Monitor.recordDropped(SupplierSourceEnum.EXPEDIA, FunnelStage.CONVERT,
+                    DropReason.NO_OCCUPANCY_PRICING, 1);
             return;
         }
         QueryPriceResponse.Occupancy_pricing occupancyPricing = rate.getOccupancy_pricing().get(request.occupancies().get(0));
@@ -486,7 +486,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         if (result == null || !result.isSucc() || null == result.getData()
                 || CollectionUtils.isEmpty(result.getData().getHotelPrices())) {
             log.warn("expedia查价未取得结果,salesEnvironment={},request:{}", salesEnvironment, JsonUtils.writeObject2Json(request));
-            return LiveStock.terminal(outcome(CheckPriceOutcome.INDETERMINATE, "查价调用未取得结果，未能确认该产品是否可订，请稍后重试"));
+            return LiveStock.terminal(CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "查价调用未取得结果，未能确认该产品是否可订，请稍后重试"));
         }
         return LiveStock.of(result.getData());
     }
@@ -533,7 +533,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
     public CheckPriceResult inspect(QueryPriceResponse.Rates rate, CheckPriceCommand request) {
         if (null == pickBedGroup(rate, request.bedId())) {
             log.info("expedia验价：所选床型已不可选,sProductId={},bedId={}", request.supplierProductId(), request.bedId());
-            return outcome(CheckPriceOutcome.RATE_DEAD, "所选床型已不可选，请重新查价后再选择");
+            return CheckPriceResult.of(CheckPriceOutcome.RATE_DEAD, "所选床型已不可选，请重新查价后再选择");
         }
         return null;
     }
@@ -548,11 +548,11 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
         ResponseResult<CheckPriceResponse> checkPriceResult = new CheckPriceAccess(host, StringUtils.isBlank(request.language()) ? "zh-CN" : request.language(), expediaUtils.generateSign(), ownIp, sessionId, rateLimiter).access(contractProfile.appendTo(bedGroups.getLinks().getPrice_check().getHref()), CallPurpose.CHECK_PRICE);
         if (checkPriceResult == null || !checkPriceResult.isSucc() || null == checkPriceResult.getData()) {
             log.warn("expedia验价未取得结果,sProductId={},response:{}", request.supplierProductId(), JsonUtils.writeObject2Json(checkPriceResult));
-            return outcome(CheckPriceOutcome.INDETERMINATE, "验价调用未取得结果，未能确认该产品是否可订，请稍后重试");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "验价调用未取得结果，未能确认该产品是否可订，请稍后重试");
         }
         if (STATUS_SOLD_OUT.equals(checkPriceResult.getData().getStatus())) {
             // 供应商明确回答满房，这是确定性结果，可以如实告知旅客
-            return outcome(CheckPriceOutcome.SOLD_OUT, "该产品已售罄");
+            return CheckPriceResult.of(CheckPriceOutcome.SOLD_OUT, "该产品已售罄");
         }
 
         checkPriceResult.getData().setAdultCount(request.adultCount());
@@ -565,7 +565,7 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             // 也不能报不可订（供应商并未这么说）
             log.error("expedia验价：响应缺少本次占用的价格,sProductId={},occupancy={}",
                     request.supplierProductId(), occupancy);
-            return outcome(CheckPriceOutcome.INDETERMINATE, "验价响应缺少本次占用的价格，未能确认该产品是否可订");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "验价响应缺少本次占用的价格，未能确认该产品是否可订");
         }
         return buildCheckPriceResp(checkPriceResult.getData(), occupancyPricing);
     }
@@ -621,10 +621,6 @@ public class ExpediaPriceServiceImpl implements ExpediaPriceService {
             any = rate.getBed_groups().get(key);
         }
         return any;
-    }
-
-    private CheckPriceResult outcome(CheckPriceOutcome outcome, String message) {
-        return CheckPriceResult.builder().outcome(outcome).message(message).build();
     }
 
 
