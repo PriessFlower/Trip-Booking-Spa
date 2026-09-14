@@ -494,7 +494,7 @@
       "description": "重试不是一次新的调用结果，单独计。重试涨而失败没涨，说明问题被重试盖住了；两者一起涨才是真的在恶化。",
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 24,
         "x": 0,
         "y": 23
       },
@@ -511,88 +511,6 @@
           "refId": "A",
           "expr": "sum by (supplier, interface) (rate(supplier_io_retry_count_total{job=\"trip-booking-spa\"}[5m])) * 60",
           "legendFormat": "{{supplier}} {{interface}}",
-          "editorMode": "code",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 12,
-            "showPoints": "never",
-            "stacking": {
-              "mode": "none",
-              "group": "A"
-            }
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 41,
-      "type": "timeseries",
-      "title": "大文件下载：次数 / 流量 / 分块重试",
-      "description": "Expedia 静态内容走分块下载。次数与流量看进度，分块重试涨说明链路在丢包，多半要调分块大小或并发。",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 23
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "spa-prom"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "spa-prom"
-          },
-          "refId": "A",
-          "expr": "sum by (supplier, interface) (rate(supplier_file_access_count_total{job=\"trip-booking-spa\"}[5m])) * 60",
-          "legendFormat": "{{supplier}} 次/分钟",
-          "editorMode": "code",
-          "range": true
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "spa-prom"
-          },
-          "refId": "B",
-          "expr": "supplier_file_bytes_value{job=\"trip-booking-spa\"}",
-          "legendFormat": "{{supplier}} 本次 KB",
-          "editorMode": "code",
-          "range": true
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "spa-prom"
-          },
-          "refId": "C",
-          "expr": "sum by (supplier, interface) (rate(supplier_file_chunk_retry_count_total{job=\"trip-booking-spa\"}[5m])) * 60",
-          "legendFormat": "{{supplier}} 分块重试/分钟",
           "editorMode": "code",
           "range": true
         }

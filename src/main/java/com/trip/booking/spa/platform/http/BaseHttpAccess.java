@@ -17,6 +17,9 @@ import com.trip.booking.spa.platform.ratelimit.Permits;
 import com.trip.booking.spa.platform.util.JsonUtils;
 import com.google.common.base.Joiner;
 import org.apache.http.HttpStatus;
+import org.apache.http.conn.ConnectTimeoutException;
+
+import java.net.SocketTimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -98,10 +101,15 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
         // 就记 ok，HTTP 非 200 与业务错误码也被算成成功。
         long cost = System.currentTimeMillis() - start;
         if (null == result) {
-            // 重试全部抛异常才会到这儿。超时与连接/解析失败目前混在一处——底层把它们
-            // 都抛成普通 Exception，要分出 TIMEOUT 得先在 request() 里辨别异常类型（欠账）
-            Monitor.recordOne(MetricNames.SUPPLIER_IO_ACCESS, ioTags(CallStatus.ERROR), cost);
-            logger.error("access fail, 重试已耗尽, supplier:[{}], interface:[{}], url:[{}]", supplier, monitorKey, url);
+            // 重试全部抛异常才会到这儿。超时与「连接失败/解析失败」必须分开：前者说明对家慢或
+            // 我方超时设得紧，处置是调超时与并发；后者说明报文或链路本身有问题，处置是查报文。
+            // 混成一个 error 就答不了「刷不出价是对家慢还是我们读错了」。
+            // 此前这里只记 error，CallStatus.TIMEOUT 声明了却从未被使用（O-3.1 的六个终态
+            // 因此并不穷尽），代码注释把它记为欠账——本次补上。
+            CallStatus status = isTimeout(lastFailure) ? CallStatus.TIMEOUT : CallStatus.ERROR;
+            Monitor.recordOne(MetricNames.SUPPLIER_IO_ACCESS, ioTags(status), cost);
+            logger.error("access fail, 重试已耗尽, supplier:[{}], interface:[{}], url:[{}], 终态:[{}]",
+                    supplier, monitorKey, url, status.tagValue());
             return new ResponseResult<>(HttpStatus.SC_GATEWAY_TIMEOUT, null);
         }
         if (!result.isSucc()) {
@@ -168,8 +176,17 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
         return false;
     }
 
+    /**
+     * 最近一次重试抛出的异常，只用于把终态从 {@code error} 里分出 {@code timeout}。
+     *
+     * <p>每次 {@link #query} 开头清空，故它只描述本次调用；各家 Access 每次调用都 new 一个实例
+     * （工厂即如此），不存在跨调用串味。
+     */
+    private Exception lastFailure;
+
     private ResponseResult<T> query(String url, U request, IParser<T> parser) {
         this.logQuery(url, request);
+        lastFailure = null;
         int count = 0;
         ResponseResult<T> result = null;
         do {
@@ -183,6 +200,7 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
                     break;
                 }
             } catch (Exception e) {
+                lastFailure = e;
                 // 这里<b>不</b>记 supplier_io_access：那个指标的语义是「一次调用的终态」，
                 // 一次调用只许记一次（O-3.1）。此前每抛一次异常记一条、末尾 result==null 再记一条，
                 // 一次逻辑调用最多产生 N+1 条，成功率与耗时都被重试次数污染。
@@ -192,6 +210,24 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
             }
         } while (retries >= count);
         return result;
+    }
+
+    /**
+     * 这次失败算不算超时。连接超时与读超时都算——对调用方而言都是「对家没在约定时间内答」。
+     *
+     * <p>要顺着 {@code getCause()} 找：底层常把原始异常包一层再抛（如解析阶段的
+     * {@code UncheckedIOException}），只看最外层会把超时误判成一般错误。
+     */
+    private static boolean isTimeout(Exception e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof SocketTimeoutException || t instanceof ConnectTimeoutException) {
+                return true;
+            }
+            if (t.getCause() == t) {
+                break;
+            }
+        }
+        return false;
     }
 
     private void logQuery(String url, Object param) {
