@@ -23,6 +23,10 @@ public enum DropReason {
 
     /** 非即时确认报价：房是有的，但要酒店二次确认，本网关暂不卖（道旅 IsOnRequest） */
     ON_REQUEST,
+    /** 钟点房（clwy {@code IsHourRoom=1}）：住期语义与整夜房不同，按整夜口径卖出去就是卖错 */
+    HOUR_ROOM,
+    /** 逐晚币种不一致：总价无法在单一币种下相加（B4 要求「单一币种」），不猜汇率 */
+    MIXED_CURRENCY,
 
     // ── CACHE_READ 阶段（缓存读侧组装出报）──
 

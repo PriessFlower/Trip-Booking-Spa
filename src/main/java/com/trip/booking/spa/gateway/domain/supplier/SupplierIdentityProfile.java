@@ -91,7 +91,28 @@ public enum SupplierIdentityProfile {
      * 无会话无到期。
      */
     DIDA(SupplierSourceEnum.DIDA, RoomIdStability.STABLE, QuoteCodeStability.PERISHABLE,
-            Duration.ofMinutes(30), CredentialRenewal.STATELESS);
+            Duration.ofMinutes(30), CredentialRenewal.STATELESS),
+
+    /**
+     * 房型 RoomTypeId：<b>稳定</b>。官方 product-room-info 把它作为房型列表接口的主键下发
+     * （04-product-room-info，2026-09-14 查阅快照），报价响应里的 RoomTypeId 与之同源；
+     * cursor 以其为房型维度落库，无任何轮换救回代码。<b>本仓尚未自行实测</b>——首轮刷价后
+     * 按道旅同法核对（报价里的 id 是否全部命中房型列表接口），核完把这句换成证据。
+     *
+     * <p>报价码 RatePlanId：<b>易腐，且是分代轮换</b>。cursor 取证（docs/product-identity.md §4）：
+     * 60 天 58 次重放仅 4 次成功，93% 撞 {@code 500 No Availability}——即整代报价一起换，
+     * 不是单条失效。故它只进 OfferStore、禁止落库（R-2.1），验价一律现取现验（R-3.1），
+     * <b>resolve 对本家不是可选项而是主路径</b>。
+     *
+     * <p>TTL 上限取 5 分钟：句柄里存的是验价（传 RatePlanId 的那一次）拿到的 RateKey，
+     * 官方 05-product-price 明示「RateKey 下单必填，且只有 10 分钟有效期，下单后直接过期」。
+     * 帽取其一半（R-2.2）。
+     *
+     * <p>凭据：<b>可程序自续</b>——Wid+ApiKey 换 JWT，官方 01-authentication 说 token 有效期
+     * 1 小时、建议缓存 50 分钟；401 即重取。
+     */
+    CLWY(SupplierSourceEnum.CLWY, RoomIdStability.STABLE, QuoteCodeStability.PERISHABLE,
+            Duration.ofMinutes(5), CredentialRenewal.SELF_RENEWING);
 
     /** 房型 ID 的申报档位 */
     public enum RoomIdStability {

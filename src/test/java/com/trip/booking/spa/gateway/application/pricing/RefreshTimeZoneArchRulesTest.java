@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 刷价车道的时区约束：<b>算"今天"必须显式给时区，不许用部署环境的默认值</b>。
  *
- * <p>为什么要成文（PROJECT.md §0.3：不成文就确实会被违反）——它已经被违反过。四家刷价里
+ * <p>为什么要成文（PROJECT.md §0.3：不成文就确实会被违反）——它已经被违反过。当时四家刷价里
  * 艺龙、飞猪、道旅都覆写了 {@code supplierZone()} 显式钉 Asia/Shanghai，唯独 Expedia 一直用
  * {@code LocalDate.now()}（JVM 默认时区），且同类里的跨天判定另用 {@code ZoneId.systemDefault()}。
  *
@@ -34,7 +34,7 @@ class RefreshTimeZoneArchRulesTest {
     private static final Path SUPPLIER_ROOT =
             Path.of("src/main/java/com/trip/booking/spa/gateway/adapter/outbound/supplier");
 
-    /** 四家刷价实现。新接一家会多一个文件，本测试自动把它纳入约束 */
+    /** 各家刷价实现。新接一家会多一个文件，本测试自动把它纳入约束 */
     private static List<Path> refreshImpls() {
         try (Stream<Path> files = Files.walk(SUPPLIER_ROOT)) {
             return files.filter(p -> p.getFileName().toString().endsWith("CPSQueryPriceServiceImpl.java"))
@@ -82,10 +82,10 @@ class RefreshTimeZoneArchRulesTest {
     }
 
     @Test
-    @DisplayName("四家都必须显式声明基准时区，且取值一致——否则同一个「今天」在四家不是同一天")
+    @DisplayName("五家都必须显式声明基准时区，且取值一致——否则同一个「今天」在各家不是同一天")
     void everySupplierDeclaresTheSameZoneExplicitly() {
         List<Path> impls = refreshImpls();
-        assertEquals(4, impls.size(), "刷价实现应为四家（新接一家请连同本约束一起看）：" + impls);
+        assertEquals(5, impls.size(), "刷价实现应为五家（新接一家请连同本约束一起看）：" + impls);
 
         List<String> missing = new ArrayList<>();
         for (Path impl : impls) {

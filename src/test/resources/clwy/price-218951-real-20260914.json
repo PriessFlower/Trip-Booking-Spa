@@ -1,0 +1,124 @@
+{
+ "code": 200,
+ "message": "",
+ "hotelList": [
+  {
+   "hotelId": "218951",
+   "hotelNameCN": "图尔基尼宫酒店",
+   "hotelNameEN": "Palazzo Turchini",
+   "roomTypeList": [
+    {
+     "roomTypeId": "22720265",
+     "roomTypeNameCN": "行政双人房或双床房",
+     "roomTypeNameEN": "Executive Double or Twin Room Non-Smoking",
+     "bedType": "2*单人床|1*双人床",
+     "bedTypeEN": "2*Single Bed|1*Double Bed",
+     "window": 3,
+     "internetWay": 4,
+     "maxAdults": 0,
+     "maxChildren": 0,
+     "useableArea": "18.0",
+     "floor": "",
+     "ratePlanList": [
+      {
+       "ratePlanId": "40f43641489389fe9a8e0d9ec2881e21b9|3",
+       "ratePlanNameCN": "Executive Double or Twin Room",
+       "ratePlanNameEN": "Executive Double or Twin Room",
+       "breakfast": 2,
+       "boardCode": "BB",
+       "advanceDays": 0,
+       "continuousDays": 0,
+       "maxContinuousDays": 0,
+       "minRoomCount": 0,
+       "maxRoomCount": 4,
+       "maxAdultOccupancy": 0,
+       "maxChildrenOccupancy": 0,
+       "ratePlanPriceList": [
+        {
+         "date": "2026-09-21",
+         "price": 2682.64,
+         "currency": "CNY",
+         "roomCount": 4,
+         "flag": 1
+        }
+       ],
+       "cityTimeZone": "1",
+       "cancellationType": "INT",
+       "cancellationPenalties": [
+        {
+         "from": "2026-09-13 23:00:00",
+         "newFrom": "2026-09-13T23:00:00+1:00",
+         "amount": 536.51,
+         "before": 0,
+         "type": 0,
+         "value": 0
+        },
+        {
+         "from": "2026-09-18 21:59:00",
+         "newFrom": "2026-09-18T21:59:00+1:00",
+         "amount": 2682.64,
+         "before": 0,
+         "type": 0,
+         "value": 0
+        }
+       ],
+       "giftList": null,
+       "feeList": [
+        {
+         "feeName": "property fees or taxes",
+         "feePrice": 13.92,
+         "curreny": "USD",
+         "currency": "USD"
+        }
+       ],
+       "invoiceType": 0,
+       "extra": null,
+       "tag": 0,
+       "isHourRoom": 0,
+       "hourRoomWeekIndex": "0000000",
+       "hourRoomStartTime": "00:00",
+       "hourRoomEndTime": "00:00",
+       "hourRoomTimeLimit": 0
+      },
+      {
+       "ratePlanId": "1268081beadef3bc2f3ce5c236f9fedc6df|0",
+       "ratePlanNameCN": "行政双人或双床房",
+       "ratePlanNameEN": "行政双人或双床房",
+       "breakfast": 2,
+       "boardCode": "BB",
+       "advanceDays": 0,
+       "continuousDays": 0,
+       "maxContinuousDays": 0,
+       "minRoomCount": 0,
+       "maxRoomCount": 8,
+       "maxAdultOccupancy": 0,
+       "maxChildrenOccupancy": 0,
+       "ratePlanPriceList": [
+        {
+         "date": "2026-09-21",
+         "price": 2502.9,
+         "currency": "CNY",
+         "roomCount": 3,
+         "flag": 1
+        }
+       ],
+       "cityTimeZone": null,
+       "cancellationType": null,
+       "cancellationPenalties": null,
+       "giftList": null,
+       "feeList": null,
+       "invoiceType": 0,
+       "extra": null,
+       "tag": 0,
+       "isHourRoom": 0,
+       "hourRoomWeekIndex": "0000000",
+       "hourRoomStartTime": "00:00",
+       "hourRoomEndTime": "00:00",
+       "hourRoomTimeLimit": 0
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
