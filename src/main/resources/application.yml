@@ -63,6 +63,11 @@ expedia:
   production-endpoint-enabled: false
   user-agent: trip-booking-spa/0.0.1
 
+dida:
+  # 同上。道旅无沙箱(测试账号 DidaApiTestID 已废除,唯一端点即生产),true 即真单真额度。
+  # 与 cursor 共用同一个 ClientID,开闸前先确认两边 ClientReference 不会撞号(我方单号前缀不同)。
+  booking-enabled: false
+
 logging:
   config: classpath:log4j2.xml
   level:

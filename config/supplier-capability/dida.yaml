@@ -37,10 +37,26 @@ methods:
       自律值。cursor 侧订单类共享桶（verify/create/cancel/query）配 8 req/s，本仓只用其中
       验价一路，起步取 2。PreBook=true 会拿到有效期 2 小时的 ReferenceNo（错误码 3006）。
 
-# 尚未接入（二批）：
-#   /api/booking/HotelBookingConfirm        下单
-#   /api/booking/HotelBookingSearch         查单
-#   /api/booking/HotelBookingCancel         预取消（拿取消确认号，有效期 10 分钟，错误码 3007）
-#   /api/booking/HotelBookingCancelConfirm  确认取消
+  HotelBookingConfirm:
+    qps: 1
+    limit-key: GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_CREATE_ORDER
+    note: >
+      自律值。cursor 侧订单类共享桶（verify/create/cancel/query）8 req/s；下单写操作重试恒 0。
+      实测耗时：cursor 2026-09-07~14 一周 19 次下单，2 次读超时（其 callTimeout 30 秒）——
+      超时的下单可能已成单，本仓一律 UNKNOWN 交上游按我方单号（ClientReference）反查。
+  HotelBookingSearch:
+    qps: 2
+    limit-key: GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_QUERY_ORDER
+    note: >
+      自律值。下单的疑似重复反查、取消前取单号、取消后确证 Status=3 都走它。
+      实测耗时 50~320ms（cursor 一周 18,424 次）。
+  HotelBookingCancel + HotelBookingCancelConfirm:
+    qps: 1
+    limit-key: GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_CANCEL_ORDER
+    note: >
+      自律值，两步共用一桶（一次取消扣两格）。预取消 200~360ms；确认取消**慢且会超时后生效**：
+      cursor 2026-09-10 单 18667668003 五次确认取消全部 30 秒读超时，随后预取消回 3018「已取消」。
+      故确认取消无响应一律 UNKNOWN，成功也要再查单看 Status=3 才算。
+
 # 静态内容另有一套端点与鉴权（static-api.didatravel.com/api/v1/hotel/details，HTTP Basic
 # base64(ClientID:LicenseKey)），本仓尚未接入，播种清单目前由离线抓取提供。

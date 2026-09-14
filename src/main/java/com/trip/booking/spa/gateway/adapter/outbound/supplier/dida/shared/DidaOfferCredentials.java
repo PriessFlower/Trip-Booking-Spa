@@ -1,11 +1,13 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared;
 
+import java.util.List;
+
 /**
  * 道旅报价句柄里存放的凭据键名。验价（写入方）与将来下单（读取方）共同引用，
- * 不许两边各写字面量（architecture.md §5 第三步）。
+ * 不许两边各写字面量（architecture.md §5 第三步）。下单侧读取方：{@code DidaBookingSyncServiceImpl}。
  *
  * <p>道旅下单只认一样东西：{@link #REFERENCE_NO}——官方 booking-api/booking-confirm
- * （2026-09-08 查阅）的 {@code ReferenceNo} 字段说明「要填写 Price Confirm 的 Response 里的
+ * （2026-09-13 查阅）的 {@code ReferenceNo} 字段说明「要填写 Price Confirm 的 Response 里的
  * ReferenceNo」。其余键是下单侧的自校验材料（住期、间数、占用、申报总价必须与验价那次一致，
  * 否则报 3001/3005/3008）。
  *
@@ -49,6 +51,13 @@ public final class DidaOfferCredentials {
 
     /** 验价所报国籍。下单必须一致，否则可能拿到另一套价（官方 pricesearch 注 14） */
     public static final String NATIONALITY = "nationality";
+
+    /**
+     * 下单前必须齐备的键（缺一即句柄内容不完整，确定性拒单）。{@link #CHILD_AGES} 不在内：
+     * 无儿童时它是空串，"缺席"与"没有儿童"同形，只能按空处理。
+     */
+    public static final List<String> REQUIRED_FOR_BOOKING = List.of(
+            REFERENCE_NO, HOTEL_ID, CHECK_IN, CHECK_OUT, ROOM_NUM, ADULT_COUNT, DECLARED_TOTAL, CURRENCY);
 
     private DidaOfferCredentials() {
     }

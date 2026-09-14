@@ -5,7 +5,7 @@
 > [../product-identity.md](../product-identity.md)。
 > **依据**：官方文档 `https://apidoc.didatravel.com/zh/`，全文引用均标注查阅日期；
 > 文档没写而实测得到的，一律写明「实测」与日期、样本量（PROJECT.md §4.2.5）。
-> **本批范围**（2026-09-08）：查价、验价、刷价、建档。下单／查单／取消留待二批。
+> **一批**（2026-09-08）：查价、验价、刷价、建档。**二批**（2026-09-13）：下单、查单、取消，见 §10。
 
 ## 1. 端点与鉴权
 
@@ -13,10 +13,10 @@
 |---|---|---|
 | 查价 | `POST https://api.didatravel.com/api/rate/pricesearch?$format=json` | `pricing/client/PriceSearchAccess` |
 | 验价 | `POST https://api.didatravel.com/api/rate/PriceConfirm?$format=json` | `checkprice/client/PriceConfirmAccess` |
-| 下单（二批） | `POST /api/booking/HotelBookingConfirm?$format=json` | — |
-| 查单（二批） | `POST /api/booking/HotelBookingSearch?$format=json` | — |
-| 预取消（二批） | `POST /api/booking/HotelBookingCancel?$format=json` | — |
-| 确认取消（二批） | `POST /api/booking/HotelBookingCancelConfirm?$format=json` | — |
+| 下单 | `POST /api/booking/HotelBookingConfirm?$format=json` | `booking/client/BookingConfirmAccess` |
+| 查单 | `POST /api/booking/HotelBookingSearch?$format=json` | `order/client/BookingSearchAccess` |
+| 预取消 | `POST /api/booking/HotelBookingCancel?$format=json` | `cancellation/client/BookingCancelAccess` |
+| 确认取消 | `POST /api/booking/HotelBookingCancelConfirm?$format=json` | `cancellation/client/BookingCancelConfirmAccess` |
 
 **鉴权**：每个请求体自带 `Header.ClientID` 与 `Header.LicenseKey`，无签名、无会话、无到期
 （故 `CredentialRenewal.STATELESS`）。凭据经 `DIDA_CLIENT_ID` / `DIDA_LICENSE_KEY` 注入。
@@ -366,3 +366,122 @@ T+0 约 18,867 家，T+1~T+6 约 3,800~5,300 家。以它作种子，比拿 9 �
 | 与 cursor 的额度叠加 | 同一个 ClientID 两边共用，放量前须先确认 cursor 侧速率 |
 | 多店实时为何丢货 | 文档反而推荐"多酒店要准确度就用实时"，与实测相反，机制未知，要问客户经理 |
 | 静态内容接入 | `static-api.didatravel.com` 另有一套端点与 Basic 鉴权，本仓未接；刷价清单目前靠离线抓取播种 |
+
+## 10. 二批：下单 / 查单 / 取消（2026-09-13）
+
+依据：官方 booking-confirm / booking-search / booking-cancel 两页 / information-hub 的订单状态表与
+订单错误码表（均 2026-09-13 查阅）；实测证据来自 cursor 生产账号（与本仓共用 ClientID）在其
+`supplier_request_log`（阿里云 `tg-trip_db`，只保留约一周）留下的报文：**2026-09-07~14 下单 19 次、
+预取消 8 次、确认取消 7 次、查单 18,424 次**，以及其 `DidaTravelTest` 注释里留存的 2025-11/2026-01 报文。
+落点：`DidaBookingClassifier`（码表→态，单测 `DidaBookingClassifierTest` 逐码钉住）、
+`DidaBookingSyncServiceImpl` / `DidaOrderQuerySyncServiceImpl` / `DidaCancelSyncServiceImpl`。
+
+**本仓自己尚未下过道旅真单**：闸 `dida.booking-enabled` 默认关（安全护栏，application.yml）。
+下面凡标「实证」的都是 cursor 账号的生产报文，凡本仓形态与其一致的（请求字段集合、Contact 形态）
+才敢说"会被接受"；首单跑通后补本仓夹具与本节。
+
+### 10.1 下单请求怎么组
+
+| 字段 | 取值 | 依据 |
+|---|---|---|
+| `ReferenceNo` | 句柄里的验价参考号 | 官方：「创建订单前必须获得订单参考号」 |
+| `CheckInDate/CheckOutDate/NumOfRooms` | **从句柄回放**，上游传参只作核对（住期不符本地拒 `stay_mismatch`，间数不符以句柄为准并落 error） | 官方：「必须与订单确认中的参数保持一致」，不一致即 3001/3008 |
+| `GuestList` | 每间 `ADULT_COUNT` 位成人 + `CHILD_AGES` 每个年龄一位儿童（`IsAdult=false`，`Age` 必填）；姓名从 personName（、，, 分隔）循环取，儿童复用首位姓名 | 官方 GuestList：「成人与儿童人数，必须与 PriceConfirm 验价时的人数保持一致，否则订单将被系统拒绝」；官方样例成人与儿童同名 |
+| `Name.First/Last` | `姓/名` 显式拆；否则空格分隔首段为姓；否则中文首字为姓；单字同填 | 前者是本仓/艺龙惯例；后两条照 cursor 在产拆法（`resolveGuestName`），复姓会拆错，无更好依据前不另造规则 |
+| `Contact` | Name 取 contactName、Phone 取 contactPhone、Email 取 `supplier.dida.booking-contact-email`（空即不发） | 官方：节点必填、可填客服信息；实证只带 Name 也成单（2025-11-28，BookingID 15801485798） |
+| `ClientReference` | 我方单号 | 官方：一对一绑定、同号不能建两单——即幂等闸；也是按我方单号查单的坐标（B5） |
+| `CustomerRequest` / `PaymentInfo` | 不发 | 契约无特殊需求；「使用额度支付的不需要传此字段」 |
+
+发出的顶层键集合（Header/ReferenceNo/CheckInDate/CheckOutDate/NumOfRooms/GuestList/Contact/ClientReference）
+与 cursor 2026-09-13 被接受的生产请求完全一致，守护测试 `DidaBookingRequestShapeTest`。
+
+### 10.2 下单响应 → 三态
+
+**成功信封看 `Status`**（官方：只有 2/3/4 是终态，「其他任何返回结果均不能视为订单的最终处理结果」）：
+
+| Status | 态 | 处置 |
+|---|---|---|
+| 2 Confirmed | SUCCESS | 核销句柄；`sOrderId=BookingID`，`sConfirmationNumber=ConfirmationCode`（酒店未回 HCN 时缺席） |
+| 5 Pending / 6 OnRequest / 0 / 1 / 缺席 | UNKNOWN（带 sOrderId） | 官方：5 在 3 分钟内、6 在 120 分钟内到终态；上游凭单号查单 |
+| 4 Failed | FAILED | 终态，无有效订单 |
+| 3 Canceled | FAILED | 终态，曾成立又已取消，无有效订单 |
+| 成功却无 BookingID | UNKNOWN | 契约撕裂 |
+
+实证：一周 17 次成功下单响应全部 `Status=2`；但同一单 4 秒后按 ClientReference 查单回 **`Status=5`**
+（2026-09-13 21:16:46 下单回 2，21:16:50 查单回 5，BookingID 18698545882）——查单的状态会短暂落后于
+下单响应，故取消后的确证（§10.4）看到非 3 时只回 UNKNOWN 让上游稍后再查，不判失败。
+
+**错误信封看码**，白名单制：
+
+| 分类 | 码 | 态 |
+|---|---|---|
+| 我方配置病 | 2017、2019 | FAILED + `[auth-config]` 告警与 `supplier_auth_config` 指标 |
+| 说的是一笔已存在订单 → **先反查** | 3018、3019、3020、3033、3036、3039、3042、3043、3060、3070、3090；以及 **Error 节点自带 BookingID**（优先于码） | 反查到 2 → SUCCESS；3/4 → FAILED（3018 时我方单号已绑定一笔已取消订单，重订须换新单号）；非终态 → UNKNOWN 带单号；查不到/查失败 → UNKNOWN |
+| 校验/额度/风控阶段被拒，供应商侧无单 | -2、3001、3002、3005、3006、3008、3011、3014、3015、3021、3022、3025、3026、3027、3034、3035、3038、3040、3041、3050、4010、4030、4031 | FAILED |
+| 其余（3000、3010、3012、3016「下单失败」、3080、表外码）与**无响应** | — | UNKNOWN |
+
+实证只见过 3005（2025-11，入住人信息不正确）与 -2（ReferenceNo 缺失）；一周 19 次下单里 **2 次读超时**
+（cursor 侧 30 秒），这两次之后 cursor 按 ClientReference 查单——空列表（见 §10.3）。3015 无房或变价：
+cursor 会自动重验价重下一次，本仓不做——那是"替客人换一个价下单"，交上游重新验价决定。
+
+### 10.3 查单
+
+坐标：有供应商单号按 `SearchBy.BookingID`，否则按 `SearchBy.BookingInfo.ClientReference`=我方单号
+（两种都是官方标「推荐」的查法）。状态映射：2→21、3→31、4→22、0/1/5/6→20、表外→null 并透出原文。
+总价取 `TotalPrice`（元→分）并带币种 `totalPriceCurrency`（取首条 RatePlan 的 Currency；缺币种就不报金额）。
+
+**NOT_FOUND 永不判**。空列表回 INDETERMINATE：官方明示空返回不能视为终态；实证一周 18,424 次查单里
+19 次空列表**全部**是按 ClientReference 查、且紧跟在下单之后（如 2026-09-12 22:15:07 同号连查两次皆空）
+——正是"单还在建、查不到"的窗口，此时判不存在等于放上游重下。3003「BookingID 不正确」同样只回
+INDETERMINATE：「不正确」分不清是没有还是写错。
+
+### 10.4 取消：两步 + 确证
+
+1. **缺供应商单号先反查**（按 ClientReference）：Status=3 → 直接 SUCCESS（幂等，罚金 NONE）；
+   Status=4 → FAILED「未成单无可取消」；空/多笔/失败 → UNKNOWN（取消未发出）。
+2. **预取消** `HotelBookingCancel`：只签 10 分钟有效的 `ConfirmID` 并报罚金，**不改订单状态**（官方原文）。
+   故任何解析得出的错误都是 FAILED（取消未发出）；例外 **3018 → SUCCESS（幂等）**——实证 2026-09-10 文案
+   「Booking is already canceled.」；2017/2019 → AUTH_CONFIG；无响应 → UNKNOWN。
+3. **罚金 = 预取消的 `Amount` + `Currency`**（来源 FIELD；确认取消成功是空对象，无处可读）。缺一即 NONE。
+   实证：6849 CNY（2025-11-28）与 0 CNY（2026-09-10 免罚单）。
+4. **确认取消** `HotelBookingCancelConfirm`，`Description` 固定「行程变更」：3003/3004/3007 → FAILED；
+   3018 → SUCCESS（罚金 NONE，那笔取消不是我们签的）；2017/2019 → AUTH_CONFIG；**4000「取消失败」、
+   表外码、无响应 → UNKNOWN**。
+5. **确认成功后再查单，看到 `Status=3` 才 SUCCESS**；看到别的状态或查不到 → UNKNOWN 引导上游稍后查单。
+   依据：官方 booking-search「Status=3 表示订单已在 Dida 系统中成功取消，这是该状态的唯一有效确认方式」。
+
+**为什么第 4/5 步这么保守——实证**（cursor 生产，2026-09-10，BookingID 18667668003）：预取消 5 次各签一个
+ConfirmID（Amount 0），确认取消 **5 次全部 30 秒读超时**（22:08:42~22:09:33），随后预取消回 3018「已取消」，
+查单 Status=3。即**第一次超时的确认已经生效**，后四次是在重复取消一个已取消的单。若把超时判成失败，
+上游会告诉客人"取消没成功"而房其实已经退了。
+
+### 10.5 超时预算
+
+官方超时设置页（information-hub/timeout-setting-description）：下单 **180 秒**、取消 **180 秒**、查单 20 秒、
+验价 20 秒、查价 5 秒。本仓通道层默认读超时 10 秒（`HttpUtils.TIME_OUT`），二批为道旅订单族加了按接口的
+读超时（`AbstractDidaJsonAccess` 新构造参数，`HttpUtils.access` 新增带 socketTimeout 的重载）：
+
+| 接口 | 读超时 | 依据 |
+|---|---|---|
+| 下单、确认取消 | 60 秒 | 官方 180 秒；cursor 按 30 秒等仍见超时且实际生效。60 秒覆盖已观测长尾，又不让客人等满三分钟 |
+| 查单、预取消 | 20 秒 | 官方查单 20 秒；实测查单 50~320ms、预取消 200~360ms |
+
+连接超时不放宽（慢的是供应商处理，不是建连）。超过预算仍按 UNKNOWN 交查单确证。
+
+### 10.6 配置与限流
+
+| 键 | 载体 | 说明 |
+|---|---|---|
+| `dida.booking-enabled` | application.yml（安全护栏，PROJECT.md §3.2.3） | 默认 false；开即真单真额度 |
+| `supplier.dida.booking-contact-email` | Nacos | 下单 Contact.Email，运营信箱，空即不发 |
+| `GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_CREATE_ORDER / QUERY_ORDER / CANCEL_ORDER` | Nacos `ratelimit.qps` | 起步 1 / 2 / 1；取消一次扣两格；依据见 `config/supplier-capability/dida.yaml` |
+
+### 10.7 待首单实测
+
+| 事项 | 现状 |
+|---|---|
+| 本仓请求被道旅接受 | 形态与 cursor 被接受的请求一致，但**未真下过单**。编排本身已用真实报文夹具跑通（`DidaBookingFlowTest` / `DidaCancelFlowTest`，通道由子类钩子替换、不打 HTTP）；查单一段真链路已通（`DidaOrderQueryE2ETest`）。**上游尚未把道旅流量放进 SPA**，首单没有日期——届时必须走真单闭环（下单→查单→取消）并补本仓夹具 |
+| 多间 / 带儿童的 GuestList | 按官方字段表铺满，无实证（cursor 生产一周全是 1 间 1~2 成人） |
+| 中文姓名的 First/Last 拆法 | 照 cursor 在产拆法，是否影响到店核对未验证；官方注 2 建议转英文 |
+| 确认取消的真实耗时分布 | 只有 cursor 的 5 次 30 秒超时样本；60 秒预算是否够，看 `supplier_io_access{interface="SPA_SUPPLIER_API_CANCEL_ORDER",status="error"}` |
+| HCN（ConfirmationCode）回填 | 下单响应里可能缺席（官方注 1），入住前三天查单补齐的定时任务本仓没有 |

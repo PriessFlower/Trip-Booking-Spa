@@ -176,6 +176,11 @@ ratelimit:
     "[GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_PRODUCT_PRICES:CHECK_PRICE]": 1
     "[GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_PRODUCT_PRICES:LIVE]": 1
     "[GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_ORDER_PRICE]": 2
+    # 订单族三接口：cursor 侧 verify/create/cancel/query 共享一桶 8/s，本仓起步取 1~2。
+    # 取消一次扣两格（预取消 + 确认取消），确认取消实测常超 30 秒（cursor 2026-09-10 五次读超时）
+    "[GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_CREATE_ORDER]": 1
+    "[GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_QUERY_ORDER]": 2
+    "[GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_CANCEL_ORDER]": 1
 
 # ── supplier / expedia：静态数据摄取总开关 ──────────────────
 # ── cache：我方自建缓存 ────────────────────────────────────
@@ -320,6 +325,11 @@ supplier:
     # 官方注 14 要求填「客人输入的真实国籍」；我方客源为中国大陆，故 CN。
     # 不要照 cursor 填酒店所在国——那是拿酒店国冒充客人国籍，正是文档点名的争议单来源。
     nationality: CN
+
+    # 下单 Contact.Email：接收道旅的订单通知，应指向运营团队可长期查收的信箱，不是旅客邮箱。
+    # 官方未标必填（只带 Name 的请求也能成单），空即不发；联系人姓名与电话取上游契约。
+    # 注意：dida.booking-enabled 为安全护栏，固定在 application.yml，禁止移入本文件（PROJECT.md §3.2.3）。
+    booking-contact-email: customer_service@mail.haowan2000.com
 
     # resolve 管线开关（docs/product-identity.md §3）：验价时所点 RatePlanID 已不在现货，
     # 允许按上游携带的 productKey 在现取的现货中自动换等价新票。

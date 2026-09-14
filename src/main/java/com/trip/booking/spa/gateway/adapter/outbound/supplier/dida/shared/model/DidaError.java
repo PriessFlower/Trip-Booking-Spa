@@ -24,4 +24,12 @@ public class DidaError {
     /** 会话 id，仅 PriceConfirm 的错误分支下发，报障时供应商据此定位 */
     @JsonProperty("SessionID")
     private String sessionId;
+
+    /**
+     * 道旅订单号，仅订单族接口（booking-confirm/search/cancel）的错误分支可能下发
+     * （官方各页 Error 字段表，2026-09-13 查阅）。错误响应里带单号=道旅侧已有相关订单，
+     * 下单分类时它优先于错误码。
+     */
+    @JsonProperty("BookingID")
+    private String bookingId;
 }

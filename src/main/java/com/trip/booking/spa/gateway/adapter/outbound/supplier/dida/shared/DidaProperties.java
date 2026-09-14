@@ -79,6 +79,29 @@ public class DidaProperties implements InitializingBean, ResolveProperties {
     @Value("${supplier.dida.resolve-price-cap-cents:2000}")
     private int resolvePriceCapCents;
 
+    /**
+     * 下单安全护栏（PROJECT.md §3.2.3/§3.8）：false 即拒绝下单，供应商侧不发生任何动作
+     * （模板回 FAILED 非 UNKNOWN）。闸口由 AbstractBookingSyncSupportService 统一执行。
+     *
+     * <p>三项声明（§3.8.5）：
+     * <ul>
+     *   <li><b>误开的后果</b>：向道旅提交真实订单并占用信用额度。<b>道旅没有沙箱</b>（测试账号
+     *       DidaApiTestID 已废除），唯一可用端点即生产，故不存在"先在沙箱验一遍"的中间态：开即真单</li>
+     *   <li><b>误关的后果</b>：道旅下单全部确定失败，上游可直接终结订单退款；查价/验价/查单/取消不受影响</li>
+     *   <li><b>生效执行面</b>：所有承载 /booking 端点的节点，与 profile 无关</li>
+     * </ul>
+     * 键名前缀 {@code dida.*} 表示它固定在 application.yml、改它必须发版（§3.7.2.1），禁止移入 Nacos。
+     */
+    @Value("${dida.booking-enabled:false}")
+    private boolean bookingEnabled;
+
+    /**
+     * 下单 Contact.Email。联系人邮箱接收供应商通知，应指向运营团队而非旅客；上游契约不含旅客邮箱。
+     * 官方未标 Phone/Email 必填（cursor 生产账号只带 Name 的请求也成单了），故空即不发。
+     */
+    @Value("${supplier.dida.booking-contact-email:}")
+    private String bookingContactEmail;
+
     @Override
     public void afterPropertiesSet() {
         if (resolvePriceTolerance < 0 || resolvePriceTolerance > 0.2) {
@@ -89,8 +112,9 @@ public class DidaProperties implements InitializingBean, ResolveProperties {
             throw new IllegalStateException(
                     "supplier.dida.resolve-price-cap-cents must be between 0 and 100000, but was " + resolvePriceCapCents);
         }
-        log.info("道旅接入配置: urlHost={}, credentialsConfigured={}, currency={}, nationality={}",
-                urlHost, isConfigured(), currency, nationality);
+        // 道旅无沙箱：bookingEnabled=true 即真单真额度，启动日志必须可查
+        log.info("道旅接入配置: urlHost={}, credentialsConfigured={}, currency={}, nationality={}, bookingEnabled={}",
+                urlHost, isConfigured(), currency, nationality, bookingEnabled);
     }
 
     /** 凭证是否齐备；未配置时道旅链路应如实回报不可用，而非带着空凭据去打供应商 */
@@ -116,6 +140,14 @@ public class DidaProperties implements InitializingBean, ResolveProperties {
 
     public String getNationality() {
         return nationality;
+    }
+
+    public boolean isBookingEnabled() {
+        return bookingEnabled;
+    }
+
+    public String getBookingContactEmail() {
+        return bookingContactEmail;
     }
 
     @Override
@@ -151,5 +183,15 @@ public class DidaProperties implements InitializingBean, ResolveProperties {
     /** 仅供测试构造场景使用 */
     public void setResolveEnabled(boolean resolveEnabled) {
         this.resolveEnabled = resolveEnabled;
+    }
+
+    /** 仅供测试构造场景使用 */
+    public void setBookingEnabled(boolean bookingEnabled) {
+        this.bookingEnabled = bookingEnabled;
+    }
+
+    /** 仅供测试构造场景使用 */
+    public void setBookingContactEmail(String bookingContactEmail) {
+        this.bookingContactEmail = bookingContactEmail;
     }
 }
