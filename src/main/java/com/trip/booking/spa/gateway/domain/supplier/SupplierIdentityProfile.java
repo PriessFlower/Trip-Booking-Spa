@@ -112,7 +112,39 @@ public enum SupplierIdentityProfile {
      * 1 小时、建议缓存 50 分钟；401 即重取。
      */
     CLWY(SupplierSourceEnum.CLWY, RoomIdStability.STABLE, QuoteCodeStability.PERISHABLE,
-            Duration.ofMinutes(5), CredentialRenewal.SELF_RENEWING);
+            Duration.ofMinutes(5), CredentialRenewal.SELF_RENEWING),
+
+    /**
+     * 物理房型 realRoomId：<b>稳定</b>。官方把它作为物理房型接口（hotel.oversea.realroom.info）
+     * 的主键下发，报价响应里的 realRoomId 与之同源；cursor 以其为房型维度落库，无轮换救回代码。
+     *
+     * <p>报价码 goodsId（官方"产品ID"）：<b>易腐</b>——按 R-4.2「无证据一律按易腐」。
+     *
+     * <p>R-4.5 的预研表把它记为"稳定"，依据是供应商文档称其为"产品ID"、cursor 无救回代码；
+     * 而 R-4.5 同时写明那是预研快照不是免检凭证，迁入时必须重新取证。2026-09-14 重新取证的结果
+     * 是<b>推翻</b>：
+     * <ul>
+     *   <li>短期确实不是一次性令牌——同参隔 20 分钟重查 287/297 仍在；换住期照样复用
+     *       （T+7 的 321 个 id 有 247 个在 T+30 出现、86 个在 T+90 出现）。这只够说明它不随
+     *       单次报价签发。</li>
+     *   <li><b>但长期没有证据</b>：拿今天实测到的 5 个 goodsId 去 cursor 生产库
+     *       {@code room_sub_sale} 里查（酒店 967183，该家 337 行、最后写入 2026-06-15），
+     *       <b>一个都不在</b>。是 id 轮换了还是那批产品下架了，从这份数据分不出来——
+     *       分不出来就按易腐。</li>
+     * </ul>
+     * 故它只进 OfferStore、禁止落库（R-2.1），也不进目录 hint 列。要改成稳定，需要的证据是
+     * 「同一个 goodsId 跨月仍可验价成功」，那要连续观测才能拿到。
+     *
+     * <p>TTL 上限取 10 分钟：本家<b>验价不签发任何票据</b>——order.check 只回最新价与退改，
+     * 没有 RateKey/ReferenceNo 之类的一次性号，下单靠 goodsId 原样再报一次。故句柄里存的
+     * 是我方自己的一份现货快照，其寿命由"价还准不准"决定。10 分钟是我方选定的保守口径，
+     * 不是美团的承诺。
+     *
+     * <p>凭据：<b>每请求现签</b>（HMAC-SHA1 签 accesskey/timestamp/nonce/data 等参数），
+     * 无会话无到期，故为 STATELESS。
+     */
+    MEITUAN(SupplierSourceEnum.MEITUAN, RoomIdStability.STABLE, QuoteCodeStability.PERISHABLE,
+            Duration.ofMinutes(10), CredentialRenewal.STATELESS);
 
     /** 房型 ID 的申报档位 */
     public enum RoomIdStability {

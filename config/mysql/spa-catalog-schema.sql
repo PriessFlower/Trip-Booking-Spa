@@ -223,3 +223,26 @@ CREATE TABLE IF NOT EXISTS clwy_query_price_task (
     UNIQUE KEY uk_hotel_stay (sh_id, delay_check_in, delay_check_out),
     KEY idx_priority_last (priority_level_number, last_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='差旅无忧查价预热任务队列';
+
+-- 美团查价预热任务队列（与 elong/fliggy/dida/clwy 的同名表同构）。速率不由本表控制，由 Nacos
+-- ratelimit.qps 的 GLOBAL_LIMIT:MEITUAN:*:REFRESH 约束。
+-- 一行 = 一次 hotel.oversea.batch.goods.rp 调用。该接口的 hotelIds 是列表、支持合批，但仍逐店一次：
+-- 2026-09-14 实测本家可卖清单只有 847 家（hotel.oversea.poi.list 全量翻页去重），逐店刷跑得起，
+-- 没必要为省配额而放弃"哪一行刷失败了"这个可归因性。清单显著变大时再议合批。
+-- 播种口径：poi.list 的全量 hotelId，住期 T+0..2 各 1 晚起步，扩住期改 delay 列。
+CREATE TABLE IF NOT EXISTS meituan_query_price_task (
+    id                    BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    sh_id                 VARCHAR(64)  NOT NULL COMMENT '美团酒店id（hotelId）',
+    delay_check_in        INT          NOT NULL DEFAULT 0 COMMENT '入住日期偏移(天)',
+    delay_check_out       INT          NOT NULL DEFAULT 1 COMMENT '离店日期偏移(天)',
+    query_count           INT          NOT NULL DEFAULT 0 COMMENT '已查价次数',
+    create_time           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    last_time             DATETIME     NULL COMMENT '最近一次查价时间',
+    priority_level_number INT          NOT NULL DEFAULT 0 COMMENT '优先级(0=T+0~2 1=T+3~7 2=T+8~30,无货态=业务档+10)',
+    temporary_upgrade     INT          NOT NULL DEFAULT 0 COMMENT '临时提升优先级 0否 1是',
+    upgrade_deadline      DATETIME     NULL COMMENT '临时优先级截止时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_hotel_stay (sh_id, delay_check_in, delay_check_out),
+    KEY idx_priority_last (priority_level_number, last_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='美团查价预热任务队列';

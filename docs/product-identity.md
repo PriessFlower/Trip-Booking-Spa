@@ -29,7 +29,7 @@
 
 - **R-2.1 (MUST NOT)** 易腐令牌不得写入 MySQL（目录表、订单表、任何持久层）。
 - **R-2.2 (MUST)** 易腐令牌只存 OfferStore，TTL < 该供应商已知轮换周期（汇智 4h → TTL ≤ 2h）。承接既有纪律：句柄存活时间必须短于供应商凭据有效期（`OfferStore` javadoc）。
-- **R-2.3 (MAY)** 申报为稳定且有证据的供应商真码（美团 `goodsId`、Expedia `rate_id`）可入目录 hint 列，语义=解析快速通道，**非身份**。身份列只放 productKey。
+- **R-2.3 (MAY)** 申报为稳定且有证据的供应商真码（Expedia `rate_id`）可入目录 hint 列，语义=解析快速通道，**非身份**。身份列只放 productKey。
 - **R-2.4 (MUST)** **聚合的映射表不建在网关**。「统一产品 ↔ 各家供应商卖法」这张桥属聚合域（用途只有比价检索），由做聚合的一方自建；SPA 只负责产出 productKey。桥的内部纪律仍然成立——统一侧列（聚合结果）可改，供应商侧列（事实）不改，聚合纠错只许重写统一侧——但那是聚合域自己要守的，不在本仓。
 
   本仓原有 `global_product_supplier`，是 2026-08-07 还原旧中台（hotel-base 带聚合层）时一并建的。撤除前实况：**全仓零 SELECT**，统一侧三列是供应商侧的 1:1 拷贝（生产抽样 1000/1000 相同），每条档案白写两遍。2026-08-20 停写并撤表，守护测试 `ProductIdentityArchRulesTest.R61_aggregationBridgeMustNotComeBack` 防复活。
@@ -108,7 +108,7 @@
 | 供应商 | 报价标识 | 腐性 | 证据 |
 |---|---|---|---|
 | Expedia | rate_id | 稳定 | 本仓测试端点实测：跨日期/跨天不变；易腐的 `?token=` 上游已分离。**跨端点（test↔生产）是否同值未证**，认证后复核 |
-| meituan | goodsId | 稳定 | 供应商文档"产品ID"；cursor 零救回代码 |
+| meituan | goodsId | **易腐**（2026-09-14 迁入时按 R-4.5 重新取证，推翻原"稳定"） | 短期不是一次性令牌（同参 20 分钟后 287/297 仍在；T+7 的 321 个 id 有 247 个在 T+30、86 个在 T+90 复现）。但长期无证据：今天实测的 5 个 goodsId 在 cursor 生产 `room_sub_sale` 里一个都不在（酒店 967183 共 337 行，最后写入 2026-06-15），是轮换还是下架分不出来 → 按 R-4.2 取易腐 |
 | tourmind | RateCode | 稳定 | 供应商文档"全局唯一" |
 | greencloud | productCode | 稳定 | cursor 代码注释：无独立 token，下单沿用 productCode |
 | xiwan | ratePlanId | 弱稳定→按易腐起步 | 仅 A/B 探针"双拉取稳定"实测 |
