@@ -102,6 +102,8 @@ public class ElongOrderQuerySyncServiceImpl
                 .supplierOrderStatus(result.getStatus())
                 .confirmationNumber(extractConfirmationNumber(result.getOrderRooms()))
                 .totalPrice(yuanToCents(result.getTotalPrice()))
+                // 艺龙国际接口价格单位为人民币元（取消实现同此口径），显式申报以免上游猜币种
+                .totalPriceCurrency(result.getTotalPrice() == null ? null : "CNY")
                 .createTime(result.getCreationDate())
                 .build();
     }

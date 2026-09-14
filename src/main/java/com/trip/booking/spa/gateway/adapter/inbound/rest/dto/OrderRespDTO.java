@@ -35,9 +35,15 @@ public class OrderRespDTO {
      */
     public String supplierProductId;
     /**
-     * 订单总价
+     * 订单总价（分），币种见 {@link #totalPriceCurrency}。
      */
     public Integer totalPrice;
+    /**
+     * {@link #totalPrice} 的币种，ISO 4217 大写三字码。与 totalPrice 同生同灭——金额不许无币种流转
+     * （Money 类注释）：道旅/飞猪等家的订单可能是 USD 等非 CNY 币种，裸数值会被上游当人民币。
+     * 存量艺龙实现按其接口口径固定报 CNY。
+     */
+    public String totalPriceCurrency;
     /**
      * 结算价
      */
