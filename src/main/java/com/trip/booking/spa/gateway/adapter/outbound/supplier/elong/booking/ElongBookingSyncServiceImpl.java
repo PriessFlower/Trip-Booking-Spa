@@ -1,8 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.booking;
 
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.BookingRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.BookingReq;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.Offer;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.booking.ElongBookingClassifier.Classification;
@@ -17,7 +15,9 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongOrderCreateResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongOrderDetailResponse;
 import com.trip.booking.spa.gateway.application.booking.AbstractBookingSyncSupportService;
+import com.trip.booking.spa.gateway.domain.booking.BookingCommand;
 import com.trip.booking.spa.gateway.domain.booking.BookingOutcome;
+import com.trip.booking.spa.gateway.domain.booking.BookingResult;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.http.asynchttp.ResponseResult;
 import com.trip.booking.spa.platform.util.JsonUtils;
@@ -44,7 +44,7 @@ import java.util.List;
 @Slf4j
 @Service("elongBookingSyncService")
 public class ElongBookingSyncServiceImpl
-        extends AbstractBookingSyncSupportService<ElongBookingSyncServiceImpl.BookingOutcomeHolder> {
+        extends AbstractBookingSyncSupportService {
 
     private static final String PAYMENT_TYPE_PREPAY = "Prepay";
 
@@ -63,12 +63,12 @@ public class ElongBookingSyncServiceImpl
     private OfferStore offerStore;
 
     @Override
-    public BookingOutcomeHolder doBooking(BookingReq req) {
-        BookingOutcomeHolder holder = bookInternal(req);
+    protected BookingResult doBooking(BookingCommand command) {
+        BookingResult holder = bookInternal(command);
         // 一次性票据：确定成功即核销句柄（PR #53 纪律）。FAILED/UNKNOWN 不核销——
         // FAILED 允许上游修正后用同一报价重试，UNKNOWN 的对账反查可能仍需它
-        if (holder != null && holder.outcome == BookingOutcome.SUCCESS) {
-            offerStore.consume(req.getOfferId());
+        if (holder != null && holder.outcome() == BookingOutcome.SUCCESS) {
+            offerStore.consume(command.offerId());
         }
         return holder;
     }
@@ -83,28 +83,24 @@ public class ElongBookingSyncServiceImpl
         return properties.isBookingEnabled();
     }
 
-    private BookingOutcomeHolder bookInternal(BookingReq req) {
+    private BookingResult bookInternal(BookingCommand command) {
         // 以下判定全部在向艺龙发出任何请求之前完成，供应商侧不会发生任何事，
         // 一律确定失败而非"结果不确定"——上游可以放心地不去查单
         if (!properties.isConfigured()) {
-            log.error("艺龙下单：凭证未配置，无法下单,orderId={}", req.getOrderId());
-            return BookingOutcomeHolder.failed(req.getOrderId(), "credentials_missing",
-                    "艺龙凭证未配置，供应商侧未发生任何动作");
+            log.error("艺龙下单：凭证未配置，无法下单,orderId={}", command.orderId());
+            return BookingResult.failed(command.orderId(), "credentials_missing", "艺龙凭证未配置，供应商侧未发生任何动作", "艺龙凭证未配置，供应商侧未发生任何动作");
         }
-        if (StringUtils.isBlank(req.getOfferId())) {
-            return BookingOutcomeHolder.failed(req.getOrderId(), "missing_offer_id",
-                    "缺少 offerId，请先验价并回传该报价句柄");
+        if (StringUtils.isBlank(command.offerId())) {
+            return BookingResult.failed(command.orderId(), "missing_offer_id", "缺少 offerId，请先验价并回传该报价句柄", "缺少 offerId，请先验价并回传该报价句柄");
         }
-        Offer offer = offerStore.resolve(req.getOfferId());
+        Offer offer = offerStore.resolve(command.offerId());
         if (offer == null) {
-            return BookingOutcomeHolder.failed(req.getOrderId(), "offer_unresolvable",
-                    "报价已过期或不存在，请重新验价后下单");
+            return BookingResult.failed(command.orderId(), "offer_unresolvable", "报价已过期或不存在，请重新验价后下单", "报价已过期或不存在，请重新验价后下单");
         }
         if (!Integer.valueOf(SupplierSourceEnum.ELONG.getCode()).equals(offer.getSupplierId())) {
             log.error("艺龙下单：报价句柄归属供应商不符,orderId={},offerSupplierId={}",
-                    req.getOrderId(), offer.getSupplierId());
-            return BookingOutcomeHolder.failed(req.getOrderId(), "offer_supplier_mismatch",
-                    "该报价句柄不属于本供应商，请核对下单请求的供应商");
+                    command.orderId(), offer.getSupplierId());
+            return BookingResult.failed(command.orderId(), "offer_supplier_mismatch", "该报价句柄不属于本供应商，请核对下单请求的供应商", "该报价句柄不属于本供应商，请核对下单请求的供应商");
         }
         // 七项会话凭证 + 申报价 + 逐日价 + 住期缺一不可（cursor 侧任一缺失即拒单）。
         // DAY_PRICE_LIST 列入必需键还有第二重作用：只有走完 validate 并通过的路径才会写它，
@@ -117,22 +113,20 @@ public class ElongBookingSyncServiceImpl
                 ElongOfferCredentials.DAY_PRICE_LIST,
                 ElongOfferCredentials.CHECK_IN, ElongOfferCredentials.CHECK_OUT)) {
             if (StringUtils.isBlank(offer.credential(key))) {
-                log.error("艺龙下单：报价句柄缺少凭据,orderId={},missingKey={}", req.getOrderId(), key);
-                return BookingOutcomeHolder.failed(req.getOrderId(), "offer_credential_missing",
-                        "报价句柄内容不完整（缺 " + key + "），请重新验价后下单");
+                log.error("艺龙下单：报价句柄缺少凭据,orderId={},missingKey={}", command.orderId(), key);
+                return BookingResult.failed(command.orderId(), "offer_credential_missing", "报价句柄内容不完整（缺 " + key + "），请重新验价后下单", "报价句柄内容不完整（缺 " + key + "），请重新验价后下单");
             }
         }
         // 住期以验价句柄为准；上游传参不一致=调用方串单，价必对不上，拒于本地
-        if (!offer.credential(ElongOfferCredentials.CHECK_IN).equals(req.getCheckIn())
-                || !offer.credential(ElongOfferCredentials.CHECK_OUT).equals(req.getCheckOut())) {
+        if (!offer.credential(ElongOfferCredentials.CHECK_IN).equals(command.checkIn())
+                || !offer.credential(ElongOfferCredentials.CHECK_OUT).equals(command.checkOut())) {
             log.error("艺龙下单：住期与验价不符,orderId={},req={}~{},offer={}~{}",
-                    req.getOrderId(), req.getCheckIn(), req.getCheckOut(),
+                    command.orderId(), command.checkIn(), command.checkOut(),
                     offer.credential(ElongOfferCredentials.CHECK_IN), offer.credential(ElongOfferCredentials.CHECK_OUT));
-            return BookingOutcomeHolder.failed(req.getOrderId(), "stay_mismatch",
-                    "下单住期与验价时不一致，请重新验价后下单");
+            return BookingResult.failed(command.orderId(), "stay_mismatch", "下单住期与验价时不一致，请重新验价后下单", "下单住期与验价时不一致，请重新验价后下单");
         }
 
-        ElongOrderCreateRequest createRequest = buildRequest(req, offer);
+        ElongOrderCreateRequest createRequest = buildRequest(command, offer);
         String dataJson = JsonUtils.writeObject2Json(
                 new ElongRequestEnvelope(properties.getVersion(), createRequest));
         ResponseResult<ElongOrderCreateResponse> result = new CreateOrderAccess(properties)
@@ -141,23 +135,21 @@ public class ElongBookingSyncServiceImpl
         ElongOrderCreateResponse data = result == null ? null : result.getData();
         Classification classification = ElongBookingClassifier.classifyCreate(data);
         log.info("艺龙下单：分类结果,orderId={},classification={},errorCode={}",
-                req.getOrderId(), classification, data == null ? null : data.getCode());
+                command.orderId(), classification, data == null ? null : data.getCode());
 
         switch (classification) {
             case SUCCESS:
                 log.info("艺龙下单：成单,orderId={},sOrderId={},cancelTime={},instantConfirm={}",
-                        req.getOrderId(), data.orderId(), data.getResult().getCancelTime(),
+                        command.orderId(), data.orderId(), data.getResult().getCancelTime(),
                         data.getResult().getIsInstantConfirm());
-                return BookingOutcomeHolder.success(req.getOrderId(), String.valueOf(data.orderId()));
+                return BookingResult.success(command.orderId(), String.valueOf(data.orderId()), null, null);
             case DUPLICATE_SUSPECT:
-                return resolveDuplicateSuspect(req, data);
+                return resolveDuplicateSuspect(command, data);
             case DETERMINISTIC_FAILURE:
-                return BookingOutcomeHolder.failed(req.getOrderId(), data.errorCode(), data.getCode());
+                return BookingResult.failed(command.orderId(), data.errorCode(), data.getCode(), data.getCode());
             case INDETERMINATE:
             default:
-                return BookingOutcomeHolder.unknown(req.getOrderId(),
-                        data == null ? null : data.errorCode(),
-                        "下单结果不确定，请稍后凭我方订单号反查确证");
+                return BookingResult.unknown(command.orderId(), data == null ? null : data.errorCode(), "下单结果不确定，请稍后凭我方订单号反查确证", "下单结果不确定，请稍后凭我方订单号反查确证");
         }
     }
 
@@ -166,14 +158,14 @@ public class ElongBookingSyncServiceImpl
      * 反查到 → 收敛为成功；确证无单 → H001045 是风控拒单可判失败，H001043 首发可能仍在
      * 处理中，只能不确定；反查本身不确定 → 不确定。
      */
-    private BookingOutcomeHolder resolveDuplicateSuspect(BookingReq req, ElongOrderCreateResponse data) {
-        ElongOrderDetailResponse detail = queryQuietly(req.getOrderId());
+    private BookingResult resolveDuplicateSuspect(BookingCommand command, ElongOrderCreateResponse data) {
+        ElongOrderDetailResponse detail = queryQuietly(command.orderId());
         if (detail != null && detail.isSucc() && detail.getResult() != null
                 && detail.getResult().getOrderId() != null) {
             log.info("艺龙下单：疑似重复经反查收敛为成功,orderId={},sOrderId={}",
-                    req.getOrderId(), detail.getResult().getOrderId());
-            return BookingOutcomeHolder.success(req.getOrderId(),
-                    String.valueOf(detail.getResult().getOrderId()));
+                    command.orderId(), detail.getResult().getOrderId());
+            return BookingResult.success(command.orderId(),
+                    String.valueOf(detail.getResult().getOrderId()), null, null);
         }
         String errorCode = data.errorCode();
         boolean confirmedAbsent = detail != null && !detail.isSucc()
@@ -181,13 +173,12 @@ public class ElongBookingSyncServiceImpl
         if (confirmedAbsent && errorCode.startsWith("H001045")) {
             // 确证我方单号名下无单：与他单撞了风控（入住日期+手机号+姓名重复），确定拒单
             log.info("艺龙下单：疑似重单且确证无我方单，判确定失败,orderId={},errorCode={}",
-                    req.getOrderId(), errorCode);
-            return BookingOutcomeHolder.failed(req.getOrderId(), errorCode, data.getCode());
+                    command.orderId(), errorCode);
+            return BookingResult.failed(command.orderId(), errorCode, data.getCode(), data.getCode());
         }
         log.warn("艺龙下单：疑似重复但反查未能确证,orderId={},errorCode={},反查确证无单={}",
-                req.getOrderId(), errorCode, confirmedAbsent);
-        return BookingOutcomeHolder.unknown(req.getOrderId(), errorCode,
-                "供应商报重复/过快提交，反查未能确证，请稍后凭我方订单号反查");
+                command.orderId(), errorCode, confirmedAbsent);
+        return BookingResult.unknown(command.orderId(), errorCode, "供应商报重复/过快提交，反查未能确证，请稍后凭我方订单号反查", "供应商报重复/过快提交，反查未能确证，请稍后凭我方订单号反查");
     }
 
     /** 反查一次，任何异常只记录不外抛——调用方的结论不应因补充信息失败而改变 */
@@ -205,21 +196,21 @@ public class ElongBookingSyncServiceImpl
         }
     }
 
-    private ElongOrderCreateRequest buildRequest(BookingReq req, Offer offer) {
-        int reqRooms = req.getRoomNum() == null || req.getRoomNum() < 1 ? 1 : req.getRoomNum();
+    private ElongOrderCreateRequest buildRequest(BookingCommand command, Offer offer) {
+        int reqRooms = command.roomNum() == null || command.roomNum() < 1 ? 1 : command.roomNum();
         // 间数以验价句柄为准：TotalPrice=Σ每日价×间数是艺龙的校验恒等式（H001188），
         // 三者必须同源。旧句柄无此键时回落上游间数（改动前签发、TTL 内的存量）
         int rooms = parseIntOrDefault(offer.credential(ElongOfferCredentials.ROOM_NUM), reqRooms);
         if (rooms != reqRooms) {
             log.error("艺龙下单：下单间数与验价句柄不一致，以句柄为准,orderId={},req={},offer={}",
-                    req.getOrderId(), reqRooms, rooms);
+                    command.orderId(), reqRooms, rooms);
         }
         int adults = parseIntOrDefault(offer.credential(ElongOfferCredentials.ADULT_COUNT), 1);
-        List<ElongOrderCreateRequest.OrderRoom> orderRooms = buildOrderRooms(req.getPersonName(), rooms);
+        List<ElongOrderCreateRequest.OrderRoom> orderRooms = buildOrderRooms(command.personName(), rooms);
         int customers = orderRooms.stream().mapToInt(r -> r.getCustomers().size()).sum();
         String checkIn = offer.credential(ElongOfferCredentials.CHECK_IN);
         return ElongOrderCreateRequest.builder()
-                .affiliateConfirmationId(req.getOrderId())
+                .affiliateConfirmationId(command.orderId())
                 .hotelId(offer.credential(ElongOfferCredentials.HOTEL_ID))
                 .roomTypeId(offer.credential(ElongOfferCredentials.ROOM_TYPE_ID))
                 .ratePlanId(Long.valueOf(offer.credential(ElongOfferCredentials.RATE_PLAN_ID)))
@@ -232,14 +223,14 @@ public class ElongBookingSyncServiceImpl
                 .declaredTotal(new BigDecimal(offer.credential(ElongOfferCredentials.DECLARED_TOTAL)))
                 // 逐日价：原样replay验价当次被艺龙接受的那一份（可能已按其回传的 MinRate 纠正过）。
                 // 官方要求透传以避免部分退时两边金额不一致；用 detail 原值会把 H001189 引到建单环节
-                .dayPriceList(dayPricesOf(offer, req.getOrderId()))
+                .dayPriceList(dayPricesOf(offer, command.orderId()))
                 .currencyCode(CURRENCY_RMB)
                 .earliestArrivalTime(checkIn + EARLIEST_ARRIVAL_HMS)
                 .latestArrivalTime(checkIn + LATEST_ARRIVAL_HMS)
                 .confirmationType(CONFIRMATION_TYPE_NO_NEED)
                 .contact(ElongOrderCreateRequest.Contact.builder()
-                        .name(req.getContactName())
-                        .mobile(req.getContactPhone())
+                        .name(command.contactName())
+                        .mobile(command.contactPhone())
                         .email(properties.getBookingContactEmail())
                         .build())
                 .orderRooms(orderRooms)
@@ -322,53 +313,6 @@ public class ElongBookingSyncServiceImpl
             return Integer.parseInt(value.trim());
         } catch (Exception e) {
             return fallback;
-        }
-    }
-
-    @Override
-    public BookingRespDTO bookingRespConvert(BookingOutcomeHolder holder) {
-        return BookingRespDTO.builder()
-                .outcome(holder.outcome)
-                .orderId(holder.orderId)
-                .sOrderId(holder.sOrderId)
-                .supplierErrorCode(holder.errorCode)
-                .supplierErrorMessage(holder.errorMessage)
-                .orderDesc(holder.errorMessage)
-                .build();
-    }
-
-    /** 编排结果的中间载体，仅本类使用 */
-    public static class BookingOutcomeHolder {
-        BookingOutcome outcome;
-        String orderId;
-        String sOrderId;
-        String errorCode;
-        String errorMessage;
-
-        static BookingOutcomeHolder success(String orderId, String sOrderId) {
-            BookingOutcomeHolder h = new BookingOutcomeHolder();
-            h.outcome = BookingOutcome.SUCCESS;
-            h.orderId = orderId;
-            h.sOrderId = sOrderId;
-            return h;
-        }
-
-        static BookingOutcomeHolder failed(String orderId, String code, String message) {
-            BookingOutcomeHolder h = new BookingOutcomeHolder();
-            h.outcome = BookingOutcome.FAILED;
-            h.orderId = orderId;
-            h.errorCode = code;
-            h.errorMessage = message;
-            return h;
-        }
-
-        static BookingOutcomeHolder unknown(String orderId, String code, String message) {
-            BookingOutcomeHolder h = new BookingOutcomeHolder();
-            h.outcome = BookingOutcome.UNKNOWN;
-            h.orderId = orderId;
-            h.errorCode = code;
-            h.errorMessage = message;
-            return h;
         }
     }
 }

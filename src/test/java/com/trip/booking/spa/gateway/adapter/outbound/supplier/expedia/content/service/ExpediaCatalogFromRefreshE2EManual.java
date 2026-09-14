@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.content.service;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductCatalogMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.state.pricecache.PriceCacheService;
@@ -94,9 +94,9 @@ class ExpediaCatalogFromRefreshE2EManual {
 
             // ---------- A：闸口关 ----------
             ExpediaPriceServiceImpl priceServiceA = priceService(sessionA.getMapper(ProductCatalogMapper.class), false);
-            List<ProductRespDTO> quotedA = new ArrayList<>();
+            List<Product> quotedA = new ArrayList<>();
             for (String pid : propertyIds) {
-                List<ProductRespDTO> got = priceServiceA.queryPricesCache(priceReq(), supplier(pid));
+                List<Product> got = priceServiceA.queryPricesCache(priceReq());
                 if (got != null) {
                     quotedA.addAll(got);
                 }
@@ -111,9 +111,9 @@ class ExpediaCatalogFromRefreshE2EManual {
 
             // ---------- B：闸口开，同一批酒店、同一住期 ----------
             ExpediaPriceServiceImpl priceServiceB = priceService(sessionB.getMapper(ProductCatalogMapper.class), true);
-            List<ProductRespDTO> quotedB = new ArrayList<>();
+            List<Product> quotedB = new ArrayList<>();
             for (String pid : propertyIds) {
-                List<ProductRespDTO> got = priceServiceB.queryPricesCache(priceReq(), supplier(pid));
+                List<Product> got = priceServiceB.queryPricesCache(priceReq());
                 if (got != null) {
                     quotedB.addAll(got);
                 }
@@ -176,11 +176,11 @@ class ExpediaCatalogFromRefreshE2EManual {
         return svc;
     }
 
-    private static PriceReq priceReq() {
+    private static PriceQuery priceReq() {
         LocalDate checkIn = LocalDate.now().plusDays(9);
-        return PriceReq.builder()
+        return PriceQuery.builder()
                 .adultNum(2).childNum(0).childAges(new ArrayList<>())
-                .checkIn(checkIn.toString()).checkout(checkIn.plusDays(1).toString())
+                .checkIn(checkIn.toString()).checkOut(checkIn.plusDays(1).toString())
                 .roomNum(1).build();
     }
 

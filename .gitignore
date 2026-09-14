@@ -39,3 +39,6 @@ HANDOFF.md
 # Python（scripts/ 下的核对脚本本地跑过会生成）
 __pycache__/
 *.pyc
+
+# Claude Code 的会话目录：里面是各会话的 worktree 与带本机路径的 launch.json，不入库
+.claude/

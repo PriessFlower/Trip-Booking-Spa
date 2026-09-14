@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.application.pricing.AbstractProductSyncSupportService;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
@@ -19,7 +19,7 @@ public class FliggyProductSyncServiceImpl extends AbstractProductSyncSupportServ
     private FliggyPriceServiceImpl fliggyPriceService;
 
     @Override
-    public PricingResult querySupplierPrice(PriceReq priceReq, Supplier supplier) {
-        return fliggyPriceService.queryPrices(priceReq, supplier, CallPurpose.LIVE);
+    public PricingResult querySupplierPrice(PriceQuery priceReq) {
+        return fliggyPriceService.queryPrices(priceReq, CallPurpose.LIVE);
     }
 }

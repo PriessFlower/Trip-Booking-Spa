@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.application.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.observability.MonitorService;
@@ -43,7 +43,7 @@ class PricingQueryMetricTest {
     private static AbstractProductSyncSupportService returning(PricingResult result) {
         return new AbstractProductSyncSupportService() {
             @Override
-            public PricingResult querySupplierPrice(PriceReq priceReq, Supplier supplier) {
+            public PricingResult querySupplierPrice(PriceQuery priceReq) {
                 return result;
             }
         };
@@ -61,35 +61,35 @@ class PricingQueryMetricTest {
     @Test
     @DisplayName("三分态各映射一个终态，一次调用记一次")
     void outcomesMapToStatuses() {
-        PriceReq req = PriceReq.builder().checkIn("2026-09-01").checkout("2026-09-02")
+        PriceQuery req = PriceQuery.builder().supplierId(10010).supplierHotelId("H1").checkIn("2026-09-01").checkOut("2026-09-02")
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).build();
 
-        returning(PricingResult.indeterminate()).queryPrice(req, elong());
+        returning(PricingResult.indeterminate()).queryPrice(req);
         assertEquals(1.0, counted("error"));
 
-        returning(PricingResult.noInventory()).queryPrice(req, elong());
+        returning(PricingResult.noInventory()).queryPrice(req);
         assertEquals(1.0, counted("no_inventory"));
 
         // available 需要非空产品列表——PricingResult.available 对空列表会纠正为 no_inventory
         returning(new PricingResult(
                 com.trip.booking.spa.gateway.domain.booking.PricingOutcome.AVAILABLE,
-                List.of())).queryPrice(req, elong());
+                List.of())).queryPrice(req);
         assertEquals(1.0, counted("quoted"));
     }
 
     @Test
     @DisplayName("实现抛异常/返回 null 的兜底路也计入 error——兜底不可无声")
     void fallbackPathsAreCounted() {
-        PriceReq req = PriceReq.builder().checkIn("2026-09-01").checkout("2026-09-02")
+        PriceQuery req = PriceQuery.builder().supplierId(10010).supplierHotelId("H1").checkIn("2026-09-01").checkOut("2026-09-02")
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).build();
 
-        returning(null).queryPrice(req, elong());
+        returning(null).queryPrice(req);
         new AbstractProductSyncSupportService() {
             @Override
-            public PricingResult querySupplierPrice(PriceReq priceReq, Supplier supplier) {
+            public PricingResult querySupplierPrice(PriceQuery priceReq) {
                 throw new IllegalStateException("boom");
             }
-        }.queryPrice(req, elong());
+        }.queryPrice(req);
 
         assertEquals(2.0, counted("error"));
     }
@@ -97,11 +97,12 @@ class PricingQueryMetricTest {
     @Test
     @DisplayName("supplier 编码未知时不打指标——不虚构标签值")
     void unknownSupplierIsNotRecorded() {
-        PriceReq req = PriceReq.builder().checkIn("2026-09-01").checkout("2026-09-02")
+        // 未知供应商码：坐标就在指令里，不再是并排的第二个参数
+        PriceQuery req = PriceQuery.builder().supplierId(99999).supplierHotelId("H1").checkIn("2026-09-01").checkOut("2026-09-02")
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).build();
 
         returning(PricingResult.indeterminate())
-                .queryPrice(req, Supplier.builder().supplierId(99999).build());
+                .queryPrice(req);
 
         assertEquals(0, registry.getMeters().stream()
                 .filter(m -> m.getId().getName().startsWith("pricing_supplier_query")).count());

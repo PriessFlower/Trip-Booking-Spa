@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.FliggyQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyQueryPriceTask;
@@ -141,8 +141,8 @@ public class FliggyCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService
 
     /** 只查不写：写缓存与三态由骨架统一做 */
     @Override
-    protected PricingResult queryForRefresh(PriceReq request, Supplier supplier) {
-        return fliggyPriceService.queryPrices(request, supplier, CallPurpose.REFRESH);
+    protected PricingResult queryForRefresh(PriceQuery request) {
+        return fliggyPriceService.queryPrices(request, CallPurpose.REFRESH);
     }
 
     @Override

@@ -1,10 +1,10 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.checkprice;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.pricing.FliggyPriceServiceImpl;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyProperties;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.model.FliggyAriResponse;
@@ -43,22 +43,22 @@ public class FliggyCheckPriceServiceImpl extends AbstractCheckPriceFlow<FliggyAr
     }
 
     @Override
-    protected CheckPriceRespDTO precondition(CheckPriceReq request) {
+    protected CheckPriceResult precondition(CheckPriceCommand request) {
         return fliggyPriceService.precondition();
     }
 
     @Override
-    protected LiveStock<FliggyAriResponse> fetchLiveStock(CheckPriceReq request, String salesEnvironment) {
+    protected LiveStock<FliggyAriResponse> fetchLiveStock(CheckPriceCommand request, String salesEnvironment) {
         return fliggyPriceService.fetchLiveStock(request);
     }
 
     @Override
-    protected JsonNode findByToken(FliggyAriResponse ari, CheckPriceReq request) {
-        return FliggyPriceServiceImpl.findByRateKey(ari.rates(), request.getSProductId());
+    protected JsonNode findByToken(FliggyAriResponse ari, CheckPriceCommand request) {
+        return FliggyPriceServiceImpl.findByRateKey(ari.rates(), request.supplierProductId());
     }
 
     @Override
-    protected List<ResolveCandidate<JsonNode>> resolveCandidates(FliggyAriResponse ari, CheckPriceReq request) {
+    protected List<ResolveCandidate<JsonNode>> resolveCandidates(FliggyAriResponse ari, CheckPriceCommand request) {
         return fliggyPriceService.resolveCandidates(ari, request);
     }
 
@@ -69,12 +69,12 @@ public class FliggyCheckPriceServiceImpl extends AbstractCheckPriceFlow<FliggyAr
     }
 
     @Override
-    protected CheckPriceRespDTO availabilityOnlyResp(JsonNode rate, FliggyAriResponse ari, CheckPriceReq request) {
+    protected CheckPriceResult availabilityOnlyResp(JsonNode rate, FliggyAriResponse ari, CheckPriceCommand request) {
         return fliggyPriceService.availabilityOnlyResp(request, rate);
     }
 
     @Override
-    protected CheckPriceRespDTO validate(JsonNode rate, FliggyAriResponse ari, CheckPriceReq request) {
+    protected CheckPriceResult validate(JsonNode rate, FliggyAriResponse ari, CheckPriceCommand request) {
         return fliggyPriceService.validate(request, rate, ari);
     }
 }

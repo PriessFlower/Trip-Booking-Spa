@@ -1,9 +1,9 @@
 package com.trip.booking.spa.gateway.application.checkprice;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 
 public interface CheckPriceSyncService {
-    CheckPriceRespDTO checkPrice(CheckPriceReq checkPriceReq);
+    CheckPriceResult checkPrice(CheckPriceCommand checkPriceReq);
 
 }

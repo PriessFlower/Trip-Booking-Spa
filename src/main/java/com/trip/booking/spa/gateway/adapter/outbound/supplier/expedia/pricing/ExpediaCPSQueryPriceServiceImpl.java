@@ -1,8 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ExpediaQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaQueryPriceTask;
 import com.trip.booking.spa.gateway.application.pricing.AbstractCPSQueryPriceService;
@@ -88,7 +87,9 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
         return environment.getProperty("task.expedia-cps.enabled", Boolean.class, false);
     }
 
-    /** Expedia 目前单档 */
+    /**
+     * 档位=住期远近(与艺龙/飞猪统一):0=T0-2 / 1=T3-7 / 2=T8-30,无货态=N+10(模板偏移算法)。
+     */
     @Override
     protected List<Integer> tiers() {
         return List.of(0, 1, 2, SOLD_OUT_OFFSET, SOLD_OUT_OFFSET + 1, SOLD_OUT_OFFSET + 2);
@@ -182,15 +183,18 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
         // 碰巧对"这件事——那个变量改了不报错，只会让刷价窗口整体平移一天，而另三家
         // 都显式钉死了时区，唯独这里没有。
         LocalDate today = LocalDate.now(supplierZone());
-        PriceReq request = PriceReq.builder()
+        // supplierHotelId 必须在这里给：查价指令合一之后（#240），酒店号是 PriceQuery 的成分，
+        // 不再由单独的 Supplier 参数携带。漏了它下游会拿 null 去问 Expedia，对方拒答。
+        PriceQuery request = PriceQuery.builder()
+                .supplierId(supplier().getCode())
+                .supplierHotelId(row.getShId())
                 .adultNum(Integer.parseInt(dimension)).childNum(0)
                 .childAges(new ArrayList<>())
                 .checkIn(today.plusDays(row.getDelayCheckIn()).toString())
-                .checkout(today.plusDays(row.getDelayCheckOut()).toString())
+                .checkOut(today.plusDays(row.getDelayCheckOut()).toString())
                 .roomNum(1).build();
-        Supplier supplier = Supplier.builder().sHotelId(row.getShId()).build();
 
-        List<ProductRespDTO> products = expediaPriceService.queryPricesCache(request, supplier);
+        List<Product> products = expediaPriceService.queryPricesCache(request);
         if (products == null) {
             return RefreshOutcome.FAILED;
         }

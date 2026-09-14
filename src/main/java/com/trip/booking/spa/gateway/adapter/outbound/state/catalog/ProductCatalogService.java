@@ -1,7 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.catalog;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.domain.product.CancelClass;
 import com.trip.booking.spa.gateway.domain.product.ProductIdentity;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierIdentityProfile;
@@ -55,17 +54,17 @@ public class ProductCatalogService {
      * 建档是增益路径：任何失败不得打断报价主路径（异常在此吞掉并告警）。
      *
      * @param products        一轮报价转换出的产品；identity 缺席或含 UNKNOWN 成分的会被跳过
-     * @param requestSupplier 请求方供应商——产品未带 supplierId 时的回落（口径同 productToCache）
+     * @param requestSupplierId 请求方供应商码——产品未带 supplierId 时的回落（口径同 productToCache）
      */
-    public void upsert(List<ProductRespDTO> products, Supplier requestSupplier) {
+    public void upsert(List<Product> products, int requestSupplierId) {
         try {
             if (products == null || products.isEmpty()) {
                 return;
             }
-            Map<Integer, List<ProductRespDTO>> bySupplier = new LinkedHashMap<>();
-            for (ProductRespDTO product : products) {
+            Map<Integer, List<Product>> bySupplier = new LinkedHashMap<>();
+            for (Product product : products) {
                 Integer code = product.getSupplierId() != null ? product.getSupplierId()
-                        : (requestSupplier == null ? null : requestSupplier.getSupplierId());
+                        : (requestSupplierId > 0 ? requestSupplierId : null);
                 if (code == null) {
                     continue;
                 }
@@ -77,7 +76,7 @@ public class ProductCatalogService {
         }
     }
 
-    private void upsertForSupplier(int supplierCode, List<ProductRespDTO> products) {
+    private void upsertForSupplier(int supplierCode, List<Product> products) {
         SupplierSourceEnum supplier = SupplierSourceEnum.getEnum(supplierCode);
         if (supplier == null) {
             // 枚举外的旧代码供应商：无申报无开关键，无从建档
@@ -104,7 +103,7 @@ public class ProductCatalogService {
         int upserted = 0;
         int skippedUnknown = 0;
         int skippedNoKey = 0;
-        for (ProductRespDTO product : products) {
+        for (Product product : products) {
             // 两个成因必须分开计(§6.2.2)：缺 productKey 是派生失败，矛头指向该家 deriver
             // 或它的入参；UNKNOWN 是解析覆盖不足，矛头指向餐食/退改的表外取值
             ProductIdentity identity = product.getIdentity();

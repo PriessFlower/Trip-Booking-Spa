@@ -48,6 +48,7 @@ class OccupancyTest {
     void missingAdultsFallsBackToOne() {
         assertEquals("1", Occupancy.canonical(null, 0, List.of()));
         assertEquals("1", Occupancy.canonical(0, 0, List.of()));
+        assertEquals("1", Occupancy.canonical(-3, 0, List.of()));
     }
 
     @Test
@@ -55,5 +56,13 @@ class OccupancyTest {
     void perRoomRepeats() {
         assertEquals(List.of("2", "2"), Occupancy.perRoom(2, 2, 0, List.of()));
         assertEquals(List.of("2-9"), Occupancy.perRoom(null, 2, 1, List.of(9)));
+        assertEquals(List.of("2"), Occupancy.perRoom(0, 2, 0, List.of()));
+    }
+
+    @Test
+    @DisplayName("儿童数与年龄列表缺其一就不拼儿童段")
+    void childrenNeedBothCountAndAges() {
+        assertEquals("2", Occupancy.canonical(2, 2, null));
+        assertEquals("2", Occupancy.canonical(2, null, List.of(9)));
     }
 }

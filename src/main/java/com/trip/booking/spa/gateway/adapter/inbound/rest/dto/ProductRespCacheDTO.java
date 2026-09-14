@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.inbound.rest.dto;
 
+import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
 import lombok.Data;
 
 /**

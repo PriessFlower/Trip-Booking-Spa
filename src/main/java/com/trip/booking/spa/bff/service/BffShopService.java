@@ -24,8 +24,12 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * 购物链路：搜索报价 → 详情房价 → 验价。
@@ -38,6 +42,29 @@ import java.util.Map;
 public class BffShopService {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /**
+     * 两趟查价并行用的执行器：每个任务一条虚拟线程，无池无队列。
+     *
+     * <p>不用 {@code CompletableFuture} 的默认执行器（ForkJoin 公共池）：那里只有
+     * CPU 核数减一条线程，而这里每个任务都要阻塞 10–20 秒等 Expedia，几个代理商同时
+     * 搜索就会把公共池占满，连带拖累所有用它的地方。虚拟线程阻塞不占内核线程，正合此形。
+     *
+     * <p>并发上限不在这里设：查价受 Expedia 限流器约束，客户端另有 30 秒超时。
+     * 待 PR #231 的 {@code ThreadPools.virtualPerTask} 合入后，这里应改为向它登记，
+     * 池水位才进得了监控（本包按 §0.4 不在 §4.3 守卫范围内，但登记处的价值一样成立）。
+     */
+    private static final ExecutorService SHOP_POOL = Executors.newVirtualThreadPerTaskExecutor();
+
+    /**
+     * 两类售卖环境。零售价（单卖）与打包价是 Expedia 眼里**两类不同产品**：打包价为捆绑价，
+     * 规则上不可当零售价单独售卖，两者各查一趟、各自成条，不做合并或比价。
+     *
+     * <p>2026-09-11 起 B2B 后台两类都取并列展示（此前只取零售价）。展示打包价会激活
+     * Expedia 的 PKG 附加要求（见 docs/expedia/b2b-launch-requirements.md），是 Owner 的决定。
+     */
+    private static final String SALES_ENV_HOTEL_ONLY = "hotel_only";
+    private static final String SALES_ENV_HOTEL_PACKAGE = "hotel_package";
 
     /** 英文原名取自静态摄取的 en-US 行（与 zh-CN 同表不同行），与展示语言无关 */
     private static final String NAME_LANGUAGE_EN = "en-US";
@@ -142,6 +169,26 @@ public class BffShopService {
         return result;
     }
 
+    /**
+     * 零售价与打包价各查一趟。
+     *
+     * <p>两趟并行而非串行：列表一趟就要 10–20 秒（实时询价 25 家），串起来代理商要等到 40 秒。
+     * 两趟互不依赖，各自受同一个限流器约束。
+     *
+     * @return 长度为 2 的数组：[0] 零售价、[1] 打包价，各自是 propertyId → 报价
+     */
+    private List<Map<String, JsonNode>> queryBothEnvironments(List<String> propertyIds, String checkin,
+                                                              String checkout, List<String> occupancies,
+                                                              int ratePlanCount, String evidenceTag,
+                                                              String testScenario) {
+        CompletableFuture<Map<String, JsonNode>> packaged = CompletableFuture.supplyAsync(() ->
+                queryAvailability(propertyIds, checkin, checkout, occupancies, ratePlanCount,
+                        evidenceTag, testScenario, SALES_ENV_HOTEL_PACKAGE), SHOP_POOL);
+        Map<String, JsonNode> retail = queryAvailability(propertyIds, checkin, checkout, occupancies,
+                ratePlanCount, evidenceTag, testScenario, SALES_ENV_HOTEL_ONLY);
+        return List.of(retail, packaged.join());
+    }
+
     // ---------- 搜索 ----------
 
     public JsonNode searchHotels(String city, String checkin, String checkout,
@@ -160,8 +207,10 @@ public class BffShopService {
 
         List<String> occupancies = buildOccupancies(occupancy, adults, childAges, rooms);
         List<String> propertyIds = properties.stream().map(p -> p.propertyId).toList();
-        Map<String, JsonNode> priced = queryAvailability(
+        List<Map<String, JsonNode>> both = queryBothEnvironments(
                 propertyIds, checkin, checkout, occupancies, 1, "shopping", testScenario);
+        Map<String, JsonNode> priced = both.get(0);
+        Map<String, JsonNode> pricedPackage = both.get(1);
         Map<String, String> englishNames = contentRepo.findNames(propertyIds, NAME_LANGUAGE_EN);
 
         ObjectNode result = MAPPER.createObjectNode();
@@ -174,36 +223,51 @@ public class BffShopService {
 
         for (PropertyContentRepo.PropertySummary property : properties) {
             JsonNode hotelPrice = priced.get(property.propertyId);
-            if (hotelPrice == null) {
-                continue; // 无报价的酒店不展示（满房或未开放）
+            JsonNode hotelPricePackage = pricedPackage.get(property.propertyId);
+            if (hotelPrice == null && hotelPricePackage == null) {
+                continue; // 两类都无报价的酒店不展示（满房或未开放）
             }
             ObjectNode hotel = hotels.addObject();
             fillContentSummary(hotel, property, englishNames.get(property.propertyId));
-            JsonNode rate = firstRate(hotelPrice);
-            if (rate != null) {
-                ObjectNode offer = hotel.putObject("offer");
-                JsonNode room = hotelPrice.path("rooms").path(0);
-                offer.put("roomName", room.path("room_name").asText(null));
-                offer.put("refundable", rate.path("refundable").asBoolean(false));
-                offer.put("merchantOfRecord", rate.path("merchant_of_record").asText(null));
-                offer.set("cancelPenalties", rate.path("cancel_penalties"));
-                offer.set("nonrefundableDateRanges", rate.path("nonrefundable_date_ranges"));
-                JsonNode pricing = firstOccupancyPricing(rate);
-                if (pricing != null) {
-                    // 金额节点原样透传（单间价）
-                    offer.set("totals", pricing.path("totals"));
-                    offer.set("nightly", pricing.path("nightly"));
-                }
-                // 列表展示的是订单总价（多间时为各间之和），与详情/结账口径一致
-                ObjectNode aggregate = PricingMath.orderAggregate(rate.path("occupancy_pricing"), occupancies);
-                if (aggregate != null) {
-                    offer.set("orderTotals", aggregate.path("totals"));
-                    offer.put("roomCount", aggregate.path("roomCount").asInt());
-                }
-            }
+            // 两类并列：单卖价进 offer，打包价进 packageOffer。**不取其低者合成一个价**——
+            // 打包价是捆绑价，与零售价不是同一个产品，合成一个数字就分不出代理商点的是哪一种
+            fillListOffer(hotel, "offer", hotelPrice, occupancies, SALES_ENV_HOTEL_ONLY);
+            fillListOffer(hotel, "packageOffer", hotelPricePackage, occupancies, SALES_ENV_HOTEL_PACKAGE);
         }
         result.put("resultCount", hotels.size());
         return result;
+    }
+
+    /** 列表上的一条报价（该酒店该售卖环境下的首条）。无报价时该节点不出现 */
+    private void fillListOffer(ObjectNode hotel, String field, JsonNode hotelPrice,
+                               List<String> occupancies, String salesEnvironment) {
+        if (hotelPrice == null) {
+            return;
+        }
+        JsonNode rate = firstRate(hotelPrice);
+        if (rate == null) {
+            return;
+        }
+        ObjectNode offer = hotel.putObject(field);
+        offer.put("priceFlag", salesEnvironment);
+        JsonNode room = hotelPrice.path("rooms").path(0);
+        offer.put("roomName", room.path("room_name").asText(null));
+        offer.put("refundable", rate.path("refundable").asBoolean(false));
+        offer.put("merchantOfRecord", rate.path("merchant_of_record").asText(null));
+        offer.set("cancelPenalties", rate.path("cancel_penalties"));
+        offer.set("nonrefundableDateRanges", rate.path("nonrefundable_date_ranges"));
+        JsonNode pricing = firstOccupancyPricing(rate);
+        if (pricing != null) {
+            // 金额节点原样透传（单间价）
+            offer.set("totals", pricing.path("totals"));
+            offer.set("nightly", pricing.path("nightly"));
+        }
+        // 列表展示的是订单总价（多间时为各间之和），与详情/结账口径一致
+        ObjectNode aggregate = PricingMath.orderAggregate(rate.path("occupancy_pricing"), occupancies);
+        if (aggregate != null) {
+            offer.set("orderTotals", aggregate.path("totals"));
+            offer.put("roomCount", aggregate.path("roomCount").asInt());
+        }
     }
 
     // ---------- 详情 ----------
@@ -221,9 +285,10 @@ public class BffShopService {
                 .orElseThrow(() -> new BffException(404, "酒店不存在或未摄取: " + propertyId));
 
         List<String> occupancies = buildOccupancies(occupancy, adults, childAges, rooms);
-        Map<String, JsonNode> priced = queryAvailability(
+        List<Map<String, JsonNode>> both = queryBothEnvironments(
                 List.of(propertyId), checkin, checkout, occupancies, 250, "shopping", testScenario);
-        JsonNode hotelPrice = priced.get(propertyId);
+        JsonNode hotelPrice = both.get(0).get(propertyId);
+        JsonNode hotelPricePackage = both.get(1).get(propertyId);
 
         ObjectNode result = MAPPER.createObjectNode();
         fillContentSummary(result, property,
@@ -234,30 +299,52 @@ public class BffShopService {
         ArrayNode occArr = result.putArray("occupancy");
         occupancies.forEach(occArr::add);
 
+        // 同一个房型在两类售卖环境下都可能有报价，按 roomId 并进同一行，房价各自带 priceFlag
         ArrayNode roomsOut = result.putArray("rooms");
-        if (hotelPrice != null) {
-            for (JsonNode room : hotelPrice.path("rooms")) {
-                ObjectNode roomOut = roomsOut.addObject();
-                String roomId = room.path("id").asText();
+        Map<String, ObjectNode> roomsById = new LinkedHashMap<>();
+        appendRooms(roomsOut, roomsById, hotelPrice, property, checkin, checkout, occupancies,
+                SALES_ENV_HOTEL_ONLY);
+        appendRooms(roomsOut, roomsById, hotelPricePackage, property, checkin, checkout, occupancies,
+                SALES_ENV_HOTEL_PACKAGE);
+        result.put("available", roomsOut.size() > 0);
+        return result;
+    }
+
+    /** 把一趟查询的房型与房价并进结果；房型已存在就只追加房价 */
+    private void appendRooms(ArrayNode roomsOut, Map<String, ObjectNode> roomsById, JsonNode hotelPrice,
+                             PropertyContentRepo.PropertySummary property, String checkin,
+                             String checkout, List<String> occupancies, String salesEnvironment) {
+        if (hotelPrice == null) {
+            return;
+        }
+        for (JsonNode room : hotelPrice.path("rooms")) {
+            String roomId = room.path("id").asText();
+            ObjectNode roomOut = roomsById.get(roomId);
+            if (roomOut == null) {
+                roomOut = roomsOut.addObject();
                 roomOut.put("roomId", roomId);
                 roomOut.put("roomName", room.path("room_name").asText(null));
                 fillRoomContent(roomOut, property.raw, roomId);
-                ArrayNode ratesOut = roomOut.putArray("rates");
-                for (JsonNode rate : room.path("rates")) {
-                    ratesOut.add(buildRateNode(property, roomId, rate, checkin, checkout, occupancies));
-                }
+                roomOut.putArray("rates");
+                roomsById.put(roomId, roomOut);
+            }
+            ArrayNode ratesOut = (ArrayNode) roomOut.path("rates");
+            for (JsonNode rate : room.path("rates")) {
+                ratesOut.add(buildRateNode(property, roomId, rate, checkin, checkout, occupancies,
+                        salesEnvironment));
             }
         }
-        result.put("available", roomsOut.size() > 0);
-        return result;
     }
 
     /** 单个房价：透传政策与价格，床型组生成 rateToken（床型选择走各自的 price_check——AP1） */
     private ObjectNode buildRateNode(PropertyContentRepo.PropertySummary property, String roomId,
                                      JsonNode rate, String checkin, String checkout,
-                                     List<String> occupancies) {
+                                     List<String> occupancies, String salesEnvironment) {
         ObjectNode out = MAPPER.createObjectNode();
         out.put("rateId", rate.path("id").asText());
+        // 本条是零售价还是打包价。取自请求的售卖环境而非响应里的 sale_scenario.package：
+        // 我方发的是哪一趟是确定的事实，响应字段缺失或含义变化都不该让这一行跟着变
+        out.put("priceFlag", salesEnvironment);
         out.put("status", rate.path("status").asText(null));
         out.put("availableRooms", rate.path("available_rooms").asInt(0));
         out.put("refundable", rate.path("refundable").asBoolean(false));
@@ -507,7 +594,7 @@ public class BffShopService {
     private Map<String, JsonNode> queryAvailability(List<String> propertyIds, String checkin,
                                                     String checkout, List<String> occupancies,
                                                     int ratePlanCount, String evidenceTag,
-                                                    String testScenario) {
+                                                    String testScenario, String salesEnvironment) {
         validateStay(checkin, checkout);
         StringBuilder query = new StringBuilder("/v3/properties/availability?");
         query.append("checkin=").append(encode(checkin));
@@ -516,7 +603,7 @@ public class BffShopService {
         query.append("&language=").append(encode(props.getLanguage()));
         query.append("&country_code=").append(encode(props.getCountryCode()));
         query.append("&sales_channel=").append(encode(contractProfile.getSalesChannel()));
-        query.append("&sales_environment=hotel_only");
+        query.append("&sales_environment=").append(encode(salesEnvironment));
         query.append("&rate_plan_count=").append(ratePlanCount);
         appendContractTerms(query);
         for (String propertyId : propertyIds) {

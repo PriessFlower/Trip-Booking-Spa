@@ -1,4 +1,4 @@
-package com.trip.booking.spa.gateway.adapter.inbound.rest.dto;
+package com.trip.booking.spa.gateway.domain.product;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

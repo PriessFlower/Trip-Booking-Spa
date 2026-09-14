@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
@@ -55,8 +55,8 @@ class NoInventoryMarkTest {
         ReflectionTestUtils.setField(service, "priceCacheTtlPolicy", new PriceCacheTtlPolicy());
     }
 
-    private static PriceReq req(int adults) {
-        return PriceReq.builder().checkIn(D1).checkout(D2)
+    private static PriceQuery req(int adults) {
+        return PriceQuery.builder().supplierId(10010).supplierHotelId("H1").checkIn(D1).checkOut(D2)
                 .roomNum(1).adultNum(adults).childNum(0).childAges(List.of())
                 .build();
     }
@@ -68,7 +68,7 @@ class NoInventoryMarkTest {
     @Test
     @DisplayName("刷到无在售 → 写无货标记，不是什么都不做")
     void emptyRefreshWritesTheMarker() {
-        service.productToCache(List.of(), req(1), sup());
+        service.productToCache(List.of(), req(1));
 
         ArgumentCaptor<Map<String, Map<String, String>>> cap = ArgumentCaptor.forClass(Map.class);
         Mockito.verify(redisUtils).batchHashMapSetWithExpire(cap.capture(), anyLong(), any(TimeUnit.class));
@@ -85,7 +85,7 @@ class NoInventoryMarkTest {
     @Test
     @DisplayName("只标记本次刷价的那一片占用")
     void marksOnlyTheRefreshedOccupancyShard() {
-        service.productToCache(List.of(), req(1), sup());
+        service.productToCache(List.of(), req(1));
 
         ArgumentCaptor<Map<String, Map<String, String>>> cap = ArgumentCaptor.forClass(Map.class);
         Mockito.verify(redisUtils).batchHashMapSetWithExpire(cap.capture(), anyLong(), any(TimeUnit.class));
@@ -100,7 +100,7 @@ class NoInventoryMarkTest {
         Mockito.when(redisUtils.hmGet("price:10010:H1:1:" + D1, PriceCacheServiceImpl.NO_INVENTORY_FIELD))
                 .thenReturn("1");
 
-        PricingResult r = service.getPriceResult(req(1), sup());
+        PricingResult r = service.getPriceResult(req(1));
 
         assertEquals(PricingOutcome.NO_INVENTORY, r.outcome());
     }
@@ -108,7 +108,7 @@ class NoInventoryMarkTest {
     @Test
     @DisplayName("没标记也没产品 → INDETERMINATE（这一片没刷过）")
     void unmarkedEmptyShardStaysIndeterminate() {
-        PricingResult r = service.getPriceResult(req(2), sup());
+        PricingResult r = service.getPriceResult(req(2));
 
         assertEquals(PricingOutcome.INDETERMINATE, r.outcome(),
                 "2 人那片从没刷过——不能因为它是空的就说供应商没房");
@@ -123,8 +123,8 @@ class NoInventoryMarkTest {
         Mockito.when(redisUtils.hmGet("price:10010:H1:1:" + D1, PriceCacheServiceImpl.NO_INVENTORY_FIELD))
                 .thenReturn("1");
 
-        assertEquals(PricingOutcome.NO_INVENTORY, service.getPriceResult(req(1), sup()).outcome());
-        assertEquals(PricingOutcome.INDETERMINATE, service.getPriceResult(req(2), sup()).outcome());
+        assertEquals(PricingOutcome.NO_INVENTORY, service.getPriceResult(req(1)).outcome());
+        assertEquals(PricingOutcome.INDETERMINATE, service.getPriceResult(req(2)).outcome());
     }
 
     /**
@@ -133,14 +133,14 @@ class NoInventoryMarkTest {
     @Test
     @DisplayName("住期内只要有一天没标记，就不算确定无货")
     void partialMarkIsNotEnough() {
-        PriceReq threeNights = PriceReq.builder().checkIn(D1).checkout("2026-09-04")
+        PriceQuery threeNights = PriceQuery.builder().supplierId(10010).supplierHotelId("H1").checkIn(D1).checkOut("2026-09-04")
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
                 .build();
         Mockito.when(redisUtils.hmGet("price:10010:H1:1:" + D1, PriceCacheServiceImpl.NO_INVENTORY_FIELD))
                 .thenReturn("1");
         // 第二、三天没标记
 
-        assertEquals(PricingOutcome.INDETERMINATE, service.getPriceResult(threeNights, sup()).outcome());
+        assertEquals(PricingOutcome.INDETERMINATE, service.getPriceResult(threeNights).outcome());
     }
 
     /**
@@ -158,7 +158,7 @@ class NoInventoryMarkTest {
                         Map.of(PriceCacheServiceImpl.NO_INVENTORY_FIELD, "1")));
 
         PricingResult r = org.junit.jupiter.api.Assertions.assertDoesNotThrow(
-                () -> service.getPriceResult(req(1), sup()));
+                () -> service.getPriceResult(req(1)));
 
         assertEquals(PricingOutcome.INDETERMINATE, r.outcome(),
                 "只有标记没有价：本用例没桩 hmGet，故落未能确认；要点是不许抛异常");
@@ -173,7 +173,7 @@ class NoInventoryMarkTest {
                         PriceCacheServiceImpl.NO_INVENTORY_FIELD, "1",
                         "a".repeat(64), "{\"price\":12345}")));
 
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> service.getPriceResult(req(1), sup()));
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> service.getPriceResult(req(1)));
     }
 
     // ---------- 标记之前先摘掉旧报价（2026-09-05） ----------
@@ -192,7 +192,7 @@ class NoInventoryMarkTest {
                 .thenReturn(Map.of("a".repeat(64), "{\"price\":12345}",
                         "b".repeat(64), "{\"price\":23456}"));
 
-        service.productToCache(List.of(), req(1), sup());
+        service.productToCache(List.of(), req(1));
 
         ArgumentCaptor<Map<String, Set<String>>> cap = ArgumentCaptor.forClass(Map.class);
         Mockito.verify(redisUtils).batchHashDelete(cap.capture());
@@ -206,7 +206,7 @@ class NoInventoryMarkTest {
         Mockito.when(redisUtils.hashMapGet("price:10010:H1:1:" + D1))
                 .thenReturn(Map.of("a".repeat(64), "{\"price\":12345}"));
 
-        service.productToCache(List.of(), req(1), sup());
+        service.productToCache(List.of(), req(1));
 
         InOrder order = Mockito.inOrder(redisUtils);
         order.verify(redisUtils).batchHashDelete(any());
@@ -220,7 +220,7 @@ class NoInventoryMarkTest {
         Mockito.when(redisUtils.hashMapGet("price:10010:H1:1:" + D1))
                 .thenReturn(Map.of(PriceCacheServiceImpl.NO_INVENTORY_FIELD, "1"));
 
-        service.productToCache(List.of(), req(1), sup());
+        service.productToCache(List.of(), req(1));
 
         Mockito.verify(redisUtils, Mockito.never()).batchHashDelete(any());
     }
@@ -229,7 +229,7 @@ class NoInventoryMarkTest {
     @Test
     @DisplayName("这一片本来就是空的 → 不调删除")
     void nothingToDropMeansNoDeleteCall() {
-        service.productToCache(List.of(), req(1), sup());
+        service.productToCache(List.of(), req(1));
 
         Mockito.verify(redisUtils, Mockito.never()).batchHashDelete(any());
     }
@@ -244,7 +244,7 @@ class NoInventoryMarkTest {
         Mockito.when(redisUtils.hashMapGet(Mockito.anyString()))
                 .thenReturn(Map.of("a".repeat(64), "{\"price\":12345}"));
 
-        service.productToCache(List.of(), req(1), sup());
+        service.productToCache(List.of(), req(1));
 
         ArgumentCaptor<Map<String, Set<String>>> cap = ArgumentCaptor.forClass(Map.class);
         Mockito.verify(redisUtils).batchHashDelete(cap.capture());

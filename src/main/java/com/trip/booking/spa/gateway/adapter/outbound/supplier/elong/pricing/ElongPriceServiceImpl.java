@@ -2,15 +2,15 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Room;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.product.Meal;
+import com.trip.booking.spa.gateway.domain.product.PriceInfo;
+import com.trip.booking.spa.gateway.domain.product.ProductInfo;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.product.Room;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ElongQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
@@ -105,31 +105,32 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     /** 刷价落缓存用；与 Expedia 共用同一实现，键结构 price:hotelId:date 与供应商无关 */
 
     @Override
-    public PricingResult queryPrices(PriceReq request, Supplier supplier, CallPurpose purpose) {
+    public PricingResult queryPrices(PriceQuery request, CallPurpose purpose) {
         if (!properties.isConfigured()) {
             log.error("艺龙查价：凭证未配置（ELONG_USER/ELONG_APP_KEY/ELONG_SECRET），无法调用,sHotelId={}",
-                    supplier.getSHotelId());
+                    request.supplierHotelId());
             return PricingResult.indeterminate();
         }
-        List<String> occupancies = Occupancy.perRoom(request.getRoomNum(), request.getAdultNum(),
-                request.getChildNum(), request.getChildAges());
-        request.setOccupancies(occupancies);
+        List<String> occupancies = Occupancy.perRoom(request.roomNum(), request.adultNum(),
+                request.childNum(), request.childAges());
+        // PriceQuery 不可变：占用串算好后带着走，不回写入参
+        request = request.toBuilder().occupancies(occupancies).build();
 
-        ResponseResult<ElongHotelDetailResponse> result = queryHotelDetail(supplier.getSHotelId(), request.getCheckIn(),
-                request.getCheckout(), request.getRoomNum(), request.getAdultNum(), request.getChildNum(), request.getChildAges(),
+        ResponseResult<ElongHotelDetailResponse> result = queryHotelDetail(request.supplierHotelId(), request.checkIn(),
+                request.checkOut(), request.roomNum(), request.adultNum(), request.childNum(), request.childAges(),
                 purpose);
         if (result == null || result.getData() == null) {
-            log.warn("艺龙查价：调用未取得结果,sHotelId={},checkIn={}", supplier.getSHotelId(), request.getCheckIn());
+            log.warn("艺龙查价：调用未取得结果,sHotelId={},checkIn={}", request.supplierHotelId(), request.checkIn());
             return PricingResult.indeterminate();
         }
-        return toPricingResult(result.getData(), request, supplier.getSHotelId());
+        return toPricingResult(result.getData(), request, request.supplierHotelId());
     }
 
     /**
      * 现货响应 → 分态+产品。查价与验价即刷回写共用这一段——两条路对「无货 / 未能确认 /
      * 在售」的口径必须同源，回写另起口径会把 F-5.1（失败不动缓存）或僵尸价清理（B7）弄丢一头。
      */
-    PricingResult toPricingResult(ElongHotelDetailResponse data, PriceReq request, String sHotelId) {
+    PricingResult toPricingResult(ElongHotelDetailResponse data, PriceQuery request, String sHotelId) {
         if (!data.isSucc()) {
             // 错误码透传不归并（移植风险④）：码义未核实的一律原样落日志。
             // 码义未核实就不能断言「确实无房」，故落未能确认
@@ -137,7 +138,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             return PricingResult.indeterminate();
         }
         if (data.isEmptyResult()) {
-            log.info("艺龙查价：该店当日无在售产品,sHotelId={},checkIn={}", sHotelId, request.getCheckIn());
+            log.info("艺龙查价：该店当日无在售产品,sHotelId={},checkIn={}", sHotelId, request.checkIn());
             return PricingResult.noInventory();
         }
         ElongHotelDetailResponse.ElongHotel hotel = data.getResult().getHotels().get(0);
@@ -147,17 +148,17 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             // 一轮 900 行里有 134 个酒店-日期是这个形态）。误判成 INDETERMINATE 的代价是
             // 缓存不被清（F-5.1 失败不动缓存），已下架的酒店会留着陈价继续对外报，
             // 直到 TTL 过期 —— 正是 B7 说的僵尸价。
-            log.info("艺龙查价：该店当日无任何报价,sHotelId={},checkIn={}", sHotelId, request.getCheckIn());
+            log.info("艺龙查价：该店当日无任何报价,sHotelId={},checkIn={}", sHotelId, request.checkIn());
             return PricingResult.noInventory();
         }
-        List<ProductRespDTO> products = convertPriceResp(hotel, request);
+        List<Product> products = convertPriceResp(hotel, request);
         if (products.isEmpty()) {
             // 供应商给了产品、但被我们三道过滤全部丢掉（停售/零库存、缺会话凭据、无每日价，
             // 分类计数见 convertPriceResp 的日志）。这里<b>不能</b>说 NO_INVENTORY：
             // 只有「缺凭据」「无每日价」那两类是我方原因，房其实还在，说成无房会让上游
             // 据此劝退旅客。要升级成确定态，得先把三类跳过原因分开统计（待做）
             log.info("艺龙查价：供应商给了报价但被我方过滤全丢，按未能确认回报,sHotelId={},checkIn={}",
-                    sHotelId, request.getCheckIn());
+                    sHotelId, request.checkIn());
             return PricingResult.indeterminate();
         }
         return PricingResult.available(products);
@@ -172,13 +173,13 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         return n;
     }
 
-    private List<ProductRespDTO> convertPriceResp(ElongHotelDetailResponse.ElongHotel hotel, PriceReq request) {
-        List<ProductRespDTO> products = new ArrayList<>();
+    private List<Product> convertPriceResp(ElongHotelDetailResponse.ElongHotel hotel, PriceQuery request) {
+        List<Product> products = new ArrayList<>();
         int totalPlans = 0;
         int skippedNotOnSale = 0;
         int skippedNoCredentials = 0;
         int skippedNoPrice = 0;
-        String occupancy = request.getOccupancies().get(0);
+        String occupancy = request.occupancies().get(0);
         for (ElongHotelDetailResponse.ElongRoom room : emptyIfNull(hotel.getRooms())) {
             for (ElongRatePlan plan : emptyIfNull(room.getRatePlans())) {
                 totalPlans++;
@@ -201,7 +202,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         // 非常态走向必须可观测（§6.2.1）：跳过的每一类都有落点，排障时能看出报价去哪了。
         // 日志答「这一家这一天」，指标答「整体丢了多少」（O-1.3：算出来的计数不得只落日志）
         log.info("艺龙查价：转换完成,hotelId={},checkIn={},产品总数={},在售出报={},跳过_停售或无库存={},跳过_缺会话凭据={},跳过_缺每日价={}",
-                hotel.getHotelId(), request.getCheckIn(), totalPlans, products.size(),
+                hotel.getHotelId(), request.checkIn(), totalPlans, products.size(),
                 skippedNotOnSale, skippedNoCredentials, skippedNoPrice);
         countConvertDropped(DropReason.NOT_ON_SALE, skippedNotOnSale);
         countConvertDropped(DropReason.NO_SESSION_CREDENTIALS, skippedNoCredentials);
@@ -216,10 +217,10 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         }
     }
 
-    private ProductRespDTO convertPlan(String hotelId, ElongHotelDetailResponse.ElongRoom room, ElongRatePlan plan,
-                                       List<ElongDataValidateRequest.DayPrice> dayPrices, String occupancy, PriceReq request) {
+    private Product convertPlan(String hotelId, ElongHotelDetailResponse.ElongRoom room, ElongRatePlan plan,
+                                       List<ElongDataValidateRequest.DayPrice> dayPrices, String occupancy, PriceQuery request) {
         Meal meal = productKeyDeriver.convertMeal(plan);
-        List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), plan.getPrepayResult());
+        List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.checkIn(), plan.getPrepayResult());
         int displayTotalCents = sumCents(dayPrices);
         // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍。
         // 房型成分 = 外层 Room.RoomId（物理房型，供应商静态接口里的那个号），与其他五家口径一致；
@@ -228,7 +229,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         // （ElongOfferCredentials.ROOM_TYPE_ID），不进身份。resolveCandidates 的重派生必须同口径（F-3.3）。
         ProductIdentity identity = productKeyDeriver.deriveIdentity(
                 hotelId, room.getRoomId(), meal, cancelPolicy, occupancy, displayTotalCents);
-        ProductRespDTO product = ProductRespDTO.builder()
+        Product product = Product.builder()
                 .hotelId(hotelId)
                 // 报价标识=GoodsUniqId（会话级易腐，申报见 SupplierIdentityProfile.ELONG）；
                 // 身份=productKey，二者永不同字段
@@ -256,7 +257,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 .priceInfos(buildPriceInfos(dayPrices))
                 .meal(meal)
                 .cancelPolicy(cancelPolicy)
-                .maxOccupancy(plan.getAdultOccupancyPerRoom() != null ? plan.getAdultOccupancyPerRoom() : request.getAdultNum())
+                .maxOccupancy(plan.getAdultOccupancyPerRoom() != null ? plan.getAdultOccupancyPerRoom() : request.adultNum())
                 .build();
         product.setTotalTaxes(0);
         return product;
@@ -265,9 +266,9 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     // ---------- 验价钩子：流程在 ElongCheckPriceServiceImpl（模板），这里只是供应商侧的读法 ----------
 
     /** 凭证未配置即确定失败（网关无兜底），不调供应商 */
-    public CheckPriceRespDTO precondition(CheckPriceReq request) {
+    public CheckPriceResult precondition(CheckPriceCommand request) {
         if (!properties.isConfigured()) {
-            log.error("艺龙验价：凭证未配置（ELONG_USER/ELONG_APP_KEY/ELONG_SECRET），无法调用,sHotelId={}", request.getSHotelId());
+            log.error("艺龙验价：凭证未配置（ELONG_USER/ELONG_APP_KEY/ELONG_SECRET），无法调用,sHotelId={}", request.supplierHotelId());
             return outcome(CheckPriceOutcome.INDETERMINATE, "艺龙凭证未配置，未能确认该产品是否可订");
         }
         return null;
@@ -278,37 +279,37 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * {@link #toPricingResult}——异常价拦截、TTL 分档、无货落缓存全部继承刷价写路径。
      * INDETERMINATE → null = 不动缓存（F-5.1）。
      */
-    public List<ProductRespDTO> freshProducts(ElongHotelDetailResponse data, PriceReq priceReq, String sHotelId) {
+    public List<Product> freshProducts(ElongHotelDetailResponse data, PriceQuery priceReq, String sHotelId) {
         PricingResult classified = toPricingResult(data, priceReq, sHotelId);
         return classified.outcome() == PricingOutcome.INDETERMINATE ? null : classified.products();
     }
 
     /** 现取现验（R-3.1）：重打一次 hotel.detail 取本会话的新马甲与新报价码 */
-    public LiveStock<ElongHotelDetailResponse.ElongHotel> fetchLiveStock(CheckPriceReq request) {
+    public LiveStock<ElongHotelDetailResponse.ElongHotel> fetchLiveStock(CheckPriceCommand request) {
         // 批次4 反馈环(F-6):验价=真实需求信号,该酒店升档 24h 被高频档跟刷(fire-and-forget)
-        markHotelHot(request.getSHotelId());
-        ResponseResult<ElongHotelDetailResponse> result = queryHotelDetail(request.getSHotelId(), request.getCheckIn(),
-                request.getCheckOut(), request.getRoomNum(), request.getAdultCount(), request.getChildNum(), request.getChildAges(),
+        markHotelHot(request.supplierHotelId());
+        ResponseResult<ElongHotelDetailResponse> result = queryHotelDetail(request.supplierHotelId(), request.checkIn(),
+                request.checkOut(), request.roomNum(), request.adultCount(), request.childNum(), request.childAges(),
                 CallPurpose.CHECK_PRICE);
         if (result == null || result.getData() == null) {
-            log.warn("艺龙验价：现货查询未取得结果,sHotelId={},sProductId={}", request.getSHotelId(), request.getSProductId());
+            log.warn("艺龙验价：现货查询未取得结果,sHotelId={},sProductId={}", request.supplierHotelId(), request.supplierProductId());
             return LiveStock.terminal(outcome(CheckPriceOutcome.INDETERMINATE, "现货查询未取得结果，未能确认该产品是否可订，请稍后重试"));
         }
         ElongHotelDetailResponse data = result.getData();
         // 验价即刷的转换器（机制在 AbstractCheckPriceFlow）：闭包捕获这份原始响应，
         // 终态分支也带着它返回——下架/整店无售正是要落无货标记的时候
-        java.util.function.Function<PriceReq, List<ProductRespDTO>> fresh =
-                priceReq -> freshProducts(data, priceReq, request.getSHotelId());
+        java.util.function.Function<PriceQuery, List<Product>> fresh =
+                priceReq -> freshProducts(data, priceReq, request.supplierHotelId());
         if (!data.isSucc()) {
             log.warn("艺龙验价：现货查询返回业务错误,sHotelId={},sProductId={},code={}",
-                    request.getSHotelId(), request.getSProductId(), data.getCode());
+                    request.supplierHotelId(), request.supplierProductId(), data.getCode());
             return LiveStock.<ElongHotelDetailResponse.ElongHotel>terminal(
                     outcome(CheckPriceOutcome.INDETERMINATE, "现货查询失败(" + data.errorCode() + ")，未能确认该产品是否可订"))
                     .freshConvertedBy(fresh);
         }
         if (data.isEmptyResult()) {
             // 逐店查询下的空 Rooms 是该店当日确无在售（混批假空已由逐店纪律排除）
-            log.info("艺龙验价：该店当日无在售产品,sHotelId={},sProductId={}", request.getSHotelId(), request.getSProductId());
+            log.info("艺龙验价：该店当日无在售产品,sHotelId={},sProductId={}", request.supplierHotelId(), request.supplierProductId());
             return LiveStock.<ElongHotelDetailResponse.ElongHotel>terminal(
                     outcome(CheckPriceOutcome.RATE_DEAD, "该酒店当日已无在售产品，请重新查价"))
                     .freshConvertedBy(fresh);
@@ -320,8 +321,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * 换票候选：在售且带验价凭据、有每日价的现货产品，按与查价完全相同的口径重派生 productKey，
      * 键相等才收；价格取 Σ Rate（单间），与查价透出的 totalPrice 同口径。
      */
-    public List<ResolveCandidate<PlanWithRoom>> resolveCandidates(ElongHotelDetailResponse.ElongHotel hotel, CheckPriceReq request) {
-        String occupancy = Occupancy.canonical(request.getAdultCount(), request.getChildNum(), request.getChildAges());
+    public List<ResolveCandidate<PlanWithRoom>> resolveCandidates(ElongHotelDetailResponse.ElongHotel hotel, CheckPriceCommand request) {
+        String occupancy = Occupancy.canonical(request.adultCount(), request.childNum(), request.childAges());
         List<ResolveCandidate<PlanWithRoom>> equivalents = new ArrayList<>();
         for (ElongHotelDetailResponse.ElongRoom room : emptyIfNull(hotel.getRooms())) {
             for (ElongRatePlan plan : emptyIfNull(room.getRatePlans())) {
@@ -333,10 +334,10 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                     continue;
                 }
                 Meal meal = productKeyDeriver.convertMeal(plan);
-                List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), plan.getPrepayResult());
+                List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(request.checkIn(), plan.getPrepayResult());
                 // 与 convertPlan 同口径：房型成分 = 外层 Room.RoomId（物理房型），键分叉即身份分叉（F-3.3）
                 String key = productKeyDeriver.deriveProductKey(hotel.getHotelId(), room.getRoomId(), meal, cancelPolicy, occupancy, sumCents(dayPrices));
-                if (!request.getProductKey().equals(key)) {
+                if (!request.productKey().equals(key)) {
                     continue;
                 }
                 equivalents.add(new ResolveCandidate<>(new PlanWithRoom(room, plan), sumCents(dayPrices)));
@@ -346,10 +347,10 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     }
 
     /** 找到票之后的自检：停售即死票；在售却缺验价凭据属响应自相矛盾，不确定 */
-    public CheckPriceRespDTO inspect(PlanWithRoom found, CheckPriceReq request) {
+    public CheckPriceResult inspect(PlanWithRoom found, CheckPriceCommand request) {
         ElongRatePlan plan = found.plan();
         if (Boolean.FALSE.equals(plan.getStatus())) {
-            log.info("艺龙验价：所点产品已停售,sHotelId={},sProductId={}", request.getSHotelId(), request.getSProductId());
+            log.info("艺龙验价：所点产品已停售,sHotelId={},sProductId={}", request.supplierHotelId(), request.supplierProductId());
             return outcome(CheckPriceOutcome.RATE_DEAD, "该产品已停售，请重新查价后再选择");
         }
         // 此处原有一段「CurrentAlloment <= 0 → SOLD_OUT」已删除：该字段是"房量限额"不是"剩余房量"，
@@ -359,25 +360,25 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         if (!hasSessionCredentials(plan) || StringUtils.isAnyBlank(plan.getHotelCode(), plan.getSupplierId(),
                 plan.getSubSupplierId(), plan.getShopperProductId())) {
             log.error("艺龙验价：现货产品缺验价凭据,sHotelId={},goodsUniqId={},ratePlanId={}",
-                    request.getSHotelId(), plan.getGoodsUniqId(), plan.getRatePlanId());
+                    request.supplierHotelId(), plan.getGoodsUniqId(), plan.getRatePlanId());
             return outcome(CheckPriceOutcome.INDETERMINATE, "供应商响应缺少验价凭据，未能确认该产品是否可订");
         }
         return null;
     }
 
     /** 下单前档：以本会话凭据打 hotel.data.validate */
-    public CheckPriceRespDTO validate(CheckPriceReq request, ElongHotelDetailResponse.ElongHotel hotel, PlanWithRoom found) {
+    public CheckPriceResult validate(CheckPriceCommand request, ElongHotelDetailResponse.ElongHotel hotel, PlanWithRoom found) {
         ElongRatePlan plan = found.plan();
         List<ElongDataValidateRequest.DayPrice> dayPrices = buildDayPrices(plan.getNightlyRates());
         if (dayPrices == null) {
-            log.error("艺龙验价：现货产品缺每日价,sHotelId={},goodsUniqId={}", request.getSHotelId(), plan.getGoodsUniqId());
+            log.error("艺龙验价：现货产品缺每日价,sHotelId={},goodsUniqId={}", request.supplierHotelId(), plan.getGoodsUniqId());
             return outcome(CheckPriceOutcome.INDETERMINATE, "供应商响应缺少每日价，未能确认该产品是否可订");
         }
         return validate(request, hotel.getHotelId(), plan, dayPrices);
     }
 
     /** 二段：以本会话凭据打 hotel.data.validate，并把结果归入确定的分态 */
-    private CheckPriceRespDTO validate(CheckPriceReq request, String hotelId, ElongRatePlan plan,
+    private CheckPriceResult validate(CheckPriceCommand request, String hotelId, ElongRatePlan plan,
                                        List<ElongDataValidateRequest.DayPrice> dayPrices) {
         ElongDataValidateRequest validateRequest = buildValidateRequest(request, hotelId, plan, dayPrices);
         BigDecimal declaredTotalYuan = validateRequest.getDeclaredTotal();
@@ -447,7 +448,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * 验价业务错误码 → 三态。纪律：只有确证不因重试而改变的才判确定态；产品级死码必须
      * RATE_DEAD，绝不折叠进"不确定"——cursor 把 H001083 兜成可订导致建单暴死丢真单。
      */
-    private CheckPriceRespDTO classifyValidateError(CheckPriceReq request, ElongRatePlan plan,
+    private CheckPriceResult classifyValidateError(CheckPriceCommand request, ElongRatePlan plan,
                                                     ElongDataValidateResponse data) {
         String errorCode = StringUtils.trimToEmpty(data.errorCode());
         String full = data.getCode() + "|" + (data.getResult() == null ? "" : StringUtils.trimToEmpty(data.getResult().getErrorMessage()));
@@ -456,19 +457,19 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             // 上游重新查价即可拿到换代后的报价。区分二者只为排障方向（§6.2.2）
             String innerCause = full.contains("7015") ? "7015餐食变化" : (full.contains("7010") ? "7010产品不可订" : "未携内层码");
             log.info("艺龙验价：产品级死码,sHotelId={},goodsUniqId={},errorCode={},内层={}",
-                    request.getSHotelId(), plan.getGoodsUniqId(), errorCode, innerCause);
+                    request.supplierHotelId(), plan.getGoodsUniqId(), errorCode, innerCause);
             return outcome(CheckPriceOutcome.RATE_DEAD, "该产品已不可订(" + errorCode + ")，请重新查价后再选择");
         }
         if (errorCode.startsWith("H001144")) {
             // 马甲过期本可现取现验救回，但本次马甲就是刚取的——即刻过期属链路异常，重试可能成功
             log.warn("艺龙验价：本会话刚取的马甲被报过期,sHotelId={},goodsUniqId={},errorCode={}",
-                    request.getSHotelId(), plan.getGoodsUniqId(), errorCode);
+                    request.supplierHotelId(), plan.getGoodsUniqId(), errorCode);
             return outcome(CheckPriceOutcome.INDETERMINATE, "验价凭证异常(H001144)，未能确认该产品是否可订，请稍后重试");
         }
         if (errorCode.startsWith("H001197") || errorCode.startsWith("H001188")) {
             // 缺马甲/每日价字段错，均属我方请求组装缺陷，需人工介入
             log.error("艺龙验价：请求组装缺陷被供应商拒绝,sHotelId={},goodsUniqId={},errorCode={},response={}",
-                    request.getSHotelId(), plan.getGoodsUniqId(), errorCode, result(data));
+                    request.supplierHotelId(), plan.getGoodsUniqId(), errorCode, result(data));
             return outcome(CheckPriceOutcome.INDETERMINATE, "验价请求异常(" + errorCode + ")，未能确认该产品是否可订");
         }
         if (errorCode.startsWith("H001189")) {
@@ -482,7 +483,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             // 会随时间漂移（同一产品数秒内 82.58→82.53），上游稍后重新查价确有救回可能，
             // 故"可重试"这个语义是站得住的。
             log.error("艺龙验价：每日价口径不符且自纠正未生效,sHotelId={},goodsUniqId={},errorCode={},response={}",
-                    request.getSHotelId(), plan.getGoodsUniqId(), errorCode, result(data));
+                    request.supplierHotelId(), plan.getGoodsUniqId(), errorCode, result(data));
             return outcome(CheckPriceOutcome.INDETERMINATE,
                     "验价未通过(" + errorCode + " 每日价口径不符)，未能确认该产品是否可订，请稍后重试");
         }
@@ -490,13 +491,13 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             // 官方错误码表（2026-08-15 核对）：总价计算错误——我方提交的 TotalPrice 与
             // 供应商现价不符，即该票价格已换代，重试同参数必再失败
             log.info("艺龙验价：总价与现价不符,sHotelId={},goodsUniqId={},errorCode={}",
-                    request.getSHotelId(), plan.getGoodsUniqId(), errorCode);
+                    request.supplierHotelId(), plan.getGoodsUniqId(), errorCode);
             return outcome(CheckPriceOutcome.RATE_DEAD, "该产品价格已变化(H001084)，请重新查价后再选择");
         }
         // 其余码义未核实的一律透传不归并（移植风险④）。H001189 已于 2026-08-21 查清并单列在上，
         // 不再落到这里——这行注释此前把它举为例子，已过时
         log.warn("艺龙验价：未核实错误码，按不确定处理,sHotelId={},goodsUniqId={},code={}",
-                request.getSHotelId(), plan.getGoodsUniqId(), data.getCode());
+                request.supplierHotelId(), plan.getGoodsUniqId(), data.getCode());
         return outcome(CheckPriceOutcome.INDETERMINATE, "验价未通过(" + errorCode + ")，未能确认该产品是否可订");
     }
 
@@ -507,7 +508,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * （供应商验后价）；未下发或与住期对不齐时回落本会话查价合计。签发不成即不可报可订
      * （报得出价却下不了单，比验价失败更糟）。
      */
-    private CheckPriceRespDTO buildBookableResp(CheckPriceReq request, String hotelId, ElongRatePlan plan,
+    private CheckPriceResult buildBookableResp(CheckPriceCommand request, String hotelId, ElongRatePlan plan,
                                                 List<ElongDataValidateRequest.DayPrice> dayPrices,
                                                 BigDecimal declaredTotalYuan, ElongDataValidateResponse data) {
         int rooms = roomsOf(request);
@@ -530,10 +531,10 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         // 间数与申报总价绑定入句柄：TotalPrice=Σ每日价×间数，下单侧必须用同一间数回放
         credentials.put(ElongOfferCredentials.ROOM_NUM, String.valueOf(rooms));
         credentials.put(ElongOfferCredentials.DAY_PRICE_LIST, JsonUtils.writeObject2Json(dayPrices));
-        credentials.put(ElongOfferCredentials.CHECK_IN, request.getCheckIn());
-        credentials.put(ElongOfferCredentials.CHECK_OUT, request.getCheckOut());
+        credentials.put(ElongOfferCredentials.CHECK_IN, request.checkIn());
+        credentials.put(ElongOfferCredentials.CHECK_OUT, request.checkOut());
         credentials.put(ElongOfferCredentials.ADULT_COUNT,
-                String.valueOf(request.getAdultCount() == null ? 1 : request.getAdultCount()));
+                String.valueOf(request.adultCount() == null ? 1 : request.adultCount()));
         String offerId = offerStore.issue(SupplierSourceEnum.ELONG.getCode(), credentials);
         if (StringUtils.isBlank(offerId)) {
             return outcome(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
@@ -541,16 +542,16 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         // 退改与每日价以验价时点为准（查价与验价之间条款可能已变，下单认的是这一份）；
         // 解析不出则回落本会话查价口径，两者皆无即空——不猜（R-5.4）
         List<CancelPolicy> cancelPolicy = productKeyDeriver.convertValidatedCancelPolicy(
-                request.getCheckIn(), validatedCancelPolicyList(data));
+                request.checkIn(), validatedCancelPolicyList(data));
         if (cancelPolicy.isEmpty()) {
-            cancelPolicy = productKeyDeriver.convertCancelPolicy(request.getCheckIn(), plan.getPrepayResult());
+            cancelPolicy = productKeyDeriver.convertCancelPolicy(request.checkIn(), plan.getPrepayResult());
             log.info("艺龙验价：验价响应退改不可解析，回落查价条款,sHotelId={},goodsUniqId={},回落后条数={}",
                     hotelId, plan.getGoodsUniqId(), cancelPolicy.size());
         }
         List<PriceInfo> priceInfos = validatedPriceInfos(data).orElseGet(() -> buildPriceInfos(dayPrices));
         log.info("艺龙验价：通过并签发句柄,sHotelId={},goodsUniqId={},salePrice={}分,offerId={},退改条数={},每日价条数={}",
                 hotelId, plan.getGoodsUniqId(), salePriceCents, offerId, cancelPolicy.size(), priceInfos.size());
-        return CheckPriceRespDTO.builder()
+        return CheckPriceResult.builder()
                 .outcome(CheckPriceOutcome.BOOKABLE)
                 .offerId(offerId)
                 .offerTtlSeconds(offerStore.ttlSecondsOf(SupplierSourceEnum.ELONG.getCode()))
@@ -581,22 +582,22 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * <p>价格与税费仍是 detail 口径（{@code Rate} 与 {@code Rate − MinRate}）；它只用于展示，
      * 真正对账的数在下单前那一档由验价响应给出。
      */
-    public CheckPriceRespDTO availabilityOnlyResp(CheckPriceReq request, ElongRatePlan plan) {
+    public CheckPriceResult availabilityOnlyResp(CheckPriceCommand request, ElongRatePlan plan) {
         List<ElongDataValidateRequest.DayPrice> dayPrices = buildDayPrices(plan.getNightlyRates());
         if (dayPrices == null) {
             log.info("艺龙验价(仅现货)：所点产品缺每日价,sHotelId={},goodsUniqId={}",
-                    request.getSHotelId(), plan.getGoodsUniqId());
+                    request.supplierHotelId(), plan.getGoodsUniqId());
             return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未给出每日价，未能确认该产品");
         }
         List<PriceInfo> priceInfos = buildPriceInfos(dayPrices);
         List<CancelPolicy> cancelPolicy =
-                productKeyDeriver.convertCancelPolicy(request.getCheckIn(), plan.getPrepayResult());
+                productKeyDeriver.convertCancelPolicy(request.checkIn(), plan.getPrepayResult());
         // salePrice 整单口径：每日价是单间的，多间须乘间数（与 BOOKABLE 档一致）
         int totalCents = sumCents(dayPrices) * roomsOf(request);
         log.info("艺龙验价(仅现货)：有货但未验证可订性,sHotelId={},goodsUniqId={},价格={}分,退改条数={},房量限额={}",
-                request.getSHotelId(), plan.getGoodsUniqId(), totalCents, cancelPolicy.size(),
+                request.supplierHotelId(), plan.getGoodsUniqId(), totalCents, cancelPolicy.size(),
                 plan.getCurrentAlloment());
-        return CheckPriceRespDTO.builder()
+        return CheckPriceResult.builder()
                 .outcome(CheckPriceOutcome.AVAILABLE)
                 .salePrice(totalCents)
                 .subPrice(totalCents)
@@ -825,16 +826,16 @@ public class ElongPriceServiceImpl implements ElongPriceService {
      * DayPriceList 是单间口径，TotalPrice = ΣDayPrice.Price × NumberOfRooms（官方 H001188
      * 排查项原文）。此前漏乘间数，多间验价必被拒（2026-08-23 高德 2 间真单坐实）。
      */
-    static ElongDataValidateRequest buildValidateRequest(CheckPriceReq request, String hotelId, ElongRatePlan plan,
+    static ElongDataValidateRequest buildValidateRequest(CheckPriceCommand request, String hotelId, ElongRatePlan plan,
                                                          List<ElongDataValidateRequest.DayPrice> dayPrices) {
         int rooms = roomsOf(request);
         return ElongDataValidateRequest.builder()
-                .arrivalDate(request.getCheckIn())
-                .departureDate(request.getCheckOut())
+                .arrivalDate(request.checkIn())
+                .departureDate(request.checkOut())
                 // Earliest 取抓包样例常用值；Latest 固定 23:59:59——上游到店时间（如
                 // amap.EarlyArrivalTime）不得透传到此，会误伤可订性判定（移植风险⑩）
-                .earliestArrivalTime(request.getCheckIn() + " 12:00:00")
-                .latestArrivalTime(request.getCheckIn() + " 23:59:59")
+                .earliestArrivalTime(request.checkIn() + " 12:00:00")
+                .latestArrivalTime(request.checkIn() + " 23:59:59")
                 .hotelId(hotelId)
                 .hotelCode(plan.getHotelCode())
                 .ratePlanId(plan.getRatePlanId())
@@ -846,15 +847,15 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 .supplierId(plan.getSupplierId())
                 .declaredTotal(sumYuan(dayPrices).multiply(BigDecimal.valueOf(rooms)))
                 .numberOfRooms(rooms)
-                .numberOfAdults(request.getAdultCount())
-                .childAges(CollectionUtils.isEmpty(request.getChildAges()) ? List.of() : request.getChildAges())
+                .numberOfAdults(request.adultCount())
+                .childAges(CollectionUtils.isEmpty(request.childAges()) ? List.of() : request.childAges())
                 .dayPriceList(dayPrices)
                 .build();
     }
 
     /** 间数：上游未携或非法一律按 1 间（与下单侧 buildRequest 同规） */
-    private static int roomsOf(CheckPriceReq request) {
-        return request.getRoomNum() == null || request.getRoomNum() < 1 ? 1 : request.getRoomNum();
+    private static int roomsOf(CheckPriceCommand request) {
+        return request.roomNum() < 1 ? 1 : request.roomNum();
     }
 
     static List<ElongDataValidateRequest.DayPrice> buildDayPrices(List<ElongNightlyRate> nightlyRates) {
@@ -951,8 +952,8 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         return list == null ? List.of() : list;
     }
 
-    private CheckPriceRespDTO outcome(CheckPriceOutcome outcome, String message) {
-        return CheckPriceRespDTO.builder().outcome(outcome).message(message).build();
+    private CheckPriceResult outcome(CheckPriceOutcome outcome, String message) {
+        return CheckPriceResult.builder().outcome(outcome).message(message).build();
     }
 
     /** 现货产品及其所在物理房型（房名展示用） */

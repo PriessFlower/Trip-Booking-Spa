@@ -37,10 +37,14 @@ class ThreadPoolsTest {
                     .filter(p -> {
                         try {
                             String s = Files.readString(p);
-                            return s.contains("new ThreadPoolExecutor(")
-                                    || s.contains("Executors.newFixedThreadPool(")
-                                    || s.contains("Executors.newCachedThreadPool(")
-                                    || s.contains("Executors.newSingleThreadExecutor(");
+                            // 黑名单换白名单：只认「不是 Executors 工厂、不是手搓池」，
+                            // 新出的工厂方法一律先失败。此前枚举四个方法名，
+                            // Executors.newVirtualThreadPerTaskExecutor 就是这么漏进
+                            // SpaController 的（2026-09-10 至 09-11）
+                            return s.contains("Executors.new")
+                                    || s.contains("new ThreadPoolExecutor(")
+                                    || s.contains("new ScheduledThreadPoolExecutor(")
+                                    || s.contains("new ForkJoinPool(");
                         } catch (IOException e) {
                             throw new RuntimeException(e);
                         }
@@ -78,6 +82,43 @@ class ThreadPoolsTest {
         release.countDown();
         pool.shutdown();
         assertTrue(pool.awaitTermination(2, TimeUnit.SECONDS));
+    }
+
+    /** 虚拟线程执行器同样只许出生在这里，且同名即同一份（否则每次请求造一个，登记表失去意义） */
+    @Test
+    void virtualPerTaskIsSharedByName() {
+        ExecutorService a = ThreadPools.virtualPerTask("tp-test-virtual");
+        ExecutorService b = ThreadPools.virtualPerTask("tp-test-virtual");
+        assertSame(a, b);
+    }
+
+    /** 在飞数必须进注册表：它是请求路径上并发量最大的一处，漏了等于监控看不见主干 */
+    @Test
+    void virtualPerTaskReportsInFlight() throws Exception {
+        ExecutorService pool = ThreadPools.virtualPerTask("tp-test-virtual-stats");
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        pool.execute(() -> {
+            started.countDown();
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        assertTrue(started.await(2, TimeUnit.SECONDS));
+
+        int[] busy = ThreadPools.stats().get("tp-test-virtual-stats");
+        assertEquals(1, busy[0], "活跃=在飞任务数");
+        assertEquals(0, busy[2], "无队列，积压恒 0");
+
+        release.countDown();
+        for (int i = 0; i < 100 && ThreadPools.stats().get("tp-test-virtual-stats")[0] != 0; i++) {
+            Thread.sleep(10);
+        }
+        int[] idle = ThreadPools.stats().get("tp-test-virtual-stats");
+        assertEquals(0, idle[0], "跑完即归零");
+        assertEquals(1, idle[3], "已完成计数");
     }
 
     /** 注册表是监控的挂点：造出来的池必须查得到名字与积压 */

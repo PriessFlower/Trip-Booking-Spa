@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.application.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
 
 import java.util.List;
@@ -14,10 +14,10 @@ import java.util.List;
  * @param outcome  分态，永不为 null
  * @param products 产品列表，永不为 null（非 {@link PricingOutcome#AVAILABLE} 时为空列表）
  */
-public record PricingResult(PricingOutcome outcome, List<ProductRespDTO> products) {
+public record PricingResult(PricingOutcome outcome, List<Product> products) {
 
     /** 查到可售产品。传入空列表会被纠正为 {@link PricingOutcome#NO_INVENTORY}——分态不能与事实矛盾 */
-    public static PricingResult available(List<ProductRespDTO> products) {
+    public static PricingResult available(List<Product> products) {
         if (products == null || products.isEmpty()) {
             return noInventory();
         }
@@ -42,7 +42,7 @@ public record PricingResult(PricingOutcome outcome, List<ProductRespDTO> product
      * 而这个断言只有读得懂供应商响应的那一层才有资格下。契约层的兜底用
      * {@link #indeterminate()}。
      */
-    public static PricingResult of(List<ProductRespDTO> products) {
+    public static PricingResult of(List<Product> products) {
         return products == null || products.isEmpty() ? noInventory() : available(products);
     }
 

@@ -1,8 +1,8 @@
 package com.trip.booking.spa.gateway.application.booking;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.BookingRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.BookingReq;
+import com.trip.booking.spa.gateway.domain.booking.BookingCommand;
 import com.trip.booking.spa.gateway.domain.booking.BookingOutcome;
+import com.trip.booking.spa.gateway.domain.booking.BookingResult;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -27,10 +27,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class BookingGateTest {
 
-    private static BookingReq req() {
-        // BookingReq 的 @NonNull 字段必须全给，否则 builder 在构造时就 NPE
-        return BookingReq.builder()
-                .supplierId(10015).sHotelId("H-1").sProductId("P-1").orderId("O-1")
+    private static BookingCommand command() {
+        return BookingCommand.builder()
+                .supplierId(10015).supplierHotelId("H-1").supplierProductId("P-1").orderId("O-1")
                 .personName("ZHANG SAN").contactName("ZHANG SAN").contactPhone("13800000000")
                 .checkIn("2026-10-10").checkOut("2026-10-11")
                 .roomNum(1).totalPrice(10000).settlePrice(9000)
@@ -38,7 +37,7 @@ class BookingGateTest {
     }
 
     /** 关闸后模板不得调用实现——§3.8.3 关闸即停做功 */
-    static class StubBooking extends AbstractBookingSyncSupportService<String> {
+    static class StubBooking extends AbstractBookingSyncSupportService {
         boolean allowed;
         boolean doBookingCalled;
 
@@ -57,27 +56,22 @@ class BookingGateTest {
         }
 
         @Override
-        public String doBooking(BookingReq bookingReq) {
+        protected BookingResult doBooking(BookingCommand command) {
             doBookingCalled = true;
-            return "raw";
-        }
-
-        @Override
-        public BookingRespDTO bookingRespConvert(String raw) {
-            return BookingRespDTO.builder().outcome(BookingOutcome.SUCCESS).sOrderId("S-1").build();
+            return BookingResult.success(command.orderId(), "S-1", null, null);
         }
     }
 
     @Test
     @DisplayName("关闸：回 FAILED（不是 UNKNOWN）——供应商侧什么都没发生，上游可直接退款")
     void closedGateIsDeterministicFailure() {
-        BookingRespDTO resp = new StubBooking(false).booking(req());
+        BookingResult resp = new StubBooking(false).booking(command());
 
-        assertEquals(BookingOutcome.FAILED, resp.getOutcome(),
+        assertEquals(BookingOutcome.FAILED, resp.outcome(),
                 "UNKNOWN 会让上游必须去查单，而这里根本没发出请求");
-        assertEquals("booking_disabled", resp.getSupplierErrorCode());
-        assertEquals("O-1", resp.getOrderId());
-        assertNull(resp.getSOrderId(), "没下单就不该有供应商单号");
+        assertEquals("booking_disabled", resp.supplierErrorCode());
+        assertEquals("O-1", resp.orderId());
+        assertNull(resp.supplierOrderId(), "没下单就不该有供应商单号");
     }
 
     @Test
@@ -85,7 +79,7 @@ class BookingGateTest {
     void closedGateShortCircuitsBeforeImplementation() {
         StubBooking flow = new StubBooking(false);
 
-        flow.booking(req());
+        flow.booking(command());
 
         assertTrue(!flow.doBookingCalled, "§3.8.3：关闸后该路径不得继续做功");
     }
@@ -95,10 +89,10 @@ class BookingGateTest {
     void openGateProceeds() {
         StubBooking flow = new StubBooking(true);
 
-        BookingRespDTO resp = flow.booking(req());
+        BookingResult resp = flow.booking(command());
 
         assertTrue(flow.doBookingCalled);
-        assertEquals(BookingOutcome.SUCCESS, resp.getOutcome());
+        assertEquals(BookingOutcome.SUCCESS, resp.outcome());
     }
 
     /** 拦截日志必须带闸口标识与业务主键（§3.8.4），键名由实现申报 */

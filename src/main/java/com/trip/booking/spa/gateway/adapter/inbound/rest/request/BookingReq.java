@@ -38,7 +38,7 @@ public class BookingReq {
     private Integer settlePrice;//结算价
 
     /**
-     * 验价时由网关签发的报价句柄，即 {@code CheckPriceRespDTO.offerId}，原样回传。
+     * 验价时由网关签发的报价句柄，即 {@code CheckPriceResult.offerId}，原样回传。
      *
      * <p>这是下单的必要输入。句柄背后是供应商内部的下单凭据，由网关自持——
      * <b>调用方不应知道该凭据的形态，也不应尝试解析本字段</b>。

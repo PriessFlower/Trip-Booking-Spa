@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.shared;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
+import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
 import com.trip.booking.spa.gateway.domain.product.CancelClass;
 import com.trip.booking.spa.gateway.domain.product.RefundType;
 import org.junit.jupiter.api.DisplayName;

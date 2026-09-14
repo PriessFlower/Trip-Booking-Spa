@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.inbound.rest.request;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
@@ -17,5 +17,5 @@ public class PushProductsReq {
 
     private String hotelId;
 
-    private List<ProductRespDTO> pushProductsDTO;
+    private List<Product> pushProductsDTO;
 }

@@ -1,6 +1,5 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
 import com.trip.booking.spa.platform.http.asynchttp.BaseResponse;
 
 import java.util.HashMap;
@@ -18,22 +17,12 @@ public class QueryPriceResponse implements BaseResponse {
 
     private List<HotelPrice> hotelPrices;
 
-    private List<ProductRespDTO> productRespDTOList;
-
     public List<HotelPrice> getHotelPrices() {
         return hotelPrices;
     }
 
     public void setHotelPrices(List<HotelPrice> hotelPrices) {
         this.hotelPrices = hotelPrices;
-    }
-
-    public List<ProductRespDTO> getProductRespDTOList() {
-        return productRespDTOList;
-    }
-
-    public void setProductRespDTOList(List<ProductRespDTO> productRespDTOList) {
-        this.productRespDTOList = productRespDTOList;
     }
 
     @Override

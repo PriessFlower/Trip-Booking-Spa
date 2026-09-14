@@ -1,7 +1,8 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.order;
 
 import com.trip.booking.spa.gateway.domain.booking.OrderPresence;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.OrderRespDTO;
+import com.trip.booking.spa.gateway.domain.booking.OrderState;
+import com.trip.booking.spa.gateway.domain.order.OrderQueryResult;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.CreateOrderResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.model.response.QueryOrderResponse;
 import org.junit.jupiter.api.Test;
@@ -29,9 +30,9 @@ class ExpediaOrderQuerySyncServiceImplTest {
     /** Expedia 空数组是「确实没有这笔订单」，这是唯一允许上游重新下单的一态 */
     @Test
     void emptyArrayMapsToNotFound() {
-        OrderRespDTO resp = service.orderQueryRespConvert(QueryOrderResponse.of("[]"));
+        OrderQueryResult resp = service.orderQueryRespConvert(QueryOrderResponse.of("[]"));
 
-        assertEquals(OrderPresence.NOT_FOUND, resp.getPresence());
+        assertEquals(OrderPresence.NOT_FOUND, resp.presence());
     }
 
     /** 错误响应必须落 INDETERMINATE，不可当成「订单不存在」 */
@@ -40,11 +41,11 @@ class ExpediaOrderQuerySyncServiceImplTest {
         QueryOrderResponse raw = QueryOrderResponse.of(
                 "{\"type\":\"internal_server_error\",\"message\":\"boom\"}");
 
-        OrderRespDTO resp = service.orderQueryRespConvert(raw);
+        OrderQueryResult resp = service.orderQueryRespConvert(raw);
 
-        assertEquals(OrderPresence.INDETERMINATE, resp.getPresence(),
+        assertEquals(OrderPresence.INDETERMINATE, resp.presence(),
                 "查单失败若被当成订单不存在，上游会重复下单");
-        assertEquals("boom", resp.getMessage());
+        assertEquals("boom", resp.message());
     }
 
     /** 查到订单时取出订单号、确认号与状态 */
@@ -55,42 +56,42 @@ class ExpediaOrderQuerySyncServiceImplTest {
                 + "\"rooms\":[{\"status\":\"booked\","
                 + "\"confirmation_id\":{\"expedia\":\"705701798359385\"}}]}]";
 
-        OrderRespDTO resp = service.orderQueryRespConvert(QueryOrderResponse.of(body));
+        OrderQueryResult resp = service.orderQueryRespConvert(QueryOrderResponse.of(body));
 
-        assertEquals(OrderPresence.FOUND, resp.getPresence());
-        assertEquals("7933703956082", resp.getSupplierOrderId());
-        assertEquals("705701798359385", resp.getConfirmationNumber());
-        assertEquals(21, resp.getOrderStatus());
-        assertEquals("booked", resp.getSupplierOrderStatus());
+        assertEquals(OrderPresence.FOUND, resp.presence());
+        assertEquals("7933703956082", resp.supplierOrderId());
+        assertEquals("705701798359385", resp.confirmationNumber());
+        assertEquals(OrderState.BOOKED, resp.state(), "语义取值在②，对外数字码 21 由 ① 的 OrderQueryMapping 产出");
+        assertEquals("booked", resp.supplierOrderStatus());
     }
 
     /** 声称查到却没有订单号，属响应自相矛盾，不可按查到处理 */
     @Test
     void foundWithoutItineraryIdIsIndeterminate() {
-        OrderRespDTO resp = service.orderQueryRespConvert(
+        OrderQueryResult resp = service.orderQueryRespConvert(
                 QueryOrderResponse.of("[{\"affiliate_reference_id\":\"UPSTREAM-1\"}]"));
 
-        assertEquals(OrderPresence.INDETERMINATE, resp.getPresence());
+        assertEquals(OrderPresence.INDETERMINATE, resp.presence());
     }
 
     // ── 状态映射：不认识就留空 ────────────────────────────────
 
     @Test
     void allCanceledMapsToCancelSuccess() {
-        assertEquals(31, ExpediaOrderQuerySyncServiceImpl.mapOrderStatus(
+        assertEquals(OrderState.CANCELED, ExpediaOrderQuerySyncServiceImpl.mapOrderStatus(
                 List.of(room("canceled"), room("canceled"))));
     }
 
     /** 部分取消不等于整单取消：只要还有已订的房间，订单仍是预定成功 */
     @Test
     void partiallyCanceledStaysBookSuccess() {
-        assertEquals(21, ExpediaOrderQuerySyncServiceImpl.mapOrderStatus(
+        assertEquals(OrderState.BOOKED, ExpediaOrderQuerySyncServiceImpl.mapOrderStatus(
                 List.of(room("booked"), room("canceled"))));
     }
 
     @Test
     void pendingMapsToBooking() {
-        assertEquals(20, ExpediaOrderQuerySyncServiceImpl.mapOrderStatus(List.of(room("pending"))));
+        assertEquals(OrderState.BOOKING, ExpediaOrderQuerySyncServiceImpl.mapOrderStatus(List.of(room("pending"))));
     }
 
     /**

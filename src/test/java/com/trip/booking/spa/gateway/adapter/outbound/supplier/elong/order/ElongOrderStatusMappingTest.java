@@ -2,6 +2,8 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.order;
 
 import org.junit.jupiter.api.Test;
 
+import com.trip.booking.spa.gateway.domain.booking.OrderState;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -14,34 +16,34 @@ class ElongOrderStatusMappingTest {
     @Test
     void establishedStatesMapToBookSuccess() {
         for (String s : new String[]{"A", "B", "C", "F"}) {
-            assertEquals(21, ElongOrderQuerySyncServiceImpl.mapOrderStatus(s), s);
+            assertEquals(OrderState.BOOKED, ElongOrderQuerySyncServiceImpl.mapOrderStatus(s), s);
         }
     }
 
     @Test
     void inFlightStatesMapToBooking() {
         for (String s : new String[]{"N", "V", "B1", "B2", "B3", "G", "H"}) {
-            assertEquals(20, ElongOrderQuerySyncServiceImpl.mapOrderStatus(s), s);
+            assertEquals(OrderState.BOOKING, ElongOrderQuerySyncServiceImpl.mapOrderStatus(s), s);
         }
     }
 
     @Test
     void cancellingInFlightMapsToCanceling() {
         // E1=取消处理中:真单实测(101067194262)取消受理后立即出现,~30 秒后翻转为 D
-        assertEquals(30, ElongOrderQuerySyncServiceImpl.mapOrderStatus("E1"));
+        assertEquals(OrderState.CANCELING, ElongOrderQuerySyncServiceImpl.mapOrderStatus("E1"));
     }
 
     @Test
     void cancelledStatesMapToCancelSuccess() {
         for (String s : new String[]{"E", "D", "Z"}) {
-            assertEquals(31, ElongOrderQuerySyncServiceImpl.mapOrderStatus(s), s);
+            assertEquals(OrderState.CANCELED, ElongOrderQuerySyncServiceImpl.mapOrderStatus(s), s);
         }
     }
 
     @Test
     void soldOutStatesMapToBookFail() {
-        assertEquals(22, ElongOrderQuerySyncServiceImpl.mapOrderStatus("O"));
-        assertEquals(22, ElongOrderQuerySyncServiceImpl.mapOrderStatus("U"));
+        assertEquals(OrderState.BOOK_FAILED, ElongOrderQuerySyncServiceImpl.mapOrderStatus("O"));
+        assertEquals(OrderState.BOOK_FAILED, ElongOrderQuerySyncServiceImpl.mapOrderStatus("U"));
     }
 
     @Test

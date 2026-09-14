@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProductKeyDeriver;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongProperties;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.model.response.ElongHotelDetailResponse;
@@ -66,11 +66,12 @@ class ElongRoomIdIsPhysicalRoomTest {
         return plan;
     }
 
-    private static PriceReq priceReq() {
-        PriceReq r = PriceReq.builder()
-                .checkIn("2026-09-10").checkout("2026-09-11")
+    private static PriceQuery priceReq() {
+        PriceQuery r = PriceQuery.builder()
+                .supplierId(10010).supplierHotelId("61835012")
+                .checkIn("2026-09-10").checkOut("2026-09-11")
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of()).build();
-        r.setOccupancies(com.trip.booking.spa.gateway.domain.product.Occupancy.perRoom(1, 1, 0, List.of()));
+        r = r.toBuilder().occupancies(com.trip.booking.spa.gateway.domain.product.Occupancy.perRoom(1, 1, 0, List.of())).build();
         return r;
     }
 
@@ -85,20 +86,20 @@ class ElongRoomIdIsPhysicalRoomTest {
         hotel.setHotelId("61504129");
         hotel.setRooms(List.of(room));
 
-        List<ProductRespDTO> products = service.freshProducts(response(hotel), priceReq(), "61504129");
+        List<Product> products = service.freshProducts(response(hotel), priceReq(), "61504129");
         assertEquals(2, products.size());
-        for (ProductRespDTO p : products) {
+        for (Product p : products) {
             assertEquals("0029", p.getRoom().getRoomId(), "报价的房型号必须是物理 RoomId，下游按它对静态数据");
             assertEquals("高级大床房", p.getRoom().getRoomName());
         }
-        for (ProductRespDTO p : products) {
+        for (Product p : products) {
             assertEquals("0029", p.getIdentity().supplierRoomId(),
                     "身份的房型成分也是物理号（2026-09-08 起），与其他五家同口径；销售号只在下单凭据里");
         }
-        assertEquals(1, products.stream().map(ProductRespDTO::getProductKey).distinct().count(),
+        assertEquals(1, products.stream().map(Product::getProductKey).distinct().count(),
                 "同物理房、同餐食退改占用的两个销售房型 = 同一等价类，换票时按容差取最低价");
         assertEquals(List.of("g-53", "g-54"),
-                products.stream().map(ProductRespDTO::getProductId).sorted().toList(),
+                products.stream().map(Product::getProductId).sorted().toList(),
                 "报价码仍各自保留，下单凭据走它们");
     }
 }

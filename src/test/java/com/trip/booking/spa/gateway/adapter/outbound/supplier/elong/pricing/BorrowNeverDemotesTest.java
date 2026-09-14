@@ -10,19 +10,19 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 钉住"借入反成降级"缺陷:验价升档曾把成交档酒店从快车道抽进慢车道。
+ * 钉住升档的档位限定:upgradeByShId 只升档 0/1,不碰档 2。
  *
- * <p>缺陷由两处各自正确的改动交叉而成。{@code upgradeByShId} 原本不过滤档位,因为
- * 当时只有档 0(高频)/档 1(常规)/档 2(兜底),<b>档号越大越不急</b>,借进档 0 恒为提速。
- * 批次5 把档 2 改作成交档(高德出过单的 464 家,T+0~2,每轮全扫、缓存龄 ≤30 分钟)、
- * 新增档 3 远期档(同一批酒店 T+7~29,每店 23 行),这个前提就没了。
+ * <p>档位自 2026-08-28 三家统一为住期远近:0=T+0~2 / 1=T+3~7 / 2=T+8~30,无货态=业务档+10。
+ * 验价事件说明这位客人要订的是<b>近期</b>日期,档 2 的远期行不急;且档 2 行数远多于档 0 的
+ * 单轮批量,借进来会把真正的近期行挤饿。故限定留在写入侧。
  *
- * <p>于是:一次验价 → 该店 3 条成交行 + 23 条远期行全部 temporary_upgrade=1 →
- * 成交/远期档取批以 AND 排除借入行,这 26 行离开本档 → 全被档 0 的 OR 借走。后果两条,
- * 都与反馈环初衷相反:成交档"≤30 分钟"的承诺对<b>刚被验价、最可能马上下单</b>的那家
- * 酒店失效,退回档 0 约 2.6h 的 LRU 轮转;而档 0 每轮只取 400 行,464 家 × 26 行的
- * 借入池足以把真档 0 的行整批挤饿。
+ * <p><b>历史</b>:本测试原本钉的是"借入反成降级"——批次5 曾把档 2 改作成交档(高德出过单的
+ * 464 家,每轮全扫、缓存龄 ≤30 分钟),比档 0 的 LRU 轮转更快,借进档 0 反而是降级。成交档已
+ * 随统一档位退役,SQL 的 in (0, 1) 保留、理由换成上面那条;是否放开档 2 借入尚未复核。
  *
+ * <p>限定必须在<b>写入侧</b>。读取侧(getQueryPriceTaskList)不能加档位过滤:存量的已升档
+ * 非 0/1 档行会哪档都不匹配,即刻变成 issue #95 的孤儿行——而复位只在行被取到时执行,
+ * 取不到即永不复位、永不再刷。
  * <p>修法是在<b>写入侧</b>限定可升档的档位。读取侧(getQueryPriceTaskList)不能加档位
  * 过滤:存量的已升档档 2/3 行会哪档都不匹配,即刻变成 issue #95 的孤儿行——而复位只在
  * 行被取到时执行,取不到即永不复位、永不再刷。
@@ -39,16 +39,15 @@ class BorrowNeverDemotesTest {
             + "/inbound/scheduler/ElongCPSQueryPriceTask.java");
 
     @Test
-    @DisplayName("升档只能碰轮转档(0/1)——成交档比档 0 更快,借入是降级")
+    @DisplayName("升档只能碰档 0/1——档 2 是远期档,借进来会挤饿近期行")
     void upgradeOnlyTouchesRotatingTiers() throws Exception {
         String upgrade = block(Files.readString(MAPPER_XML), "<update id=\"upgradeByShId\">", "</update>");
 
         assertTrue(upgrade.contains("sh_id = #{shId}"),
                 "升档仍应按酒店维度整店生效(F-6.1),不要退化成按行升档");
         assertTrue(upgrade.contains("priority_level_number in (0, 1)"),
-                "upgradeByShId 又变成不限档位升档了。成交档(2)每轮全扫、缓存龄 ≤30 分钟,"
-                        + "借进档 0 的 2.6h 轮转是降级,降的还是刚被验价、最可能下单的那家;"
-                        + "远期档(3)每店 23 行,464 家借进档 0 的 400 批量会把真档 0 挤饿");
+                "upgradeByShId 又变成不限档位升档了。档 2 是远期档(T+8~30),验价者要订的是近期日,"
+                        + "远期行不急;且档 2 行数远多于档 0 的单轮批量,借进来会把真正的近期行挤饿");
     }
 
     @Test
@@ -80,9 +79,8 @@ class BorrowNeverDemotesTest {
         // 借入判定：默认实现只让档 0 借入。各家若要覆写，必须仍然只有一档借入
         String skeleton = Files.readString(SKELETON);
         assertTrue(skeleton.contains("priority == 0 ? 1 : 0"),
-                "借入判定变了。只有档 0 可以借入(F-2.4.1)：成交档比档 0 更快,借进来是降级,"
-                        + "而降的正是刚被验价、最可能马上下单的酒店；远期档每店 23 行,"
-                        + "464 家的借入池会挤爆档 0 的批量");
+                "借入判定变了。只有档 0 可以借入(F-2.4.1)：档 2 是远期档,借进档 0 会把真正的"
+                        + "近期行挤饿");
         assertFalse(src.contains("borrowFor"),
                 "艺龙覆写了 borrowFor。目前没有理由偏离默认(只有档 0 借入),"
                         + "若确有理由,请连同 F-2.4.1 一起改并说明");

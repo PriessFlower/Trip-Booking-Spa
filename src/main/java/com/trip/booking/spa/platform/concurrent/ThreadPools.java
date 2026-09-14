@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -37,6 +38,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class ThreadPools {
 
     private static final ConcurrentHashMap<String, ThreadPoolExecutor> REGISTRY = new ConcurrentHashMap<>();
+
+    /** 虚拟线程执行器另存一处：它不是 ThreadPoolExecutor，没有池大小与队列可查 */
+    private static final ConcurrentHashMap<String, VirtualPerTaskExecutor> VIRTUAL = new ConcurrentHashMap<>();
 
     private ThreadPools() {
     }
@@ -84,6 +88,22 @@ public final class ThreadPools {
     }
 
     /**
+     * 每任务一条虚拟线程：<b>请求级扇出</b>用（查价多腿并行）。无池、无队列，故不存在"满"，
+     * 也就没有拒绝策略——并发上限由各腿自己的供应商限流（{@code Permits}）与客户端超时管，
+     * 不在这里设第二道闸。
+     *
+     * <p><b>常驻一份，调用方不要 shutdown</b>：它不持有线程（虚拟线程随任务生灭），
+     * 关掉只会让后续请求无处可跑。这与 {@link #fixed} 那类"短命池用完即弃"刻意不同。
+     *
+     * <p>之所以也要经本类：§4.3.1 要求池类设施的创建只许一处，§4.3.2 要求有登记处。
+     * 在飞任务数会随其余池一起进 {@link #stats()}——否则"现在一共有哪些池"这个问题
+     * 会漏掉请求路径上并发量最大的这一个。
+     */
+    public static ExecutorService virtualPerTask(String name) {
+        return VIRTUAL.computeIfAbsent(name, VirtualPerTaskExecutor::new);
+    }
+
+    /**
      * 语义同缺省 AbortPolicy（照抛 {@link RejectedExecutionException}），只是抛前计一笔
      * {@code thread_pool_rejected}。拒绝是调用方语义的一部分（忙则跳过、满则弃），
      * 但「弃了多少」必须可见——静默的拒绝和被吞的任务只差一个 catch。
@@ -110,13 +130,20 @@ public final class ThreadPools {
         return pool == null ? 0 : pool.getQueue().size();
     }
 
-    /** 注册表快照：池名 → [活跃线程, 池大小, 队列积压, 已完成]。监控接指标只挂这一处 */
+    /**
+     * 注册表快照：池名 → [活跃线程, 池大小, 队列积压, 已完成]。监控接指标只挂这一处。
+     *
+     * <p>虚拟线程执行器一并列入：活跃与池大小同取<b>在飞任务数</b>（虚拟线程随任务生灭，
+     * 两者本就相等），队列积压恒 0——它没有队列，这个 0 是事实不是缺省值。
+     */
     public static Map<String, int[]> stats() {
         prune();
         Map<String, int[]> snapshot = new LinkedHashMap<>();
         REGISTRY.forEach((name, pool) -> snapshot.put(name, new int[]{
                 pool.getActiveCount(), pool.getPoolSize(), pool.getQueue().size(),
                 (int) pool.getCompletedTaskCount()}));
+        VIRTUAL.forEach((name, exec) -> snapshot.put(name, new int[]{
+                exec.inFlight(), exec.inFlight(), 0, exec.completed()}));
         return snapshot;
     }
 

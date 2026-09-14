@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaHelper;
 import com.trip.booking.spa.platform.observability.RecordLogService;
@@ -41,16 +41,16 @@ class SameDayBlockGateTest {
         priceService = Mockito.mock(ExpediaPriceService.class);
         ReflectionTestUtils.setField(service, "expediaPriceService", priceService);
         ReflectionTestUtils.setField(service, "redisRecordLogServiceImpl", Mockito.mock(RecordLogService.class));
-        Mockito.when(priceService.queryPrices(Mockito.any(), Mockito.any()))
+        Mockito.when(priceService.queryPrices(Mockito.any()))
                 .thenReturn(PricingResult.noInventory());
     }
 
-    private PriceReq sameDayReq(String hotelId) {
-        return PriceReq.builder()
+    private static PriceQuery sameDayQuery(String hotelId) {
+        return PriceQuery.builder()
+                .supplierId(10005).supplierHotelId(hotelId)
                 .checkIn(LocalDate.now().toString())
-                .checkout(LocalDate.now().plusDays(1).toString())
+                .checkOut(LocalDate.now().plusDays(1).toString())
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
-                .suppliers(List.of(Supplier.builder().supplierId(10005).sHotelId(hotelId).build()))
                 .build();
     }
 
@@ -60,12 +60,11 @@ class SameDayBlockGateTest {
         ReflectionTestUtils.setField(service, "sameDayBlockEnabled", true);
         String hotelId = blockedHotelId();
 
-        PricingResult r = service.querySupplierPrice(sameDayReq(hotelId),
-                Supplier.builder().supplierId(10005).sHotelId(hotelId).build());
+        PricingResult r = service.querySupplierPrice(sameDayQuery(hotelId));
 
         assertEquals(PricingOutcome.NO_INVENTORY, r.outcome(),
                 "闸口拒绝归入无可售——重试无用，报未能确认只会诱发无谓重试");
-        Mockito.verify(priceService, Mockito.never()).queryPrices(Mockito.any(), Mockito.any());
+        Mockito.verify(priceService, Mockito.never()).queryPrices(Mockito.any());
     }
 
     /**
@@ -77,10 +76,30 @@ class SameDayBlockGateTest {
         ReflectionTestUtils.setField(service, "sameDayBlockEnabled", false);
         String hotelId = blockedHotelId();
 
-        service.querySupplierPrice(sameDayReq(hotelId),
-                Supplier.builder().supplierId(10005).sHotelId(hotelId).build());
+        service.querySupplierPrice(sameDayQuery(hotelId));
 
-        Mockito.verify(priceService).queryPrices(Mockito.any(), Mockito.any());
+        Mockito.verify(priceService).queryPrices(Mockito.any());
+    }
+
+    /**
+     * 闸口只许看该供应商自己的酒店。
+     *
+     * <p>#237 修的是「取了请求里第一个供应商的酒店号」，而 2026-09-11 的查价解耦之后
+     * <b>这个错已经写不出来</b>：{@link PriceQuery} 结构上只装一家供应商的坐标，
+     * 不存在「列表里第几个」这回事。本用例钉住这条结构保证——若日后有人往查价指令里
+     * 塞回一个供应商列表，它会失败。
+     */
+    @Test
+    @DisplayName("查价指令结构上只带一家供应商，取错家无从写起")
+    void queryCarriesExactlyOneSupplier() {
+        String blocked = blockedHotelId();
+        PriceQuery q = sameDayQuery(blocked);
+
+        assertEquals(blocked, q.supplierHotelId());
+        assertTrue(java.util.Arrays.stream(PriceQuery.class.getDeclaredFields())
+                        .noneMatch(f -> java.util.List.class.isAssignableFrom(f.getType())
+                                && f.getName().toLowerCase().contains("supplier")),
+                "PriceQuery 不得带供应商列表：一次请求 × 一家供应商是它的定义");
     }
 
     @Test
@@ -88,15 +107,14 @@ class SameDayBlockGateTest {
     void futureCheckInIsNeverBlocked() {
         ReflectionTestUtils.setField(service, "sameDayBlockEnabled", true);
         String hotelId = blockedHotelId();
-        PriceReq req = PriceReq.builder()
+        PriceQuery req = PriceQuery.builder()
                 .checkIn(LocalDate.now().plusDays(3).toString())
-                .checkout(LocalDate.now().plusDays(4).toString())
+                .checkOut(LocalDate.now().plusDays(4).toString())
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
-                .suppliers(List.of(Supplier.builder().supplierId(10005).sHotelId(hotelId).build()))
                 .build();
 
-        service.querySupplierPrice(req, Supplier.builder().supplierId(10005).sHotelId(hotelId).build());
+        service.querySupplierPrice(req);
 
-        Mockito.verify(priceService).queryPrices(Mockito.any(), Mockito.any());
+        Mockito.verify(priceService).queryPrices(Mockito.any());
     }
 }

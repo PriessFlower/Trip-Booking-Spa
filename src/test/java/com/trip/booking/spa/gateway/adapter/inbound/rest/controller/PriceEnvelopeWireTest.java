@@ -2,8 +2,8 @@ package com.trip.booking.spa.gateway.adapter.inbound.rest.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ResponseDTO;
 import com.trip.booking.spa.gateway.domain.booking.CheckPriceOutcome;
 import com.trip.booking.spa.gateway.domain.booking.PricingOutcome;
@@ -38,7 +38,7 @@ class PriceEnvelopeWireTest {
     @Test
     void availableKeepsArrayResultAndCarriesOutcome() throws Exception {
         JsonNode node = json(SpaController.toPriceResponse(
-                PricingOutcome.AVAILABLE, List.of(new ProductRespDTO())));
+                PricingOutcome.AVAILABLE, List.of(new Product())));
 
         assertTrue(node.path("result").isArray(), "result 必须仍是数组: " + node);
         assertTrue(node.path("success").asBoolean());
@@ -74,7 +74,7 @@ class PriceEnvelopeWireTest {
     @Test
     void otherEndpointsDoNotGrowAnOutcomeField() throws Exception {
         JsonNode node = json(ResponseDTO.success(
-                CheckPriceRespDTO.builder().outcome(CheckPriceOutcome.BOOKABLE).build()));
+                CheckPriceResult.builder().outcome(CheckPriceOutcome.BOOKABLE).build()));
 
         assertFalse(node.has("outcome"),
                 "信封上的 outcome 只服务查价；其余端点的分态在 result 里，不该多出一个空字段: " + node);

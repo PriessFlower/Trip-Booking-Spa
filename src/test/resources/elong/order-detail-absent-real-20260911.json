@@ -1,0 +1,1 @@
+{"Code":"H001054|订单ID错误，订单号不存在","Guid":"9856bc1a-e946-4291-a042-da5d8814c63a","Result":{"OrderId":0,"Status":null,"TotalPrice":0.0,"CurrencyCode":"RMB","ArrivalDate":null,"DepartureDate":null,"NumberOfRooms":0,"CancelTime":null,"IsCancelable":null,"PenaltyToCustomer":null,"AffiliateConfirmationId":null,"CreationDate":null,"OrderRooms":null},"Succ":false,"EmptyResult":false}

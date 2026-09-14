@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaHelper;
 import com.trip.booking.spa.gateway.application.pricing.AbstractProductSyncSupportService;
@@ -39,12 +39,12 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
     private RecordLogService redisRecordLogServiceImpl;
 
     @Override
-    public PricingResult querySupplierPrice(PriceReq priceReq, Supplier supplier) {
+    public PricingResult querySupplierPrice(PriceQuery priceReq) {
         redisRecordLogServiceImpl.recordExpediaQps();
-        if (StringUtils.isNotBlank(supplier.getSProductId())) {
+        if (StringUtils.isNotBlank(priceReq.supplierProductId())) {
             // 单产品路径：内部把「验价失败」「所点报价不在响应中」「调用失败」一律折成 null，
             // 无从分辨，故一律落未能确认——不可说成无房（待做：与 checkPrices 一样按响应分态）
-            List<ProductRespDTO> products = expediaPriceService.queryProductPrice(priceReq, supplier);
+            List<Product> products = expediaPriceService.queryProductPrice(priceReq);
             return CollectionUtils.isEmpty(products)
                     ? PricingResult.indeterminate() : PricingResult.available(products);
         }
@@ -60,15 +60,15 @@ public class ExpediaProductSyncServiceImpl extends AbstractProductSyncSupportSer
         //
         // §3.8.6 真正要的是「不发版也能关掉」，那与名单放哪无关，故补的是上面那个开关。
         if (sameDayBlockEnabled
-                && ExpediaHelper.hotelIdList.contains(priceReq.getSuppliers().get(0).getSHotelId())
-                && LocalDate.parse(priceReq.getCheckIn()).equals(LocalDate.now()))
+                && ExpediaHelper.hotelIdList.contains(priceReq.supplierHotelId())
+                && LocalDate.parse(priceReq.checkIn()).equals(LocalDate.now()))
         {
             log.info("[gate] expedia.same-day-blocked-hotels 拦截: hotelId={}, checkIn={}",
-                    supplier.getSHotelId(), priceReq.getCheckIn());
+                    priceReq.supplierHotelId(), priceReq.checkIn());
             // 闸口拒绝报价归入「无可售」而非「未能确认」：对上游而言同样是这里没有可卖的，
             // 且重试无用，报未能确认只会诱发无谓重试
             return PricingResult.noInventory();
         }
-        return expediaPriceService.queryPrices(priceReq, supplier);
+        return expediaPriceService.queryPrices(priceReq);
     }
 }

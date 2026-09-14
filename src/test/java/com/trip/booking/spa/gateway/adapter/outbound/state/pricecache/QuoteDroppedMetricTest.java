@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ProductAttributeReader;
 import com.trip.booking.spa.platform.observability.Monitor;
@@ -66,8 +66,8 @@ class QuoteDroppedMetricTest {
         return Supplier.builder().supplierId(10010).sHotelId("H1").build();
     }
 
-    private static PriceReq req(String checkout) {
-        return PriceReq.builder().checkIn(D1).checkout(checkout)
+    private static PriceQuery req(String checkout) {
+        return PriceQuery.builder().supplierId(10010).supplierHotelId("H1").checkIn(D1).checkOut(checkout)
                 .roomNum(1).adultNum(1).childNum(0).childAges(List.of())
                 .build();
     }
@@ -90,7 +90,7 @@ class QuoteDroppedMetricTest {
     void missingDayIsCounted() {
         firstDayOnly("{\"price\":100}");
 
-        service.getPrice(req(D3), elong());
+        service.getPrice(req(D3));
 
         assertEquals(1.0, dropped("day_count_mismatch"));
     }
@@ -100,7 +100,7 @@ class QuoteDroppedMetricTest {
     void zeroTotalIsCounted() {
         firstDayOnly("{\"price\":0}");
 
-        service.getPrice(req(D2), elong());
+        service.getPrice(req(D2));
 
         assertEquals(1.0, dropped("zero_total_price"));
     }
@@ -111,7 +111,7 @@ class QuoteDroppedMetricTest {
         firstDayOnly("{\"price\":100}");
         Mockito.when(redisUtils.get(anyString())).thenReturn("");
 
-        List<?> products = service.getPrice(req(D2), elong());
+        List<?> products = service.getPrice(req(D2));
 
         assertEquals(0, products.size());
         assertEquals(1.0, dropped("quote_detail_missing"));

@@ -1,6 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.state.pricecache;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -27,16 +27,16 @@ class PriceCacheTrimmerTest {
         ReflectionTestUtils.setField(trimmer, "keepPerKey", 2);
     }
 
-    private static ProductRespDTO p(String id, String key, Integer price) {
-        return ProductRespDTO.builder().hotelId("H1").productId(id).productKey(key).totalPrice(price).build();
+    private static Product p(String id, String key, Integer price) {
+        return Product.builder().hotelId("H1").productId(id).productKey(key).totalPrice(price).build();
     }
 
     @Test
     void keepsCheapestNPerEquivalenceClass() {
-        List<ProductRespDTO> kept = trimmer.trim(List.of(
+        List<Product> kept = trimmer.trim(List.of(
                 p("a", "K1", 500), p("b", "K1", 300), p("c", "K1", 400), p("d", "K1", 900)));
         assertEquals(2, kept.size());
-        assertEquals(List.of("b", "c"), kept.stream().map(ProductRespDTO::getProductId).toList());
+        assertEquals(List.of("b", "c"), kept.stream().map(Product::getProductId).toList());
     }
 
     /**
@@ -45,12 +45,12 @@ class PriceCacheTrimmerTest {
      */
     @Test
     void everyEquivalenceClassSurvives() {
-        List<ProductRespDTO> kept = trimmer.trim(List.of(
+        List<Product> kept = trimmer.trim(List.of(
                 p("cheap-norefund", "K-NONREFUND", 300),
                 p("mid-norefund", "K-NONREFUND", 350),
                 p("expensive-free-cancel", "K-FREE", 900),   // 贵但可免费取消
                 p("cheap-breakfast", "K-BREAKFAST", 400)));
-        List<String> ids = kept.stream().map(ProductRespDTO::getProductId).toList();
+        List<String> ids = kept.stream().map(Product::getProductId).toList();
         assertEquals(4, kept.size());
         assertTrue(ids.contains("expensive-free-cancel"), "最贵的那条不能因为贵就被裁——它是独立卖法");
         assertTrue(ids.contains("cheap-breakfast"));
@@ -59,9 +59,9 @@ class PriceCacheTrimmerTest {
     /** F-3.4：缺价的排最后、不占名额 */
     @Test
     void productsWithoutPriceRankLast() {
-        List<ProductRespDTO> kept = trimmer.trim(List.of(
+        List<Product> kept = trimmer.trim(List.of(
                 p("no-price", "K1", null), p("cheap", "K1", 200), p("mid", "K1", 400), p("dear", "K1", 800)));
-        assertEquals(List.of("cheap", "mid"), kept.stream().map(ProductRespDTO::getProductId).toList());
+        assertEquals(List.of("cheap", "mid"), kept.stream().map(Product::getProductId).toList());
     }
 
     /**
@@ -70,14 +70,14 @@ class PriceCacheTrimmerTest {
      */
     @Test
     void neverTrimsWhenProductKeyAbsent() {
-        List<ProductRespDTO> input = List.of(
+        List<Product> input = List.of(
                 p("a", null, 500), p("b", null, 300), p("c", "", 400));
         assertSame(input, trimmer.trim(input));
     }
 
     @Test
     void groupsSmallerThanLimitPassThrough() {
-        List<ProductRespDTO> kept = trimmer.trim(List.of(
+        List<Product> kept = trimmer.trim(List.of(
                 p("a", "K1", 500), p("b", "K2", 300)));
         assertEquals(2, kept.size());
     }
@@ -86,14 +86,14 @@ class PriceCacheTrimmerTest {
     @Test
     void canBeDisabled() {
         ReflectionTestUtils.setField(trimmer, "keepPerKey", 0);
-        List<ProductRespDTO> input = List.of(p("a", "K1", 500), p("b", "K1", 300), p("c", "K1", 400));
+        List<Product> input = List.of(p("a", "K1", 500), p("b", "K1", 300), p("c", "K1", 400));
         assertSame(input, trimmer.trim(input));
     }
 
     @Test
     void handlesNullAndSingleton() {
         assertEquals(null, trimmer.trim(null));
-        List<ProductRespDTO> one = List.of(p("a", "K1", 100));
+        List<Product> one = List.of(p("a", "K1", 100));
         assertSame(one, trimmer.trim(one));
     }
 }
