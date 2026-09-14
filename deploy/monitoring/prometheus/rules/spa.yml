@@ -27,24 +27,38 @@ groups:
 
   - name: price-refresh
     rules:
+      # Per supplier, not summed across them: the refresh fleet is one piece of
+      # infrastructure instantiated per supplier, so its alerts must be too.
+      # Summing hid which supplier was broken — on 2026-09-14 this rule was firing at
+      # a global 8.8% while EXPEDIA alone sat at 49.6% and the other three were clean.
+      # A per-supplier series also stops a small supplier's total failure from being
+      # diluted below the threshold by healthy large ones.
       - alert: RefreshFailureRatioHigh
         expr: >-
-          sum(rate(refresh_failed_count_total{job="trip-booking-spa"}[30m]))
-          / sum(rate(refresh_rows_count_total{job="trip-booking-spa"}[30m])) > 0.02
+          sum by (supplier) (rate(refresh_failed_count_total{job="trip-booking-spa"}[30m]))
+          / sum by (supplier) (rate(refresh_rows_count_total{job="trip-booking-spa"}[30m])) > 0.02
         for: 15m
         labels:
           severity: warning
         annotations:
-          summary: "刷价失败率 {{ $value | humanizePercentage }}，超过 2%"
+          summary: "{{ $labels.supplier }} 刷价失败率 {{ $value | humanizePercentage }}，超过 2%"
           description: "基线约 0.17%，触发即为十倍以上劣化。先看是否供应商侧限流或频控。"
 
+      # Per supplier for the same reason. The second clause is what makes that safe:
+      # a supplier whose gate is deliberately closed simply stops emitting, and without
+      # the guard every closed gate would page forever. Requiring activity within 24h
+      # means a real stall still alerts for about a day, while a closed gate goes quiet
+      # 24h after it was closed.
       - alert: RefreshStalled
-        expr: sum(rate(refresh_rows_count_total{job="trip-booking-spa"}[1h])) == 0
+        expr: >-
+          sum by (supplier) (rate(refresh_rows_count_total{job="trip-booking-spa"}[1h])) == 0
+          and
+          sum by (supplier) (increase(refresh_rows_count_total{job="trip-booking-spa"}[24h])) > 0
         for: 3h
         labels:
           severity: warning
         annotations:
-          summary: "刷价连续 3 小时没有产出任何行"
+          summary: "{{ $labels.supplier }} 刷价连续 3 小时没有产出任何行"
           description: "调度停摆或任务全量失败；空窗期比失败率更容易被忽略，故单独设一条。"
 
   - name: supplier-io
