@@ -260,7 +260,9 @@ public class DidaProductKeyDeriver {
 
     /**
      * 某时刻距「入住日 24:00」的小时数（下限 25），基准时区固定北京。
-     * 用服务器时区会随部署环境漂移——生产容器实际跑在 UTC，偏 8 小时会把"还能免费取消多久"说长。
+     * 用服务器时区会随部署环境漂移，而这里差一小时就把"还能免费取消多久"说错。
+     * （2026-09-14 实测：生产容器 {@code TZ=Asia/Shanghai}，此刻与显式指定同值；正因为它
+     * 只是个环境变量、改了没人会发现，才必须在代码里钉死，不能靠它碰巧对。）
      */
     private static Integer hoursBeforeCheckInEnd(String isoInstant, String checkIn) {
         Instant at = parseFromDate(isoInstant);

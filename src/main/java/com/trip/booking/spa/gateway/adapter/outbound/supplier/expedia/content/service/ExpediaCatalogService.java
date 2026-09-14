@@ -32,9 +32,15 @@ import java.util.List;
  *
  * <p><b>与 {@link ExpediaProductMappingService} 的分工</b>：后者是全量补建（按酒店清单分页、
  * 自带占位住期），适合首次铺底或按需补某几家；本类是随刷价增量维护，<b>覆盖面等于刷价
- * 清单，也就到 78 家为止</b>——而 {@code supplier_hotel_base} 里 Expedia 有 97,409 家。
+ * 清单</b>——2026-09-14 生产实测：刷价队列 2,514 家（75,420 行 = 2,514 × T+1..T+30），
+ * 本类已建出 1,675 家 / 27,555 行，而 {@code supplier_hotel_base} 里 Expedia 有 97,409 家。
  * 换言之本类只保证「在刷的那批」目录不空，铺满全量仍须打后门。两者写同一张表、
  * 同一套列语义，只是数据来源与触发方式不同。
+ *
+ * <p><b>目录行的 {@code update_time} 长期不动是正常的</b>，不是建档停了：唯一键是
+ * {@code (supplier_id, product_key)} 而该表只存身份属性、不存价格，产品稳定时 upsert 是
+ * 空写，MySQL 的 {@code ON UPDATE CURRENT_TIMESTAMP} 不触发。2026-09-14 实测 Expedia
+ * 最新 update_time 停在 09-11，而同期刷价仍在跑（任务表 last_time 为当日）——两者不矛盾。
  *
  * <p><b>三条写入纪律</b>（与艺龙一致）：
  * <ul>
