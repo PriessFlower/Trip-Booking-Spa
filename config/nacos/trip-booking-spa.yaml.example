@@ -414,7 +414,7 @@ supplier:
 
     # resolve 管线开关（docs/product-identity.md §3）。
     # ⚠️ 本家比另几家更依赖它：报价码是分代轮换的（cursor 取证：60 天 58 次重放仅 4 次成功、
-    # 93% 撞 No Availability），关掉它绝大多数「旧列表点击」会直接 RATE_DEAD。不资损，但可订率塌。
+    # 93% 撞 No Availability），关掉它绝大多数「旧列表点击」会直接 RATE_DEAD。不资损，但可订率大幅下降。
     resolve-enabled: false
     resolve-price-tolerance: 0.02
     resolve-price-cap-cents: 2000
