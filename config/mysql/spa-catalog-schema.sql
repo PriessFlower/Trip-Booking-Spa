@@ -227,9 +227,10 @@ CREATE TABLE IF NOT EXISTS clwy_query_price_task (
 -- 美团查价预热任务队列（与 elong/fliggy/dida/clwy 的同名表同构）。速率不由本表控制，由 Nacos
 -- ratelimit.qps 的 GLOBAL_LIMIT:MEITUAN:*:REFRESH 约束。
 -- 一行 = 一次 hotel.oversea.batch.goods.rp 调用。该接口的 hotelIds 是列表、支持合批，但仍逐店一次：
--- 2026-09-14 实测本家可卖清单只有 847 家（hotel.oversea.poi.list 全量翻页去重），逐店刷跑得起，
--- 没必要为省配额而放弃"哪一行刷失败了"这个可归因性。清单显著变大时再议合批。
--- 播种口径：poi.list 的全量 hotelId，住期 T+0..2 各 1 晚起步，扩住期改 delay 列。
+-- 刷价清单按"高德出单酒店"播种只有 537 家（2026-09-14），逐店刷跑得起，没必要为省配额而放弃
+-- "哪一行刷失败了"这个可归因性。清单显著变大时再议合批。
+-- 播种口径：高德出单酒店经 hotel_base_mapping 映射到的 hotelId（不是 poi.list——它翻页只回 847 家
+-- 且不是可报价全集：清单外抽 40 个 id 直接问价有 3 个能报），住期 T+0..2 各 1 晚起步，扩住期改 delay 列。
 CREATE TABLE IF NOT EXISTS meituan_query_price_task (
     id                    BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
     sh_id                 VARCHAR(64)  NOT NULL COMMENT '美团酒店id（hotelId）',

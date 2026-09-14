@@ -1,5 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.meituan.shared;
 
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.meituan.shared.model.MeituanCodes;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierDataTypeEnum;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.http.BaseHttpAccess;
@@ -49,6 +50,15 @@ public abstract class AbstractMeituanJsonAccess<U, T extends BaseResponse> exten
                 // 报价档是整店全产品（实测单店单住期 297~321 条产品），不压缩是纯浪费；
                 // 服务端按 Content-Encoding 如实标注，Apache HttpClient 透明解 gzip
                 "Accept-Encoding", "gzip");
+    }
+
+    /**
+     * 频控与普通业务错误分开计数（F-8.2：它是调速的唯一直接指标）。不登记的话生产上会记成
+     * {@code rejected}，Grafana 上答不了"刷不出价是被限流还是真没货"——而这两者的处置相反。
+     */
+    @Override
+    protected boolean isThrottled(T response) {
+        return String.valueOf(MeituanCodes.THROTTLED).equals(errorCode(response));
     }
 
     /** 失败是 HTTP 200 + 体内 code != 0，错在体内，故必须解析错误响应 */
