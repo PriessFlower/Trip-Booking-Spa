@@ -13,7 +13,12 @@ import javax.annotation.PostConstruct;
 /**
  * 飞猪（淘宝 TOP）接入配置。凭据一律经 FLIGGY_* 环境变量注入（§3.5.1，名单在
  * {@code .env.example}）；契约与网关事实见 docs/fliggy/distribution-api.md §1。
- * session 90 天且只能人工重授权，重授权后 {@link #sessionAuthorizedAt} 必须同批更新，
+ * <p><b>本类只承载运维可调项</b>（{@code supplier.fliggy.*}，权威取值在 Nacos，热生效）。
+ * 下单安全护栏<b>不在这里</b>——它在 {@link FliggyBookingGate}，键是 {@code fliggy.booking-enabled}、
+ * 固定在 application.yml、改它必须发版（§3.2.3、§3.7.2.1）。两者曾经同处一类，
+ * 结果护栏跟着这个前缀跑到了配置台上，2026-09-09 被点开后连开五天无人察觉。
+ *
+ * <p>session 90 天且只能人工重授权，重授权后 {@link #sessionAuthorizedAt} 必须同批更新，
  * 否则到期监控失真。
  */
 @Slf4j
@@ -61,16 +66,6 @@ public class FliggyProperties implements ResolveProperties {
     /** resolve 换票容差的绝对帽（分）：单笔自动让利的财务上限，与比例容差取严 */
     private int resolvePriceCapCents = 2000;
 
-    /**
-     * 下单安全护栏（§3.8）：false 即拒绝下单，供应商侧不发生任何动作。
-     *
-     * <p><b>飞猪没有沙箱</b>——唯一可用端点就是生产 TOP 网关（eco.taobao.com），
-     * 故本开关不存在"先在沙箱验一遍"的中间态：开即真单真扣款。默认关。
-     *
-     * <p>此前飞猪连这个配置项都没有，SPA 侧下单是常开的（三家里只有艺龙真有闸）。
-     */
-    private boolean bookingEnabled = false;
-
     /** 四样缺一即不可调用（网关无兜底）；接入期未配置是正常态，调用方按「凭据未配置→确定失败」处理 */
     public boolean isConfigured() {
         return StringUtils.isNoneBlank(appKey, secret, session, urlHost);
@@ -87,8 +82,8 @@ public class FliggyProperties implements ResolveProperties {
                     "supplier.fliggy.resolve-price-cap-cents must be between 0 and 100000, but was " + resolvePriceCapCents);
         }
         log.info("飞猪接入配置: urlHost={}, credentialsConfigured={}, distributor={}, "
-                        + "sessionAuthorizedAt={}, sessionTtlDays={}, resolveEnabled={}, bookingEnabled={}",
+                        + "sessionAuthorizedAt={}, sessionTtlDays={}, resolveEnabled={}",
                 urlHost, isConfigured(), StringUtils.defaultIfBlank(distributor, "<未配置>"),
-                StringUtils.defaultIfBlank(sessionAuthorizedAt, "<未配置>"), sessionTtlDays, resolveEnabled, bookingEnabled);
+                StringUtils.defaultIfBlank(sessionAuthorizedAt, "<未配置>"), sessionTtlDays, resolveEnabled);
     }
 }

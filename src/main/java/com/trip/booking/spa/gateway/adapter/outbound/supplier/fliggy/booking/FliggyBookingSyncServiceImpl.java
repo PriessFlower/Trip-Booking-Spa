@@ -4,6 +4,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.state.offer.Offer;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.booking.client.CreateOrderAccess;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyOfferCredentials;
+import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyBookingGate;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyProperties;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyTopCall;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.model.FliggyCreateResponse;
@@ -40,17 +41,21 @@ public class FliggyBookingSyncServiceImpl extends AbstractBookingSyncSupportServ
 
     @Resource
     private FliggyProperties properties;
+
+    /** 护栏独立成件，不与 supplier.fliggy.* 的运维项同处一类（见 FliggyBookingGate 类注释） */
+    @Resource
+    private FliggyBookingGate bookingGate;
     @Resource
     private OfferStore offerStore;
 
     @Override
     protected String bookingGateKey() {
-        return "supplier.fliggy.booking-enabled";
+        return "fliggy.booking-enabled";
     }
 
     @Override
     protected boolean bookingAllowed() {
-        return properties.isBookingEnabled();
+        return bookingGate.isOpen();
     }
 
     @Override

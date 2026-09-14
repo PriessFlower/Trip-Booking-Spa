@@ -11,3 +11,13 @@
 # task.timezone-init.suppliers（dev 上读取方已删、生产镜像上还在），线上立刻落回空值
 # 并打出 "Nacos config ... is empty or invalid"，随即恢复原值。
 
+supplier.fliggy.booking-enabled
+    删除时机：等含本次改动的版本真正上了生产之后。
+    原因：飞猪下单安全护栏已迁到 application.yml 的 fliggy.booking-enabled（§3.2.3 要求护栏
+    必须经发版与评审才能改，而本键在 Nacos 配置台上点一下即改、且本类是
+    @ConfigurationProperties，Spring Cloud 重绑定会让它热生效）。
+    起因：2026-09-09 有人为试真单把它点开，注释写着"测完关回 false"，到 2026-09-14 被发现时
+    已连续开了五天；飞猪没有沙箱，开着就是真扣钱。2026-09-14 已在 Nacos 将其改回 false。
+    代码侧现状：读取方已改名为 bookingGateOpen，本键在 FliggyProperties 上无属性可匹配、
+    被静默忽略，不影响启动；只要它还在 Nacos 里，每次启动会打一条 [gate] error 提示清理。
+
