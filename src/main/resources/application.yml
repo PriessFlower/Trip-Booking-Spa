@@ -48,6 +48,13 @@ elong:
   booking-enabled: false
   customer-ip-fallback: ${ELONG_CUSTOMER_IP_FALLBACK:47.92.28.195}
 
+fliggy:
+  # 同上。飞猪没有沙箱——唯一可用端点就是生产 TOP 网关,开即真单真扣款。
+  # 2026-09-14 由 Nacos 的 supplier.fliggy.booking-enabled 搬来:那个键在配置台上点一下就改,
+  # 不进 git、不留 diff、没有评审。2026-09-09 有人为试真单点开、注释写着"测完关回 false",
+  # 结果连开五天无人察觉。安全护栏的价值就在于改起来必须麻烦(§3.2.3)。
+  booking-enabled: false
+
 expedia:
   # 同上。Expedia 有沙箱,但"下不下单"与"打哪个端点"是两个独立护栏:
   # 本开关管前者,production-endpoint-enabled 管后者,两者都关才是完全静默。
