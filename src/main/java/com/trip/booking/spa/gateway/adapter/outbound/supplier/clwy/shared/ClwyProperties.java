@@ -54,7 +54,7 @@ public class ClwyProperties implements InitializingBean, ResolveProperties {
      * <ul>
      *   <li><b>误开的后果</b>：容差门（R-3.3）失效场景下可能按更高价自动成交</li>
      *   <li><b>误关的后果</b>：本家报价码是<b>分代轮换</b>（cursor 取证：60 天 58 次重放仅 4 次成功、
-     *       93% 撞 500 No Availability），误关即绝大多数「旧列表点击」直接死。不资损，但可订率塌方
+     *       93% 撞 500 No Availability），误关即绝大多数「旧列表点击」直接死。不资损，但可订率大幅下降方
      *       ——本家比另三家更依赖 resolve</li>
      *   <li><b>生效执行面</b>：全部承载 /client/spa/check 流量的节点，仅 clwy 链路</li>
      * </ul>

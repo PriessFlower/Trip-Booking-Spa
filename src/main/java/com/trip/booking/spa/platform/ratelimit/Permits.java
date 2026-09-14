@@ -14,7 +14,7 @@ import com.trip.booking.spa.platform.observability.Monitor;
  * </pre>
  *
  * <p><b>为什么要收成一处</b>：取许可的地方原先有四处各写一遍——通道层
- * （{@code BaseHttpAccess}）、大文件下载（{@code ChunkedFileAccess}）、Expedia 的两个静态
+ * （{@code BaseHttpAccess}）、Expedia 的两个静态
  * 内容客户端（它们直接用 RestTemplate，不经通道层）。四处只有第一处后来加了用途桶，于是
  * "每条路都受分配约束"这个前提在另外三处是不成立的——而分配一旦有例外就退化成建议值。
  *

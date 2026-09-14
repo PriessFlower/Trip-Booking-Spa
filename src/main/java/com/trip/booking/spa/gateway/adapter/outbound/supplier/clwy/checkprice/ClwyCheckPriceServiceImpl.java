@@ -23,7 +23,7 @@ import java.util.List;
  *
  * <p><b>本家比另三家更依赖 resolve</b>：报价码是分代轮换的（cursor 取证：60 天 58 次重放
  * 仅 4 次成功、93% 撞 {@code No Availability}），即"查价拿到的码到验价时还在"是小概率。
- * 关掉 resolve 不会资损，但可订率会塌——见 {@code ClwyProperties#resolveEnabled} 的闸口声明。
+ * 关掉 resolve 不会资损，但可订率会大幅下降——见 {@code ClwyProperties#resolveEnabled} 的闸口声明。
  */
 @Service("clwyCheckPriceSyncService")
 public class ClwyCheckPriceServiceImpl extends AbstractCheckPriceFlow<ClwyHotel, ClwyPlan> {
