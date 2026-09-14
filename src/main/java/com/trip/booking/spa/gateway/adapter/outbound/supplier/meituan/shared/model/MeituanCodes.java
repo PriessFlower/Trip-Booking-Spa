@@ -17,6 +17,12 @@ public final class MeituanCodes {
     /** 通用系统错误：参数缺失、内部异常等都落这个码，属"没问出结果"而非"没货" */
     public static final int SYSTEM_ERROR = 2000;
 
+    /**
+     * 频控：{@code 超过配额:境外酒店请求接口被限流}。官方文档没写这个码，是 2026-09-14 开闸
+     * 首轮在生产撞出来的——按 2 QPS 刷价，277 次里 2 次。属"没问出结果"，绝不当没货去清缓存。
+     */
+    public static final int THROTTLED = 1200;
+
     // ── 下单前校验 hotel.oversea.order.check ──
 
     /** 校验失败 */
