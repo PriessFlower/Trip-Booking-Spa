@@ -42,6 +42,14 @@ supplier:
     # 差旅无忧无沙箱（官方文档只给一个生产域名），故兜底即生产端点——与艺龙、道旅同形
     url-host: ${CLWY_API_HOST:https://availability.xiangdo.cn}
 
+  meituan:
+    access-key: ${MEITUAN_ACCESS_KEY:}
+    secret-key: ${MEITUAN_SECRET_KEY:}
+    partner-id: ${MEITUAN_PARTNER_ID:}
+    # 美团无沙箱（官方只给一个生产地址），故兜底即生产端点——与艺龙、道旅、差旅无忧同形。
+    # 本家所有接口共用这一个 URL，调哪个接口由请求体里的 method 决定
+    url: ${MEITUAN_API_URL:https://fenxiao.meituan.com/opdtor/api/v2}
+
   fliggy:
     app-key: ${FLIGGY_APP_KEY:}
     secret: ${FLIGGY_SECRET:}

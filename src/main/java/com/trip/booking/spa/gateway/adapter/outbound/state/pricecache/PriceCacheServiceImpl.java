@@ -17,8 +17,6 @@ import com.trip.booking.spa.gateway.domain.product.Occupancy;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.observability.DropReason;
 import com.trip.booking.spa.platform.observability.FunnelStage;
-import com.trip.booking.spa.platform.observability.MetricNames;
-import com.trip.booking.spa.platform.observability.MetricTags;
 import com.trip.booking.spa.platform.observability.Monitor;
 import com.trip.booking.spa.platform.util.RedisKeyUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -318,7 +316,7 @@ public class PriceCacheServiceImpl implements PriceCacheService {
         if (supplier == null) {
             return;
         }
-        Monitor.recordOne(MetricNames.QUOTE_DROPPED, MetricTags.dropped(supplier, stage, reason));
+        Monitor.recordDropped(supplier, stage, reason, 1);
     }
 
     /**

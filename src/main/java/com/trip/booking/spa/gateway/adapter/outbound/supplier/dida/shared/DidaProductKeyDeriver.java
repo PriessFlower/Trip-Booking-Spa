@@ -229,7 +229,7 @@ public class DidaProductKeyDeriver {
         List<CancelPolicy> policies = new ArrayList<>();
         BigDecimal firstAmount = sorted.get(0).getAmount();
         if (firstAmount.signum() > 0) {
-            Integer before = hoursBeforeCheckInEnd(sorted.get(0).getFromDate(), checkIn);
+            Integer before = CancelClassifier.beforeHours(parseFromDate(sorted.get(0).getFromDate()), checkIn, DIDA_ZONE);
             if (before == null) {
                 return List.of();
             }
@@ -237,7 +237,7 @@ public class DidaProductKeyDeriver {
         }
         for (int i = 0; i < sorted.size(); i++) {
             String deadline = i + 1 < sorted.size() ? sorted.get(i + 1).getFromDate() : null;
-            Integer before = deadline == null ? MIN_BEFORE : hoursBeforeCheckInEnd(deadline, checkIn);
+            Integer before = deadline == null ? CancelClassifier.MIN_BEFORE : CancelClassifier.beforeHours(parseFromDate(deadline), checkIn, DIDA_ZONE);
             if (before == null) {
                 return List.of();
             }
@@ -251,30 +251,9 @@ public class DidaProductKeyDeriver {
     }
 
     /** {@code before} 的下限，语义是"此后一直"（同 CancelPolicy#before 的 >24 约束） */
-    private static final int MIN_BEFORE = 25;
-
     private static CancelPolicy free(int before) {
         return CancelPolicy.builder().cancelType(1).timeZone("GMT+08:00").before(before)
                 .type(RefundType.NO_DEDUCTION).build();
-    }
-
-    /**
-     * 某时刻距「入住日 24:00」的小时数（下限 25），基准时区固定北京。
-     * 用服务器时区会随部署环境漂移，而这里差一小时就把"还能免费取消多久"说错。
-     * （2026-09-14 实测：生产容器 {@code TZ=Asia/Shanghai}，此刻与显式指定同值；正因为它
-     * 只是个环境变量、改了没人会发现，才必须在代码里钉死，不能靠它碰巧对。）
-     */
-    private static Integer hoursBeforeCheckInEnd(String isoInstant, String checkIn) {
-        Instant at = parseFromDate(isoInstant);
-        if (at == null) {
-            return null;
-        }
-        try {
-            Instant checkInEnd = LocalDate.parse(checkIn).plusDays(1).atStartOfDay(DIDA_ZONE).toInstant();
-            return Math.max(MIN_BEFORE, (int) Math.ceil(Duration.between(at, checkInEnd).toMinutes() / 60.0));
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     private static Instant parseFromDate(String isoInstant) {

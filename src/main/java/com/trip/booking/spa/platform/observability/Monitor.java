@@ -1,6 +1,7 @@
 package com.trip.booking.spa.platform.observability;
 
 import com.google.common.collect.ImmutableMap;
+import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import org.slf4j.Logger;
@@ -128,6 +129,20 @@ public class Monitor {
             return;
         }
         getCounter(monitorName + COUNTER_METRIC_SUFFIX, tags).increment(count);
+    }
+
+    /**
+     * 漏斗丢弃计数（{@code quote_dropped}）：{@code count <= 0} 时什么都不做。
+     *
+     * <p>收进本门面而不是各家自己写，判据同 §4.1.3：换一家供应商只换 {@code supplier} 这个入参。
+     * 此前飞猪、差旅无忧、美团各有一份逐字相同的私有 {@code countDropped}。
+     */
+    public static void recordDropped(SupplierSourceEnum supplier, FunnelStage stage,
+                                     DropReason reason, int count) {
+        if (count <= 0) {
+            return;
+        }
+        recordMany(MetricNames.QUOTE_DROPPED, MetricTags.dropped(supplier, stage, reason), count);
     }
 
     public static void recordValue(String monitorName, int value) {

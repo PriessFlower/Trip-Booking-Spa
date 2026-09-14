@@ -77,6 +77,27 @@ task:
     # 缺哪一档那一档的查询就恒空；高德按 2 人问价，故默认 2 人
     occupancies: "2"
 
+  meituan-cps:
+    # 美团刷价（消费 meituan_query_price_task，逐店查询）。误开=与 cursor 侧仍在跑的美团刷价
+    # 叠加打同一个 partnerId/accessKey，撞美团的额度；误关=缓存价陈旧，不资损（下单前必经验价）。
+    # 官方只公布了下单前校验的限流（1000 次/分钟），批量查价那页的"接口限流"是空的——
+    # 即上限未知，放量只能看 supplier_io_access{supplier="MEITUAN"} 的失败率抬升。
+    enabled: false
+    cron: '0 7/10 * * * ?'    # 与艺龙(0/10)、差旅无忧(3/10)、飞猪(5/10)、道旅(8/10)错开，仅启动时读取
+    batch-size: 200
+    concurrency: 1
+    # 慢档(无货档)：小批长周期，只为探测满房回归与重新上架
+    slow-batch-size: 100
+    slow-concurrency: 1
+    # 住期档：0=T+0~2(batch-size/concurrency)、1=T+3~7(mid)、2=T+8~30(far)
+    mid-batch-size: 200
+    mid-concurrency: 1
+    far-batch-size: 200
+    far-concurrency: 1
+    # 每行按这些成人数各查一次。本家 numberOfAdults 是「每间房」人数且进请求，
+    # 缺哪一档那一档的查询就恒空；高德按 2 人问价，故默认 2 人
+    occupancies: "2"
+
   dida-cps:
     # 道旅刷价（消费 dida_query_price_task，逐店查询）。误开=与 cursor 侧仍在跑的道旅刷价
     # 叠加打同一个 ClientID，撞 2022（超过流量限制）；误关=缓存价陈旧，不资损（下单前必经验价）。
@@ -214,6 +235,15 @@ ratelimit:
     # 取令牌：每实例每 50 分钟一次，量极小；配它是因为它也走通道层那道唯一闸门（§3.3），
     # 不配会落到 default-qps 上——那个值远大于实际需要，等于没限
     "[GLOBAL_LIMIT:CLWY:SPA_SUPPLIER_API_AUTH_TOKEN]": 1
+    # 美团（MEITUAN）：官方只公布了「下单前校验 1000 次/分钟」，批量查价那页的"接口限流"是空的
+    # （2026-09-14 查阅），即报价档上限未知。取值按保守起步，放量看 supplier_io_access 的失败率。
+    "[GLOBAL_LIMIT:MEITUAN:SPA_SUPPLIER_API_PRODUCT_PRICES]": 4
+    "[GLOBAL_LIMIT:MEITUAN:SPA_SUPPLIER_API_PRODUCT_PRICES:REFRESH]": 2
+    "[GLOBAL_LIMIT:MEITUAN:SPA_SUPPLIER_API_PRODUCT_PRICES:CHECK_PRICE]": 1
+    "[GLOBAL_LIMIT:MEITUAN:SPA_SUPPLIER_API_PRODUCT_PRICES:LIVE]": 1
+    # 下单前校验：官方明示 1000 次/分钟 ≈ 16 QPS，取 8 留一半余量给将来的下单链路
+    "[GLOBAL_LIMIT:MEITUAN:SPA_SUPPLIER_API_ORDER_PRICE]": 8
+    "[GLOBAL_LIMIT:MEITUAN:SPA_SUPPLIER_API_ORDER_PRICE:CHECK_PRICE]": 4
 
 # ── supplier / expedia：静态数据摄取总开关 ──────────────────
 # ── cache：我方自建缓存 ────────────────────────────────────
@@ -388,6 +418,29 @@ supplier:
     # resolve 管线开关（docs/product-identity.md §3）。
     # ⚠️ 本家比另几家更依赖它：报价码是分代轮换的（cursor 取证：60 天 58 次重放仅 4 次成功、
     # 93% 撞 No Availability），关掉它绝大多数「旧列表点击」会直接 RATE_DEAD。不资损，但可订率塌。
+    resolve-enabled: false
+    resolve-price-tolerance: 0.02
+    resolve-price-cap-cents: 2000
+
+  meituan:
+    # 产品建档(R-2.6)：语义与另几家的 catalog-enabled 同，由公共 ProductCatalogService 按家读。
+    # 默认关——先看刷价跑起来的量再决定。
+    catalog-enabled: false
+
+    # 报价币种。⚠️ 本家的响应<b>不带币种字段</b>，币种只在我们发出的请求里声明，
+    # 返回的 price 就按它计价——故这是币种的唯一出处，不是"报文没给时的兜底"。
+    # 我方与美团的结算币种为 USD，配错即全线错币种。
+    currency: USD
+
+    # 入住人国籍（ISO 3166-1 alpha-2）。它筛的是可售集合而非价格：2026-09-14 实测同一家酒店
+    # 同住期，不传与传 CN 完全一致（317 条、价格逐条相同），传 US 只剩 37 条且价格不变。
+    # 报价与验价必须同值，否则会出现"列表里有、点进去没有"。
+    client-nationality: CN
+
+    # resolve 管线开关（docs/product-identity.md §3）。
+    # 短周期内对它的依赖比另几家轻：goodsId 在一个会话内会跨住期复用（T+7 的 321 个 id
+    # 有 247 个在 T+30 也出现），旧列表点击命中原票是常态。但它按易腐申报——今天实测的 id
+    # 在 cursor 六月快照里一个都不在，长周期的命中率没有数据，别把这个"轻"当成长期结论。
     resolve-enabled: false
     resolve-price-tolerance: 0.02
     resolve-price-cap-cents: 2000

@@ -219,7 +219,7 @@ public class FliggyPriceServiceImpl {
     /** 凭证未配置即确定失败（网关无兜底），不调供应商 */
     public CheckPriceResult precondition() {
         if (!properties.isConfigured()) {
-            return outcome(CheckPriceOutcome.INDETERMINATE, "飞猪凭证未配置，未能确认该产品是否可订");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "飞猪凭证未配置，未能确认该产品是否可订");
         }
         return null;
     }
@@ -246,21 +246,21 @@ public class FliggyPriceServiceImpl {
                         CallPurpose.CHECK_PRICE);
         FliggyAriResponse ari = ariResult == null ? null : ariResult.getData();
         if (ari == null) {
-            return LiveStock.terminal(outcome(CheckPriceOutcome.INDETERMINATE, "查价未取得结果，请稍后重试"));
+            return LiveStock.terminal(CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "查价未取得结果，请稍后重试"));
         }
         // 验价即刷的转换器（机制在 AbstractCheckPriceFlow）：闭包捕获这份原始 ARI，
         // 终态分支也带着它返回——下架/整店无售正是要落无货标记的时候（B7）
         java.util.function.Function<PriceQuery, List<Product>> fresh =
                 priceReq -> freshProducts(ari, priceReq, request.supplierHotelId());
         if (ari.isHotelDelisted()) {
-            return LiveStock.<FliggyAriResponse>terminal(outcome(CheckPriceOutcome.SOLD_OUT, "该酒店已被供应商下架")).freshConvertedBy(fresh);
+            return LiveStock.<FliggyAriResponse>terminal(CheckPriceResult.of(CheckPriceOutcome.SOLD_OUT, "该酒店已被供应商下架")).freshConvertedBy(fresh);
         }
         if (ari.isPlatformError()) {
             reportPlatformError("验价·现取", ari, request.supplierHotelId());
-            return LiveStock.<FliggyAriResponse>terminal(outcome(CheckPriceOutcome.INDETERMINATE, "供应商平台拒绝了请求，未能确认")).freshConvertedBy(fresh);
+            return LiveStock.<FliggyAriResponse>terminal(CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "供应商平台拒绝了请求，未能确认")).freshConvertedBy(fresh);
         }
         if (ari.isEmptyResult()) {
-            return LiveStock.<FliggyAriResponse>terminal(outcome(CheckPriceOutcome.SOLD_OUT, "该住期已无任何可售报价")).freshConvertedBy(fresh);
+            return LiveStock.<FliggyAriResponse>terminal(CheckPriceResult.of(CheckPriceOutcome.SOLD_OUT, "该住期已无任何可售报价")).freshConvertedBy(fresh);
         }
         return LiveStock.of(ari).freshConvertedBy(fresh);
     }
@@ -300,17 +300,17 @@ public class FliggyPriceServiceImpl {
                 .access(validateCall(freshRateKey, traceId, request), CallPurpose.CHECK_PRICE);
         FliggyValidateResponse validate = validateResult == null ? null : validateResult.getData();
         if (validate == null) {
-            return outcome(CheckPriceOutcome.INDETERMINATE, "验价未取得结果，请稍后重试");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "验价未取得结果，请稍后重试");
         }
         if (validate.isPlatformError()) {
             reportPlatformError("验价", validate, request.supplierHotelId());
-            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商平台拒绝了请求，未能确认");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "供应商平台拒绝了请求，未能确认");
         }
         if (!validate.isSucc()) {
             // 业务层失败：官方码表空白，码义未核实一律不确定，绝不判无房
             log.warn("飞猪验价：业务层未通过,sHotelId={},rateKey={},bizErrorCode={}",
                     request.supplierHotelId(), freshRateKey, validate.bizErrorCode());
-            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未确认该报价可订，请稍后重试");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "供应商未确认该报价可订，请稍后重试");
         }
         String createKey = validate.createKey();
         Integer totalCents = validate.totalRoomPriceCents();
@@ -319,7 +319,7 @@ public class FliggyPriceServiceImpl {
             // 价格与钥匙不许猜：少任何一样都无法安全下单
             log.error("飞猪验价：响应缺关键字段,createKey空={},total空={},currency空={}",
                     StringUtils.isBlank(createKey), totalCents == null, StringUtils.isBlank(currency));
-            return outcome(CheckPriceOutcome.INDETERMINATE, "验价响应不完整，未能确认该产品是否可订");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "验价响应不完整，未能确认该产品是否可订");
         }
 
         Map<String, String> credentials = new HashMap<>();
@@ -332,7 +332,7 @@ public class FliggyPriceServiceImpl {
         }
         String offerId = offerStore.issue(SupplierSourceEnum.FLIGGY.getCode(), credentials);
         if (offerId == null) {
-            return outcome(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
         }
         return CheckPriceResult.builder()
                 .outcome(CheckPriceOutcome.BOOKABLE)
@@ -361,16 +361,16 @@ public class FliggyPriceServiceImpl {
         JsonNode totalRate = fresh.get("total_rate");
         Integer inclusive = intOrNull(totalRate, "inclusive");
         if (inclusive == null) {
-            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未给出总价，未能确认该产品");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "供应商未给出总价，未能确认该产品");
         }
         String currency = text(totalRate, "currency");
         if (StringUtils.isBlank(currency)) {
             // 币种不许缺也不许猜：上游把美元数字当人民币用即 7 倍资损（SpaCurrencyConverter 同纪律）
-            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未给出币种，未能确认该产品");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "供应商未给出币种，未能确认该产品");
         }
         List<PriceInfo> priceInfos = convertPriceInfos(fresh, request.checkIn(), request.checkOut());
         if (priceInfos == null) {
-            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未给出每日价，未能确认该产品");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "供应商未给出每日价，未能确认该产品");
         }
         // salePrice 整单口径：ARI 的 total_rate 是单间价，多间须乘间数（与 BOOKABLE 档一致，
         // 那档的 validate 总价本就按 number_of_rooms 算）
@@ -459,15 +459,12 @@ public class FliggyPriceServiceImpl {
         log.warn("飞猪{}：平台层拒绝,platformError={},sHotelId={}", phase, resp.platformError(), sHotelId);
     }
 
+    /**
+     * 本类的丢弃计数：只绑定"是哪一家、丢在哪一层"，怎么记在 {@link Monitor#recordDropped}。
+     * 这个切分就是 §4.1.3 的判据——换一家供应商要改的只有这两个常量。
+     */
     private static void countDropped(DropReason reason, int count) {
-        if (count > 0) {
-            Monitor.recordMany(MetricNames.QUOTE_DROPPED,
-                    MetricTags.dropped(SupplierSourceEnum.FLIGGY, FunnelStage.CONVERT, reason), count);
-        }
-    }
-
-    private static CheckPriceResult outcome(CheckPriceOutcome outcome, String message) {
-        return CheckPriceResult.builder().outcome(outcome).message(message).build();
+        Monitor.recordDropped(SupplierSourceEnum.FLIGGY, FunnelStage.CONVERT, reason, count);
     }
 
     private static String text(JsonNode node, String field) {

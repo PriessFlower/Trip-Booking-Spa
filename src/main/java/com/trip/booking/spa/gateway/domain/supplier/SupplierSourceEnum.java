@@ -29,6 +29,8 @@ public enum SupplierSourceEnum {
     DIDA(10020, "dida"),
     /** 接入中（2026-09-14 开工）：一批为查价+验价+刷价+建档，下单/查单/取消待二批。差旅无忧（xiangdo 开放平台） */
     CLWY(10025, "clwy"),
+    /** 接入中（2026-09-14 开工）：一批为查价+验价+刷价+建档，下单/查单/取消待二批。美团境外供给 */
+    MEITUAN(10030, "meituan"),
     ;
 
     SupplierSourceEnum(int code, String desc) {

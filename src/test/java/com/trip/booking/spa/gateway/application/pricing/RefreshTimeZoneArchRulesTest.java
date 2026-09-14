@@ -82,10 +82,10 @@ class RefreshTimeZoneArchRulesTest {
     }
 
     @Test
-    @DisplayName("五家都必须显式声明基准时区，且取值一致——否则同一个「今天」在各家不是同一天")
+    @DisplayName("六家都必须显式声明基准时区，且取值一致——否则同一个「今天」在各家不是同一天")
     void everySupplierDeclaresTheSameZoneExplicitly() {
         List<Path> impls = refreshImpls();
-        assertEquals(5, impls.size(), "刷价实现应为五家（新接一家请连同本约束一起看）：" + impls);
+        assertEquals(6, impls.size(), "刷价实现应为六家（新接一家请连同本约束一起看）：" + impls);
 
         List<String> missing = new ArrayList<>();
         for (Path impl : impls) {

@@ -210,11 +210,12 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         return products;
     }
 
+    /**
+     * 本类的丢弃计数：只绑定"是哪一家、丢在哪一层"，怎么记在 {@link Monitor#recordDropped}。
+     * 这个切分就是 §4.1.3 的判据——换一家供应商要改的只有这两个常量。
+     */
     private static void countConvertDropped(DropReason reason, int count) {
-        if (count > 0) {
-            Monitor.recordMany(MetricNames.QUOTE_DROPPED,
-                    MetricTags.dropped(SupplierSourceEnum.ELONG, FunnelStage.CONVERT, reason), count);
-        }
+        Monitor.recordDropped(SupplierSourceEnum.ELONG, FunnelStage.CONVERT, reason, count);
     }
 
     private Product convertPlan(String hotelId, ElongHotelDetailResponse.ElongRoom room, ElongRatePlan plan,
@@ -269,7 +270,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
     public CheckPriceResult precondition(CheckPriceCommand request) {
         if (!properties.isConfigured()) {
             log.error("艺龙验价：凭证未配置（ELONG_USER/ELONG_APP_KEY/ELONG_SECRET），无法调用,sHotelId={}", request.supplierHotelId());
-            return outcome(CheckPriceOutcome.INDETERMINATE, "艺龙凭证未配置，未能确认该产品是否可订");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "艺龙凭证未配置，未能确认该产品是否可订");
         }
         return null;
     }
@@ -293,7 +294,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 CallPurpose.CHECK_PRICE);
         if (result == null || result.getData() == null) {
             log.warn("艺龙验价：现货查询未取得结果,sHotelId={},sProductId={}", request.supplierHotelId(), request.supplierProductId());
-            return LiveStock.terminal(outcome(CheckPriceOutcome.INDETERMINATE, "现货查询未取得结果，未能确认该产品是否可订，请稍后重试"));
+            return LiveStock.terminal(CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "现货查询未取得结果，未能确认该产品是否可订，请稍后重试"));
         }
         ElongHotelDetailResponse data = result.getData();
         // 验价即刷的转换器（机制在 AbstractCheckPriceFlow）：闭包捕获这份原始响应，
@@ -304,14 +305,14 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             log.warn("艺龙验价：现货查询返回业务错误,sHotelId={},sProductId={},code={}",
                     request.supplierHotelId(), request.supplierProductId(), data.getCode());
             return LiveStock.<ElongHotelDetailResponse.ElongHotel>terminal(
-                    outcome(CheckPriceOutcome.INDETERMINATE, "现货查询失败(" + data.errorCode() + ")，未能确认该产品是否可订"))
+                    CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "现货查询失败(" + data.errorCode() + ")，未能确认该产品是否可订"))
                     .freshConvertedBy(fresh);
         }
         if (data.isEmptyResult()) {
             // 逐店查询下的空 Rooms 是该店当日确无在售（混批假空已由逐店纪律排除）
             log.info("艺龙验价：该店当日无在售产品,sHotelId={},sProductId={}", request.supplierHotelId(), request.supplierProductId());
             return LiveStock.<ElongHotelDetailResponse.ElongHotel>terminal(
-                    outcome(CheckPriceOutcome.RATE_DEAD, "该酒店当日已无在售产品，请重新查价"))
+                    CheckPriceResult.of(CheckPriceOutcome.RATE_DEAD, "该酒店当日已无在售产品，请重新查价"))
                     .freshConvertedBy(fresh);
         }
         return LiveStock.of(data.getResult().getHotels().get(0)).freshConvertedBy(fresh);
@@ -351,7 +352,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         ElongRatePlan plan = found.plan();
         if (Boolean.FALSE.equals(plan.getStatus())) {
             log.info("艺龙验价：所点产品已停售,sHotelId={},sProductId={}", request.supplierHotelId(), request.supplierProductId());
-            return outcome(CheckPriceOutcome.RATE_DEAD, "该产品已停售，请重新查价后再选择");
+            return CheckPriceResult.of(CheckPriceOutcome.RATE_DEAD, "该产品已停售，请重新查价后再选择");
         }
         // 此处原有一段「CurrentAlloment <= 0 → SOLD_OUT」已删除：该字段是"房量限额"不是"剩余房量"，
         // 0/999/9999 均表示不限，官方对每种口径都写明「最少有 1 间可以预定」，而我方一次只订 1 间。
@@ -361,7 +362,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 plan.getSubSupplierId(), plan.getShopperProductId())) {
             log.error("艺龙验价：现货产品缺验价凭据,sHotelId={},goodsUniqId={},ratePlanId={}",
                     request.supplierHotelId(), plan.getGoodsUniqId(), plan.getRatePlanId());
-            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商响应缺少验价凭据，未能确认该产品是否可订");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "供应商响应缺少验价凭据，未能确认该产品是否可订");
         }
         return null;
     }
@@ -372,7 +373,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         List<ElongDataValidateRequest.DayPrice> dayPrices = buildDayPrices(plan.getNightlyRates());
         if (dayPrices == null) {
             log.error("艺龙验价：现货产品缺每日价,sHotelId={},goodsUniqId={}", request.supplierHotelId(), plan.getGoodsUniqId());
-            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商响应缺少每日价，未能确认该产品是否可订");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "供应商响应缺少每日价，未能确认该产品是否可订");
         }
         return validate(request, hotel.getHotelId(), plan, dayPrices);
     }
@@ -386,7 +387,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         ElongDataValidateResponse data = callValidate(dataJson);
         if (data == null) {
             log.warn("艺龙验价：validate 调用未取得结果,sHotelId={},goodsUniqId={}", hotelId, plan.getGoodsUniqId());
-            return outcome(CheckPriceOutcome.INDETERMINATE, "验价调用未取得结果，未能确认该产品是否可订，请稍后重试");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "验价调用未取得结果，未能确认该产品是否可订，请稍后重试");
         }
         // H001189 自纠正：艺龙在拒绝的同一份响应里回传了它自己认可的 MinRate，用它重打一次。
         // 详见 alignMinRateToSupplier 的注释。Price（Σ Rate）一个字不动，故申报总价不受影响
@@ -426,21 +427,21 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         if ("Inventory".equalsIgnoreCase(resultCode)) {
             log.info("艺龙验价：供应商明确房量不够,sHotelId={},goodsUniqId={},resultCode={}",
                     hotelId, plan.getGoodsUniqId(), resultCode);
-            return outcome(CheckPriceOutcome.SOLD_OUT, "该产品已售罄");
+            return CheckPriceResult.of(CheckPriceOutcome.SOLD_OUT, "该产品已售罄");
         }
         if ("Product".equalsIgnoreCase(resultCode) || "Rate".equalsIgnoreCase(resultCode)) {
             // 产品无效/关房、价格不符：该票已死，上游重新查价即可拿到换代后的报价
             log.info("艺龙验价：产品级死态,sHotelId={},goodsUniqId={},resultCode={},errorMessage={}",
                     hotelId, plan.getGoodsUniqId(), resultCode,
                     data.getResult() == null ? null : data.getResult().getErrorMessage());
-            return outcome(CheckPriceOutcome.RATE_DEAD,
+            return CheckPriceResult.of(CheckPriceOutcome.RATE_DEAD,
                     "该产品已不可订(ResultCode=" + resultCode + ")，请重新查价后再选择");
         }
         // 官方表外的取值只透传不归并（移植风险④）
         log.warn("艺龙验价：ResultCode 表外取值，按不确定处理,sHotelId={},goodsUniqId={},resultCode={},errorMessage={}",
                 hotelId, plan.getGoodsUniqId(), resultCode,
                 data.getResult() == null ? null : data.getResult().getErrorMessage());
-        return outcome(CheckPriceOutcome.INDETERMINATE,
+        return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE,
                 "验价未通过(ResultCode=" + resultCode + ")，未能确认该产品是否可订");
     }
 
@@ -458,19 +459,19 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             String innerCause = full.contains("7015") ? "7015餐食变化" : (full.contains("7010") ? "7010产品不可订" : "未携内层码");
             log.info("艺龙验价：产品级死码,sHotelId={},goodsUniqId={},errorCode={},内层={}",
                     request.supplierHotelId(), plan.getGoodsUniqId(), errorCode, innerCause);
-            return outcome(CheckPriceOutcome.RATE_DEAD, "该产品已不可订(" + errorCode + ")，请重新查价后再选择");
+            return CheckPriceResult.of(CheckPriceOutcome.RATE_DEAD, "该产品已不可订(" + errorCode + ")，请重新查价后再选择");
         }
         if (errorCode.startsWith("H001144")) {
             // 马甲过期本可现取现验救回，但本次马甲就是刚取的——即刻过期属链路异常，重试可能成功
             log.warn("艺龙验价：本会话刚取的马甲被报过期,sHotelId={},goodsUniqId={},errorCode={}",
                     request.supplierHotelId(), plan.getGoodsUniqId(), errorCode);
-            return outcome(CheckPriceOutcome.INDETERMINATE, "验价凭证异常(H001144)，未能确认该产品是否可订，请稍后重试");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "验价凭证异常(H001144)，未能确认该产品是否可订，请稍后重试");
         }
         if (errorCode.startsWith("H001197") || errorCode.startsWith("H001188")) {
             // 缺马甲/每日价字段错，均属我方请求组装缺陷，需人工介入
             log.error("艺龙验价：请求组装缺陷被供应商拒绝,sHotelId={},goodsUniqId={},errorCode={},response={}",
                     request.supplierHotelId(), plan.getGoodsUniqId(), errorCode, result(data));
-            return outcome(CheckPriceOutcome.INDETERMINATE, "验价请求异常(" + errorCode + ")，未能确认该产品是否可订");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "验价请求异常(" + errorCode + ")，未能确认该产品是否可订");
         }
         if (errorCode.startsWith("H001189")) {
             // 走到这里说明自纠正没救回来，两种成因：①响应未回传可用的逐日 MinRate，无从纠正；
@@ -484,7 +485,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             // 故"可重试"这个语义是站得住的。
             log.error("艺龙验价：每日价口径不符且自纠正未生效,sHotelId={},goodsUniqId={},errorCode={},response={}",
                     request.supplierHotelId(), plan.getGoodsUniqId(), errorCode, result(data));
-            return outcome(CheckPriceOutcome.INDETERMINATE,
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE,
                     "验价未通过(" + errorCode + " 每日价口径不符)，未能确认该产品是否可订，请稍后重试");
         }
         if (errorCode.startsWith("H001084")) {
@@ -492,13 +493,13 @@ public class ElongPriceServiceImpl implements ElongPriceService {
             // 供应商现价不符，即该票价格已换代，重试同参数必再失败
             log.info("艺龙验价：总价与现价不符,sHotelId={},goodsUniqId={},errorCode={}",
                     request.supplierHotelId(), plan.getGoodsUniqId(), errorCode);
-            return outcome(CheckPriceOutcome.RATE_DEAD, "该产品价格已变化(H001084)，请重新查价后再选择");
+            return CheckPriceResult.of(CheckPriceOutcome.RATE_DEAD, "该产品价格已变化(H001084)，请重新查价后再选择");
         }
         // 其余码义未核实的一律透传不归并（移植风险④）。H001189 已于 2026-08-21 查清并单列在上，
         // 不再落到这里——这行注释此前把它举为例子，已过时
         log.warn("艺龙验价：未核实错误码，按不确定处理,sHotelId={},goodsUniqId={},code={}",
                 request.supplierHotelId(), plan.getGoodsUniqId(), data.getCode());
-        return outcome(CheckPriceOutcome.INDETERMINATE, "验价未通过(" + errorCode + ")，未能确认该产品是否可订");
+        return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "验价未通过(" + errorCode + ")，未能确认该产品是否可订");
     }
 
     /**
@@ -537,7 +538,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
                 String.valueOf(request.adultCount() == null ? 1 : request.adultCount()));
         String offerId = offerStore.issue(SupplierSourceEnum.ELONG.getCode(), credentials);
         if (StringUtils.isBlank(offerId)) {
-            return outcome(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "报价句柄签发失败，请稍后重试");
         }
         // 退改与每日价以验价时点为准（查价与验价之间条款可能已变，下单认的是这一份）；
         // 解析不出则回落本会话查价口径，两者皆无即空——不猜（R-5.4）
@@ -587,7 +588,7 @@ public class ElongPriceServiceImpl implements ElongPriceService {
         if (dayPrices == null) {
             log.info("艺龙验价(仅现货)：所点产品缺每日价,sHotelId={},goodsUniqId={}",
                     request.supplierHotelId(), plan.getGoodsUniqId());
-            return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未给出每日价，未能确认该产品");
+            return CheckPriceResult.of(CheckPriceOutcome.INDETERMINATE, "供应商未给出每日价，未能确认该产品");
         }
         List<PriceInfo> priceInfos = buildPriceInfos(dayPrices);
         List<CancelPolicy> cancelPolicy =
@@ -950,10 +951,6 @@ public class ElongPriceServiceImpl implements ElongPriceService {
 
     private static <T> List<T> emptyIfNull(List<T> list) {
         return list == null ? List.of() : list;
-    }
-
-    private CheckPriceResult outcome(CheckPriceOutcome outcome, String message) {
-        return CheckPriceResult.builder().outcome(outcome).message(message).build();
     }
 
     /** 现货产品及其所在物理房型（房名展示用） */

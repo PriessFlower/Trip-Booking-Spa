@@ -1,0 +1,272 @@
+{
+  "code": 0,
+  "message": "success",
+  "partnerId": 39155,
+  "result": [
+    {
+      "hotelId": 967183,
+      "goodsList": [
+        {
+          "hotelId": 967183,
+          "goodsId": 158043997015,
+          "goodsName": "尊尚双床客房",
+          "goodsNameEn": "Premier Double Queen Room",
+          "averagePrice": 25855,
+          "averagePriceStd": "25855",
+          "goodsSource": 2,
+          "otaBeds": [
+            [
+              {
+                "otaBedType": "双人床",
+                "otaBedDesc": "1.5",
+                "otaBedCount": 2,
+                "otaBedTypeId": 1
+              }
+            ]
+          ],
+          "mealType": {
+            "desc": "无早",
+            "count": -1,
+            "ohMealTypeEnum": "NO_BREAKFAST"
+          },
+          "realRoomId": 26899457,
+          "refundable": 2,
+          "cpApply": [
+            {
+              "endDate": "09/20/2026 00:00",
+              "refound": 28020,
+              "penalty": 0,
+              "penaltyStd": "0",
+              "endDateLocal": "09/20/2026 00:00"
+            },
+            {
+              "endDate": "09/21/2026 23:59",
+              "refound": 0,
+              "penalty": 28020,
+              "penaltyStd": "28020",
+              "endDateLocal": "09/21/2026 23:59"
+            }
+          ],
+          "giftPackageList": null,
+          "minGuestAge": 0,
+          "smokingPreferences": 0,
+          "quotedOccupancy": 2,
+          "rateOccupancy": 2,
+          "priceModelList": [
+            {
+              "date": "2026-09-21",
+              "price": 25855,
+              "activityPrice": 25855,
+              "savingPrice": 0,
+              "priceStd": "25855",
+              "activityPriceStd": "25855",
+              "savingPriceStd": "0"
+            }
+          ],
+          "checkPolicy": "",
+          "confirmType": 1,
+          "invoiceMode": 2,
+          "saleScenario": {
+            "sellChannelLimit": false
+          },
+          "immediateConfirm": true,
+          "targetUser": null,
+          "accessCode": "2965647#72018eca-2366-4036-b63e-6c5f8eb4365d#A2C0#65f00ec59f4bfd000143c0a4#337926#Y#RO",
+          "partnerId": 4534379,
+          "hotelTax": null
+        },
+        {
+          "hotelId": 967183,
+          "goodsId": 161689616981,
+          "goodsName": "尊尚双床客房",
+          "goodsNameEn": "Premier Double Queen Room",
+          "averagePrice": 26367,
+          "averagePriceStd": "26367",
+          "goodsSource": 2,
+          "otaBeds": [
+            [
+              {
+                "otaBedType": "大床",
+                "otaBedDesc": "大床",
+                "otaBedCount": 2,
+                "otaBedTypeId": 1
+              }
+            ]
+          ],
+          "mealType": {
+            "desc": "无早",
+            "count": -1,
+            "ohMealTypeEnum": "NO_BREAKFAST"
+          },
+          "realRoomId": 26899457,
+          "refundable": 1,
+          "cpApply": [],
+          "giftPackageList": null,
+          "minGuestAge": 0,
+          "smokingPreferences": 0,
+          "quotedOccupancy": 2,
+          "rateOccupancy": 2,
+          "priceModelList": [
+            {
+              "date": "2026-09-21",
+              "price": 26367,
+              "activityPrice": 26367,
+              "savingPrice": 0,
+              "priceStd": "26367",
+              "activityPriceStd": "26367",
+              "savingPriceStd": "0"
+            }
+          ],
+          "checkPolicy": "",
+          "confirmType": 1,
+          "invoiceMode": 2,
+          "saleScenario": {
+            "sellChannelLimit": false
+          },
+          "immediateConfirm": true,
+          "targetUser": {
+            "targetUserRule": 0,
+            "targetUserRestrictionList": []
+          },
+          "accessCode": "2965868#10182845#288171882#V0_10182845_288171882_725_0_2#2A0C",
+          "partnerId": 4749750,
+          "hotelTax": null
+        },
+        {
+          "hotelId": 967183,
+          "goodsId": 804665179,
+          "goodsName": "尊尚双床客房-官方直销",
+          "goodsNameEn": "Premier Double Queen Room",
+          "averagePrice": 25722,
+          "averagePriceStd": "25722",
+          "goodsSource": 2,
+          "otaBeds": [
+            [
+              {
+                "otaBedType": "双人床",
+                "otaBedDesc": "0.8×2.0米",
+                "otaBedCount": 2,
+                "otaBedTypeId": 1
+              }
+            ]
+          ],
+          "mealType": {
+            "desc": "无早",
+            "count": -1,
+            "ohMealTypeEnum": "NO_BREAKFAST"
+          },
+          "realRoomId": 26899457,
+          "refundable": 2,
+          "cpApply": [
+            {
+              "endDate": "09/20/2026 18:00",
+              "refound": 28157,
+              "penalty": 0,
+              "penaltyStd": "0",
+              "endDateLocal": "09/20/2026 18:00"
+            }
+          ],
+          "giftPackageList": [
+            "赠送Mini吧",
+            "迷你吧免费小食及赠饮"
+          ],
+          "minGuestAge": 0,
+          "smokingPreferences": 0,
+          "quotedOccupancy": 2,
+          "rateOccupancy": 2,
+          "priceModelList": [
+            {
+              "date": "2026-09-21",
+              "price": 25722,
+              "activityPrice": 25722,
+              "savingPrice": 0,
+              "priceStd": "25722",
+              "activityPriceStd": "25722",
+              "savingPriceStd": "0"
+            }
+          ],
+          "checkPolicy": "",
+          "confirmType": 2,
+          "invoiceMode": 2,
+          "saleScenario": {
+            "sellChannelLimit": false
+          },
+          "immediateConfirm": false,
+          "targetUser": null,
+          "accessCode": "-900#967183#804665179",
+          "partnerId": 4465868,
+          "hotelTax": null
+        },
+        {
+          "hotelId": 967183,
+          "goodsId": 158043997016,
+          "goodsName": "尊尚双床客房",
+          "goodsNameEn": "Premier Double Queen Room",
+          "averagePrice": 32106,
+          "averagePriceStd": "32106",
+          "goodsSource": 2,
+          "otaBeds": [
+            [
+              {
+                "otaBedType": "双人床",
+                "otaBedDesc": "1.5",
+                "otaBedCount": 2,
+                "otaBedTypeId": 1
+              }
+            ]
+          ],
+          "mealType": {
+            "desc": "早餐",
+            "count": 2,
+            "ohMealTypeEnum": "BREAKFAST"
+          },
+          "realRoomId": 26899457,
+          "refundable": 2,
+          "cpApply": [
+            {
+              "endDate": "09/20/2026 00:00",
+              "refound": 34794,
+              "penalty": 0,
+              "penaltyStd": "0",
+              "endDateLocal": "09/20/2026 00:00"
+            },
+            {
+              "endDate": "09/21/2026 23:59",
+              "refound": 0,
+              "penalty": 34794,
+              "penaltyStd": "34794",
+              "endDateLocal": "09/21/2026 23:59"
+            }
+          ],
+          "giftPackageList": null,
+          "minGuestAge": 0,
+          "smokingPreferences": 0,
+          "quotedOccupancy": 2,
+          "rateOccupancy": 2,
+          "priceModelList": [
+            {
+              "date": "2026-09-21",
+              "price": 32106,
+              "activityPrice": 32106,
+              "savingPrice": 0,
+              "priceStd": "32106",
+              "activityPriceStd": "32106",
+              "savingPriceStd": "0"
+            }
+          ],
+          "checkPolicy": "",
+          "confirmType": 1,
+          "invoiceMode": 2,
+          "saleScenario": {
+            "sellChannelLimit": false
+          },
+          "immediateConfirm": true,
+          "targetUser": null,
+          "accessCode": "2965647#72018eca-2366-4036-b63e-6c5f8eb4365d#A2C0#65f00ec59f4bfd000143c0a4#337927#Y#0",
+          "partnerId": 4534379,
+          "hotelTax": null
+        }
+      ]
+    }
+  ]
+}
