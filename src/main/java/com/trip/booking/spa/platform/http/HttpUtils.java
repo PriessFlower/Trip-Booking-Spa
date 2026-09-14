@@ -58,7 +58,7 @@ import java.util.Map;
  * 通道层的 HTTP 传输实现：连接池、超时、重试处理器、请求发送与响应读取。
  *
  * <p><b>本类属 ④ 通道层</b>（见 {@code docs/architecture.md} §2），与 {@link BaseHttpAccess}、
- * {@link ChunkedFileAccess} 同层。此前它落在 {@code core/util/}——那是放日期格式化、字符串
+ * 通道层。此前它落在 {@code core/util/}——那是放日期格式化、字符串
  * 处理这类零碎工具的地方，而本类是八家供应商全部对外请求的底层实现，改错即八家同挂。
  * 放在「杂物筐」里既掩盖了它的分量，也使通道层的纪律（统一限流、重试、埋点）管不到它。
  *
