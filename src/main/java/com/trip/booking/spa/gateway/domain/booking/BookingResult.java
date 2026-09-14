@@ -73,6 +73,22 @@ public final class BookingResult {
                 supplierErrorCode, supplierErrorMessage, message);
     }
 
+    /**
+     * 补上供应商单号。<b>不确定态尤其需要它</b>：拿到了单号却没到终态，是真实且常见的一档
+     * （道旅 Status=5 Pending 三分钟内到终态、Status=6 OnRequest 120 分钟内到终态），此时
+     * 上游凭这个号去查单是最直接的确证路径。失败态同理——供应商明确回报"这笔已存在的单
+     * 是失败/已取消"时，号是那个结论的证据。
+     *
+     * <p>{@link #success} 在工厂上就要求给号，故本方法只服务另外两态；它们的工厂不带这个参数，
+     * 是因为多数失败确实没有号。<b>没有出口就只能把号拼进中文 message，那正是本仓在取消罚金上
+     * 栽过的跟头</b>（上游只能正则中文串去取）——故给一个正经字段出口。
+     */
+    public BookingResult withSupplierOrderId(String id) {
+        return id == null || id.equals(supplierOrderId) ? this
+                : new BookingResult(outcome, orderId, id, confirmationNumber,
+                supplierErrorCode, supplierErrorMessage, message);
+    }
+
     public BookingOutcome outcome() {
         return outcome;
     }

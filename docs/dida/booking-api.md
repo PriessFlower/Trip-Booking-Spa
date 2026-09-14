@@ -1,0 +1,487 @@
+# 道旅（DidaTravel）接入实录
+
+> **定位**：本仓道旅适配层的协议事实、判据与实测证据。设计原则见
+> [../architecture.md](../architecture.md) §5（接一家新供应商要做什么）与
+> [../product-identity.md](../product-identity.md)。
+> **依据**：官方文档 `https://apidoc.didatravel.com/zh/`，全文引用均标注查阅日期；
+> 文档没写而实测得到的，一律写明「实测」与日期、样本量（PROJECT.md §4.2.5）。
+> **一批**（2026-09-08）：查价、验价、刷价、建档。**二批**（2026-09-13）：下单、查单、取消，见 §10。
+
+## 1. 端点与鉴权
+
+| 用途 | 端点 | 本仓落点 |
+|---|---|---|
+| 查价 | `POST https://api.didatravel.com/api/rate/pricesearch?$format=json` | `pricing/client/PriceSearchAccess` |
+| 验价 | `POST https://api.didatravel.com/api/rate/PriceConfirm?$format=json` | `checkprice/client/PriceConfirmAccess` |
+| 下单 | `POST /api/booking/HotelBookingConfirm?$format=json` | `booking/client/BookingConfirmAccess` |
+| 查单 | `POST /api/booking/HotelBookingSearch?$format=json` | `order/client/BookingSearchAccess` |
+| 预取消 | `POST /api/booking/HotelBookingCancel?$format=json` | `cancellation/client/BookingCancelAccess` |
+| 确认取消 | `POST /api/booking/HotelBookingCancelConfirm?$format=json` | `cancellation/client/BookingCancelConfirmAccess` |
+
+**鉴权**：每个请求体自带 `Header.ClientID` 与 `Header.LicenseKey`，无签名、无会话、无到期
+（故 `CredentialRenewal.STATELESS`）。凭据经 `DIDA_CLIENT_ID` / `DIDA_LICENSE_KEY` 注入。
+
+**两条硬约束**（都不在文档里，2026-09-08 实测）：
+
+- **必须带 `Accept-Encoding: gzip`**。不带直接被拒：
+  `{"Error":{"Code":"-2","Message":"gzip is required, please add Accept-Encoding: gzip in your request header."}}`
+- **出网 IP 必须在道旅白名单内**，否则 `{"Error":{"Code":"2017","Message":"Invalid ip/signature"}}`。
+  本机（美国出口）被拒；腾讯云 `trip-offline` 与阿里云 `tg_server1` 已在白名单。
+  本机跑真链路的办法：`ssh -D 1080` 到白名单机，JVM 加
+  `-DsocksProxyHost=127.0.0.1 -DsocksProxyPort=1080`；本机若有 TUN 代理污染 DNS
+  （解析出 198.18.x），再加 `-Djdk.net.hosts.file=<写死真实 IP 的 hosts 文件>`。
+
+**没有沙箱**：官方 price-search 注 15（2026-09-08 查阅）写明测试账号 `DidaApiTestID` 已废除，
+要测试须请客户经理另开专属测试账号。故 `supplier.dida.url-host` 的兜底即生产端点。
+
+## 2. 错误码 → 三态
+
+码表出处：`information-hub/api-error-code`（2026-09-08 查阅）。落点：查价在
+`DidaPriceServiceImpl#toPricingResult`，验价在 `#interpretConfirmResponse`，单测
+`DidaPricingOutcomeTest` / `DidaConfirmOutcomeTest` 逐码钉住。
+
+| 码 | 官方文案 | 查价 | 验价 |
+|---|---|---|---|
+| 2005 | 没有库存 | `NO_INVENTORY` | `SOLD_OUT` |
+| 2006 | 此价格计划失效 | `NO_INVENTORY` | `RATE_DEAD` |
+| 2020 | RatePlanID不正确 | — | `RATE_DEAD` |
+| 2029 | 酒店停止售卖 | `NO_INVENTORY` | `RATE_DEAD` |
+| 2030 | 价格不可用 | `NO_INVENTORY` | `RATE_DEAD` |
+| 2017 / 2019 | 机构信息验证失败／请求被禁止 | `INDETERMINATE` | `INDETERMINATE`（error 级日志，需人工） |
+| 2022 | 超过流量限制 | `INDETERMINATE` | `INDETERMINATE`（并计 `throttled`） |
+| 其余与表外码 | — | `INDETERMINATE` | `INDETERMINATE` |
+
+两个形态上的坑：
+
+- **HTTP 恒 200**，成败只看 `Success` / `Error` 两个互斥节点。
+- **空 `HotelList` 是成功响应**，不是错误：拿一个不存在的酒店 id 去查，回的是
+  `Success` + 空列表（2026-09-08 实测）。它与「这家这天满房」同形，本仓一并落
+  `NO_INVENTORY`——对上游是同一件事，且这样缓存里的僵尸价才会被清（B7）。
+
+## 3. 身份与腐性（申报见 `SupplierIdentityProfile.DIDA`）
+
+- **`RoomTypeID` 稳定**：2026-09-08 实测 36 家有报价的酒店、225 个不同的 `RoomTypeID`，
+  **全部**能在静态内容接口（`static-api.didatravel.com/api/v1/hotel/details` 的
+  `rooms[].id`）里找到，未命中 0 个。故它进 productKey，也是房型级目录的锚。
+- **`RatePlanID` 易腐，且腐得极快**：同店同参数间隔 **3 秒** 重查，所点报价码已不在响应中
+  （首查 24 条与复查 116 条只有 12 条同码）。故它只进 OfferStore、禁止落库，验价一律现取
+  现验，且 resolve（按 productKey 换等价票）对道旅不是可选项而是常态路径。
+- **`ReferenceNo` 是下单唯一入口**；能活多久本仓按 **1 小时**计（我方保守口径，非道旅承诺，
+  辨析见 §4.6），句柄 TTL 帽取其一半＝30 分钟。
+
+## 4. 查价的两个口径坑
+
+**① 多店 + 实时报价会被降级**（2026-09-08 生产实测，腾讯云 trip-offline 直打）。
+
+样本：从道旅可卖清单里等距抽 **60 家酒店**（跨国家、非同城），跑 **3 个住期**
+（T+3 / T+21 / T+60，各 1 晚、2 成人、CNY/CN），共 180 个「酒店×住期」，其中单店实时
+确有报价的 50 个。基准 = 逐店实时；对照 = 同样 10 家一批，实时档与缓存档各一次。
+
+| 住期 | 有货酒店 | 逐店实时（基准） | 10 家一批 · 实时 | 10 家一批 · 缓存 | 实时档整家消失 |
+|---|---|---|---|---|---|
+| T+3 | 17 | 354 条 | 114 条（32%） | 354 条（100%） | 10/17（59%） |
+| T+21 | 17 | 394 条 | 129 条（33%） | 393 条（100%） | 11/17（65%） |
+| T+60 | 16 | 357 条 | 136 条（38%） | 353 条（99%） | 9/16（56%） |
+| **合计** | **50** | **1105 条** | **379 条（34%）** | **1100 条（99.5%）** | **30/50（60%）** |
+
+最低价方向**从无例外**：混批实时里 18 家的最低价比逐店实时贵、0 家更便宜，中位偏高
+3.6%~4.7%；混批缓存则 47/50 家与逐店实时**完全相等**（另 3 家小幅偏高）。
+
+**机制不是"批量条数上限"**：同一批 10 家关掉 `IsRealTime` 就全回来了。批量从 2 开始就退化
+（酒店 528：单店 116 条 → 批量 2/3/5/10 一律 39 条），不随批量大小递减。
+按批内位置看实时档的命中率有前高后低的迹象（第 1 位 6/7，第 10 位 0/6），与"实时聚合按列表
+顺序做、做到哪算哪"相符，但每格样本只有个位数，**不足以定论**。
+
+单店那一档 `IsRealTime` true / false 的差别很小：8 家里 7 家逐条相同，1 家实时多 3 条
+（80 vs 77）。故本仓取**逐店 + 实时**，是最全的一档。若将来为省调用数要合批，
+必须同时关掉 `IsRealTime`——只改批量就会丢货。
+
+> 顺带的观察（不构成结论）：从非实时那一档拿到的 4 条最低价报价，逐条打 PriceConfirm
+> 验价，4/4 价格与查价完全一致。这只说明"此刻缓存价没有陈"，不足以证明它长期可靠。
+
+**cursor 侧现状**（2026-09-09 重新核对，此前记载有误，见下）：批量查价在生产**确实存在，
+但只有一条车道**——`AmapPioneerFlushService`（先锋刷价，`FlushPriority.HOT_HOTEL`），
+批量大小是代码常量 `DIDA_BATCH = 10`，热配 `amapPioneer.enabled=true`、`cap=8000`（跨供应商
+共享的候选名额），`@Scheduled(cron="0 50 * * * ?")` 每小时一轮、每轮只刷一个住期。
+
+**其余查价调用一律单店**（`Collections.singletonList`）：`HotelFlushServiceImpl` 四处（含
+C_END）、`Non7EmergencyClwyFlushService` 两处、`DidaTravelPriceStrategy` 的 2005 重解析一处。
+故这些车道不受本节问题影响。
+
+> **更正**：此前本节写「生产 Redis `dida:flush:batch-size=10`，故刷价正踩在退化组合上」——
+> **错**。该键读在 `DidaTravelHotelTask`，而生产定时任务给它的入参是 `needWrapPrice=false`
+> （周频**静态**同步，不查价）。同样作废的还有由此推出的影响面（"每周约 100 万行 room_price
+> 从未落地"）——那个数把全部 100~158 万次/天的道旅调用都当成批量的，而实测按刷新时间的
+> 分钟分布看不到先锋轮次的尖峰（:50–:55 段占近 6 小时的 12.7%，与均匀分布的 10% 无显著差异），
+> 说明批量车道在总调用里占比很小。**真实影响面尚未量化**。
+
+影响面虽小，方向仍不利：先锋刷价挑的是**热门酒店**，每次丢货丢的是最该有价的那批。
+
+**文档自己怎么说的**（官方 price-search，2026-09-08 查阅）：同一个端点靠参数分三种查法——
+`LowestPriceOnly=true` 是**最低价查询**、`IsRealTime.Value=false` 是**缓存查询**
+（原文：「拉取多酒店缓存报价，当多酒店搜索报价时推荐使用缓存(最多支持50家酒店)」）、
+`IsRealTime.Value=true` 是**实时查询**（原文只有「拉取多酒店实时报价」，没写家数上限）。
+选哪种，文档给的是一句速度与准确度的取舍：
+
+> 当使用多酒店查询报价时，如果贵公司更在意返回的**速度**，建议多酒店使用**缓存**查价，
+> 如果贵公司更在意返回的价格和库存的**准确度**，建议多酒店也使用实时查价。
+
+**实测与这句话冲突**：多酒店实时不是"更准"，是**更少**——同一批 10 家，实时只回 105 条、
+漏掉 4 家，缓存回满 280 条。按 PROJECT.md §4.2.4「文档与实测冲突时以实测为准，两者都留痕」，
+本仓按实测走（逐店 + 实时），并把这条列进第 9 节待向客户经理确认。
+超时不是解释：官方超时页写价格搜索默认 5 秒，而那次批量实时响应只用了 0.36 秒，远没到超时。
+
+**关掉实时的硬代价：缓存档完全无视占用**。官方注 2 写着「默认情况下，Lowest price search 和
+Cache rate search 将返回基于 2 人的价格」，2026-09-08 实测坐实（酒店 528 与 5279 各测四档）：
+
+| 请求占用 | 实时档回的最低价 | 缓存档回的最低价 | 缓存档响应里声明的占用 |
+|---|---|---|---|
+| 1 成人 | 534 | 610 | 2 成人 0 儿童 |
+| 2 成人 | 610 | 610 | 2 成人 0 儿童 |
+| 3 成人 | 801 | 610 | 2 成人 0 儿童 |
+| 2 成人 1 儿童(5 岁) | 758 | 610 | 2 成人 0 儿童 |
+
+即缓存档只有「2 人」这一档是对的。刷价维度若只有 2 人，合批+缓存与逐店实时等值；一旦要刷
+1 人、3 人或带儿童档，缓存档会把 2 人价当成那一档的价存下来。验价链路必须按客人真实占用，
+故只能实时。
+
+**② `TotalPrice` 两个接口口径不同**（官方 price-search / price-confirm）：
+pricesearch 是**单间**住期总价（搜 3 间需自行 ×3），PriceConfirm 是**全部房间**的总价。
+本仓缓存与出价按单间口径存，验价那一档直接用 PriceConfirm 的总价作 `salePrice`。
+
+`IncludedFeeList` 的税费**已含在 TotalPrice 内**（官方明示「不要再把此税费列表里的价格跟
+TotalPrice 运算」），故 `totalTaxes` 报 0，不做加减。`InventoryCount` 官方自己写着
+「仅供参考，不准的」，故只在查价响应里原样透出，验价那一档**不报** `remainRoomNum`。
+
+## 4.5 耗时：慢的是验价，不是查价
+
+2026-09-08 实测（腾讯云 trip-offline → 道旅；**网络路径与 cursor 的阿里云张家口不同，绝对值
+不可直接比，只看量级与相对关系**）：
+
+| 调用 | p50 | p90 | 最大 |
+|---|---|---|---|
+| 查价 单店实时 | 736ms | 857ms | 857ms |
+| 查价 单店缓存 | 697ms | 965ms | 965ms |
+| 查价 10 家实时 | 454ms | 831ms | 831ms |
+| 查价 10 家缓存 | 577ms | 716ms | 716ms |
+| **验价 PriceConfirm** | **389~1869ms** | **~2.7~3.0s** | **2980ms** |
+
+两条结论：
+
+1. **查价从来不是超时来源**——半秒级，而且混批比单店还快（少发几次请求）。所以第 4 节那个
+   丢货问题与超时**没有直接因果**。
+2. **验价才是**：秒级且方差大，与 cursor 生产观测同量级（他们记录 Dida 验价
+   `p50=1283ms / p90=2219ms / p95=2570ms`，为此单独给道旅配了 2300ms 预算，
+   见其 `backend/specs/2026-07-18-dida-timeout-budget.md`）。`PreBook=true` 不额外变慢
+   （实测 852/860ms）。
+
+丢货与超时之间存在一条**间接**链，值得在 cursor 那边验证：报价丢了六成 → 曝光出去的报价更
+容易已经失效 → 验价撞 `2005` → 触发按 productKey 的重解析（再查一次现货 + 再验一次价，
+而按其 spec 这些**共用同一个 deadline**）→ 预算耗尽即记成超时。本仓没有量过这条链，
+要坐实得看 cursor 侧 `RATE_PLAN_STALE_2005` 与超时归因的相关性。
+
+**对本仓的直接影响**：曝光档只打一次查价（0.5~0.9s），塞得进上游 1200ms 那档预算；
+下单前档要「查价 + 验价」≈ 2s 起步、p90 可能 3s 以上，**只能放在下单前那档的秒级预算里**，
+不要指望它进 1200ms。这与艺龙"完整验价约 4.6s、塞不进渠道验价预算"的结论同形。
+
+## 4.6 验价（PriceConfirm）文档明说的四件事
+
+原文均出自官方 booking-api/price-confirm（2026-09-08 查阅）：
+
+1. **它是房型级实时报价，且以它为准**：「如果 PriceConfirm 取消政策 (mealtype/rate/RoomName/
+   available 等) 与 PriceSearch 不一致，请使用 priceconfirm 信息作为最终信息。」
+   本仓已照此实现：退改与逐晚价一律以验价时点那份为准，解析不出才回落查价那份。
+2. **官方给的耗时预期**：「一般情况下，Dida 会在 2 秒内返回验价结果, 最多不超过 20 秒。
+   如果超过 20 秒还未收到结果，建议重发一次请求。」与 §4.5 实测吻合（实测最大见到 4.0 秒）。
+3. **只验价不下单时不要开 PreBook**：「如果客人只是需要验价，并没有进入订单创建的流程，
+   不需要设置 PreBook 为 true，这样能有更好的性能表现，减少超时的情况。」
+   本仓的曝光档根本不打验价，下单前档必须签句柄故必须 PreBook=true——两档都合规。
+4. **`ReferenceNo` 的有效期，接口页没写**。「2 小时」这个数只出现在错误码表 3006 的文案里
+   （「订单参考号过期了。订单参考号有效时长为2小时」）。
+
+**本仓的口径：按 1 小时计**（2026-09-08 定，我方保守取值，不向道旅求证）。理由是那 2 小时
+既非接口承诺、也不保证房价被锁住，取一半留余量；句柄 TTL 上限 30 分钟＝这 1 小时的一半。
+将来若道旅给出正式答复，改这里与 `SupplierIdentityProfile.DIDA` 两处即可。
+
+以下是这样取值的依据——**那 2 小时是"号自己最长能活多久"，不是"房和价被锁住 2 小时"**。
+道旅自己的订单族错误码里就有 `3015 无房或变价`、`3001 订单信息不正确`——都是拿着尚未过期的
+号去下单仍然失败的情形；而报价码本身实测 3 秒即换代。**当天入住**尤其不能指望：2026-09-08
+北京时间 16:15 实测 T+0 仍可查价并成功拿到 ReferenceNo（3 家里 2 家有货），但一个晚上 22 点
+签出的号显然跨不过酒店的当日截止时间，而这一点无法在不真下单的前提下验证。
+
+故本仓不依赖它：句柄 TTL 上限 30 分钟，实际以 OfferStore 的 TTL（生产 600 秒）为准，
+过期一律凭 productKey 现取现验。
+
+## 5. 餐食：只认两种有实证的取值
+
+官方 price-search 的字段说明里 `MealType` 只有字段名，**没有取值表**，故取值靠统计推。
+两轮生产实测（2026-09-08），组合记为 (BreakfastType, MealType, MealAmount)：
+
+| 样本 | 规模 | 分布 |
+|---|---|---|
+| A：36 家（日本居多） | 606 条报价 | (1,1,0) 344 · (2,2,2) 210 · (2,3,2) 32 · (2,7,2) 20 |
+| B：可卖清单等距抽 260 家（86 家有货） | 1844 条报价 | (2,2,2) 1018 · (1,1,0) 819 · (1,3,1) 6 · (2,3,2) 1 |
+
+**结论：`MealType` 取 1（无餐）与 2（含早）覆盖 99.6%，3 与 7 是长尾。** 房型名帮不上忙——
+样本 B 的 1844 条里，名称含餐食词（breakfast / 含早 / half board / dinner…）的 **0 条**。
+
+**`MealAmount` 是人份，不是餐数。** 实测同一家酒店只改占用：1 成人→1、2 成人→2、3 成人→3、
+2 成人 1 儿童→3，而 `MealType` 恒为 2。故 `Meal.count` 填它，与艺龙同口径（那边份数来自文案、
+这边来自请求占用）；占用本就是 productKey 成分，不会因此键分叉。
+
+**`BreakfastType` 与逐晚 `MealType` 会打架，一律以后者为准**（官方注 8 也写着 BreakfastType
+已过时）：样本 A 里 `MealType=7` 的样例是日式「1泊2食」（一晚含早+晚）而 `BreakfastType` 仍是 2，
+照它判就会把两餐说成仅含早——那是卖错；样本 B 里另有 (1,3,1) 6 条、占用扫描时另见 (1,2,2)，
+都是 `BreakfastType` 说无早而逐晚有餐。
+
+### 5.1 取值表找到了，但差一个偏移量待确认（2026-09-09）
+
+官方**渠道管理端**文档（`/supplier-docs/DidaTravel_ChannelManager_API_Document_CN.html`，
+供应侧推价用，与分销 API 不是同一份）附录给了完整餐型表：
+
+| MealTypeID | 名称 | | MealTypeID | 名称 |
+|---|---|---|---|---|
+| 0 | Room Only | | 5 | Dinner |
+| 1 | Breakfast Included | | 6 | BreakfastAndDinner |
+| 2 | Half-Board | | 7 | BreakfastAndLunch |
+| 3 | Full-Board | | 8 | PKG(Room&Ticket) |
+| 4 | All Inclusive | | 9~14 | Lunch / Lunch And Dinner / Suhur 系 |
+
+**它与分销侧的 `MealType` 差 1**：我们实测分销 1=无餐、2=含早，对应供应侧 0=Room Only、
+1=Breakfast Included。若两侧同码，分销 1 就该是「含早」，与实测（`MealAmount=0`、
+`BreakfastType=1`）直接矛盾，故同码被排除。按 +1 推：
+
+- **分销 3 = 供应 2 = Half-Board（半食宿）**
+- **分销 7 = 供应 6 = BreakfastAndDinner（早+晚）**
+
+支持这个推断的独立旁证：①样本 A 里 `MealType=7` 的样例是日式「一泊二食」，与「早+晚」吻合；
+②实测 3 与 7 的价格都比同房型含早档贵（+155 / +1346 / +1674 / +1707），符合「多一餐」。
+
+**但没有任何一条是官方对分销侧的明文**，故代码维持 UNKNOWN 不放开。要放开只需道旅回答一句：
+**分销 price-search 的 `MealType` 是否等于渠道端 `MealTypeID` + 1？**
+
+两条排除掉的路，避免重复试：验价响应不返回餐食名称（字段与查价同构）；验价独有的
+`Supplement` / `PriceWithoutSupplement` **实测恒 0**，不是餐费拆分。
+
+**判定**（`DidaProductKeyDeriver#convertMeal`）：逐晚全 1 且份数 0 → 无餐；逐晚全 2 且份数 >0 →
+含早（份数取逐晚最大）；**其余一律 UNKNOWN**（含 3、7、将来的新值、逐晚不一致、字段缺失）。
+UNKNOWN 照常可售，只是不进产品目录。按样本 B，这条纪律的代价是 0.4% 的报价不进目录。
+要收窄它，只能向道旅要到 `MealType` 取值表——统计推不出 3 和 7 到底含哪几餐。
+
+## 6. 退改：起始点列表 → 分段
+
+道旅给的是「**从 FromDate 起**取消收 Amount」的起始点列表，FromDate 之前免费，
+时刻是**北京时间**（官方 price-search 字段说明，2026-09-08 查阅）。本仓翻成分段：
+
+- 段 i 的截止时刻 = 下一条的 `FromDate`；末段无截止（落 `before` 下限 25，表示"此后一直"）
+- 首条 `Amount>0` 时补一段免费窗，其截止时刻即首条 `FromDate`
+- 金额币种 = 本次报价币种（`supplier.dida.currency`，默认 CNY）——那张表只给数值不给币种
+- 政策列表缺席即 UNKNOWN，**不兜成"不可退"也不兜成"免费"**（cursor 兜成不可退是防赔款的
+  故意设计，SPA 用 UNKNOWN 达成同等防护而不说谎）
+- 过期段一律滤掉（`CancelClassifier.liveSegments`）：作废的免费窗不能对外承诺
+
+## 7. 国籍：填客人真实国籍，不填酒店所在国
+
+官方 price-search 注 14：「请在 Nationality 中填入客人输入的真实国籍，以免后续到店出现
+争议单」。上游契约不带国籍字段，故配置化为 `supplier.dida.nationality`，默认 `CN`
+（我方客源国）。**不照 cursor 的做法填酒店所在国**——那正是文档点名要避免的争议单来源。
+代价是可售集合与价格可能与 cursor 侧不同，比价时要记得这一条。
+
+## 8. 非即时确认（on-request）
+
+本批只卖即时确认：请求一律 `IsNeedOnRequest=false`，响应里万一仍带 `IsOnRequest=true`
+的报价，在转换与找票两处都被排除并计入 `quote_dropped{reason="on_request"}`。
+接 on-request 需要下单链路先就位（订单状态另有【6】OnRequest 档，120 分钟内出终态）。
+
+## 8.5 播种：别拿 9 万个 id 直接铺
+
+刷价任务表 `dida_query_price_task` 生产尚未播种。**播种口径要先探再铺**，理由是两组数据：
+
+**旁证（飞猪，2026-09-08 另一会话实测）**：队列 9,822 家酒店里 5,818 家不在业务方给的可卖清单
+上，而这批里 **99.1%（5,763 家）全住期无货**，却占了 18 万行任务、吃掉一半以上刷价轮次。
+清掉后队列 33.3 万行 → 15.5 万行，有货率 25% → 73.4%，一轮耗时约 34 小时 → 约 16 小时。
+
+**本仓自己的抽样也指向同一件事**：从 `ids_dida.txt` 等距抽 60 家，任一住期真能查出报价的只有
+16~17 家（T+3 17 家 / T+21 17 家 / T+60 16 家，约 28%）。即这份清单里**七成左右的酒店在给定
+住期查不出货**。9 万 id × 住期数轻易做到上百万行，而道旅的配额从未公开、撞限只有一个 2022。
+
+**播种名单不必自己探，生产库里现成**（2026-09-09 查实）：阿里云聚合库 `tg-trip_db` 的
+`hotel_price_freshness`（`supplier_code='didatravel'`，98 万行）记的就是 cursor 真刷出过价的
+酒店——抽 600 家逐一对 `room_price` 核验，**600 家全部有在售行**（15,583 行）。各住期规模：
+T+0 约 18,867 家，T+1~T+6 约 3,800~5,300 家。以它作种子，比拿 9 万 id 全量铺精准得多。
+
+> 取数注意：道旅在该库的 `supplier_code` 是 **`didatravel`** 不是 `dida`；且 `room_price`
+> （4,666 万行）**只有 `(supplier_hotel_id, cur_date)` 索引**，按 `supplier_code` 过滤是全表扫，
+> 会拖垮生产库——务必先从 `hotel_price_freshness` 取酒店 id，再按 id 查 `room_price`。
+
+再看 `supplier_io_access{supplier="DIDA",status="throttled"}` 逐步放量。
+
+表上已有 `UNIQUE KEY uk_hotel_stay (sh_id, delay_check_in, delay_check_out)`，播种脚本可以
+反复重跑（`INSERT IGNORE` / `ON DUPLICATE KEY UPDATE`），不必自建幂等闸——飞猪那张表没有这把
+键，播种脚本只能自己记，这是趁表还空时补上的。
+
+## 8.6 生产数据 e2e（2026-09-09）
+
+按 PROJECT.md §2.2.2「验证必须以真实库中的真实数据驱动」，用生产数据做了一轮同数据 A/B。
+
+**做法**：从聚合库取 300 家生产确有在售的道旅酒店（住期 T+2，见 §8.5），播进本地任务表；
+本地起服务真打道旅生产端点（本机美国出口，走 `ssh -D` 借白名单机出口 + `jdk.net.hosts.file`
+绕 TUN 假 DNS）；跑完与生产 `room_price` 同住期横比。
+
+| 观察 | 结果 |
+|---|---|
+| 覆盖 | 生产有价 300 家，我们刷到 **287 家（96%）**；16 行因当下无在售自动沉入无货档 |
+| 最低价 | **中位偏差 +0.0%**（相同 89 家 / 我们更低 80 家 / 我们更高 118 家） |
+| 条数 | 我们 3,968 条 vs 生产 8,849 行（45%）——**粒度不同，非丢数据**（见下） |
+| 落库 | 产品档案 3,981 行 / 296 家 / 2,161 个房型；失败 0 |
+| 幂等 | 同一份播种脚本跑两遍，任务表 320 行不变（`uk_hotel_stay` 生效） |
+
+**条数差是粒度**：生产按**售卖单元**存（四家抽查：行数 22/50/24/84 与 `supplier_sub_room_id`
+去重数完全相等，而房型只有 4/12/6/13），我们按**产品身份**存，同房同餐同退改的多个卖法合成
+一个等价类（服务日志 `入缓存裁剪：入参=15条,等价类=10个`）。故 45% 是聚合比例，不是缺口。
+
+**偏差大的样本集中在生产数据陈旧的那一侧**：偏差前 6 名的生产行 `update_dt` 为 08-19、
+09-02、09-04、09-07（住期是 09-11），且这些酒店在我们这轮只查到 1~5 条报价而生产存着
+20~38 行——即那份存量是几天前更多库存时的快照。同住期全量看新鲜度更直接：
+
+| `room_price` 更新于 | 行数 | 酒店 |
+|---|---|---|
+| 1 天内 | 39,482 | 1,815 |
+| 1–3 天 | 19,226 | 631 |
+| 3–7 天 | 30,363 | 993 |
+| **超过 7 天** | **43,051** | **1,609** |
+
+**只有 30% 的行是一天内刷新的，33% 超过一周**——两天后入住的住期挂着一周前的价。这与 §4 的
+多店实时丢货是同一件事的两面（拿回来的只剩三分之一，剩下的就越挂越旧），且这里是直接数出来的，
+不依赖相关性推断。
+
+## 9. 未解决 / 待确认
+
+| 事项 | 现状 |
+|---|---|
+| `MealType` 取值表 | 文档无，已按实证收窄；待向客户经理索取 |
+| QPS 配额 | 文档无（缓存建议页与 FAQ 均无数值）；现取自律值，见 `config/supplier-capability/dida.yaml` |
+| `Metadata` | 官方标必填，但本账号 pricesearch **不下发**该字段；实测不传照样验价成功。需客户经理开通后再回传 |
+| 多间（`NumOfRooms>1`） | 验价请求已按间数逐间列 `OccupancyDetails`，但**未做多间真实验证**；逐晚明细是否随间数变化未确认 |
+| 与 cursor 的额度叠加 | 同一个 ClientID 两边共用，放量前须先确认 cursor 侧速率 |
+| 多店实时为何丢货 | 文档反而推荐"多酒店要准确度就用实时"，与实测相反，机制未知，要问客户经理 |
+| 静态内容接入 | `static-api.didatravel.com` 另有一套端点与 Basic 鉴权，本仓未接；刷价清单目前靠离线抓取播种 |
+
+## 10. 二批：下单 / 查单 / 取消（2026-09-13）
+
+依据：官方 booking-confirm / booking-search / booking-cancel 两页 / information-hub 的订单状态表与
+订单错误码表（均 2026-09-13 查阅）；实测证据来自 cursor 生产账号（与本仓共用 ClientID）在其
+`supplier_request_log`（阿里云 `tg-trip_db`，只保留约一周）留下的报文：**2026-09-07~14 下单 19 次、
+预取消 8 次、确认取消 7 次、查单 18,424 次**，以及其 `DidaTravelTest` 注释里留存的 2025-11/2026-01 报文。
+落点：`DidaBookingClassifier`（码表→态，单测 `DidaBookingClassifierTest` 逐码钉住）、
+`DidaBookingSyncServiceImpl` / `DidaOrderQuerySyncServiceImpl` / `DidaCancelSyncServiceImpl`。
+
+**本仓自己尚未下过道旅真单**：闸 `dida.booking-enabled` 默认关（安全护栏，application.yml）。
+下面凡标「实证」的都是 cursor 账号的生产报文，凡本仓形态与其一致的（请求字段集合、Contact 形态）
+才敢说"会被接受"；首单跑通后补本仓夹具与本节。
+
+### 10.1 下单请求怎么组
+
+| 字段 | 取值 | 依据 |
+|---|---|---|
+| `ReferenceNo` | 句柄里的验价参考号 | 官方：「创建订单前必须获得订单参考号」 |
+| `CheckInDate/CheckOutDate/NumOfRooms` | **从句柄回放**，上游传参只作核对（住期不符本地拒 `stay_mismatch`，间数不符以句柄为准并落 error） | 官方：「必须与订单确认中的参数保持一致」，不一致即 3001/3008 |
+| `GuestList` | 每间 `ADULT_COUNT` 位成人 + `CHILD_AGES` 每个年龄一位儿童（`IsAdult=false`，`Age` 必填）；姓名从 personName（、，, 分隔）循环取，儿童复用首位姓名 | 官方 GuestList：「成人与儿童人数，必须与 PriceConfirm 验价时的人数保持一致，否则订单将被系统拒绝」；官方样例成人与儿童同名 |
+| `Name.First/Last` | `姓/名` 显式拆；否则空格分隔首段为姓；否则中文首字为姓；单字同填 | 前者是本仓/艺龙惯例；后两条照 cursor 在产拆法（`resolveGuestName`），复姓会拆错，无更好依据前不另造规则 |
+| `Contact` | Name 取 contactName、Phone 取 contactPhone、Email 取 `supplier.dida.booking-contact-email`（空即不发） | 官方：节点必填、可填客服信息；实证只带 Name 也成单（2025-11-28，BookingID 15801485798） |
+| `ClientReference` | 我方单号 | 官方：一对一绑定、同号不能建两单——即幂等闸；也是按我方单号查单的坐标（B5） |
+| `CustomerRequest` / `PaymentInfo` | 不发 | 契约无特殊需求；「使用额度支付的不需要传此字段」 |
+
+发出的顶层键集合（Header/ReferenceNo/CheckInDate/CheckOutDate/NumOfRooms/GuestList/Contact/ClientReference）
+与 cursor 2026-09-13 被接受的生产请求完全一致，守护测试 `DidaBookingRequestShapeTest`。
+
+### 10.2 下单响应 → 三态
+
+**成功信封看 `Status`**（官方：只有 2/3/4 是终态，「其他任何返回结果均不能视为订单的最终处理结果」）：
+
+| Status | 态 | 处置 |
+|---|---|---|
+| 2 Confirmed | SUCCESS | 核销句柄；`sOrderId=BookingID`，`sConfirmationNumber=ConfirmationCode`（酒店未回 HCN 时缺席） |
+| 5 Pending / 6 OnRequest / 0 / 1 / 缺席 | UNKNOWN（带 sOrderId） | 官方：5 在 3 分钟内、6 在 120 分钟内到终态；上游凭单号查单 |
+| 4 Failed | FAILED | 终态，无有效订单 |
+| 3 Canceled | FAILED | 终态，曾成立又已取消，无有效订单 |
+| 成功却无 BookingID | UNKNOWN | 契约撕裂 |
+
+实证：一周 17 次成功下单响应全部 `Status=2`；但同一单 4 秒后按 ClientReference 查单回 **`Status=5`**
+（2026-09-13 21:16:46 下单回 2，21:16:50 查单回 5，BookingID 18698545882）——查单的状态会短暂落后于
+下单响应，故取消后的确证（§10.4）看到非 3 时只回 UNKNOWN 让上游稍后再查，不判失败。
+
+**错误信封看码**，白名单制：
+
+| 分类 | 码 | 态 |
+|---|---|---|
+| 我方配置病 | 2017、2019 | FAILED + `[auth-config]` 告警与 `supplier_auth_config` 指标 |
+| 说的是一笔已存在订单 → **先反查** | 3018、3019、3020、3033、3036、3039、3042、3043、3060、3070、3090；以及 **Error 节点自带 BookingID**（优先于码） | 反查到 2 → SUCCESS；3/4 → FAILED（3018 时我方单号已绑定一笔已取消订单，重订须换新单号）；非终态 → UNKNOWN 带单号；查不到/查失败 → UNKNOWN |
+| 校验/额度/风控阶段被拒，供应商侧无单 | -2、3001、3002、3005、3006、3008、3011、3014、3015、3021、3022、3025、3026、3027、3034、3035、3038、3040、3041、3050、4010、4030、4031 | FAILED |
+| 其余（3000、3010、3012、3016「下单失败」、3080、表外码）与**无响应** | — | UNKNOWN |
+
+实证只见过 3005（2025-11，入住人信息不正确）与 -2（ReferenceNo 缺失）；一周 19 次下单里 **2 次读超时**
+（cursor 侧 30 秒），这两次之后 cursor 按 ClientReference 查单——空列表（见 §10.3）。3015 无房或变价：
+cursor 会自动重验价重下一次，本仓不做——那是"替客人换一个价下单"，交上游重新验价决定。
+
+### 10.3 查单
+
+坐标：有供应商单号按 `SearchBy.BookingID`，否则按 `SearchBy.BookingInfo.ClientReference`=我方单号
+（两种都是官方标「推荐」的查法）。状态映射：2→21、3→31、4→22、0/1/5/6→20、表外→null 并透出原文。
+总价取 `TotalPrice`（元→分）并带币种 `totalPriceCurrency`（取首条 RatePlan 的 Currency；缺币种就不报金额）。
+
+**NOT_FOUND 永不判**。空列表回 INDETERMINATE：官方明示空返回不能视为终态；实证一周 18,424 次查单里
+19 次空列表**全部**是按 ClientReference 查、且紧跟在下单之后（如 2026-09-12 22:15:07 同号连查两次皆空）
+——正是"单还在建、查不到"的窗口，此时判不存在等于放上游重下。3003「BookingID 不正确」同样只回
+INDETERMINATE：「不正确」分不清是没有还是写错。
+
+### 10.4 取消：两步 + 确证
+
+1. **缺供应商单号先反查**（按 ClientReference）：Status=3 → 直接 SUCCESS（幂等，罚金 NONE）；
+   Status=4 → FAILED「未成单无可取消」；空/多笔/失败 → UNKNOWN（取消未发出）。
+2. **预取消** `HotelBookingCancel`：只签 10 分钟有效的 `ConfirmID` 并报罚金，**不改订单状态**（官方原文）。
+   故任何解析得出的错误都是 FAILED（取消未发出）；例外 **3018 → SUCCESS（幂等）**——实证 2026-09-10 文案
+   「Booking is already canceled.」；2017/2019 → AUTH_CONFIG；无响应 → UNKNOWN。
+3. **罚金 = 预取消的 `Amount` + `Currency`**（来源 FIELD；确认取消成功是空对象，无处可读）。缺一即 NONE。
+   实证：6849 CNY（2025-11-28）与 0 CNY（2026-09-10 免罚单）。
+4. **确认取消** `HotelBookingCancelConfirm`，`Description` 固定「行程变更」：3003/3004/3007 → FAILED；
+   3018 → SUCCESS（罚金 NONE，那笔取消不是我们签的）；2017/2019 → AUTH_CONFIG；**4000「取消失败」、
+   表外码、无响应 → UNKNOWN**。
+5. **确认成功后再查单，看到 `Status=3` 才 SUCCESS**；看到别的状态或查不到 → UNKNOWN 引导上游稍后查单。
+   依据：官方 booking-search「Status=3 表示订单已在 Dida 系统中成功取消，这是该状态的唯一有效确认方式」。
+
+**为什么第 4/5 步这么保守——实证**（cursor 生产，2026-09-10，BookingID 18667668003）：预取消 5 次各签一个
+ConfirmID（Amount 0），确认取消 **5 次全部 30 秒读超时**（22:08:42~22:09:33），随后预取消回 3018「已取消」，
+查单 Status=3。即**第一次超时的确认已经生效**，后四次是在重复取消一个已取消的单。若把超时判成失败，
+上游会告诉客人"取消没成功"而房其实已经退了。
+
+### 10.5 超时预算
+
+官方超时设置页（information-hub/timeout-setting-description）：下单 **180 秒**、取消 **180 秒**、查单 20 秒、
+验价 20 秒、查价 5 秒。本仓通道层默认读超时 10 秒（`HttpUtils.TIME_OUT`），二批为道旅订单族加了按接口的
+读超时（`AbstractDidaJsonAccess` 新构造参数，`HttpUtils.access` 新增带 socketTimeout 的重载）：
+
+| 接口 | 读超时 | 依据 |
+|---|---|---|
+| 下单、确认取消 | 60 秒 | 官方 180 秒；cursor 按 30 秒等仍见超时且实际生效。60 秒覆盖已观测长尾，又不让客人等满三分钟 |
+| 查单、预取消 | 20 秒 | 官方查单 20 秒；实测查单 50~320ms、预取消 200~360ms |
+
+连接超时不放宽（慢的是供应商处理，不是建连）。超过预算仍按 UNKNOWN 交查单确证。
+
+### 10.6 配置与限流
+
+| 键 | 载体 | 说明 |
+|---|---|---|
+| `dida.booking-enabled` | application.yml（安全护栏，PROJECT.md §3.2.3） | 默认 false；开即真单真额度 |
+| `supplier.dida.booking-contact-email` | Nacos | 下单 Contact.Email，运营信箱，空即不发 |
+| `GLOBAL_LIMIT:DIDA:SPA_SUPPLIER_API_CREATE_ORDER / QUERY_ORDER / CANCEL_ORDER` | Nacos `ratelimit.qps` | 起步 1 / 2 / 1；取消一次扣两格；依据见 `config/supplier-capability/dida.yaml` |
+
+### 10.7 待首单实测
+
+| 事项 | 现状 |
+|---|---|
+| 本仓请求被道旅接受 | 形态与 cursor 被接受的请求一致，但**未真下过单**。编排本身已用真实报文夹具跑通（`DidaBookingFlowTest` / `DidaCancelFlowTest`，通道由子类钩子替换、不打 HTTP）；查单一段真链路已通（`DidaOrderQueryE2ETest`）。**上游尚未把道旅流量放进 SPA**，首单没有日期——届时必须走真单闭环（下单→查单→取消）并补本仓夹具 |
+| 多间 / 带儿童的 GuestList | 按官方字段表铺满，无实证（cursor 生产一周全是 1 间 1~2 成人） |
+| 中文姓名的 First/Last 拆法 | 照 cursor 在产拆法，是否影响到店核对未验证；官方注 2 建议转英文 |
+| 确认取消的真实耗时分布 | 只有 cursor 的 5 次 30 秒超时样本；60 秒预算是否够，看 `supplier_io_access{interface="SPA_SUPPLIER_API_CANCEL_ORDER",status="error"}` |
+| HCN（ConfirmationCode）回填 | 下单响应里可能缺席（官方注 1），入住前三天查单补齐的定时任务本仓没有 |

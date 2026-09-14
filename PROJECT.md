@@ -273,6 +273,7 @@ dev      ──●──────●──────●──────�
 | `expedia.production-endpoint-enabled` | 连接 Expedia 生产端点，消耗真实配额并可能产生真实交易 |
 | `elong.booking-enabled` | 向艺龙提交真实订单并即时扣款。**艺龙无沙箱**——其测试网关 api-test 已于 2026-08-15 实测全服务 403，唯一可用端点即生产网关，故此开关不存在“先在沙箱验证”的中间态：开即真单真费用 |
 | `fliggy.booking-enabled` | 向飞猪提交真实订单并真实扣款。**飞猪无沙箱**——唯一可用端点即生产 TOP 网关，开即真单。2026-09-14 由 Nacos 的 `supplier.fliggy.booking-enabled` 迁来：护栏放在配置台上，等于任何人点一下就能开且不留评审痕迹，2026-09-09 那次"临时开、测完关"因此一开就是五天 |
+| `dida.booking-enabled` | 向道旅提交真实订单并占用信用额度。**道旅无沙箱**——测试账号 DidaApiTestID 已废除（官方 price-search 注 15，2026-09-08 查阅），唯一可用端点即生产，开即真单。与 cursor 共用同一 ClientID，ClientReference（我方单号）一对一绑定 |
 
 > 艺龙没有对应的 `production-endpoint-enabled`：既然测试端点不存在可用形态，“是否连生产”就不是一个可选项，无从设闸。端点误配的防线改设在部署流水线（`ELONG_API_HOST` 必须为生产网关，否则拒绝部署）。
 

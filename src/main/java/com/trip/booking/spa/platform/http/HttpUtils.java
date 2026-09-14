@@ -94,6 +94,19 @@ public class HttpUtils {
     private static final int MAX_PER_HOST = 64;
 
     private static void config(HttpRequestBase httpRequestBase) {
+        config(httpRequestBase, TIME_OUT);
+    }
+
+    /**
+     * 同上，但读超时由调用方给。连接与取连接超时仍是 {@link #TIME_OUT}——慢的是供应商处理，
+     * 不是建连；建连慢是网络病，不该跟着放宽。
+     *
+     * <p>为什么要有这个口子：各家写接口的服务端处理时长差异极大。道旅官方超时设置页
+     * （information-hub/timeout-setting-description，2026-09-13 查阅）写明下单与取消默认
+     * <b>180 秒</b>、查单与验价 20 秒；cursor 生产按 30 秒等，2026-09-10 一单五次确认取消全部
+     * 读超时、实际却已生效。统一 10 秒会把这类写操作系统性地推成"不确定"。
+     */
+    private static void config(HttpRequestBase httpRequestBase, int socketTimeoutMs) {
 //         设置Header等
         httpRequestBase.setHeader("User-Agent", "Mozilla/5.0");
         httpRequestBase.setHeader("Accept", "application/json, text/plain, */*");
@@ -104,7 +117,7 @@ public class HttpUtils {
         RequestConfig requestConfig = RequestConfig.custom()
                 .setConnectionRequestTimeout(TIME_OUT)
                 .setConnectTimeout(TIME_OUT)
-                .setSocketTimeout(TIME_OUT).build();
+                .setSocketTimeout(socketTimeoutMs).build();
 
         httpRequestBase.setConfig(requestConfig);
     }
@@ -149,10 +162,18 @@ public class HttpUtils {
     public static <T extends BaseResponse> ResponseResult access(String url, Map<String, String> headers,
                                                                  String params, IParser<T> parser)
             throws Exception {
+        return access(url, headers, params, parser, TIME_OUT);
+    }
+
+    /** 同上，读超时由调用方给（见 {@link #config(HttpRequestBase, int)}） */
+    public static <T extends BaseResponse> ResponseResult access(String url, Map<String, String> headers,
+                                                                 String params, IParser<T> parser,
+                                                                 int socketTimeoutMs)
+            throws Exception {
         HttpClient httpClient = getHttpClient(url);
 
         HttpPost httpPost = new HttpPost(url);
-        config(httpPost);
+        config(httpPost, socketTimeoutMs);
         if (MapUtils.isNotEmpty(headers)) {
             for (Map.Entry<String, String> e : headers.entrySet()) {
                 httpPost.addHeader(e.getKey(), e.getValue());

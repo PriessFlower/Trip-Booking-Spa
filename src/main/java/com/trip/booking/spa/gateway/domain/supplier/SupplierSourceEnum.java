@@ -25,6 +25,8 @@ public enum SupplierSourceEnum {
     ELONG(10010, "elong"),
     /** 接入中（2026-08-26 开工）：能力矩阵登记与放量以实现落地为准，编码先行是建档/缓存键需要 */
     FLIGGY(10015, "fliggy"),
+    /** 2026-09-08 一批查价+验价+刷价+建档，2026-09-13 二批下单+查单+取消；下单闸 dida.booking-enabled 默认关 */
+    DIDA(10020, "dida"),
     ;
 
     SupplierSourceEnum(int code, String desc) {

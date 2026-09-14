@@ -32,9 +32,23 @@ import java.util.List;
  *
  * <p><b>与 {@link ExpediaProductMappingService} 的分工</b>：后者是全量补建（按酒店清单分页、
  * 自带占位住期），适合首次铺底或按需补某几家；本类是随刷价增量维护，<b>覆盖面等于刷价
- * 清单，也就到 78 家为止</b>——而 {@code supplier_hotel_base} 里 Expedia 有 97,409 家。
+ * 清单</b>——2026-09-14 生产实测：刷价队列 2,514 家（75,420 行 = 2,514 × T+1..T+30），
+ * 本类已建出 1,675 家 / 27,555 行，而 {@code supplier_hotel_base} 里 Expedia 有 97,409 家。
  * 换言之本类只保证「在刷的那批」目录不空，铺满全量仍须打后门。两者写同一张表、
  * 同一套列语义，只是数据来源与触发方式不同。
+ *
+ * <p><b>2026-09-14 更正</b>：本注释先前写着「目录 update_time 长期不动是正常的，因为产品稳定时
+ * upsert 是空写、{@code ON UPDATE CURRENT_TIMESTAMP} 不触发」。那个机制本身成立，但把它
+ * 当成 Expedia 停更的解释是<b>错的</b>，且我是先有解释才去量的——正好是本仓反复吃亏的那种顺序。
+ *
+ * <p>真实原因：Expedia 刷价自 2026-09-11 23:08 那次部署起<b>全量失败</b>，一条也没写进来。
+ * 证据：{@code operator='expedia-refresh'} 的 27,362 行最后一次写入停在 09-11 23:07:47，
+ * 容器 23:08:02 启动；此后 8 分钟窗口内 1,773 次刷价调用<b>全部</b>失败，请求里
+ * {@code property_id} 恒为 null。根因见 {@code ExpediaCPSQueryPriceServiceImpl#refreshOne}。
+ *
+ * <p>留下这段是因为它同时说明一件事：<b>本表的 update_time 不能当"建档在不在跑"的探针</b>。
+ * 空写确实不推进它，所以它不动既可能是产品稳定，也可能是刷价全挂——两者在这一列上同形。
+ * 要判断跑没跑，看 {@code catalog_upserted} 指标或刷价日志。
  *
  * <p><b>三条写入纪律</b>（与艺龙一致）：
  * <ul>

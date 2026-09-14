@@ -37,6 +37,9 @@ import java.util.List;
 public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService<ExpediaQueryPriceTask>
         implements ExpediaCPSQueryPriceService {
 
+    /** 住期与跨天判定的基准时区，理由见 {@link #supplierZone()}；与另三家同值 */
+    private static final ZoneId SUPPLIER_ZONE = ZoneId.of("Asia/Shanghai");
+
     /** 刷价互斥锁：定时调度与 BackDoor 手动触发共用，保证同一时刻仅一个执行者（§3.8.2） */
     private static final String LOCK_KEY = "task:lock:expediaCpsQueryPrice";
 
@@ -159,11 +162,27 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
                 .collect(java.util.stream.Collectors.toList());
     }
 
+    /**
+     * 住期与跨天判定的基准时区。取北京时间的理由是<b>我方客源口径</b>：上游按北京日期
+     * 问价，刷价就该按同一个"今天"铺住期；另三家同此。
+     *
+     * <p>Expedia 是美国供应商，其自身的日期口径<b>仍未与对接方确认</b>（这一点没有因本次
+     * 改动而解决）。但确认与否都不影响这里：无论口径最终是什么，都不该是"部署环境的
+     * TZ 变量恰好是什么"。
+     */
+    @Override
+    protected ZoneId supplierZone() {
+        return SUPPLIER_ZONE;
+    }
+
     @Override
     protected RefreshOutcome refreshOne(ExpediaQueryPriceTask row, String dimension) {
-        // Expedia 是美国供应商，日期按 JVM 默认时区计——这是改动前的行为，未经核实故保留。
-        // 艺龙那侧已显式指定 Asia/Shanghai（供应商口径），Expedia 的正确口径待与对接方确认
-        LocalDate today = LocalDate.now();
+        // 住期基准时区：显式取 supplierZone()（本家 = Asia/Shanghai，见该方法）。
+        // 此前这里是 LocalDate.now()，即 JVM 默认时区。2026-09-14 实测生产容器
+        // TZ=Asia/Shanghai，故两者当前同值、本次改动不改变任何行为；改的是"靠环境变量
+        // 碰巧对"这件事——那个变量改了不报错，只会让刷价窗口整体平移一天，而另三家
+        // 都显式钉死了时区，唯独这里没有。
+        LocalDate today = LocalDate.now(supplierZone());
         // supplierHotelId 必须在这里给：查价指令合一之后（#240），酒店号是 PriceQuery 的成分，
         // 不再由单独的 Supplier 参数携带。漏了它下游会拿 null 去问 Expedia，对方拒答。
         PriceQuery request = PriceQuery.builder()
@@ -208,13 +227,21 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
         expediaQueryPriceTaskMapper.updateAddCount(row);
     }
 
+    /**
+     * 是否同一天，基准时区同 {@link #supplierZone()}。
+     *
+     * <p>它只决定 {@code query_count}（今天刷了几次）要不要归 1，而该列<b>不参与任何取批
+     * 或排序</b>（2026-09-14 核对 ExpediaQueryPriceTaskMapper.xml，只出现在字段列表与自增
+     * 语句里），故判错一天不改变刷价行为，只让这个计数的语义失真。仍然改成显式时区：
+     * 同一个类里两处算"日期"，没有理由用两套基准。
+     */
     public static boolean isSameDay(Date updateTime, Date lastTime) {
         // 新任务行 last_time 为空（从未刷过价），视为非同一天，走首次/新一天的计数重置
         if (null == updateTime || null == lastTime) {
             return false;
         }
-        LocalDate a = updateTime.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-        LocalDate b = lastTime.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+        LocalDate a = updateTime.toInstant().atZone(SUPPLIER_ZONE).toLocalDate();
+        LocalDate b = lastTime.toInstant().atZone(SUPPLIER_ZONE).toLocalDate();
         return a.isEqual(b);
     }
 }

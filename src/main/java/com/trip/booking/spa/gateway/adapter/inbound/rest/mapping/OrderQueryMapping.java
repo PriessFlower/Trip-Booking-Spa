@@ -45,6 +45,7 @@ public final class OrderQueryMapping {
                 .supplierOrderId(result.supplierOrderId())
                 .supplierProductId(result.supplierProductId())
                 .totalPrice(result.totalPrice())
+                .totalPriceCurrency(result.totalPriceCurrency())
                 .settlePrice(result.settlePrice())
                 .createTime(result.createTime())
                 .orderStatus(statusCodeOf(result.state()))

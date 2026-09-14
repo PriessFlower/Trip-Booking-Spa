@@ -23,6 +23,12 @@ public final class OrderQueryResult {
     private final String supplierOrderId;
     private final String supplierProductId;
     private final Integer totalPrice;
+    /**
+     * {@link #totalPrice} 的币种，ISO 4217 大写三字码。与 totalPrice 同生同灭——
+     * 金额不许无币种流转（{@code Money} 类注释）：道旅与飞猪的订单可能是 USD 等非 CNY 币种，
+     * 裸数值会被上游当人民币。取不到币种时两者都留空，不猜。
+     */
+    private final String totalPriceCurrency;
     private final Integer settlePrice;
     private final String createTime;
     /** 可为 null：映射不出就不取值，原文留在 {@link #supplierOrderStatus()}，见 {@link OrderState} */
@@ -31,14 +37,15 @@ public final class OrderQueryResult {
     private final String confirmationNumber;
 
     private OrderQueryResult(OrderPresence presence, String message, String supplierOrderId,
-                             String supplierProductId, Integer totalPrice, Integer settlePrice,
-                             String createTime, OrderState state, String supplierOrderStatus,
-                             String confirmationNumber) {
+                             String supplierProductId, Integer totalPrice, String totalPriceCurrency,
+                             Integer settlePrice, String createTime, OrderState state,
+                             String supplierOrderStatus, String confirmationNumber) {
         this.presence = Objects.requireNonNull(presence);
         this.message = message;
         this.supplierOrderId = supplierOrderId;
         this.supplierProductId = supplierProductId;
         this.totalPrice = totalPrice;
+        this.totalPriceCurrency = totalPriceCurrency;
         this.settlePrice = settlePrice;
         this.createTime = createTime;
         this.state = state;
@@ -81,6 +88,11 @@ public final class OrderQueryResult {
         return totalPrice;
     }
 
+    /** 可为 null；与 {@link #totalPrice()} 同生同灭 */
+    public String totalPriceCurrency() {
+        return totalPriceCurrency;
+    }
+
     public Integer settlePrice() {
         return settlePrice;
     }
@@ -110,6 +122,7 @@ public final class OrderQueryResult {
         private String supplierOrderId;
         private String supplierProductId;
         private Integer totalPrice;
+        private String totalPriceCurrency;
         private Integer settlePrice;
         private String createTime;
         private OrderState state;
@@ -140,6 +153,11 @@ public final class OrderQueryResult {
             return this;
         }
 
+        public Builder totalPriceCurrency(String totalPriceCurrency) {
+            this.totalPriceCurrency = totalPriceCurrency;
+            return this;
+        }
+
         public Builder settlePrice(Integer settlePrice) {
             this.settlePrice = settlePrice;
             return this;
@@ -167,7 +185,8 @@ public final class OrderQueryResult {
 
         public OrderQueryResult build() {
             return new OrderQueryResult(presence, message, supplierOrderId, supplierProductId,
-                    totalPrice, settlePrice, createTime, state, supplierOrderStatus, confirmationNumber);
+                    totalPrice, totalPriceCurrency, settlePrice, createTime, state,
+                    supplierOrderStatus, confirmationNumber);
         }
     }
 }
