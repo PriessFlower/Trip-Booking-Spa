@@ -49,7 +49,7 @@
   | `outcome` | 校验类检查结果、下载方式、分态结论这类非终态的结果 | 由该指标自行定义并在 `MetricNames` 注释里写明 |
   | `stage` | 漏斗阶段：报价丢在哪一环 | `FunnelStage` 枚举（O-4.6：小集合且稳定） |
   | `reason` | 报价为什么被丢弃 | `DropReason` 枚举（O-4.4） |
-  | `source` | 查价这条腿走缓存还是实时 | `MetricTags.SOURCE_CACHE` / `SOURCE_LIVE` 两个常量 |
+  | `source` | 这一次查价走缓存还是实时 | `MetricTags.SOURCE_CACHE` / `SOURCE_LIVE` 两个常量 |
 
   反面即改造前：`supplier_io_access` 用 `status`（`ok`/`empty`/`error`/`limited`）、`pricing_supplier_query` 用 `outcome`（`all`/`empty`/`fail`/`success`），两个键都在说“这次调用的终态”，取值集合却不同——于是“全平台调用成功率”没有一条 PromQL 能回答，只能手工拼，而拼法因人而异、结论随之不同。
 

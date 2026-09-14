@@ -180,7 +180,7 @@ public abstract class BaseHttpAccess<U, T extends BaseResponse> {
      * 最近一次重试抛出的异常，只用于把终态从 {@code error} 里分出 {@code timeout}。
      *
      * <p>每次 {@link #query} 开头清空，故它只描述本次调用；各家 Access 每次调用都 new 一个实例
-     * （工厂即如此），不存在跨调用串味。
+     * （工厂即如此），故不会读到上一次调用留下的异常。
      */
     private Exception lastFailure;
 

@@ -2182,7 +2182,7 @@
         "type": "prometheus",
         "uid": "spa-prom"
       },
-      "description": "出报的腿 / 全部腿。腿=请求×供应商。此前「出报率 36%」只能 grep 日志现算，现在是这条曲线。分母含 indeterminate（这一片没刷过/过 TTL），所以它同时吃「没刷到」和「刷了没货」两类损失。",
+      "description": "出了价的次数 / 问过的次数。一次 = 一个查价请求问一家供应商。此前「出报率 36%」只能翻日志现算，现在是这条曲线。分母含 indeterminate（这一片没刷过或已过期），所以它同时吃「没刷到」和「刷了没货」两类损失。",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -2238,12 +2238,12 @@
     {
       "id": 30,
       "type": "timeseries",
-      "title": "腿数按分态",
+      "title": "问价次数按结论",
       "datasource": {
         "type": "prometheus",
         "uid": "spa-prom"
       },
-      "description": "available=出报；no_inventory=刷过、确定无货；indeterminate=没刷过或已过 TTL——它高说明刷价覆盖不住查询流量；error=处理中抛异常（HTTP 报错出去）。source=cache|live 区分走缓存还是实时问供应商。",
+      "description": "available=出了价；no_inventory=刷过、确定没房；indeterminate=没刷过或缓存已过期——它高说明刷价覆盖不住查询流量；error=处理中抛异常（会给上游报错）。source=cache 还是 live，区分走缓存还是实时问供应商。",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -2363,7 +2363,7 @@
         "type": "prometheus",
         "uid": "spa-prom"
       },
-      "description": "实际返给上游的产品条数（不是腿数）。与腿数相除得每腿平均出报条数——条数掉而出报率没掉，是单腿变薄。",
+      "description": "实际返给上游的产品条数（不是问价次数）。两者相除得每次问价平均出几条——条数掉而出报率没掉，说明每次出的条数变少了。",
       "gridPos": {
         "h": 8,
         "w": 12,
