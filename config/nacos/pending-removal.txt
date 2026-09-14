@@ -14,9 +14,3 @@
 # 等于在无人预期的时刻改变行为。2026-08-19 实证：先删了
 # task.timezone-init.suppliers（dev 上读取方已删、生产镜像上还在），线上立刻落回空值
 # 并打出 "Nacos config ... is empty or invalid"，随即恢复原值。
-
-# ── 2026-09-15 登记 ──
-# 静态数据分块下载的限流桶。读取方是 ChunkedFileAccess，该类随 2026-09-08 撤除的
-# 静态目录域一起失去调用方（全仓无人实例化），本次连类一并删除，故这个桶已无人会打。
-# 删 Nacos 键的时机见文件开头：等本次改动真正上了生产之后再删。
-ratelimit.qps."[GLOBAL_LIMIT:EXPEDIA:SPA_SUPPLIER_FILE_DOWNLOAD]"
