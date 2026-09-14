@@ -8,6 +8,7 @@ import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.model.
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.model.DidaBookingConfirmResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.model.DidaBookingDetails;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.model.DidaError;
+import com.trip.booking.spa.gateway.domain.booking.OrderState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -89,16 +90,16 @@ class DidaBookingClassifierTest {
     }
 
     @Test
-    @DisplayName("订单状态 → 我方状态码：2→21、3→31、4→22、0/1/5/6→20、表外→null 保留原文")
+    @DisplayName("订单状态 → 我方状态：2→BOOKED、3→CANCELED、4→BOOK_FAILED、0/1/5/6→BOOKING、表外→null 保留原文")
     void orderStatusMapping() {
-        assertEquals(21, DidaBookingClassifier.toOrderStatus(2));
-        assertEquals(31, DidaBookingClassifier.toOrderStatus(3));
-        assertEquals(22, DidaBookingClassifier.toOrderStatus(4));
+        assertEquals(OrderState.BOOKED, DidaBookingClassifier.toOrderState(2));
+        assertEquals(OrderState.CANCELED, DidaBookingClassifier.toOrderState(3));
+        assertEquals(OrderState.BOOK_FAILED, DidaBookingClassifier.toOrderState(4));
         for (int s : new int[]{0, 1, 5, 6}) {
-            assertEquals(20, DidaBookingClassifier.toOrderStatus(s), String.valueOf(s));
+            assertEquals(OrderState.BOOKING, DidaBookingClassifier.toOrderState(s), String.valueOf(s));
         }
-        assertNull(DidaBookingClassifier.toOrderStatus(7));
-        assertNull(DidaBookingClassifier.toOrderStatus(null));
+        assertNull(DidaBookingClassifier.toOrderState(7));
+        assertNull(DidaBookingClassifier.toOrderState(null));
     }
 
     @Test

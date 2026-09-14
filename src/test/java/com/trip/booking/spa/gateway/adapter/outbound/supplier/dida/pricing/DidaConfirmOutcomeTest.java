@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.DidaProductKeyDeriver;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.DidaProperties;
@@ -88,7 +88,7 @@ class DidaConfirmOutcomeTest {
         DidaPriceConfirmResponse resp = confirmFixture();
         resp.getSuccess().getPriceDetails().setReferenceNo(null);
 
-        CheckPriceRespDTO dto = interpret(resp);
+        CheckPriceResult dto = interpret(resp);
         assertEquals(CheckPriceOutcome.INDETERMINATE, dto.getOutcome());
         assertNull(dto.getOfferId());
     }
@@ -96,7 +96,7 @@ class DidaConfirmOutcomeTest {
     @Test
     @DisplayName("真实 PreBook 报文 → BOOKABLE：句柄签出、价格取验后价、退改取验价时点那份")
     void realPrebookIsBookable() throws IOException {
-        CheckPriceRespDTO dto = interpret(confirmFixture());
+        CheckPriceResult dto = interpret(confirmFixture());
 
         assertEquals(CheckPriceOutcome.BOOKABLE, dto.getOutcome());
         assertEquals("offer-test", dto.getOfferId());
@@ -139,13 +139,13 @@ class DidaConfirmOutcomeTest {
         return interpret(resp).getOutcome();
     }
 
-    private CheckPriceRespDTO interpret(DidaPriceConfirmResponse resp) {
+    private CheckPriceResult interpret(DidaPriceConfirmResponse resp) {
         return service.interpretConfirmResponse(request(), hotel(), searchedPlan(), resp);
     }
 
-    private static CheckPriceReq request() {
-        return CheckPriceReq.builder().supplierId(10020).sHotelId("563")
-                .sProductId("190452504804273758").checkIn("2026-09-29").checkOut("2026-09-30")
+    private static CheckPriceCommand request() {
+        return CheckPriceCommand.builder().supplierId(10020).supplierHotelId("563")
+                .supplierProductId("190452504804273758").checkIn("2026-09-29").checkOut("2026-09-30")
                 .roomNum(1).adultCount(2).childNum(0).build();
     }
 

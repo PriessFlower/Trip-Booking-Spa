@@ -1,9 +1,10 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.order;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.OrderRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.OrderQueryReq;
+import com.trip.booking.spa.gateway.domain.order.OrderQueryResult;
+import com.trip.booking.spa.gateway.domain.order.OrderQueryCommand;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.DidaProperties;
 import com.trip.booking.spa.gateway.domain.booking.OrderPresence;
+import com.trip.booking.spa.gateway.domain.booking.OrderState;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.ratelimit.RateLimitHolder;
 import com.trip.booking.spa.platform.ratelimit.RateLimitManager;
@@ -85,28 +86,28 @@ class DidaOrderQueryE2ETest {
         String bookingId = System.getenv().getOrDefault("DIDA_E2E_BOOKING_ID", "18577514927");
         TAKEN.clear();
 
-        OrderRespDTO dto = service.orderQuery(OrderQueryReq.builder()
-                .supplierId(SupplierSourceEnum.DIDA.getCode()).orderId("spa-e2e-readonly").supplierOrderId(bookingId).build());
+        OrderQueryResult dto = service.orderQuery(OrderQueryCommand.of(
+                SupplierSourceEnum.DIDA.getCode(), "spa-e2e-readonly", bookingId));
 
         assertThat(TAKEN).as("查单必须扣 :ORDER 用途桶与接口桶各一格").containsSubsequence(QUERY_BUCKET + ":ORDER", QUERY_BUCKET);
-        assumeTrue(dto.getPresence() != OrderPresence.INDETERMINATE, "道旅未给出结果：" + dto.getMessage());
-        assertThat(dto.getPresence()).isEqualTo(OrderPresence.FOUND);
-        assertThat(dto.getSupplierOrderId()).isEqualTo(bookingId);
-        assertThat(dto.getOrderStatus()).as("供应商状态原文=" + dto.getSupplierOrderStatus()).isIn(20, 21, 22, 31);
-        assertThat(dto.getTotalPriceCurrency()).as("金额必须带币种").isNotBlank();
-        assertThat(dto.getCreateTime()).isNotBlank();
-        System.out.println("[dida-e2e] " + bookingId + " -> status=" + dto.getSupplierOrderStatus()
-                + " mapped=" + dto.getOrderStatus() + " hcn=" + dto.getConfirmationNumber()
-                + " price=" + dto.getTotalPrice() + dto.getTotalPriceCurrency());
+        assumeTrue(dto.presence() != OrderPresence.INDETERMINATE, "道旅未给出结果：" + dto.message());
+        assertThat(dto.presence()).isEqualTo(OrderPresence.FOUND);
+        assertThat(dto.supplierOrderId()).isEqualTo(bookingId);
+        assertThat(dto.state()).as("供应商状态原文=" + dto.supplierOrderStatus()).isIn(OrderState.BOOKING, OrderState.BOOKED, OrderState.BOOK_FAILED, OrderState.CANCELED);
+        assertThat(dto.totalPriceCurrency()).as("金额必须带币种").isNotBlank();
+        assertThat(dto.createTime()).isNotBlank();
+        System.out.println("[dida-e2e] " + bookingId + " -> status=" + dto.supplierOrderStatus()
+                + " mapped=" + dto.state() + " hcn=" + dto.confirmationNumber()
+                + " price=" + dto.totalPrice() + dto.totalPriceCurrency());
     }
 
     @Test
     @DisplayName("按不存在的我方单号查：空列表 → INDETERMINATE，不是 NOT_FOUND")
     void queryUnknownClientReferenceIsIndeterminate() {
-        OrderRespDTO dto = service.orderQuery(OrderQueryReq.builder()
-                .supplierId(SupplierSourceEnum.DIDA.getCode()).orderId("spa-e2e-never-booked-" + System.nanoTime()).build());
-        assertThat(dto.getPresence()).isEqualTo(OrderPresence.INDETERMINATE);
-        System.out.println("[dida-e2e] unknown clientReference -> " + dto.getMessage());
+        OrderQueryResult dto = service.orderQuery(OrderQueryCommand.of(
+                SupplierSourceEnum.DIDA.getCode(), "spa-e2e-never-booked-" + System.nanoTime(), null));
+        assertThat(dto.presence()).isEqualTo(OrderPresence.INDETERMINATE);
+        System.out.println("[dida-e2e] unknown clientReference -> " + dto.message());
     }
 
     private static void set(Object target, String field, Object value) throws Exception {

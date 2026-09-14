@@ -1,7 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.DidaQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.DidaQueryPriceTask;
 import com.trip.booking.spa.gateway.application.pricing.AbstractCPSQueryPriceService;
@@ -170,8 +169,8 @@ public class DidaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService<D
 
     /** 只查不写：写缓存与三态由骨架统一做 */
     @Override
-    protected PricingResult queryForRefresh(PriceReq request, Supplier supplier) {
-        return didaPriceService.queryPrices(request, supplier, CallPurpose.REFRESH);
+    protected PricingResult queryForRefresh(PriceQuery request) {
+        return didaPriceService.queryPrices(request, CallPurpose.REFRESH);
     }
 
     @Override

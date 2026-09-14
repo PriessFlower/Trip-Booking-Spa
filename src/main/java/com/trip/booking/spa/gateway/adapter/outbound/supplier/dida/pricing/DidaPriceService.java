@@ -1,7 +1,6 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 
@@ -11,5 +10,5 @@ import com.trip.booking.spa.platform.ratelimit.CallPurpose;
  */
 public interface DidaPriceService {
 
-    PricingResult queryPrices(PriceReq request, Supplier supplier, CallPurpose purpose);
+    PricingResult queryPrices(PriceQuery request, CallPurpose purpose);
 }

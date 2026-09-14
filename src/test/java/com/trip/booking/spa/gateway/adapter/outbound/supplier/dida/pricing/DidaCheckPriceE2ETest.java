@@ -1,11 +1,10 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.product.PriceInfo;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.checkprice.DidaCheckPriceServiceImpl;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.DidaProductKeyDeriver;
@@ -83,7 +82,7 @@ class DidaCheckPriceE2ETest {
     private static String checkOut;
 
     /** 查价拿到的参照产品，供后续两档验价复用——同数据 A/B 是本测试的核心 */
-    private static ProductRespDTO reference;
+    private static Product reference;
 
     @BeforeAll
     static void wireRealService() throws Exception {
@@ -154,18 +153,17 @@ class DidaCheckPriceE2ETest {
         f.set(target, value);
     }
 
-    private static Supplier supplier() {
-        return Supplier.builder().supplierId(SupplierSourceEnum.DIDA.getCode()).sHotelId(HOTEL).build();
-    }
-
     @Test
     @Order(1)
     @DisplayName("查价：真实调 pricesearch，逐日之和等于总价，身份与报价码分列两字段")
     void queryPricesReturnsSellableProducts() {
-        PriceReq req = PriceReq.builder().checkIn(checkIn).checkout(checkOut)
+        // 查价指令合一（#240）：酒店号是 PriceQuery 的成分，不再由单独的 Supplier 参数携带
+        PriceQuery req = PriceQuery.builder()
+                .supplierId(SupplierSourceEnum.DIDA.getCode()).supplierHotelId(HOTEL)
+                .checkIn(checkIn).checkOut(checkOut)
                 .roomNum(1).adultNum(2).childNum(0).childAges(new ArrayList<>()).build();
 
-        PricingResult result = service.queryPrices(req, supplier(), CallPurpose.LIVE);
+        PricingResult result = service.queryPrices(req, CallPurpose.LIVE);
 
         // 两级桶：扣格发生在调用之前，与道旅给不给货无关，故断言放在 assume 之前
         assertThat(TAKEN).as("实时查价这条路必须扣 :LIVE 用途桶与接口桶各一格")
@@ -174,9 +172,9 @@ class DidaCheckPriceE2ETest {
         assumeTrue(result.outcome() != PricingOutcome.INDETERMINATE, "道旅未给出结果，本轮跳过");
         assumeTrue(result.outcome() == PricingOutcome.AVAILABLE, "该店该住期无在售产品，本轮跳过");
 
-        List<ProductRespDTO> products = result.products();
+        List<Product> products = result.products();
         assertThat(products).isNotEmpty();
-        for (ProductRespDTO p : products) {
+        for (Product p : products) {
             assertThat(p.getProductKey()).as("productKey 必须派生出来").isNotBlank();
             assertThat(p.getProductId()).as("报价码不得与身份键同字段").isNotEqualTo(p.getProductKey());
             assertThat(p.getTotalPrice()).as("住期总价").isPositive();
@@ -197,7 +195,7 @@ class DidaCheckPriceE2ETest {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
 
         TAKEN.clear();
-        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY));
+        CheckPriceResult resp = flow.checkPrice(req(VerifyLevel.AVAILABILITY));
 
         assertThat(TAKEN).as("现取现验必须扣 :CHECK_PRICE 用途桶与接口桶各一格")
                 .containsSubsequence(SEARCH_BUCKET + ":CHECK_PRICE", SEARCH_BUCKET);
@@ -219,7 +217,7 @@ class DidaCheckPriceE2ETest {
         assumeTrue(reference != null, "查价未取到参照产品，跳过");
 
         TAKEN.clear();
-        CheckPriceRespDTO resp = flow.checkPrice(req(VerifyLevel.BOOKABLE));
+        CheckPriceResult resp = flow.checkPrice(req(VerifyLevel.BOOKABLE));
 
         assertThat(resp.getOutcome()).as("这一档打了验价，不该回 AVAILABLE")
                 .isNotEqualTo(CheckPriceOutcome.AVAILABLE);
@@ -234,11 +232,11 @@ class DidaCheckPriceE2ETest {
         assertThat(resp.getPriceInfos()).isNotEmpty();
     }
 
-    private static CheckPriceReq req(VerifyLevel level) {
-        return CheckPriceReq.builder()
+    private static CheckPriceCommand req(VerifyLevel level) {
+        return CheckPriceCommand.builder()
                 .supplierId(SupplierSourceEnum.DIDA.getCode())
-                .sHotelId(HOTEL)
-                .sProductId(reference.getProductId())
+                .supplierHotelId(HOTEL)
+                .supplierProductId(reference.getProductId())
                 .productKey(reference.getProductKey())
                 // 换票容差的尺子。本测试不装 PriceCacheService（回写与反查都会静默跳过），
                 // 故基准必须由入参给，否则 resolve 会以"无基准"拒绝换票

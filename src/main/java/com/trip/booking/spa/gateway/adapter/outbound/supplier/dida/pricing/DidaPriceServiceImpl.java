@@ -1,15 +1,14 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CancelPolicy;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Meal;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.PriceInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductInfo;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.Room;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
+import com.trip.booking.spa.gateway.domain.product.CancelPolicy;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.product.Meal;
+import com.trip.booking.spa.gateway.domain.product.PriceInfo;
+import com.trip.booking.spa.gateway.domain.product.ProductInfo;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.product.Room;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.checkprice.client.PriceConfirmAccess;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.pricing.client.PriceSearchAccess;
@@ -95,77 +94,77 @@ public class DidaPriceServiceImpl implements DidaPriceService {
     private OfferStore offerStore;
 
     @Override
-    public PricingResult queryPrices(PriceReq request, Supplier supplier, CallPurpose purpose) {
+    public PricingResult queryPrices(PriceQuery request, CallPurpose purpose) {
         if (!properties.isConfigured()) {
             log.error("道旅查价：凭证未配置（DIDA_CLIENT_ID/DIDA_LICENSE_KEY），无法调用,sHotelId={}",
-                    supplier.getSHotelId());
+                    request.supplierHotelId());
             return PricingResult.indeterminate();
         }
-        Long hotelId = hotelIdOf(supplier.getSHotelId());
+        Long hotelId = hotelIdOf(request.supplierHotelId());
         if (hotelId == null) {
-            log.error("道旅查价：酒店 id 非数字，无法调用,sHotelId={}", supplier.getSHotelId());
+            log.error("道旅查价：酒店 id 非数字，无法调用,sHotelId={}", request.supplierHotelId());
             return PricingResult.indeterminate();
         }
-        request.setOccupancies(Occupancy.perRoom(request.getRoomNum(), request.getAdultNum(),
-                request.getChildNum(), request.getChildAges()));
+        request = request.toBuilder().occupancies(Occupancy.perRoom(
+                request.roomNum(), request.adultNum(), request.childNum(), request.childAges())).build();
 
-        DidaPriceSearchResponse data = search(hotelId, request.getCheckIn(), request.getCheckout(),
-                request.getRoomNum(), request.getAdultNum(), request.getChildNum(), request.getChildAges(), purpose);
+        DidaPriceSearchResponse data = search(hotelId, request.checkIn(), request.checkOut(),
+                request.roomNum(), request.adultNum(), request.childNum(), request.childAges(), purpose);
         if (data == null) {
-            log.warn("道旅查价：调用未取得结果,sHotelId={},checkIn={}", supplier.getSHotelId(), request.getCheckIn());
+            log.warn("道旅查价：调用未取得结果,sHotelId={},checkIn={}", request.supplierHotelId(), request.checkIn());
             return PricingResult.indeterminate();
         }
-        return toPricingResult(data, request, supplier.getSHotelId());
+        return toPricingResult(data, request, request.supplierHotelId());
     }
 
     /**
      * 现货响应 → 分态+产品。查价与验价即刷回写共用这一段——两条路对「无货 / 未能确认 / 在售」
      * 的口径必须同源，回写另起口径会把 F-5.1（失败不动缓存）或僵尸价清理（B7）弄丢一头。
      */
-    PricingResult toPricingResult(DidaPriceSearchResponse data, PriceReq request, String sHotelId) {
+    PricingResult toPricingResult(DidaPriceSearchResponse data, PriceQuery request, String sHotelId) {
         if (!data.isSucc()) {
             String code = StringUtils.trimToEmpty(data.errorCode());
             if (SOLD_OUT_CODE.equals(code) || RATE_DEAD_CODES.contains(code)) {
                 // 供应商明确说没得卖（满房 / 该价格计划失效 / 酒店停售）——这是确定无货，
                 // 缓存该被清（B7 僵尸价），不是"没问出来"
                 log.info("道旅查价：供应商明确无可售,sHotelId={},checkIn={},code={},message={}",
-                        sHotelId, request.getCheckIn(), code, data.errorMessage());
+                        sHotelId, request.checkIn(), code, data.errorMessage());
                 return PricingResult.noInventory();
             }
             // 码义未核实的一律原样落日志、按未能确认回报（不归并）
             log.warn("道旅查价：供应商返回业务错误,sHotelId={},checkIn={},code={},message={}",
-                    sHotelId, request.getCheckIn(), code, data.errorMessage());
+                    sHotelId, request.checkIn(), code, data.errorMessage());
             return PricingResult.indeterminate();
         }
         if (data.isEmptyResult()) {
-            log.info("道旅查价：该店当日无在售产品,sHotelId={},checkIn={}", sHotelId, request.getCheckIn());
+            log.info("道旅查价：该店当日无在售产品,sHotelId={},checkIn={}", sHotelId, request.checkIn());
             return PricingResult.noInventory();
         }
         DidaHotel hotel = data.firstHotel();
         if (CollectionUtils.isEmpty(hotel.getRatePlanList())) {
             // 酒店回来了、一条报价都没给：确定无货（与 isEmptyResult 是两种形态，都要落无货标记）
-            log.info("道旅查价：该店当日无任何报价,sHotelId={},checkIn={}", sHotelId, request.getCheckIn());
+            log.info("道旅查价：该店当日无任何报价,sHotelId={},checkIn={}", sHotelId, request.checkIn());
             return PricingResult.noInventory();
         }
-        List<ProductRespDTO> products = convertPriceResp(hotel, request);
+        List<Product> products = convertPriceResp(hotel, request);
         if (products.isEmpty()) {
             // 供应商给了报价、被我方过滤全丢（非即时确认 / 缺逐晚价 / 价为零）。这里不能说
             // NO_INVENTORY：房其实还在，说成无房会让上游据此劝退旅客
             log.info("道旅查价：供应商给了报价但被我方过滤全丢，按未能确认回报,sHotelId={},checkIn={}",
-                    sHotelId, request.getCheckIn());
+                    sHotelId, request.checkIn());
             return PricingResult.indeterminate();
         }
         return PricingResult.available(products);
     }
 
-    private List<ProductRespDTO> convertPriceResp(DidaHotel hotel, PriceReq request) {
-        List<ProductRespDTO> products = new ArrayList<>();
+    private List<Product> convertPriceResp(DidaHotel hotel, PriceQuery request) {
+        List<Product> products = new ArrayList<>();
         int totalPlans = 0;
         int skippedOnRequest = 0;
         int skippedNoDayPrice = 0;
         int skippedZeroPrice = 0;
-        String occupancy = request.getOccupancies().get(0);
-        int nights = nightsOf(request.getCheckIn(), request.getCheckout());
+        String occupancy = request.occupancies().get(0);
+        int nights = nightsOf(request.checkIn(), request.checkOut());
         String hotelId = String.valueOf(hotel.getHotelId());
         for (DidaRatePlan plan : hotel.getRatePlanList()) {
             totalPlans++;
@@ -188,7 +187,7 @@ public class DidaPriceServiceImpl implements DidaPriceService {
         // 指标答「整体丢了多少」（O-1.3）
         log.info("道旅查价：转换完成,hotelId={},checkIn={},产品总数={},在售出报={},跳过_非即时确认={},"
                         + "跳过_缺逐晚价={},跳过_价为零={}",
-                hotelId, request.getCheckIn(), totalPlans, products.size(),
+                hotelId, request.checkIn(), totalPlans, products.size(),
                 skippedOnRequest, skippedNoDayPrice, skippedZeroPrice);
         countConvertDropped(DropReason.ON_REQUEST, skippedOnRequest);
         countConvertDropped(DropReason.NO_DAY_PRICE, skippedNoDayPrice);
@@ -203,15 +202,15 @@ public class DidaPriceServiceImpl implements DidaPriceService {
         }
     }
 
-    private ProductRespDTO convertPlan(String hotelId, DidaRatePlan plan, int totalCents,
-                                       String occupancy, PriceReq request) {
+    private Product convertPlan(String hotelId, DidaRatePlan plan, int totalCents,
+                                       String occupancy, PriceQuery request) {
         Meal meal = productKeyDeriver.convertMeal(plan);
         List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(
-                request.getCheckIn(), plan.getRatePlanCancellationPolicyList());
+                request.checkIn(), plan.getRatePlanCancellationPolicyList());
         // 身份与成分一次算出（R-2.8）：建档照抄 identity，不得再判一遍
         ProductIdentity identity = productKeyDeriver.deriveIdentity(hotelId, roomTypeIdOf(plan),
                 meal, cancelPolicy, occupancy, totalCents);
-        ProductRespDTO product = ProductRespDTO.builder()
+        Product product = Product.builder()
                 .hotelId(hotelId)
                 // 报价标识=RatePlanID（易腐，实测 3 秒即换代）；身份=productKey，二者永不同字段
                 .productId(plan.getRatePlanId())
@@ -244,10 +243,10 @@ public class DidaPriceServiceImpl implements DidaPriceService {
     // ---------- 验价钩子：流程在 DidaCheckPriceServiceImpl（模板），这里只是供应商侧的读法 ----------
 
     /** 凭证未配置即确定失败（网关无兜底），不调供应商 */
-    public CheckPriceRespDTO precondition(CheckPriceReq request) {
+    public CheckPriceResult precondition(CheckPriceCommand request) {
         if (!properties.isConfigured()) {
             log.error("道旅验价：凭证未配置（DIDA_CLIENT_ID/DIDA_LICENSE_KEY），无法调用,sHotelId={}",
-                    request.getSHotelId());
+                    request.supplierHotelId());
             return outcome(CheckPriceOutcome.INDETERMINATE, "道旅凭证未配置，未能确认该产品是否可订");
         }
         return null;
@@ -258,45 +257,45 @@ public class DidaPriceServiceImpl implements DidaPriceService {
      * {@link #toPricingResult}——异常价拦截、TTL 分档、无货落缓存全部继承刷价写路径。
      * INDETERMINATE → null = 不动缓存（F-5.1）。
      */
-    public List<ProductRespDTO> freshProducts(DidaPriceSearchResponse data, PriceReq priceReq, String sHotelId) {
+    public List<Product> freshProducts(DidaPriceSearchResponse data, PriceQuery priceReq, String sHotelId) {
         PricingResult classified = toPricingResult(data, priceReq, sHotelId);
         return classified.outcome() == PricingOutcome.INDETERMINATE ? null : classified.products();
     }
 
     /** 现取现验（R-3.1）：重打一次 pricesearch 取本次的新报价码 */
-    public LiveStock<DidaHotel> fetchLiveStock(CheckPriceReq request) {
-        Long hotelId = hotelIdOf(request.getSHotelId());
+    public LiveStock<DidaHotel> fetchLiveStock(CheckPriceCommand request) {
+        Long hotelId = hotelIdOf(request.supplierHotelId());
         if (hotelId == null) {
-            log.error("道旅验价：酒店 id 非数字,sHotelId={}", request.getSHotelId());
+            log.error("道旅验价：酒店 id 非数字,sHotelId={}", request.supplierHotelId());
             return LiveStock.terminal(outcome(CheckPriceOutcome.INDETERMINATE, "酒店标识非法，未能确认该产品是否可订"));
         }
-        DidaPriceSearchResponse data = search(hotelId, request.getCheckIn(), request.getCheckOut(),
-                request.getRoomNum(), request.getAdultCount(), request.getChildNum(), request.getChildAges(),
+        DidaPriceSearchResponse data = search(hotelId, request.checkIn(), request.checkOut(),
+                request.roomNum(), request.adultCount(), request.childNum(), request.childAges(),
                 CallPurpose.CHECK_PRICE);
         if (data == null) {
             log.warn("道旅验价：现货查询未取得结果,sHotelId={},sProductId={}",
-                    request.getSHotelId(), request.getSProductId());
+                    request.supplierHotelId(), request.supplierProductId());
             return LiveStock.terminal(outcome(CheckPriceOutcome.INDETERMINATE,
                     "现货查询未取得结果，未能确认该产品是否可订，请稍后重试"));
         }
         // 验价即刷的转换器：闭包捕获这份原始响应，终态分支也带着它返回——
         // 下架/整店无售正是要落无货标记的时候
-        Function<PriceReq, List<ProductRespDTO>> fresh =
-                priceReq -> freshProducts(data, priceReq, request.getSHotelId());
+        Function<PriceQuery, List<Product>> fresh =
+                priceReq -> freshProducts(data, priceReq, request.supplierHotelId());
         if (!data.isSucc()) {
             String code = StringUtils.trimToEmpty(data.errorCode());
             CheckPriceOutcome terminal = SOLD_OUT_CODE.equals(code) ? CheckPriceOutcome.SOLD_OUT
                     : RATE_DEAD_CODES.contains(code) ? CheckPriceOutcome.RATE_DEAD
                             : CheckPriceOutcome.INDETERMINATE;
             log.info("道旅验价：现货查询返回业务错误,sHotelId={},sProductId={},code={},message={},判定={}",
-                    request.getSHotelId(), request.getSProductId(), code, data.errorMessage(), terminal);
+                    request.supplierHotelId(), request.supplierProductId(), code, data.errorMessage(), terminal);
             return LiveStock.<DidaHotel>terminal(outcome(terminal,
                     "现货查询失败(" + code + ")，" + terminalMessage(terminal))).freshConvertedBy(fresh);
         }
         DidaHotel hotel = data.firstHotel();
         if (hotel == null || CollectionUtils.isEmpty(hotel.getRatePlanList())) {
             log.info("道旅验价：该店当日无在售产品,sHotelId={},sProductId={}",
-                    request.getSHotelId(), request.getSProductId());
+                    request.supplierHotelId(), request.supplierProductId());
             return LiveStock.<DidaHotel>terminal(outcome(CheckPriceOutcome.RATE_DEAD,
                     "该酒店当日已无在售产品，请重新查价")).freshConvertedBy(fresh);
         }
@@ -320,9 +319,9 @@ public class DidaPriceServiceImpl implements DidaPriceService {
      * 换票候选：现货里可成交、有完整逐晚价的报价，按与查价<b>完全相同</b>的口径重派生
      * productKey，键相等才收；价格取单间住期总价，与查价透出的 totalPrice 同口径。
      */
-    public List<ResolveCandidate<DidaRatePlan>> resolveCandidates(DidaHotel hotel, CheckPriceReq request) {
-        String occupancy = Occupancy.canonical(request.getAdultCount(), request.getChildNum(), request.getChildAges());
-        int nights = nightsOf(request.getCheckIn(), request.getCheckOut());
+    public List<ResolveCandidate<DidaRatePlan>> resolveCandidates(DidaHotel hotel, CheckPriceCommand request) {
+        String occupancy = Occupancy.canonical(request.adultCount(), request.childNum(), request.childAges());
+        int nights = nightsOf(request.checkIn(), request.checkOut());
         String hotelId = String.valueOf(hotel.getHotelId());
         List<ResolveCandidate<DidaRatePlan>> equivalents = new ArrayList<>();
         for (DidaRatePlan plan : hotel.getRatePlanList()) {
@@ -335,10 +334,10 @@ public class DidaPriceServiceImpl implements DidaPriceService {
             }
             Meal meal = productKeyDeriver.convertMeal(plan);
             List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(
-                    request.getCheckIn(), plan.getRatePlanCancellationPolicyList());
+                    request.checkIn(), plan.getRatePlanCancellationPolicyList());
             String key = productKeyDeriver.deriveProductKey(hotelId, roomTypeIdOf(plan), meal,
                     cancelPolicy, occupancy, totalCents);
-            if (!key.equals(request.getProductKey())) {
+            if (!key.equals(request.productKey())) {
                 continue;
             }
             equivalents.add(new ResolveCandidate<>(plan, totalCents));
@@ -347,10 +346,10 @@ public class DidaPriceServiceImpl implements DidaPriceService {
     }
 
     /** 找到票之后的自检：现货里的票已排除停售与非即时确认，此处只挡缺逐晚价 */
-    public CheckPriceRespDTO inspect(DidaRatePlan plan, CheckPriceReq request) {
-        if (!hasFullDayPrices(plan, nightsOf(request.getCheckIn(), request.getCheckOut()))) {
+    public CheckPriceResult inspect(DidaRatePlan plan, CheckPriceCommand request) {
+        if (!hasFullDayPrices(plan, nightsOf(request.checkIn(), request.checkOut()))) {
             log.info("道旅验价：所点产品缺逐晚价,sHotelId={},ratePlanId={}",
-                    request.getSHotelId(), plan.getRatePlanId());
+                    request.supplierHotelId(), plan.getRatePlanId());
             return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未给出逐晚价，未能确认该产品是否可订");
         }
         return null;
@@ -365,17 +364,17 @@ public class DidaPriceServiceImpl implements DidaPriceService {
      * <b>remainRoomNum 恒为 null</b>——道旅官方明说 InventoryCount「不准」，把不准的数报成
      * 剩余房量等于把猜测说成事实。
      */
-    public CheckPriceRespDTO availabilityOnlyResp(CheckPriceReq request, DidaRatePlan plan) {
+    public CheckPriceResult availabilityOnlyResp(CheckPriceCommand request, DidaRatePlan plan) {
         Integer perRoomCents = totalCentsOf(plan);
         if (perRoomCents == null || perRoomCents <= 0) {
             return outcome(CheckPriceOutcome.INDETERMINATE, "供应商未给出价格，未能确认该产品");
         }
         int totalCents = perRoomCents * roomsOf(request);
         List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(
-                request.getCheckIn(), plan.getRatePlanCancellationPolicyList());
+                request.checkIn(), plan.getRatePlanCancellationPolicyList());
         log.info("道旅验价(仅现货)：有货但未验证可订性,sHotelId={},ratePlanId={},价格={}分,退改条数={}",
-                request.getSHotelId(), plan.getRatePlanId(), totalCents, cancelPolicy.size());
-        return CheckPriceRespDTO.builder()
+                request.supplierHotelId(), plan.getRatePlanId(), totalCents, cancelPolicy.size());
+        return CheckPriceResult.builder()
                 .outcome(CheckPriceOutcome.AVAILABLE)
                 .salePrice(totalCents)
                 .subPrice(totalCents)
@@ -386,14 +385,14 @@ public class DidaPriceServiceImpl implements DidaPriceService {
     }
 
     /** 下单前档：打 PriceConfirm(PreBook=true) 取 ReferenceNo，并把结果归入确定的分态 */
-    public CheckPriceRespDTO validate(CheckPriceReq request, DidaHotel hotel, DidaRatePlan plan) {
+    public CheckPriceResult validate(CheckPriceCommand request, DidaHotel hotel, DidaRatePlan plan) {
         DidaPriceConfirmRequest confirmRequest = buildConfirmRequest(request, hotel, plan);
         ResponseResult<DidaPriceConfirmResponse> result =
                 new PriceConfirmAccess(properties).access(confirmRequest, CallPurpose.CHECK_PRICE);
         DidaPriceConfirmResponse data = result == null ? null : result.getData();
         if (data == null) {
             log.warn("道旅验价：PriceConfirm 调用未取得结果,sHotelId={},ratePlanId={}",
-                    request.getSHotelId(), plan.getRatePlanId());
+                    request.supplierHotelId(), plan.getRatePlanId());
             return outcome(CheckPriceOutcome.INDETERMINATE, "验价调用未取得结果，未能确认该产品是否可订，请稍后重试");
         }
         return interpretConfirmResponse(request, hotel, plan, data);
@@ -403,7 +402,7 @@ public class DidaPriceServiceImpl implements DidaPriceService {
      * 验价响应 → 终态。与 HTTP 调用分开，是为了让「哪个码落哪一态」能被单测直接驱动——
      * 这段判定是本次接入里最容易出资损的地方（architecture.md §5 第四步）。
      */
-    CheckPriceRespDTO interpretConfirmResponse(CheckPriceReq request, DidaHotel hotel, DidaRatePlan plan,
+    CheckPriceResult interpretConfirmResponse(CheckPriceCommand request, DidaHotel hotel, DidaRatePlan plan,
                                                DidaPriceConfirmResponse data) {
         if (!data.isSucc()) {
             return classifyConfirmError(request, plan, data);
@@ -412,7 +411,7 @@ public class DidaPriceServiceImpl implements DidaPriceService {
         if (confirmed == null) {
             // 验价成功却没带回这条报价：该票已死，上游重新查价即可拿到换代后的报价
             log.info("道旅验价：响应未回传所点报价，判为死票,sHotelId={},ratePlanId={}",
-                    request.getSHotelId(), plan.getRatePlanId());
+                    request.supplierHotelId(), plan.getRatePlanId());
             return outcome(CheckPriceOutcome.RATE_DEAD, "该产品已不可订，请重新查价后再选择");
         }
         String referenceNo = data.referenceNo();
@@ -420,7 +419,7 @@ public class DidaPriceServiceImpl implements DidaPriceService {
             // PreBook=true 必回 ReferenceNo（官方 price-confirm）。没有它就下不了单，
             // 报"可订"等于把不确定说成确定
             log.error("道旅验价：PreBook 未回 ReferenceNo，无法下单,sHotelId={},ratePlanId={}",
-                    request.getSHotelId(), plan.getRatePlanId());
+                    request.supplierHotelId(), plan.getRatePlanId());
             return outcome(CheckPriceOutcome.INDETERMINATE, "验价未取得下单参考号，未能确认该产品是否可订");
         }
         return buildBookableResp(request, hotel, plan, confirmed, data, referenceNo);
@@ -430,29 +429,29 @@ public class DidaPriceServiceImpl implements DidaPriceService {
      * 验价业务错误码 → 三态（官方 information-hub/api-error-code，2026-09-08 查阅）。
      * 纪律：只有确证不因重试而改变的才判确定态；产品级死码必须 RATE_DEAD，绝不折叠进"不确定"。
      */
-    private CheckPriceRespDTO classifyConfirmError(CheckPriceReq request, DidaRatePlan plan,
+    private CheckPriceResult classifyConfirmError(CheckPriceCommand request, DidaRatePlan plan,
                                                    DidaPriceConfirmResponse data) {
         String code = StringUtils.trimToEmpty(data.errorCode());
         if (SOLD_OUT_CODE.equals(code)) {
             log.info("道旅验价：供应商明确无库存,sHotelId={},ratePlanId={},code={}",
-                    request.getSHotelId(), plan.getRatePlanId(), code);
+                    request.supplierHotelId(), plan.getRatePlanId(), code);
             return outcome(CheckPriceOutcome.SOLD_OUT, "该产品已售罄");
         }
         if (RATE_DEAD_CODES.contains(code)) {
             log.info("道旅验价：产品级死码,sHotelId={},ratePlanId={},code={},message={}",
-                    request.getSHotelId(), plan.getRatePlanId(), code, data.errorMessage());
+                    request.supplierHotelId(), plan.getRatePlanId(), code, data.errorMessage());
             return outcome(CheckPriceOutcome.RATE_DEAD, "该产品已不可订(" + code + ")，请重新查价后再选择");
         }
         if ("2017".equals(code) || "2019".equals(code)) {
             // 机构信息验证失败 / 请求被禁止：凭据或白名单出了问题，须人工介入
             log.error("道旅验价：账号或权限异常,sHotelId={},ratePlanId={},code={},message={}",
-                    request.getSHotelId(), plan.getRatePlanId(), code, data.errorMessage());
+                    request.supplierHotelId(), plan.getRatePlanId(), code, data.errorMessage());
             return outcome(CheckPriceOutcome.INDETERMINATE, "验价被供应商拒绝(" + code + ")，未能确认该产品是否可订");
         }
         // 其余码义未核实的一律透传不归并：参数类多半是我方组装缺陷，系统类重试可能好转，
         // 两者都不足以断言这条报价的死活
         log.warn("道旅验价：未归类错误码，按不确定处理,sHotelId={},ratePlanId={},code={},message={}",
-                request.getSHotelId(), plan.getRatePlanId(), code, data.errorMessage());
+                request.supplierHotelId(), plan.getRatePlanId(), code, data.errorMessage());
         return outcome(CheckPriceOutcome.INDETERMINATE, "验价未通过(" + code + ")，未能确认该产品是否可订");
     }
 
@@ -463,12 +462,12 @@ public class DidaPriceServiceImpl implements DidaPriceService {
      * {@code TotalPrice} 是<b>全部房间</b>的总价，故 salePrice 直接取它，不再乘间数。
      * 逐晚明细取验价响应的 {@code PriceList}（单间口径，与查价同形）。
      */
-    private CheckPriceRespDTO buildBookableResp(CheckPriceReq request, DidaHotel hotel, DidaRatePlan searched,
+    private CheckPriceResult buildBookableResp(CheckPriceCommand request, DidaHotel hotel, DidaRatePlan searched,
                                                 DidaRatePlan confirmed, DidaPriceConfirmResponse data,
                                                 String referenceNo) {
         Integer salePriceCents = totalCentsOf(confirmed);
         if (salePriceCents == null || salePriceCents <= 0) {
-            log.error("道旅验价：验后价缺失,sHotelId={},ratePlanId={}", request.getSHotelId(), searched.getRatePlanId());
+            log.error("道旅验价：验后价缺失,sHotelId={},ratePlanId={}", request.supplierHotelId(), searched.getRatePlanId());
             return outcome(CheckPriceOutcome.INDETERMINATE, "验价未回价格，未能确认该产品是否可订");
         }
         String currency = StringUtils.defaultIfBlank(confirmed.getCurrency(), properties.getCurrency());
@@ -476,12 +475,12 @@ public class DidaPriceServiceImpl implements DidaPriceService {
         credentials.put(DidaOfferCredentials.REFERENCE_NO, referenceNo);
         credentials.put(DidaOfferCredentials.HOTEL_ID, String.valueOf(hotel.getHotelId()));
         credentials.put(DidaOfferCredentials.RATE_PLAN_ID, confirmed.getRatePlanId());
-        credentials.put(DidaOfferCredentials.CHECK_IN, request.getCheckIn());
-        credentials.put(DidaOfferCredentials.CHECK_OUT, request.getCheckOut());
+        credentials.put(DidaOfferCredentials.CHECK_IN, request.checkIn());
+        credentials.put(DidaOfferCredentials.CHECK_OUT, request.checkOut());
         credentials.put(DidaOfferCredentials.ROOM_NUM, String.valueOf(roomsOf(request)));
         credentials.put(DidaOfferCredentials.ADULT_COUNT,
-                String.valueOf(request.getAdultCount() == null ? 1 : request.getAdultCount()));
-        credentials.put(DidaOfferCredentials.CHILD_AGES, childAgesCsv(request.getChildAges()));
+                String.valueOf(request.adultCount() == null ? 1 : request.adultCount()));
+        credentials.put(DidaOfferCredentials.CHILD_AGES, childAgesCsv(request.childAges()));
         credentials.put(DidaOfferCredentials.DECLARED_TOTAL,
                 confirmed.getTotalPrice() == null ? "" : confirmed.getTotalPrice().toPlainString());
         credentials.put(DidaOfferCredentials.CURRENCY, currency);
@@ -494,18 +493,18 @@ public class DidaPriceServiceImpl implements DidaPriceService {
         // 验价响应把它挂在酒店节点上。解析不出则回落查价时点的那份，两者皆无即空——不猜（R-5.4）
         DidaHotel confirmedHotel = data.firstHotel();
         List<CancelPolicy> cancelPolicy = productKeyDeriver.convertCancelPolicy(
-                request.getCheckIn(), confirmedHotel == null ? null : confirmedHotel.getCancellationPolicyList());
+                request.checkIn(), confirmedHotel == null ? null : confirmedHotel.getCancellationPolicyList());
         if (cancelPolicy.isEmpty()) {
             cancelPolicy = productKeyDeriver.convertCancelPolicy(
-                    request.getCheckIn(), searched.getRatePlanCancellationPolicyList());
+                    request.checkIn(), searched.getRatePlanCancellationPolicyList());
             log.info("道旅验价：验价响应退改不可解析，回落查价条款,sHotelId={},ratePlanId={},回落后条数={}",
-                    request.getSHotelId(), confirmed.getRatePlanId(), cancelPolicy.size());
+                    request.supplierHotelId(), confirmed.getRatePlanId(), cancelPolicy.size());
         }
         List<PriceInfo> priceInfos = buildPriceInfos(confirmed.getPriceList());
         log.info("道旅验价：通过并签发句柄,sHotelId={},ratePlanId={},salePrice={}分,offerId={},退改条数={},每日价条数={}",
-                request.getSHotelId(), confirmed.getRatePlanId(), salePriceCents, offerId,
+                request.supplierHotelId(), confirmed.getRatePlanId(), salePriceCents, offerId,
                 cancelPolicy.size(), priceInfos.size());
-        return CheckPriceRespDTO.builder()
+        return CheckPriceResult.builder()
                 .outcome(CheckPriceOutcome.BOOKABLE)
                 .offerId(offerId)
                 .offerTtlSeconds(offerStore.ttlSecondsOf(SupplierSourceEnum.DIDA.getCode()))
@@ -517,13 +516,13 @@ public class DidaPriceServiceImpl implements DidaPriceService {
                 .build();
     }
 
-    private DidaPriceConfirmRequest buildConfirmRequest(CheckPriceReq request, DidaHotel hotel, DidaRatePlan plan) {
+    private DidaPriceConfirmRequest buildConfirmRequest(CheckPriceCommand request, DidaHotel hotel, DidaRatePlan plan) {
         DidaPriceConfirmRequest confirmRequest = new DidaPriceConfirmRequest();
         confirmRequest.setHeader(header());
         confirmRequest.setHotelId(hotel.getHotelId());
         confirmRequest.setRatePlanId(plan.getRatePlanId());
-        confirmRequest.setCheckInDate(request.getCheckIn());
-        confirmRequest.setCheckOutDate(request.getCheckOut());
+        confirmRequest.setCheckInDate(request.checkIn());
+        confirmRequest.setCheckOutDate(request.checkOut());
         confirmRequest.setNationality(properties.getNationality());
         confirmRequest.setNumOfRooms(roomsOf(request));
         confirmRequest.setCurrency(properties.getCurrency());
@@ -536,11 +535,11 @@ public class DidaPriceServiceImpl implements DidaPriceService {
         return confirmRequest;
     }
 
-    private List<DidaPriceConfirmRequest.OccupancyDetail> occupancyDetails(CheckPriceReq request) {
+    private List<DidaPriceConfirmRequest.OccupancyDetail> occupancyDetails(CheckPriceCommand request) {
         int rooms = roomsOf(request);
-        int adults = request.getAdultCount() == null ? 1 : request.getAdultCount();
-        int children = request.getChildNum() == null ? 0 : request.getChildNum();
-        List<Integer> ages = request.getChildAges() == null ? List.of() : request.getChildAges();
+        int adults = request.adultCount() == null ? 1 : request.adultCount();
+        int children = request.childNum();
+        List<Integer> ages = request.childAges() == null ? List.of() : request.childAges();
         List<DidaPriceConfirmRequest.OccupancyDetail> details = new ArrayList<>(rooms);
         for (int roomNum = 1; roomNum <= rooms; roomNum++) {
             DidaPriceConfirmRequest.OccupancyDetail detail = new DidaPriceConfirmRequest.OccupancyDetail();
@@ -645,8 +644,8 @@ public class DidaPriceServiceImpl implements DidaPriceService {
         }
     }
 
-    private static int roomsOf(CheckPriceReq request) {
-        return request.getRoomNum() == null || request.getRoomNum() <= 0 ? 1 : request.getRoomNum();
+    private static int roomsOf(CheckPriceCommand request) {
+        return request.roomNum() <= 0 ? 1 : request.roomNum();
     }
 
     private static int nightsOf(String checkIn, String checkOut) {
@@ -670,7 +669,7 @@ public class DidaPriceServiceImpl implements DidaPriceService {
         };
     }
 
-    private static CheckPriceRespDTO outcome(CheckPriceOutcome outcome, String message) {
-        return CheckPriceRespDTO.builder().outcome(outcome).message(message).build();
+    private static CheckPriceResult outcome(CheckPriceOutcome outcome, String message) {
+        return CheckPriceResult.builder().outcome(outcome).message(message).build();
     }
 }

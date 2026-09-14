@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.booking;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.BookingRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.BookingReq;
+import com.trip.booking.spa.gateway.domain.booking.BookingResult;
+import com.trip.booking.spa.gateway.domain.booking.BookingCommand;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.Offer;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.booking.DidaBookingClassifier.CreateClassification;
@@ -48,7 +48,7 @@ import java.util.List;
  */
 @Slf4j
 @Service("didaBookingSyncService")
-public class DidaBookingSyncServiceImpl extends AbstractBookingSyncSupportService<BookingRespDTO> {
+public class DidaBookingSyncServiceImpl extends AbstractBookingSyncSupportService {
 
     @Resource
     private DidaProperties properties;
@@ -67,40 +67,40 @@ public class DidaBookingSyncServiceImpl extends AbstractBookingSyncSupportServic
     }
 
     @Override
-    public BookingRespDTO doBooking(BookingReq req) {
+    protected BookingResult doBooking(BookingCommand req) {
         // 以下判定全部在向道旅发出任何请求之前完成，供应商侧不会发生任何事，一律确定失败
         if (!properties.isConfigured()) {
-            log.error("道旅下单：凭证未配置，无法下单,orderId={}", req.getOrderId());
-            return failed(req.getOrderId(), null, "credentials_missing", "道旅凭证未配置，供应商侧未发生任何动作");
+            log.error("道旅下单：凭证未配置，无法下单,orderId={}", req.orderId());
+            return failed(req.orderId(), null, "credentials_missing", "道旅凭证未配置，供应商侧未发生任何动作");
         }
-        if (StringUtils.isBlank(req.getOfferId())) {
-            return failed(req.getOrderId(), null, "missing_offer_id", "缺少 offerId，请先验价并回传该报价句柄");
+        if (StringUtils.isBlank(req.offerId())) {
+            return failed(req.orderId(), null, "missing_offer_id", "缺少 offerId，请先验价并回传该报价句柄");
         }
-        Offer offer = offerStore.resolve(req.getOfferId());
+        Offer offer = offerStore.resolve(req.offerId());
         if (offer == null) {
-            return failed(req.getOrderId(), null, "offer_unresolvable", "报价已过期或不存在，请重新验价后下单");
+            return failed(req.orderId(), null, "offer_unresolvable", "报价已过期或不存在，请重新验价后下单");
         }
         if (!Integer.valueOf(SupplierSourceEnum.DIDA.getCode()).equals(offer.getSupplierId())) {
-            log.error("道旅下单：报价句柄归属供应商不符,orderId={},offerSupplierId={}", req.getOrderId(), offer.getSupplierId());
-            return failed(req.getOrderId(), null, "offer_supplier_mismatch", "该报价句柄不属于道旅，请核对下单请求的供应商");
+            log.error("道旅下单：报价句柄归属供应商不符,orderId={},offerSupplierId={}", req.orderId(), offer.getSupplierId());
+            return failed(req.orderId(), null, "offer_supplier_mismatch", "该报价句柄不属于道旅，请核对下单请求的供应商");
         }
         for (String key : DidaOfferCredentials.REQUIRED_FOR_BOOKING) {
             if (StringUtils.isBlank(offer.credential(key))) {
-                log.error("道旅下单：报价句柄缺少凭据,orderId={},missingKey={}", req.getOrderId(), key);
-                return failed(req.getOrderId(), null, "offer_credential_missing",
+                log.error("道旅下单：报价句柄缺少凭据,orderId={},missingKey={}", req.orderId(), key);
+                return failed(req.orderId(), null, "offer_credential_missing",
                         "报价句柄内容不完整（缺 " + key + "），请重新验价后下单");
             }
         }
         // 住期以验价句柄为准；上游传参不一致=调用方串单，道旅也必报 3001，拒于本地
-        if (!offer.credential(DidaOfferCredentials.CHECK_IN).equals(req.getCheckIn())
-                || !offer.credential(DidaOfferCredentials.CHECK_OUT).equals(req.getCheckOut())) {
-            log.error("道旅下单：住期与验价不符,orderId={},req={}~{},offer={}~{}", req.getOrderId(),
-                    req.getCheckIn(), req.getCheckOut(),
+        if (!offer.credential(DidaOfferCredentials.CHECK_IN).equals(req.checkIn())
+                || !offer.credential(DidaOfferCredentials.CHECK_OUT).equals(req.checkOut())) {
+            log.error("道旅下单：住期与验价不符,orderId={},req={}~{},offer={}~{}", req.orderId(),
+                    req.checkIn(), req.checkOut(),
                     offer.credential(DidaOfferCredentials.CHECK_IN), offer.credential(DidaOfferCredentials.CHECK_OUT));
-            return failed(req.getOrderId(), null, "stay_mismatch", "下单住期与验价时不一致，请重新验价后下单");
+            return failed(req.orderId(), null, "stay_mismatch", "下单住期与验价时不一致，请重新验价后下单");
         }
-        if (StringUtils.isAllBlank(req.getPersonName(), req.getContactName()) || StringUtils.isBlank(req.getContactPhone())) {
-            return failed(req.getOrderId(), null, "missing_guest_or_contact", "缺少入住人姓名或联系人电话，供应商侧未发生任何动作");
+        if (StringUtils.isAllBlank(req.personName(), req.contactName()) || StringUtils.isBlank(req.contactPhone())) {
+            return failed(req.orderId(), null, "missing_guest_or_contact", "缺少入住人姓名或联系人电话，供应商侧未发生任何动作");
         }
 
         DidaBookingConfirmRequest request = buildRequest(req, offer);
@@ -110,36 +110,36 @@ public class DidaBookingSyncServiceImpl extends AbstractBookingSyncSupportServic
         CreateClassification classification = DidaBookingClassifier.classifyCreate(resp);
         DidaBookingDetails details = resp == null ? null : resp.bookingDetails();
         log.info("道旅下单：分类结果,orderId={},classification={},errorCode={},bookingId={},status={}",
-                req.getOrderId(), classification, resp == null ? null : resp.errorCode(),
+                req.orderId(), classification, resp == null ? null : resp.errorCode(),
                 details == null ? null : details.getBookingId(), details == null ? null : details.getStatus());
 
         switch (classification) {
             case CONFIRMED:
-                offerStore.consume(req.getOfferId());
-                return success(req.getOrderId(), details);
+                offerStore.consume(req.offerId());
+                return successOf(req.orderId(), details);
             case PENDING:
                 // 订单已在道旅侧存在但未到终态（5 Pending 3 分钟内、6 OnRequest 120 分钟内到终态）
-                return unknown(req.getOrderId(), details.getBookingId(), "status:" + details.getStatus(),
+                return unknown(req.orderId(), details.getBookingId(), "status:" + details.getStatus(),
                         "供应商已受理但订单未到终态（Status=" + details.getStatus() + "），请凭供应商单号查单确证");
             case FINAL_FAILED:
-                return failed(req.getOrderId(), details.getBookingId(), "status:" + details.getStatus(),
+                return failed(req.orderId(), details.getBookingId(), "status:" + details.getStatus(),
                         "供应商回报订单终态 Failed，未成单");
             case FINAL_CANCELED:
-                return failed(req.getOrderId(), details.getBookingId(), "status:" + details.getStatus(),
+                return failed(req.orderId(), details.getBookingId(), "status:" + details.getStatus(),
                         "供应商回报订单终态 Canceled，无有效订单");
             case REQUERY:
                 return resolveByRequery(req, resp);
             case AUTH_CONFIG:
                 Monitor.recordOne(MetricNames.SUPPLIER_AUTH_CONFIG, MetricTags.of(SupplierSourceEnum.DIDA));
                 log.error("[auth-config] 道旅下单：我方凭据/配置病，供应商无辜、重试无效、需人工处理。code={},message={},orderId={}",
-                        resp.errorCode(), resp.errorMessage(), req.getOrderId());
-                return failed(req.getOrderId(), null, resp.errorCode(), "我方凭据/配置被道旅拒绝，下单未发生：" + resp.errorMessage());
+                        resp.errorCode(), resp.errorMessage(), req.orderId());
+                return failed(req.orderId(), null, resp.errorCode(), "我方凭据/配置被道旅拒绝，下单未发生：" + resp.errorMessage());
             case DETERMINISTIC_FAILURE:
-                return failed(req.getOrderId(), null, resp.errorCode(), "供应商拒绝下单：" + resp.errorMessage());
+                return failed(req.orderId(), null, resp.errorCode(), "供应商拒绝下单：" + resp.errorMessage());
             case INDETERMINATE:
             default:
                 // 无响应≠未成单（cursor 生产读超时 30 秒的下单，道旅侧可能已成单）
-                return unknown(req.getOrderId(), null, resp == null ? null : resp.errorCode(),
+                return unknown(req.orderId(), null, resp == null ? null : resp.errorCode(),
                         "下单结果不确定，请凭我方单号反查确证");
         }
     }
@@ -149,33 +149,33 @@ public class DidaBookingSyncServiceImpl extends AbstractBookingSyncSupportServic
      * 反查到终态 2 → 收敛为成功；终态 3/4 → 无有效订单，确定失败（3018 时我方单号已绑定
      * 一笔已取消订单，重订必须换新单号）；非终态 → 不确定并带单号；反查不到或反查失败 → 不确定。
      */
-    private BookingRespDTO resolveByRequery(BookingReq req, DidaBookingConfirmResponse resp) {
+    private BookingResult resolveByRequery(BookingCommand req, DidaBookingConfirmResponse resp) {
         String code = resp.errorCode();
         String errorBookingId = resp.getError() == null ? null : StringUtils.trimToNull(resp.getError().getBookingId());
-        DidaBookingSearchResponse search = searchQuietly(errorBookingId, req.getOrderId());
+        DidaBookingSearchResponse search = searchQuietly(errorBookingId, req.orderId());
         DidaBookingDetails found = search == null || !search.isSucc() ? null : search.single();
         if (found == null) {
             log.warn("道旅下单：供应商报已有相关订单但反查未能确证,orderId={},code={},errorBookingId={},searchSucc={},hits={}",
-                    req.getOrderId(), code, errorBookingId, search != null && search.isSucc(),
+                    req.orderId(), code, errorBookingId, search != null && search.isSucc(),
                     search == null ? null : search.bookings().size());
-            return unknown(req.getOrderId(), errorBookingId, code,
+            return unknown(req.orderId(), errorBookingId, code,
                     "供应商报 " + code + "（" + resp.errorMessage() + "），反查未能确证，请稍后凭我方单号反查");
         }
         CreateClassification byStatus = DidaBookingClassifier.classifyStatus(found.getStatus());
         log.info("道旅下单：反查结果,orderId={},code={},bookingId={},status={},classification={}",
-                req.getOrderId(), code, found.getBookingId(), found.getStatus(), byStatus);
+                req.orderId(), code, found.getBookingId(), found.getStatus(), byStatus);
         switch (byStatus) {
             case CONFIRMED:
-                offerStore.consume(req.getOfferId());
-                return success(req.getOrderId(), found);
+                offerStore.consume(req.offerId());
+                return successOf(req.orderId(), found);
             case FINAL_FAILED:
-                return failed(req.getOrderId(), found.getBookingId(), code,
+                return failed(req.orderId(), found.getBookingId(), code,
                         "供应商报 " + code + "，反查该单终态为 Failed，未成单");
             case FINAL_CANCELED:
-                return failed(req.getOrderId(), found.getBookingId(), code,
+                return failed(req.orderId(), found.getBookingId(), code,
                         "供应商报 " + code + "，我方单号名下的道旅订单已取消；如需重订请换新单号");
             default:
-                return unknown(req.getOrderId(), found.getBookingId(), code,
+                return unknown(req.orderId(), found.getBookingId(), code,
                         "供应商报 " + code + "，反查该单未到终态（Status=" + found.getStatus() + "），请稍后查单确证");
         }
     }
@@ -203,12 +203,12 @@ public class DidaBookingSyncServiceImpl extends AbstractBookingSyncSupportServic
         return new BookingSearchAccess(properties);
     }
 
-    DidaBookingConfirmRequest buildRequest(BookingReq req, Offer offer) {
-        int reqRooms = req.getRoomNum() == null || req.getRoomNum() < 1 ? 1 : req.getRoomNum();
+    DidaBookingConfirmRequest buildRequest(BookingCommand req, Offer offer) {
+        int reqRooms = req.roomNum() == null || req.roomNum() < 1 ? 1 : req.roomNum();
         // 间数以验价句柄为准（官方：与 PriceConfirm 不一致即被拒，且 PriceConfirm 的总价按它算）
         int rooms = parseIntOrDefault(offer.credential(DidaOfferCredentials.ROOM_NUM), reqRooms);
         if (rooms != reqRooms) {
-            log.error("道旅下单：下单间数与验价句柄不一致，以句柄为准,orderId={},req={},offer={}", req.getOrderId(), reqRooms, rooms);
+            log.error("道旅下单：下单间数与验价句柄不一致，以句柄为准,orderId={},req={},offer={}", req.orderId(), reqRooms, rooms);
         }
         int adults = parseIntOrDefault(offer.credential(DidaOfferCredentials.ADULT_COUNT), 1);
         List<Integer> childAges = parseAges(offer.credential(DidaOfferCredentials.CHILD_AGES));
@@ -220,9 +220,9 @@ public class DidaBookingSyncServiceImpl extends AbstractBookingSyncSupportServic
         request.setCheckOutDate(offer.credential(DidaOfferCredentials.CHECK_OUT));
         request.setNumOfRooms(rooms);
         request.setGuestList(buildGuestList(
-                StringUtils.defaultIfBlank(req.getPersonName(), req.getContactName()), rooms, adults, childAges));
+                StringUtils.defaultIfBlank(req.personName(), req.contactName()), rooms, adults, childAges));
         request.setContact(buildContact(req));
-        request.setClientReference(req.getOrderId());
+        request.setClientReference(req.orderId());
         return request;
     }
 
@@ -294,10 +294,10 @@ public class DidaBookingSyncServiceImpl extends AbstractBookingSyncSupportServic
     }
 
     /** 联系人：姓名与电话取上游契约；邮箱接收供应商通知，指向运营团队而非旅客，故配置化 */
-    private DidaContact buildContact(BookingReq req) {
+    private DidaContact buildContact(BookingCommand req) {
         DidaContact contact = new DidaContact();
-        contact.setName(splitName(StringUtils.defaultIfBlank(req.getContactName(), req.getPersonName())));
-        contact.setPhone(StringUtils.trimToNull(req.getContactPhone()));
+        contact.setName(splitName(StringUtils.defaultIfBlank(req.contactName(), req.personName())));
+        contact.setPhone(StringUtils.trimToNull(req.contactPhone()));
         contact.setEmail(StringUtils.trimToNull(properties.getBookingContactEmail()));
         return contact;
     }
@@ -324,30 +324,21 @@ public class DidaBookingSyncServiceImpl extends AbstractBookingSyncSupportServic
         }
     }
 
-    @Override
-    public BookingRespDTO bookingRespConvert(BookingRespDTO dto) {
-        return dto;
-    }
 
-    private static BookingRespDTO success(String orderId, DidaBookingDetails details) {
+    private static BookingResult successOf(String orderId, DidaBookingDetails details) {
         log.info("道旅下单：成单,orderId={},sOrderId={},confirmationCode={},totalPrice={}{}",
                 orderId, details.getBookingId(), details.getConfirmationCode(), details.getTotalPrice(), details.currency());
-        return BookingRespDTO.builder()
-                .outcome(BookingOutcome.SUCCESS)
-                .orderId(orderId)
-                .sOrderId(details.getBookingId())
-                .sConfirmationNumber(StringUtils.trimToNull(details.getConfirmationCode()))
-                .orderDesc("下单成功")
-                .build();
+        return BookingResult.success(orderId, details.getBookingId(),
+                StringUtils.trimToNull(details.getConfirmationCode()), "下单成功");
     }
 
-    private static BookingRespDTO failed(String orderId, String sOrderId, String code, String message) {
-        return BookingRespDTO.builder().outcome(BookingOutcome.FAILED).orderId(orderId).sOrderId(sOrderId)
-                .supplierErrorCode(code).supplierErrorMessage(message).orderDesc(message).build();
+    /** 确定失败；供应商单号有则带上（那是"这笔已存在的单确实失败/已取消"这个结论的证据） */
+    private static BookingResult failed(String orderId, String sOrderId, String code, String message) {
+        return BookingResult.failed(orderId, code, message, message).withSupplierOrderId(sOrderId);
     }
 
-    private static BookingRespDTO unknown(String orderId, String sOrderId, String code, String message) {
-        return BookingRespDTO.builder().outcome(BookingOutcome.UNKNOWN).orderId(orderId).sOrderId(sOrderId)
-                .supplierErrorCode(code).supplierErrorMessage(message).orderDesc(message).build();
+    /** 结果不确定；供应商单号有则带上——上游正是要凭它查单确证 */
+    private static BookingResult unknown(String orderId, String sOrderId, String code, String message) {
+        return BookingResult.unknown(orderId, code, message, message).withSupplierOrderId(sOrderId);
     }
 }

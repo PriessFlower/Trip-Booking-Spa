@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.checkprice;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.CheckPriceRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.CheckPriceReq;
+import com.trip.booking.spa.gateway.application.checkprice.CheckPriceResult;
+import com.trip.booking.spa.gateway.domain.pricing.CheckPriceCommand;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.pricing.DidaPriceServiceImpl;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.DidaProperties;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.model.DidaHotel;
@@ -41,22 +41,22 @@ public class DidaCheckPriceServiceImpl extends AbstractCheckPriceFlow<DidaHotel,
     }
 
     @Override
-    protected CheckPriceRespDTO precondition(CheckPriceReq request) {
+    protected CheckPriceResult precondition(CheckPriceCommand request) {
         return didaPriceService.precondition(request);
     }
 
     @Override
-    protected LiveStock<DidaHotel> fetchLiveStock(CheckPriceReq request, String salesEnvironment) {
+    protected LiveStock<DidaHotel> fetchLiveStock(CheckPriceCommand request, String salesEnvironment) {
         return didaPriceService.fetchLiveStock(request);
     }
 
     @Override
-    protected DidaRatePlan findByToken(DidaHotel hotel, CheckPriceReq request) {
-        return didaPriceService.findPlan(hotel, request.getSProductId());
+    protected DidaRatePlan findByToken(DidaHotel hotel, CheckPriceCommand request) {
+        return didaPriceService.findPlan(hotel, request.supplierProductId());
     }
 
     @Override
-    protected List<ResolveCandidate<DidaRatePlan>> resolveCandidates(DidaHotel hotel, CheckPriceReq request) {
+    protected List<ResolveCandidate<DidaRatePlan>> resolveCandidates(DidaHotel hotel, CheckPriceCommand request) {
         return didaPriceService.resolveCandidates(hotel, request);
     }
 
@@ -66,17 +66,17 @@ public class DidaCheckPriceServiceImpl extends AbstractCheckPriceFlow<DidaHotel,
     }
 
     @Override
-    protected CheckPriceRespDTO inspect(DidaRatePlan plan, DidaHotel hotel, CheckPriceReq request) {
+    protected CheckPriceResult inspect(DidaRatePlan plan, DidaHotel hotel, CheckPriceCommand request) {
         return didaPriceService.inspect(plan, request);
     }
 
     @Override
-    protected CheckPriceRespDTO availabilityOnlyResp(DidaRatePlan plan, DidaHotel hotel, CheckPriceReq request) {
+    protected CheckPriceResult availabilityOnlyResp(DidaRatePlan plan, DidaHotel hotel, CheckPriceCommand request) {
         return didaPriceService.availabilityOnlyResp(request, plan);
     }
 
     @Override
-    protected CheckPriceRespDTO validate(DidaRatePlan plan, DidaHotel hotel, CheckPriceReq request) {
+    protected CheckPriceResult validate(DidaRatePlan plan, DidaHotel hotel, CheckPriceCommand request) {
         return didaPriceService.validate(request, hotel, plan);
     }
 }

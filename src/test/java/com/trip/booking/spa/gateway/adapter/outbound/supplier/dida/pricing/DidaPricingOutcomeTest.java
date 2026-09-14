@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.pricing;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.ProductRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.PriceReq;
+import com.trip.booking.spa.gateway.domain.product.Product;
+import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.DidaProductKeyDeriver;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.DidaProperties;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.model.DidaError;
@@ -46,7 +46,7 @@ class DidaPricingOutcomeTest {
         assertEquals(PricingOutcome.AVAILABLE, result.outcome());
         assertEquals(3, result.products().size());
 
-        ProductRespDTO first = result.products().get(0);
+        Product first = result.products().get(0);
         assertEquals("563", first.getHotelId());
         // 报价码原样透出，身份另立一个字段——身份与令牌永不同字段
         assertEquals("190452504804273758", first.getProductId());
@@ -67,7 +67,7 @@ class DidaPricingOutcomeTest {
     @Test
     @DisplayName("同房型不同报价码：productKey 相同——键标识卖法，不标识某一条报价")
     void sameSellingWayShareOneProductKey() throws IOException {
-        List<ProductRespDTO> products = service.toPricingResult(
+        List<Product> products = service.toPricingResult(
                 fixture("/dida/price-search-528-2night.json"), request("2026-09-29", "2026-10-01"), "528")
                 .products();
 
@@ -90,7 +90,7 @@ class DidaPricingOutcomeTest {
     @Test
     @DisplayName("productKey 的房型成分与对外 roomId 同为 RoomTypeID（物理房型）")
     void roomComponentIsThePhysicalRoomId() throws IOException {
-        ProductRespDTO first = service.toPricingResult(
+        Product first = service.toPricingResult(
                 fixture("/dida/price-search-563-1night.json"), request("2026-09-29", "2026-09-30"), "563")
                 .products().get(0);
 
@@ -230,10 +230,10 @@ class DidaPricingOutcomeTest {
         return plan;
     }
 
-    private static PriceReq request(String checkIn, String checkOut) {
-        PriceReq req = PriceReq.builder().checkIn(checkIn).checkout(checkOut).roomNum(1)
+    private static PriceQuery request(String checkIn, String checkOut) {
+        PriceQuery req = PriceQuery.builder().checkIn(checkIn).checkOut(checkOut).roomNum(1)
                 .adultNum(2).childNum(0).childAges(List.of()).build();
-        req.setOccupancies(Occupancy.perRoom(1, 2, 0, List.of()));
+        req = req.toBuilder().occupancies(Occupancy.perRoom(1, 2, 0, List.of())).build();
         return req;
     }
 

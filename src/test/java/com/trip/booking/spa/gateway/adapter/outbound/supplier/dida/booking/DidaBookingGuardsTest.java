@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.booking;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.BookingRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.BookingReq;
+import com.trip.booking.spa.gateway.domain.booking.BookingResult;
+import com.trip.booking.spa.gateway.domain.booking.BookingCommand;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.Offer;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.DidaOfferCredentials;
@@ -36,10 +36,10 @@ class DidaBookingGuardsTest {
         OfferStore store = mock(OfferStore.class);
         ReflectionTestUtils.setField(service, "offerStore", store);
 
-        BookingRespDTO resp = service.booking(validReq());
+        BookingResult resp = service.booking(validReq());
 
-        assertEquals(BookingOutcome.FAILED, resp.getOutcome());
-        assertEquals("booking_disabled", resp.getSupplierErrorCode());
+        assertEquals(BookingOutcome.FAILED, resp.outcome());
+        assertEquals("booking_disabled", resp.supplierErrorCode());
         verify(store, never()).resolve(anyString());
     }
 
@@ -50,7 +50,7 @@ class DidaBookingGuardsTest {
         ((DidaProperties) ReflectionTestUtils.getField(service, "properties")).setLicenseKey("");
         ReflectionTestUtils.setField(service, "offerStore", mock(OfferStore.class));
 
-        assertEquals("credentials_missing", service.booking(validReq()).getSupplierErrorCode());
+        assertEquals("credentials_missing", service.booking(validReq()).supplierErrorCode());
     }
 
     @Test
@@ -60,23 +60,23 @@ class DidaBookingGuardsTest {
         OfferStore store = mock(OfferStore.class);
         ReflectionTestUtils.setField(service, "offerStore", store);
 
-        BookingReq noOffer = validReq();
-        noOffer.setOfferId(null);
-        assertEquals("missing_offer_id", service.booking(noOffer).getSupplierErrorCode());
+        BookingCommand noOffer = DidaBookingRequestShapeTest.req(
+                "张/三", "李/四", "13800000000", "2026-10-01", "2026-10-03", 1, null);
+        assertEquals("missing_offer_id", service.booking(noOffer).supplierErrorCode());
 
         when(store.resolve("of_test")).thenReturn(null);
-        assertEquals("offer_unresolvable", service.booking(validReq()).getSupplierErrorCode());
+        assertEquals("offer_unresolvable", service.booking(validReq()).supplierErrorCode());
 
         when(store.resolve("of_test")).thenReturn(Offer.builder().supplierId(10015).credentials(fullCredentials())
                 .expiresAt(System.currentTimeMillis() + 60_000).build());
-        assertEquals("offer_supplier_mismatch", service.booking(validReq()).getSupplierErrorCode());
+        assertEquals("offer_supplier_mismatch", service.booking(validReq()).supplierErrorCode());
 
         Map<String, String> missing = fullCredentials();
         missing.remove(DidaOfferCredentials.REFERENCE_NO);
         when(store.resolve("of_test")).thenReturn(DidaBookingRequestShapeTest.offer(missing));
-        BookingRespDTO resp = service.booking(validReq());
-        assertEquals("offer_credential_missing", resp.getSupplierErrorCode());
-        assertEquals(BookingOutcome.FAILED, resp.getOutcome());
+        BookingResult resp = service.booking(validReq());
+        assertEquals("offer_credential_missing", resp.supplierErrorCode());
+        assertEquals(BookingOutcome.FAILED, resp.outcome());
     }
 
     @Test
@@ -87,16 +87,17 @@ class DidaBookingGuardsTest {
         ReflectionTestUtils.setField(service, "offerStore", store);
         when(store.resolve("of_test")).thenReturn(DidaBookingRequestShapeTest.offer(fullCredentials()));
 
-        BookingReq req = validReq();
-        req.setCheckOut("2026-10-04");
-        BookingRespDTO resp = service.booking(req);
+        // 住期与句柄不一致：BookingCommand 不可变，直接建一条离店日不同的指令
+        BookingCommand req = DidaBookingRequestShapeTest.req(
+                "张/三", "李/四", "13800000000", "2026-10-01", "2026-10-04", 1, "of_test");
+        BookingResult resp = service.booking(req);
 
-        assertEquals(BookingOutcome.FAILED, resp.getOutcome());
-        assertEquals("stay_mismatch", resp.getSupplierErrorCode());
-        assertNull(resp.getSOrderId());
+        assertEquals(BookingOutcome.FAILED, resp.outcome());
+        assertEquals("stay_mismatch", resp.supplierErrorCode());
+        assertNull(resp.supplierOrderId());
     }
 
-    private static BookingReq validReq() {
+    private static BookingCommand validReq() {
         return DidaBookingRequestShapeTest.req("张/三", "李/四", "13800000000", "2026-10-01", "2026-10-03", 1);
     }
 

@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.booking;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.BookingReq;
+import com.trip.booking.spa.gateway.domain.booking.BookingCommand;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.Offer;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.DidaOfferCredentials;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.DidaProperties;
@@ -40,7 +40,7 @@ class DidaBookingRequestShapeTest {
     @DisplayName("整单请求：字段名与官方一致，住期/间数/占用从句柄回放，ClientReference=我方单号")
     void requestShapeMatchesOfficialContract() {
         DidaBookingSyncServiceImpl service = service();
-        BookingReq req = req("张/三", "李/四", "13800000000", "2026-10-01", "2026-10-03", 2);
+        BookingCommand req = req("张/三", "李/四", "13800000000", "2026-10-01", "2026-10-03", 2);
         Offer offer = offer(Map.of(
                 DidaOfferCredentials.REFERENCE_NO, "18698545882",
                 DidaOfferCredentials.HOTEL_ID, "875535",
@@ -138,10 +138,16 @@ class DidaBookingRequestShapeTest {
         return service;
     }
 
-    static BookingReq req(String person, String contact, String phone, String in, String out, int rooms) {
-        return BookingReq.builder().supplierId(10020).orderId("ORDER-1").personName(person).contactName(contact)
+    static BookingCommand req(String person, String contact, String phone, String in, String out, int rooms) {
+        return req(person, contact, phone, in, out, rooms, "of_test");
+    }
+
+    /** BookingCommand 不可变，要改哪一项就整条重建——句柄可传 null 以构造「缺 offerId」那一档 */
+    static BookingCommand req(String person, String contact, String phone, String in, String out,
+                              int rooms, String offerId) {
+        return BookingCommand.builder().supplierId(10020).orderId("ORDER-1").personName(person).contactName(contact)
                 .contactPhone(phone).checkIn(in).checkOut(out).roomNum(rooms).totalPrice(21200).settlePrice(21200)
-                .offerId("of_test").build();
+                .offerId(offerId).build();
     }
 
     static Offer offer(Map<String, String> credentials) {

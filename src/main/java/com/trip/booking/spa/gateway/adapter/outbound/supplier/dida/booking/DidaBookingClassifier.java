@@ -3,6 +3,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.booking;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.model.DidaBookingCancelConfirmResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.model.DidaBookingCancelResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.model.DidaBookingConfirmResponse;
+import com.trip.booking.spa.gateway.domain.booking.OrderState;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.model.DidaBookingDetails;
 import org.apache.commons.lang3.StringUtils;
 
@@ -23,7 +24,7 @@ import java.util.Set;
  */
 public final class DidaBookingClassifier {
 
-    /** 我方订单状态码，取值含义见 {@code OrderRespDTO#orderStatus} */
+    /** 我方订单状态码，取值含义见 {@code OrderQueryResult#orderStatus} */
     static final int ORDER_STATUS_BOOKING = 20;
     static final int ORDER_STATUS_BOOK_SUCCESS = 21;
     static final int ORDER_STATUS_BOOK_FAIL = 22;
@@ -151,31 +152,33 @@ public final class DidaBookingClassifier {
     }
 
     /**
-     * 道旅订单状态 → 我方状态码。映射纪律：只映射语义铁定的取值，<b>识别不出的返回 null</b>
-     * 并保留原文（OrderRespDTO#supplierOrderStatus）。
+     * 道旅订单状态 → 我方订单状态（官方 information-hub/api-booking-status）。
+     * 映射纪律：只映射语义铁定的取值，<b>识别不出的返回 null</b> 并由调用方保留原文
+     * （{@code OrderQueryResult#supplierOrderStatus}）——猜默认值会把未知状态说成已知。
      * <ul>
-     *   <li>2 Confirmed → 21 预定成功</li>
-     *   <li>3 Canceled → 31 取消成功</li>
-     *   <li>4 Failed → 22 预定失败</li>
-     *   <li>0 PreBook / 1 Booked / 5 Pending / 6 OnRequest → 20 预定中（官方：非终态，会到终态）</li>
+     *   <li>2 Confirmed → {@link OrderState#BOOKED}</li>
+     *   <li>3 Canceled → {@link OrderState#CANCELED}</li>
+     *   <li>4 Failed → {@link OrderState#BOOK_FAILED}</li>
+     *   <li>0 PreBook / 1 Booked / 5 Pending / 6 OnRequest → {@link OrderState#BOOKING}
+     *       （官方：非终态，会在 3 分钟／120 分钟内到终态）</li>
      * </ul>
      */
-    public static Integer toOrderStatus(Integer status) {
+    public static OrderState toOrderState(Integer status) {
         if (status == null) {
             return null;
         }
         switch (status) {
             case DidaBookingDetails.STATUS_CONFIRMED:
-                return ORDER_STATUS_BOOK_SUCCESS;
+                return OrderState.BOOKED;
             case DidaBookingDetails.STATUS_CANCELED:
-                return ORDER_STATUS_CANCEL_SUCCESS;
+                return OrderState.CANCELED;
             case DidaBookingDetails.STATUS_FAILED:
-                return ORDER_STATUS_BOOK_FAIL;
+                return OrderState.BOOK_FAILED;
             case DidaBookingDetails.STATUS_PRE_BOOK:
             case DidaBookingDetails.STATUS_BOOKED:
             case DidaBookingDetails.STATUS_PENDING:
             case DidaBookingDetails.STATUS_ON_REQUEST:
-                return ORDER_STATUS_BOOKING;
+                return OrderState.BOOKING;
             default:
                 return null;
         }

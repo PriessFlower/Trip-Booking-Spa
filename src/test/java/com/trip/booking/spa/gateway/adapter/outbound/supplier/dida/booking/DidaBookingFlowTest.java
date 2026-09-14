@@ -1,7 +1,7 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.booking;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.BookingRespDTO;
-import com.trip.booking.spa.gateway.adapter.inbound.rest.request.BookingReq;
+import com.trip.booking.spa.gateway.domain.booking.BookingResult;
+import com.trip.booking.spa.gateway.domain.booking.BookingCommand;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.Offer;
 import com.trip.booking.spa.gateway.adapter.outbound.state.offer.OfferStore;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.booking.client.BookingConfirmAccess;
@@ -96,11 +96,11 @@ class DidaBookingFlowTest {
         Harness h = new Harness();
         h.confirm = read("/dida/booking-confirm-real-20260913.json", DidaBookingConfirmResponse.class);
 
-        BookingRespDTO r = h.booking(req());
+        BookingResult r = h.booking(req());
 
-        assertEquals(BookingOutcome.SUCCESS, r.getOutcome());
-        assertEquals("18698545882", r.getSOrderId());
-        assertNull(r.getSConfirmationNumber(), "该单未回 HCN");
+        assertEquals(BookingOutcome.SUCCESS, r.outcome());
+        assertEquals("18698545882", r.supplierOrderId());
+        assertNull(r.confirmationNumber(), "该单未回 HCN");
         verify(h.store).consume("of_test");
         assertEquals(List.of("confirm:ORDER-1"), h.calls);
     }
@@ -112,10 +112,10 @@ class DidaBookingFlowTest {
         h.confirm = read("/dida/booking-confirm-real-20260913.json", DidaBookingConfirmResponse.class);
         h.confirm.bookingDetails().setStatus(5);
 
-        BookingRespDTO r = h.booking(req());
+        BookingResult r = h.booking(req());
 
-        assertEquals(BookingOutcome.UNKNOWN, r.getOutcome());
-        assertEquals("18698545882", r.getSOrderId());
+        assertEquals(BookingOutcome.UNKNOWN, r.outcome());
+        assertEquals("18698545882", r.supplierOrderId());
         verify(h.store, never()).consume("of_test");
     }
 
@@ -124,14 +124,14 @@ class DidaBookingFlowTest {
     void deterministicFailureAndTimeout() throws IOException {
         Harness h = new Harness();
         h.confirm = read("/dida/booking-confirm-error-3005-real.json", DidaBookingConfirmResponse.class);
-        BookingRespDTO r = h.booking(req());
-        assertEquals(BookingOutcome.FAILED, r.getOutcome());
-        assertEquals("3005", r.getSupplierErrorCode());
+        BookingResult r = h.booking(req());
+        assertEquals(BookingOutcome.FAILED, r.outcome());
+        assertEquals("3005", r.supplierErrorCode());
         verify(h.store, never()).consume("of_test");
 
         Harness h2 = new Harness();
         h2.confirm = null;
-        assertEquals(BookingOutcome.UNKNOWN, h2.booking(req()).getOutcome());
+        assertEquals(BookingOutcome.UNKNOWN, h2.booking(req()).outcome());
     }
 
     @Test
@@ -140,24 +140,24 @@ class DidaBookingFlowTest {
         Harness h = new Harness();
         h.confirm = error("3019");
         h.search = read("/dida/booking-search-status2-real-20251128.json", DidaBookingSearchResponse.class);
-        BookingRespDTO r = h.booking(req());
-        assertEquals(BookingOutcome.SUCCESS, r.getOutcome());
-        assertEquals("15801485798", r.getSOrderId());
+        BookingResult r = h.booking(req());
+        assertEquals(BookingOutcome.SUCCESS, r.outcome());
+        assertEquals("15801485798", r.supplierOrderId());
         verify(h.store).consume("of_test");
         assertEquals(List.of("confirm:ORDER-1", "search:ref=ORDER-1"), h.calls);
 
         Harness canceled = new Harness();
         canceled.confirm = error("3018");
         canceled.search = read("/dida/booking-search-status3-real-20251128.json", DidaBookingSearchResponse.class);
-        BookingRespDTO r2 = canceled.booking(req());
-        assertEquals(BookingOutcome.FAILED, r2.getOutcome());
-        assertEquals("3018", r2.getSupplierErrorCode());
-        assertEquals("15801485798", r2.getSOrderId());
+        BookingResult r2 = canceled.booking(req());
+        assertEquals(BookingOutcome.FAILED, r2.outcome());
+        assertEquals("3018", r2.supplierErrorCode());
+        assertEquals("15801485798", r2.supplierOrderId());
 
         Harness empty = new Harness();
         empty.confirm = error("3039");
         empty.search = read("/dida/booking-search-empty-real-20260912.json", DidaBookingSearchResponse.class);
-        assertEquals(BookingOutcome.UNKNOWN, empty.booking(req()).getOutcome());
+        assertEquals(BookingOutcome.UNKNOWN, empty.booking(req()).outcome());
     }
 
     private static DidaBookingConfirmResponse error(String code) {
@@ -169,7 +169,7 @@ class DidaBookingFlowTest {
         return resp;
     }
 
-    private static BookingReq req() {
+    private static BookingCommand req() {
         return DidaBookingRequestShapeTest.req("张/三", "李/四", "13800000000", "2026-10-01", "2026-10-03", 1);
     }
 

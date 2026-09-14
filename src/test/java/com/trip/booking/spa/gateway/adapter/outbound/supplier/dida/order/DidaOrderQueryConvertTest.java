@@ -1,10 +1,11 @@
 package com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.order;
 
-import com.trip.booking.spa.gateway.adapter.inbound.rest.dto.OrderRespDTO;
+import com.trip.booking.spa.gateway.domain.order.OrderQueryResult;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.DidaOrderWireNameTest;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.model.DidaBookingSearchResponse;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.model.DidaError;
 import com.trip.booking.spa.gateway.domain.booking.OrderPresence;
+import com.trip.booking.spa.gateway.domain.booking.OrderState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -22,41 +23,41 @@ class DidaOrderQueryConvertTest {
     private final DidaOrderQuerySyncServiceImpl service = new DidaOrderQuerySyncServiceImpl();
 
     @Test
-    @DisplayName("真实 Status=2 且带酒店确认号 → FOUND / 21 / HCN / 总价分+币种 / 下单时间")
+    @DisplayName("真实 Status=2 且带酒店确认号 → FOUND / BOOKED / HCN / 总价分+币种 / 下单时间")
     void confirmedWithHcn() throws IOException {
-        OrderRespDTO dto = service.orderQueryRespConvert(
+        OrderQueryResult dto = service.orderQueryRespConvert(
                 DidaOrderWireNameTest.read("/dida/booking-search-hcn-real-20260914.json", DidaBookingSearchResponse.class));
-        assertEquals(OrderPresence.FOUND, dto.getPresence());
-        assertEquals("18577514927", dto.getSupplierOrderId());
-        assertEquals(21, dto.getOrderStatus());
-        assertEquals("2", dto.getSupplierOrderStatus());
-        assertEquals("78112572", dto.getConfirmationNumber());
-        assertEquals(210400, dto.getTotalPrice());
-        assertEquals("CNY", dto.getTotalPriceCurrency());
-        assertEquals("2026-09-01 20:12:27.720", dto.getCreateTime());
+        assertEquals(OrderPresence.FOUND, dto.presence());
+        assertEquals("18577514927", dto.supplierOrderId());
+        assertEquals(OrderState.BOOKED, dto.state());
+        assertEquals("2", dto.supplierOrderStatus());
+        assertEquals("78112572", dto.confirmationNumber());
+        assertEquals(210400, dto.totalPrice());
+        assertEquals("CNY", dto.totalPriceCurrency());
+        assertEquals("2026-09-01 20:12:27.720", dto.createTime());
     }
 
     @Test
-    @DisplayName("Status 3/4/5 → 31/22/20；HCN 缺席为 null 不是空串")
+    @DisplayName("Status 3/4/5 → CANCELED/BOOK_FAILED/BOOKING；HCN 缺席为 null 不是空串")
     void statusMapping() throws IOException {
-        assertEquals(31, service.orderQueryRespConvert(DidaOrderWireNameTest.read(
-                "/dida/booking-search-status3-real-20251128.json", DidaBookingSearchResponse.class)).getOrderStatus());
-        assertEquals(22, service.orderQueryRespConvert(DidaOrderWireNameTest.read(
-                "/dida/booking-search-status4-real-20260910.json", DidaBookingSearchResponse.class)).getOrderStatus());
-        OrderRespDTO pending = service.orderQueryRespConvert(DidaOrderWireNameTest.read(
+        assertEquals(OrderState.CANCELED, service.orderQueryRespConvert(DidaOrderWireNameTest.read(
+                "/dida/booking-search-status3-real-20251128.json", DidaBookingSearchResponse.class)).state());
+        assertEquals(OrderState.BOOK_FAILED, service.orderQueryRespConvert(DidaOrderWireNameTest.read(
+                "/dida/booking-search-status4-real-20260910.json", DidaBookingSearchResponse.class)).state());
+        OrderQueryResult pending = service.orderQueryRespConvert(DidaOrderWireNameTest.read(
                 "/dida/booking-search-status5-real-20260913.json", DidaBookingSearchResponse.class));
-        assertEquals(20, pending.getOrderStatus());
-        assertEquals(OrderPresence.FOUND, pending.getPresence());
-        assertNull(pending.getConfirmationNumber());
+        assertEquals(OrderState.BOOKING, pending.state());
+        assertEquals(OrderPresence.FOUND, pending.presence());
+        assertNull(pending.confirmationNumber());
     }
 
     @Test
     @DisplayName("空列表 → INDETERMINATE，绝不 NOT_FOUND")
     void emptyListIsIndeterminate() throws IOException {
-        OrderRespDTO dto = service.orderQueryRespConvert(
+        OrderQueryResult dto = service.orderQueryRespConvert(
                 DidaOrderWireNameTest.read("/dida/booking-search-empty-real-20260912.json", DidaBookingSearchResponse.class));
-        assertEquals(OrderPresence.INDETERMINATE, dto.getPresence());
-        assertNull(dto.getSupplierOrderId());
+        assertEquals(OrderPresence.INDETERMINATE, dto.presence());
+        assertNull(dto.supplierOrderId());
     }
 
     @Test
@@ -67,7 +68,7 @@ class DidaOrderQueryConvertTest {
         error.setMessage("Invalid BookingID");
         DidaBookingSearchResponse resp = new DidaBookingSearchResponse();
         resp.setError(error);
-        OrderRespDTO dto = service.orderQueryRespConvert(resp);
-        assertEquals(OrderPresence.INDETERMINATE, dto.getPresence());
+        OrderQueryResult dto = service.orderQueryRespConvert(resp);
+        assertEquals(OrderPresence.INDETERMINATE, dto.presence());
     }
 }
