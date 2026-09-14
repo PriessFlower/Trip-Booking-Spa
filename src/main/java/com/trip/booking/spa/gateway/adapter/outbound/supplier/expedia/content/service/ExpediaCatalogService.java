@@ -37,10 +37,18 @@ import java.util.List;
  * 换言之本类只保证「在刷的那批」目录不空，铺满全量仍须打后门。两者写同一张表、
  * 同一套列语义，只是数据来源与触发方式不同。
  *
- * <p><b>目录行的 {@code update_time} 长期不动是正常的</b>，不是建档停了：唯一键是
- * {@code (supplier_id, product_key)} 而该表只存身份属性、不存价格，产品稳定时 upsert 是
- * 空写，MySQL 的 {@code ON UPDATE CURRENT_TIMESTAMP} 不触发。2026-09-14 实测 Expedia
- * 最新 update_time 停在 09-11，而同期刷价仍在跑（任务表 last_time 为当日）——两者不矛盾。
+ * <p><b>2026-09-14 更正</b>：本注释先前写着「目录 update_time 长期不动是正常的，因为产品稳定时
+ * upsert 是空写、{@code ON UPDATE CURRENT_TIMESTAMP} 不触发」。那个机制本身成立，但把它
+ * 当成 Expedia 停更的解释是<b>错的</b>，且我是先有解释才去量的——正好是本仓反复吃亏的那种顺序。
+ *
+ * <p>真实原因：Expedia 刷价自 2026-09-11 23:08 那次部署起<b>全量失败</b>，一条也没写进来。
+ * 证据：{@code operator='expedia-refresh'} 的 27,362 行最后一次写入停在 09-11 23:07:47，
+ * 容器 23:08:02 启动；此后 8 分钟窗口内 1,773 次刷价调用<b>全部</b>失败，请求里
+ * {@code property_id} 恒为 null。根因见 {@code ExpediaCPSQueryPriceServiceImpl#refreshOne}。
+ *
+ * <p>留下这段是因为它同时说明一件事：<b>本表的 update_time 不能当"建档在不在跑"的探针</b>。
+ * 空写确实不推进它，所以它不动既可能是产品稳定，也可能是刷价全挂——两者在这一列上同形。
+ * 要判断跑没跑，看 {@code catalog_upserted} 指标或刷价日志。
  *
  * <p><b>三条写入纪律</b>（与艺龙一致）：
  * <ul>
