@@ -455,6 +455,23 @@ jobs:
           FLIGGY_DISTRIBUTOR: ${{ secrets.PROD_FLIGGY_DISTRIBUTOR }}
           FLIGGY_API_HOST: ${{ vars.PROD_FLIGGY_API_HOST }}
           FLIGGY_SESSION_AUTHORIZED_AT: ${{ vars.PROD_FLIGGY_SESSION_AUTHORIZED_AT }}
+          # 道旅、差旅无忧、美团。同规：缺一即拒绝部署。
+          #
+          # 这三家的漏配后果与上面几家不同，但同样不该放行：它们的 isConfigured() 为假时
+          # 链路会如实自停并打错误日志（不像艺龙那样静默打到一个 403 的死端点），
+          # 所以不是"静默降级"。真正的理由是<b>另一个</b>：三家的刷价闸、建档闸、resolve 闸
+          # 默认全关，凭据又缺，那这一家在生产就是彻底不存在——而部署日志一片祥和。
+          # 与其让"这家到底接没接"取决于有没有人记得配密钥，不如让部署直接拦下来。
+          DIDA_CLIENT_ID: ${{ secrets.PROD_DIDA_CLIENT_ID }}
+          DIDA_LICENSE_KEY: ${{ secrets.PROD_DIDA_LICENSE_KEY }}
+          DIDA_API_HOST: ${{ vars.PROD_DIDA_API_HOST }}
+          CLWY_WID: ${{ secrets.PROD_CLWY_WID }}
+          CLWY_API_KEY: ${{ secrets.PROD_CLWY_API_KEY }}
+          CLWY_API_HOST: ${{ vars.PROD_CLWY_API_HOST }}
+          MEITUAN_ACCESS_KEY: ${{ secrets.PROD_MEITUAN_ACCESS_KEY }}
+          MEITUAN_SECRET_KEY: ${{ secrets.PROD_MEITUAN_SECRET_KEY }}
+          MEITUAN_PARTNER_ID: ${{ secrets.PROD_MEITUAN_PARTNER_ID }}
+          MEITUAN_API_URL: ${{ vars.PROD_MEITUAN_API_URL }}
         run: |
           set -Eeuo pipefail
 
@@ -466,6 +483,9 @@ jobs:
             ELONG_USER ELONG_APP_KEY ELONG_SECRET ELONG_API_HOST
             FLIGGY_APP_KEY FLIGGY_SECRET FLIGGY_SESSION FLIGGY_DISTRIBUTOR
             FLIGGY_API_HOST FLIGGY_SESSION_AUTHORIZED_AT
+            DIDA_CLIENT_ID DIDA_LICENSE_KEY DIDA_API_HOST
+            CLWY_WID CLWY_API_KEY CLWY_API_HOST
+            MEITUAN_ACCESS_KEY MEITUAN_SECRET_KEY MEITUAN_PARTNER_ID MEITUAN_API_URL
           )
 
           for name in "${required_values[@]}"; do
@@ -505,6 +525,24 @@ jobs:
             exit 1
           fi
 
+          # 这三家都<b>没有沙箱</b>：官方各只给一个生产地址，代码兜底值就是它。
+          # 钉死是为了挡住"配了个错地址"——不像艺龙飞猪那样有个会 403 或已下线的旧网关
+          # 可撞，这三家配错只会连不上，但连不上与"这家没货"在指标上长得很像，不值得让它发生。
+          if [ "$DIDA_API_HOST" != https://api.didatravel.com ]; then
+            echo "DIDA_API_HOST must be https://api.didatravel.com (the only endpoint dida publishes)." >&2
+            exit 1
+          fi
+
+          if [ "$CLWY_API_HOST" != https://availability.xiangdo.cn ]; then
+            echo "CLWY_API_HOST must be https://availability.xiangdo.cn (the only endpoint clwy publishes)." >&2
+            exit 1
+          fi
+
+          if [ "$MEITUAN_API_URL" != https://fenxiao.meituan.com/opdtor/api/v2 ]; then
+            echo "MEITUAN_API_URL must be https://fenxiao.meituan.com/opdtor/api/v2 (one URL serves every method)." >&2
+            exit 1
+          fi
+
           {
             printf 'SPRING_PROFILES_ACTIVE=prod\n'
             printf 'DB_HOST=%s\n' "$DB_HOST"
@@ -534,6 +572,16 @@ jobs:
             printf 'FLIGGY_DISTRIBUTOR=%s\n' "$FLIGGY_DISTRIBUTOR"
             printf 'FLIGGY_API_HOST=%s\n' "$FLIGGY_API_HOST"
             printf 'FLIGGY_SESSION_AUTHORIZED_AT=%s\n' "$FLIGGY_SESSION_AUTHORIZED_AT"
+            printf 'DIDA_CLIENT_ID=%s\n' "$DIDA_CLIENT_ID"
+            printf 'DIDA_LICENSE_KEY=%s\n' "$DIDA_LICENSE_KEY"
+            printf 'DIDA_API_HOST=%s\n' "$DIDA_API_HOST"
+            printf 'CLWY_WID=%s\n' "$CLWY_WID"
+            printf 'CLWY_API_KEY=%s\n' "$CLWY_API_KEY"
+            printf 'CLWY_API_HOST=%s\n' "$CLWY_API_HOST"
+            printf 'MEITUAN_ACCESS_KEY=%s\n' "$MEITUAN_ACCESS_KEY"
+            printf 'MEITUAN_SECRET_KEY=%s\n' "$MEITUAN_SECRET_KEY"
+            printf 'MEITUAN_PARTNER_ID=%s\n' "$MEITUAN_PARTNER_ID"
+            printf 'MEITUAN_API_URL=%s\n' "$MEITUAN_API_URL"
           } | ssh -F "$RUNNER_TEMP/trip-booking-spa-deploy-ssh/config" production \
             'set -Eeuo pipefail; app_dir=/opt/trip-booking-spa; install -d -m 700 "$app_dir"; umask 077; cat > "$app_dir/app.env.next"'
 
