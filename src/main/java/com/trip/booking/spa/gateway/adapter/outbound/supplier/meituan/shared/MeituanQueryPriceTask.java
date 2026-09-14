@@ -10,9 +10,9 @@ import java.util.Date;
  *
  * <p>与另五家的同名实体同构：一行 = 一次 batch.goods.rp 调用。
  *
- * <p>本家的接口<b>支持合批</b>（hotelIds 是列表），但仍逐店一次：2026-09-14 实测可卖清单
- * 只有 847 家（poi.list 全量翻页去重），逐店刷跑得起，没有为省配额而牺牲"一行任务 = 一次调用"
- * 这个可归因性的必要。清单显著变大时再议。
+ * <p>本家的接口<b>支持合批</b>（hotelIds 是列表），但仍逐店一次：刷价清单按"高德出单酒店"
+ * 播种只有 537 家，逐店刷跑得起，没有为省配额而牺牲"一行任务 = 一次调用"这个可归因性的必要。
+ * 清单显著变大时再议。
  */
 @Data
 public class MeituanQueryPriceTask implements RefreshTaskRow {
