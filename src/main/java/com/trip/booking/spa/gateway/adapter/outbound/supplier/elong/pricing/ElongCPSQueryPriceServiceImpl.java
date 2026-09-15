@@ -6,6 +6,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ElongQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.elong.shared.ElongQueryPriceTask;
 import com.trip.booking.spa.gateway.application.pricing.AbstractCPSQueryPriceService;
+import com.trip.booking.spa.gateway.application.pricing.QueueHotelCount;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
@@ -195,5 +196,10 @@ public class ElongCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService<
         if (target != row.getPriorityLevelNumber()) {
             elongQueryPriceTaskMapper.updatePriority(row.getId(), target);
         }
+    }
+
+    @Override
+    protected QueueHotelCount countQueueHotels() {
+        return elongQueryPriceTaskMapper.countQueueHotels();
     }
 }

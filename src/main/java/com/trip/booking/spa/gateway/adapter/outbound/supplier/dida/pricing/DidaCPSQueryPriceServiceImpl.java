@@ -4,6 +4,7 @@ import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.DidaQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.dida.shared.DidaQueryPriceTask;
 import com.trip.booking.spa.gateway.application.pricing.AbstractCPSQueryPriceService;
+import com.trip.booking.spa.gateway.application.pricing.QueueHotelCount;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
@@ -190,5 +191,10 @@ public class DidaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService<D
         if (target != row.getPriorityLevelNumber()) {
             didaQueryPriceTaskMapper.updatePriority(row.getId(), target);
         }
+    }
+
+    @Override
+    protected QueueHotelCount countQueueHotels() {
+        return didaQueryPriceTaskMapper.countQueueHotels();
     }
 }

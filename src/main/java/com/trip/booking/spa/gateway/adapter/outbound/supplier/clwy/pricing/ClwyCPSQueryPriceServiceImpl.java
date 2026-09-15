@@ -3,6 +3,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.clwy.pricing;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ClwyQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.clwy.shared.ClwyQueryPriceTask;
 import com.trip.booking.spa.gateway.application.pricing.AbstractCPSQueryPriceService;
+import com.trip.booking.spa.gateway.application.pricing.QueueHotelCount;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
@@ -185,5 +186,10 @@ public class ClwyCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService<C
         if (target != row.getPriorityLevelNumber()) {
             clwyQueryPriceTaskMapper.updatePriority(row.getId(), target);
         }
+    }
+
+    @Override
+    protected QueueHotelCount countQueueHotels() {
+        return clwyQueryPriceTaskMapper.countQueueHotels();
     }
 }
