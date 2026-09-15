@@ -33,9 +33,10 @@ public class Product {
     /**
      * productKey 的<b>全部成分</b>，供建档原样落库（R-2.7 / R-2.8）。
      *
-     * <p><b>不出网关</b>：{@code @JsonIgnore}，也不进价格缓存
+     * <p><b>整体不出网关</b>：{@code @JsonIgnore}，也不进价格缓存
      * （{@code ProductRespCacheDTO} 无同名字段，{@code BeanUtils.copyProperties} 按名复制，
-     * 自然不会带过去）。它是内部执行材料，对上游只暴露 {@link #productKey}。
+     * 自然不会带过去）。它是内部执行材料——账号与供应商酒店/房型 id 一律不出网关。
+     * 上游拿到的是 {@link #productKey} 加三个等价类成分（{@link #stampEquivalence}，R-2.10）。
      *
      * <p>为什么挂在出参 DTO 上：建档的入口是
      * {@code CatalogService.upsert(List<Product>)}，而成分只在查价组装那一刻
@@ -44,6 +45,39 @@ public class Product {
      */
     @com.fasterxml.jackson.annotation.JsonIgnore
     private com.trip.booking.spa.gateway.domain.product.ProductIdentity identity;
+
+    /**
+     * 等价类成分之一：餐食规范形（如 {@code B1L0D0}），未知为 {@code UNKNOWN}（R-2.10）。
+     *
+     * <p>与 {@link #meal} 不是一回事：那是给人看的原始描述，各家写法不一；这个是派生器
+     * 归一化后的判定结果，是 productKey 的成分。上游按它分组，<b>不得自行重判</b>（R-2.8 同理）。
+     */
+    private String mealSignature;
+
+    /** 等价类成分之一：退改粗分类（{@code CancelClass} 名），未知为 {@code UNKNOWN}（R-2.10） */
+    private String cancelClass;
+
+    /** 等价类成分之一：占用规范串（如 {@code 2}、{@code 2-9,4}）（R-2.10） */
+    private String occupancy;
+
+    /**
+     * 把等价类成分从 {@link #identity} 拓到出参字段上（R-2.10）。<b>实时查价这条路用它</b>；
+     * 走缓存那条路的成分来自档案表（成分是稳定信息，不进 Redis，R-2.6）。
+     *
+     * <p>收在查价模板里而不是让各家自己填：各家自己填必然漏一家，而漏了不报错，
+     * 只是上游那几个字段恒空。
+     *
+     * <p>只拓三个成分，<b>不拓</b>账号、供应商酒店/房型 id：那些是内部执行材料，
+     * 且凑齐就能反推 productKey，等于把身份发号权交出去（R-1.5）。
+     */
+    public void stampEquivalence() {
+        if (identity == null) {
+            return;
+        }
+        this.mealSignature = identity.mealSignature();
+        this.cancelClass = identity.cancelClass();
+        this.occupancy = identity.occupancy();
+    }
     public Integer supplierId;
     /**
      * 总价

@@ -287,6 +287,11 @@ public class PriceCacheServiceImpl implements PriceCacheService {
                 respDTO.setRoom(attr.toRoom());
                 respDTO.setMeal(attr.toMeal());
                 respDTO.setProductInfo(attr.toProductInfo());
+                // 等价类成分同样来自档案表（R-2.10 + R-2.6）：它们是稳定信息，
+                // 进 Redis 就成了同一事实的第二份拷贝，判据一改两份必然对不上
+                respDTO.setMealSignature(attr.getMealSignature());
+                respDTO.setCancelClass(attr.getCancelClass());
+                respDTO.setOccupancy(attr.getOccupancy());
             }
             // 退改段的过期判定必须在【读侧】再做一次：刷价时还开着的免费窗，等客人来查时
             // 可能已经关了（未来日期的价能在缓存里活 16 小时）。只在写侧滤，对外照旧会承诺
