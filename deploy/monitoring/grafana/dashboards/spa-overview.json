@@ -1019,6 +1019,68 @@
       }
     },
     {
+      "id": 50,
+      "type": "timeseries",
+      "title": "刷价清单里还能报出价的店",
+      "description": "清单里当前还能报出价的店 ÷ 清单里的店，按家不按行：分子 refresh_queue_onsale_hotels_value、分母 refresh_queue_hotels_value，十分钟采一次。「有货」＝这家至少有一个住期停在业务档、且刷过至少一次（人工停用位 9、无货位 10+ 都不算）。刷价那几个按行的指标看不出覆盖面——无货的店被调档沉进了慢车道，快档刷出来几乎全是有货。口径与验收基线见 docs/price-refresh.md F-2.6。两种读数不是故障：闸没开的家恒为 0；从不答「无货」的家恒为 100%（不沉档即不减）。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 56
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (supplier) (refresh_queue_onsale_hotels_value{job=\"trip-booking-spa\"}) / sum by (supplier) (refresh_queue_hotels_value{job=\"trip-booking-spa\"})",
+          "legendFormat": "{{supplier}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "min"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
       "id": 44,
       "type": "row",
       "title": "验价（下单前这一步）",
@@ -1026,7 +1088,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 56
+        "y": 64
       },
       "collapsed": false
     },
@@ -1039,7 +1101,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 57
+        "y": 65
       },
       "datasource": {
         "type": "prometheus",
@@ -1099,7 +1161,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 57
+        "y": 65
       },
       "datasource": {
         "type": "prometheus",
@@ -1159,7 +1221,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 65
+        "y": 73
       },
       "datasource": {
         "type": "prometheus",
@@ -1219,7 +1281,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 65
+        "y": 73
       },
       "datasource": {
         "type": "prometheus",
@@ -1279,7 +1341,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 73
+        "y": 81
       },
       "panels": []
     },
@@ -1295,7 +1357,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 74
+        "y": 82
       },
       "targets": [
         {
@@ -1355,7 +1417,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 74
+        "y": 82
       },
       "targets": [
         {
@@ -1416,7 +1478,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 82
+        "y": 90
       },
       "targets": [
         {
@@ -1473,7 +1535,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 90
+        "y": 98
       },
       "datasource": {
         "type": "prometheus",
@@ -1533,7 +1595,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 98
+        "y": 106
       },
       "panels": []
     },
@@ -1549,7 +1611,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 99
+        "y": 107
       },
       "targets": [
         {
@@ -1632,7 +1694,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 99
+        "y": 107
       },
       "targets": [
         {
@@ -1702,7 +1764,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 99
+        "y": 107
       },
       "targets": [
         {
@@ -1784,7 +1846,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 107
+        "y": 115
       },
       "targets": [
         {
@@ -1877,7 +1939,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 107
+        "y": 115
       },
       "targets": [
         {
@@ -1948,7 +2010,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 107
+        "y": 115
       },
       "targets": [
         {
@@ -2031,7 +2093,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 115
+        "y": 123
       },
       "targets": [
         {
@@ -2103,7 +2165,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 115
+        "y": 123
       },
       "targets": [
         {
@@ -2171,7 +2233,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 123
+        "y": 131
       }
     },
     {
@@ -2187,7 +2249,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 124
+        "y": 132
       },
       "targets": [
         {
@@ -2248,7 +2310,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 124
+        "y": 132
       },
       "targets": [
         {
@@ -2308,7 +2370,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 132
+        "y": 140
       },
       "targets": [
         {
@@ -2368,7 +2430,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 132
+        "y": 140
       },
       "targets": [
         {
@@ -2423,7 +2485,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 140
+        "y": 148
       },
       "collapsed": false
     },
@@ -2435,7 +2497,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 141
+        "y": 149
       },
       "datasource": {
         "type": "prometheus",
@@ -2516,7 +2578,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 141
+        "y": 149
       },
       "datasource": {
         "type": "prometheus",
@@ -2586,7 +2648,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 149
+        "y": 157
       },
       "datasource": {
         "type": "prometheus",
@@ -2678,7 +2740,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 149
+        "y": 157
       },
       "datasource": {
         "type": "prometheus",
@@ -2738,7 +2800,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 157
+        "y": 165
       },
       "datasource": {
         "type": "prometheus",
@@ -2797,7 +2859,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 157
+        "y": 165
       },
       "datasource": {
         "type": "prometheus",

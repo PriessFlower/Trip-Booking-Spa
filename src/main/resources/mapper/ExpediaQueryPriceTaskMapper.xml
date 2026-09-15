@@ -50,4 +50,16 @@
         WHERE id = #{id} AND priority_level_number != #{priority}
     </update>
 
+
+    <!-- 清单覆盖面（F-2.6 的度量）：分母＝清单里的店，分子＝当前还有货的店。
+         「有货」＝任一住期行停在业务档、且刷过至少一次。9 是人工停用位、10+ 是无货位，都不算；
+         last_time 为空是「还没轮到」不是「有货」——新播的行就是这个状态，算进去会虚高 -->
+    <select id="countQueueHotels"
+            resultType="com.trip.booking.spa.gateway.application.pricing.QueueHotelCount">
+        SELECT COUNT(DISTINCT sh_id) AS hotels,
+               COUNT(DISTINCT CASE WHEN priority_level_number &lt; 9 AND last_time IS NOT NULL
+                                   THEN sh_id END) AS onsaleHotels
+        FROM expedia_query_price_task
+    </select>
+
 </mapper>

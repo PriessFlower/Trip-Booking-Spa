@@ -5,6 +5,7 @@ import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.ExpediaQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.expedia.shared.ExpediaQueryPriceTask;
 import com.trip.booking.spa.gateway.application.pricing.AbstractCPSQueryPriceService;
+import com.trip.booking.spa.gateway.application.pricing.QueueHotelCount;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import lombok.extern.slf4j.Slf4j;
@@ -243,5 +244,10 @@ public class ExpediaCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
         LocalDate a = updateTime.toInstant().atZone(SUPPLIER_ZONE).toLocalDate();
         LocalDate b = lastTime.toInstant().atZone(SUPPLIER_ZONE).toLocalDate();
         return a.isEqual(b);
+    }
+
+    @Override
+    protected QueueHotelCount countQueueHotels() {
+        return expediaQueryPriceTaskMapper.countQueueHotels();
     }
 }

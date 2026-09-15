@@ -6,6 +6,7 @@ import com.trip.booking.spa.gateway.adapter.inbound.rest.request.Supplier;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.FliggyQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.fliggy.shared.FliggyQueryPriceTask;
 import com.trip.booking.spa.gateway.application.pricing.AbstractCPSQueryPriceService;
+import com.trip.booking.spa.gateway.application.pricing.QueueHotelCount;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.platform.ratelimit.CallPurpose;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
@@ -162,5 +163,10 @@ public class FliggyCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceService
         if (target != row.getPriorityLevelNumber()) {
             fliggyQueryPriceTaskMapper.updatePriority(row.getId(), target);
         }
+    }
+
+    @Override
+    protected QueueHotelCount countQueueHotels() {
+        return fliggyQueryPriceTaskMapper.countQueueHotels();
     }
 }

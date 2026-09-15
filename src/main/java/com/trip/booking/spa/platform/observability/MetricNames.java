@@ -96,6 +96,24 @@ public final class MetricNames {
     public static final String REFRESH_INFLIGHT_SIZE = "refresh_inflight_size";
 
     /**
+     * 刷价清单里的酒店数（gauge，按家不按行）。与 {@link #REFRESH_QUEUE_ONSALE_HOTELS} 相除即
+     * 「清单里还有多少家出得了货」，是 F-2.6 的验收数字（docs/price-refresh.md）。
+     *
+     * <p>行的口径（{@code refresh_rows/onsale}）答不了覆盖面：无货的店会被调档沉进慢车道，
+     * 于是快档刷出来几乎全是有货，清单里大半家从来不出货这件事在行上看不见。
+     */
+    public static final String REFRESH_QUEUE_HOTELS = "refresh_queue_hotels";
+
+    /**
+     * 刷价清单里<b>当前有货</b>的酒店数（gauge）。口径＝任一住期行停在业务档
+     * （{@code priority_level_number < 9}）且刷过至少一次；9 是人工停用位、10+ 是无货位，都不算。
+     *
+     * <p>两种读数不是故障：闸没开的家恒为 0（一次都没刷过）；从不答「无货」的家恒等于
+     * {@link #REFRESH_QUEUE_HOTELS}（不沉档即不减）。
+     */
+    public static final String REFRESH_QUEUE_ONSALE_HOTELS = "refresh_queue_onsale_hotels";
+
+    /**
      * 一次验价的终态。标签 supplier/outcome（{@code CheckPriceOutcome} 小写）。
      * 由验价模板统一打（O-4.3，新接一家自动具备）。此前验价 outcome 只在日志里，
      * 「飞猪 RATE_DEAD 占多少」只能 grep 现算（2026-09-05：8/18，3 天日志）。

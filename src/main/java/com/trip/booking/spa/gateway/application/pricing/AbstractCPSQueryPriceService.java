@@ -29,8 +29,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 刷价骨架：一份实现，各家共用（docs/price-refresh.md §1.1）。
  *
  * <p>骨架管这些：分布式锁互斥、<b>连续消费直到关闸</b>、取批、行级并发、单行 try 隔离、
- * 借入与复位、三态计数、轮次日志、指标（含轮内进度）、不截断等待。各家只答四个问题：
- * 取哪一批、按哪些维度刷、怎么刷一行、刷完怎么记账。
+ * 借入与复位、三态计数、轮次日志、指标（含轮内进度与清单覆盖面）、不截断等待。各家只答五个问题：
+ * 取哪一批、按哪些维度刷、怎么刷一行、刷完怎么记账、清单里有多少家店（{@link #countQueueHotels}）。
  *
  * <p><b>为什么改成连续循环</b>（2026-08-25，取代 F-2.2 原来的「一轮一返回」）：cron 每 10 分钟
  * 才给一次活，而一轮实测 5.5 分钟，于是 45% 的时间在空等——刷一遍要 54 分钟，其中 24 分钟纯闲着。
@@ -153,6 +153,20 @@ public abstract class AbstractCPSQueryPriceService<T extends RefreshTaskRow> {
 
     /** 记账：写回刷价时间与次数（各家 mapper 不同，且 Expedia 还要按天重置计数） */
     protected abstract void markRefreshed(T row);
+
+    /** 数一下本家清单里共多少家店、其中多少家当前有货（各家一张表，SQL 逐字同构） */
+    protected abstract QueueHotelCount countQueueHotels();
+
+    /**
+     * 把清单覆盖面推成两个 gauge，由 {@code RefreshQueueSampler} 周期调用。
+     * 埋点跟着骨架走，新接一家自动具备（O-4.3）。
+     */
+    public final void sampleQueueHotels() {
+        QueueHotelCount count = countQueueHotels();
+        Map<String, Object> tags = MetricTags.of(supplier());
+        Monitor.recordValue(MetricNames.REFRESH_QUEUE_HOTELS, tags, count.getHotels());
+        Monitor.recordValue(MetricNames.REFRESH_QUEUE_ONSALE_HOTELS, tags, count.getOnsaleHotels());
+    }
 
     /**
      * 行刷完后的调档钩子，默认不动档。入参是该行全维度的聚合结果：任一维度在售

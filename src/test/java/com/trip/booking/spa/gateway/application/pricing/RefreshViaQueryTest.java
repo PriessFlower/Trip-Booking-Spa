@@ -75,6 +75,7 @@ class RefreshViaQueryTest {
     static class StubRefresh extends AbstractCPSQueryPriceService<Row> {
         PricingResult next;
         PriceQuery seenRequest;
+        QueueHotelCount queueHotelCount = new QueueHotelCount();
 
         @Override
         protected RedissonClient redissonClient() {
@@ -133,6 +134,12 @@ class RefreshViaQueryTest {
 
         @Override
         protected void markRefreshed(Row row) {
+        }
+
+        /** 清单店数由测试直接摆好，本类不碰库（{@code RefreshQueueSamplerTest} 用它） */
+        @Override
+        protected QueueHotelCount countQueueHotels() {
+            return queueHotelCount;
         }
 
         @Override

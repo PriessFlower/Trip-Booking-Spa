@@ -3,6 +3,7 @@ package com.trip.booking.spa.gateway.adapter.outbound.supplier.meituan.pricing;
 import com.trip.booking.spa.gateway.adapter.outbound.state.catalog.MeituanQueryPriceTaskMapper;
 import com.trip.booking.spa.gateway.adapter.outbound.supplier.meituan.shared.MeituanQueryPriceTask;
 import com.trip.booking.spa.gateway.application.pricing.AbstractCPSQueryPriceService;
+import com.trip.booking.spa.gateway.application.pricing.QueueHotelCount;
 import com.trip.booking.spa.gateway.application.pricing.PricingResult;
 import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
@@ -185,5 +186,10 @@ public class MeituanCPSQueryPriceServiceImpl extends AbstractCPSQueryPriceServic
         if (target != row.getPriorityLevelNumber()) {
             meituanQueryPriceTaskMapper.updatePriority(row.getId(), target);
         }
+    }
+
+    @Override
+    protected QueueHotelCount countQueueHotels() {
+        return meituanQueryPriceTaskMapper.countQueueHotels();
     }
 }
