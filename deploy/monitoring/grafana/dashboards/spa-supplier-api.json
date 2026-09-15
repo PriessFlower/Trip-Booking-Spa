@@ -1,7 +1,7 @@
 {
   "uid": "spa-supplier-api",
-  "title": "供应商接口",
-  "description": "按供应商×接口的调用量/成功率/延时分位/原生错误码分布。数据源=通道层唯一闸门(BaseHttpAccess)。",
+  "title": "供应商",
+  "description": "按供应商看的一切：我们打出去的每一次调用（量/成功率/延时/错误码）、刷价、验价。数据源＝通道层唯一闸门 BaseHttpAccess 与刷价/验价模板，supplier 是标签不是筛选器——各家同图并排，坏的那家一眼看出来。",
   "tags": [
     "spa",
     "supplier"
@@ -15,63 +15,20 @@
     "from": "now-6h",
     "to": "now"
   },
-  "templating": {
-    "list": [
-      {
-        "name": "supplier",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "spa-prom"
-        },
-        "query": {
-          "qryType": 1,
-          "query": "label_values(supplier_io_access_count_total, supplier)",
-          "refId": "var-supplier"
-        },
-        "refresh": 2,
-        "multi": true,
-        "includeAll": true,
-        "current": {
-          "selected": true,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        },
-        "sort": 1
-      },
-      {
-        "name": "interface",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "spa-prom"
-        },
-        "query": {
-          "qryType": 1,
-          "query": "label_values(supplier_io_access_count_total{supplier=~\"$supplier\"}, interface)",
-          "refId": "var-interface"
-        },
-        "refresh": 2,
-        "multi": true,
-        "includeAll": true,
-        "current": {
-          "selected": true,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        },
-        "sort": 1
-      }
-    ]
-  },
   "panels": [
+    {
+      "id": 100,
+      "type": "row",
+      "title": "调用（supplier_io_* · 我们打出去的每一次）",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
     {
       "id": 1,
       "type": "timeseries",
@@ -80,7 +37,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 0
+        "y": 1
       },
       "datasource": {
         "type": "prometheus",
@@ -93,7 +50,7 @@
             "uid": "spa-prom"
           },
           "refId": "A",
-          "expr": "sum by (supplier, interface, status) (rate(supplier_io_access_count_total{supplier=~\"$supplier\",interface=~\"$interface\",job=\"trip-booking-spa\"}[5m]))",
+          "expr": "sum by (supplier, interface, status) (rate(supplier_io_access_count_total{job=\"trip-booking-spa\"}[5m]))",
           "legendFormat": "{{supplier}} {{interface}} {{status}}",
           "editorMode": "code",
           "range": true
@@ -129,7 +86,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "每秒向供应商打出多少次调用，按终态拆开（CallStatus 六个值互斥且穷尽，故按 status 求和即总调用量）。数据源是通道层唯一闸门 BaseHttpAccess，各家各接口都从这里出去。"
     },
     {
       "id": 2,
@@ -139,7 +97,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 0
+        "y": 1
       },
       "datasource": {
         "type": "prometheus",
@@ -152,7 +110,7 @@
             "uid": "spa-prom"
           },
           "refId": "A",
-          "expr": "sum by (supplier, interface) (rate(supplier_io_access_count_total{supplier=~\"$supplier\",interface=~\"$interface\",job=\"trip-booking-spa\",status=~\"quoted|no_inventory\"}[5m])) / sum by (supplier, interface) (rate(supplier_io_access_count_total{supplier=~\"$supplier\",interface=~\"$interface\",job=\"trip-booking-spa\"}[5m]))",
+          "expr": "sum by (supplier, interface) (rate(supplier_io_access_count_total{job=\"trip-booking-spa\",status=~\"quoted|no_inventory\"}[5m])) / sum by (supplier, interface) (rate(supplier_io_access_count_total{job=\"trip-booking-spa\"}[5m]))",
           "legendFormat": "{{supplier}} {{interface}}",
           "editorMode": "code",
           "range": true
@@ -199,7 +157,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 9
       },
       "datasource": {
         "type": "prometheus",
@@ -212,7 +170,7 @@
             "uid": "spa-prom"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.90, sum by (le, supplier, interface) (rate(supplier_io_access_time_bucket{supplier=~\"$supplier\",interface=~\"$interface\",job=\"trip-booking-spa\"}[5m])))",
+          "expr": "histogram_quantile(0.90, sum by (le, supplier, interface) (rate(supplier_io_access_time_bucket{job=\"trip-booking-spa\"}[5m])))",
           "legendFormat": "{{supplier}} {{interface}} p90",
           "editorMode": "code",
           "range": true
@@ -223,7 +181,7 @@
             "uid": "spa-prom"
           },
           "refId": "B",
-          "expr": "histogram_quantile(0.99, sum by (le, supplier, interface) (rate(supplier_io_access_time_bucket{supplier=~\"$supplier\",interface=~\"$interface\",job=\"trip-booking-spa\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (le, supplier, interface) (rate(supplier_io_access_time_bucket{job=\"trip-booking-spa\"}[5m])))",
           "legendFormat": "{{supplier}} {{interface}} p99",
           "editorMode": "code",
           "range": true
@@ -270,7 +228,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 9
       },
       "datasource": {
         "type": "prometheus",
@@ -283,7 +241,7 @@
             "uid": "spa-prom"
           },
           "refId": "A",
-          "expr": "sum by (supplier, interface) (rate(supplier_io_access_time_sum{supplier=~\"$supplier\",interface=~\"$interface\",job=\"trip-booking-spa\"}[5m])) / sum by (supplier, interface) (rate(supplier_io_access_time_count{supplier=~\"$supplier\",interface=~\"$interface\",job=\"trip-booking-spa\"}[5m]))",
+          "expr": "sum by (supplier, interface) (rate(supplier_io_access_time_sum{job=\"trip-booking-spa\"}[5m])) / sum by (supplier, interface) (rate(supplier_io_access_time_count{job=\"trip-booking-spa\"}[5m]))",
           "legendFormat": "{{supplier}} {{interface}}",
           "editorMode": "code",
           "range": true
@@ -330,7 +288,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 17
       },
       "datasource": {
         "type": "prometheus",
@@ -343,7 +301,7 @@
             "uid": "spa-prom"
           },
           "refId": "A",
-          "expr": "sum by (supplier, interface, status) (rate(supplier_io_access_count_total{supplier=~\"$supplier\",interface=~\"$interface\",job=\"trip-booking-spa\",status=~\"rejected|error|timeout|throttled\"}[5m]))",
+          "expr": "sum by (supplier, interface, status) (rate(supplier_io_access_count_total{job=\"trip-booking-spa\",status=~\"rejected|error|timeout|throttled\"}[5m]))",
           "legendFormat": "{{supplier}} {{interface}} {{status}}",
           "editorMode": "code",
           "range": true
@@ -390,7 +348,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 17
       },
       "datasource": {
         "type": "prometheus",
@@ -403,7 +361,7 @@
             "uid": "spa-prom"
           },
           "refId": "A",
-          "expr": "sum by (supplier, interface, code) (rate(supplier_io_error_code_count_total{supplier=~\"$supplier\",interface=~\"$interface\",job=\"trip-booking-spa\"}[10m]))",
+          "expr": "sum by (supplier, interface, code) (rate(supplier_io_error_code_count_total{job=\"trip-booking-spa\"}[10m]))",
           "legendFormat": "{{supplier}} {{interface}} {{code}}",
           "editorMode": "code",
           "range": true
@@ -441,6 +399,842 @@
         }
       },
       "description": "码取供应商原生值不归并(H001083/A201010001/27:invalid-sessionkey/biz:101/http_500)。码义未核实先可见后判定。"
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "无房占比",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 25
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (supplier) (rate(supplier_io_access_count_total{job=\"trip-booking-spa\",status=\"no_inventory\"}[10m])) / sum by (supplier) (rate(supplier_io_access_count_total{job=\"trip-booking-spa\"}[10m]))",
+          "legendFormat": "{{supplier}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "percentunit",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "供应商答了但没房（status=no_inventory）在全部调用里的占比。分母是 sum by(status)，四态互斥穷尽，故可直接相除（O-3.3）。此前 ok 被无条件补记一次，这个比例被系统性低估。"
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "比价查询终态",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 25
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "editorMode": "code",
+          "range": true,
+          "expr": "sum by (supplier, status) (rate(pricing_supplier_query_count_total{job=\"trip-booking-spa\"}[5m]))",
+          "legendFormat": "{{supplier}} {{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "比价链路向供应商发起的查价，按终态切片。此前只有一个不可加的 outcome=all，算不出成功率（O-3.3 已修）。"
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "原始查询（供应商侧）",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 33
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (supplier) (rate(supplier_io_original_query_count_total{job=\"trip-booking-spa\"}[5m]))",
+          "legendFormat": "{{supplier}} qps",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "B",
+          "expr": "sum by (supplier) (rate(supplier_io_original_query_time_sum{job=\"trip-booking-spa\"}[5m])) / sum by (supplier) (rate(supplier_io_original_query_time_count{job=\"trip-booking-spa\"}[5m]))",
+          "legendFormat": "{{supplier}} 平均耗时 ms",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
+    },
+    {
+      "id": 40,
+      "type": "timeseries",
+      "title": "调用重试次数（次/分钟）",
+      "description": "重试不是一次新的调用结果，单独计。重试涨而失败没涨，说明问题被重试盖住了；两者一起涨才是真的在恶化。",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 33
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (supplier, interface) (rate(supplier_io_retry_count_total{job=\"trip-booking-spa\"}[5m])) * 60",
+          "legendFormat": "{{supplier}} {{interface}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 101,
+      "type": "row",
+      "title": "刷价（refresh_*）",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      },
+      "panels": []
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "刷价产出（行/分钟）",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 42
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (supplier) (rate(refresh_onsale_count_total{job=\"trip-booking-spa\"}[10m]))* 60",
+          "legendFormat": "{{supplier}} onsale 现货",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "B",
+          "expr": "sum by (supplier) (rate(refresh_borrowed_count_total{job=\"trip-booking-spa\"}[10m]))* 60",
+          "legendFormat": "{{supplier}} borrowed 借用",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "C",
+          "expr": "sum by (supplier) (rate(refresh_demoted_count_total{job=\"trip-booking-spa\"}[10m]))* 60",
+          "legendFormat": "{{supplier}} demoted 降级",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "D",
+          "expr": "sum by (supplier) (rate(refresh_empty_count_total{job=\"trip-booking-spa\"}[10m]))* 60",
+          "legendFormat": "{{supplier}} empty 空",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "E",
+          "expr": "sum by (supplier) (rate(refresh_failed_count_total{job=\"trip-booking-spa\"}[10m]))* 60",
+          "legendFormat": "{{supplier}} failed 失败",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "F",
+          "expr": "sum by (supplier) (rate(refresh_rows_count_total{job=\"trip-booking-spa\"}[10m]))* 60",
+          "legendFormat": "{{supplier}} rows 总行",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "failed/rows 就是刷价失败率的分子分母。"
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "刷价轮次耗时",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 42
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (supplier) (rate(refresh_round_time_sum{job=\"trip-booking-spa\"}[10m])) / sum by (supplier) (rate(refresh_round_time_count{job=\"trip-booking-spa\"}[10m]))",
+          "legendFormat": "{{supplier}} 平均",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "B",
+          "expr": "max by (supplier) (refresh_round_time_max{job=\"trip-booking-spa\"})",
+          "legendFormat": "{{supplier}} 窗口最大",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "ms",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "见 docs/observability.md §4；指标解释在 MetricNames 对应常量的注释里。"
+    },
+    {
+      "id": 42,
+      "type": "timeseries",
+      "title": "本轮进度（已处理 / 共）",
+      "description": "其余 refresh_* 都在轮末一次上报，一轮几分钟里画出来是平线甚至是 0。这两条是轮内实时进度，调速后不必等一轮结束就能看出效果。",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 50
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "refresh_inflight_done_value{job=\"trip-booking-spa\"}",
+          "legendFormat": "{{supplier}} 档{{priority}} 已处理",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "B",
+          "expr": "refresh_inflight_size_value{job=\"trip-booking-spa\"}",
+          "legendFormat": "{{supplier}} 档{{priority}} 共",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 50,
+      "type": "timeseries",
+      "title": "刷价清单里还能报出价的店",
+      "description": "清单里当前还能报出价的店 ÷ 清单里的店，按家不按行：分子 refresh_queue_onsale_hotels_value、分母 refresh_queue_hotels_value，十分钟采一次。「有货」＝这家至少有一个住期停在业务档、且刷过至少一次（人工停用位 9、无货位 10+ 都不算）。刷价那几个按行的指标看不出覆盖面——无货的店被调档沉进了慢车道，快档刷出来几乎全是有货。口径与验收基线见 docs/price-refresh.md F-2.6。两种读数不是故障：闸没开的家恒为 0；从不答「无货」的家恒为 100%（不沉档即不减）。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 50
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (supplier) (refresh_queue_onsale_hotels_value{job=\"trip-booking-spa\"}) / sum by (supplier) (refresh_queue_hotels_value{job=\"trip-booking-spa\"})",
+          "legendFormat": "{{supplier}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "min"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 102,
+      "type": "row",
+      "title": "验价（check_price_* · 下单前这一步）",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 58
+      },
+      "panels": []
+    },
+    {
+      "id": 45,
+      "type": "timeseries",
+      "title": "验价终态（次/分钟）",
+      "description": "一次验价的结论。RATE_DEAD 该重新查价、SOLD_OUT 该告知满房，两者处置相反，必须分开看。由验价模板统一上报，新接一家自动出现。",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 59
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (supplier, outcome) (rate(check_price_outcome_count_total{job=\"trip-booking-spa\"}[5m])) * 60",
+          "legendFormat": "{{supplier}} {{outcome}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 46,
+      "type": "timeseries",
+      "title": "换票结果（次/分钟）",
+      "description": "客人点的那张票没了之后，按 productKey 找等价新票的结果。没换成的原因要能分辨：没有等价票、超出价格容差、上游没带 productKey。",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 59
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (supplier, outcome) (rate(check_price_resolve_count_total{job=\"trip-booking-spa\"}[5m])) * 60",
+          "legendFormat": "{{supplier}} {{outcome}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 47,
+      "type": "timeseries",
+      "title": "验价即刷回写（次/分钟）",
+      "description": "验价拿到的现货顺手写回缓存。写成功即缓存被即时纠正；长期为 0 说明这条即时通道没在工作。",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 67
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (supplier, outcome) (rate(check_price_fresh_write_count_total{job=\"trip-booking-spa\"}[5m])) * 60",
+          "legendFormat": "{{supplier}} {{outcome}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 48,
+      "type": "timeseries",
+      "title": "逐日价与总价是否对得上（次/分钟）",
+      "description": "验价时核对逐日价之和与总价。对不上说明取价口径有问题，会直接导致成本落账错。",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 67
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "spa-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "spa-prom"
+          },
+          "refId": "A",
+          "expr": "sum by (supplier, outcome) (rate(validate_day_price_align_count_total{job=\"trip-booking-spa\"}[5m])) * 60",
+          "legendFormat": "{{supplier}} {{outcome}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
     }
   ]
 }
