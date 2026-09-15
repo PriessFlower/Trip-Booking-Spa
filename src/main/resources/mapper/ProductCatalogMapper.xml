@@ -38,7 +38,8 @@
                supplier_room_id,
                supplier_product_name,
                meal_signature,
-               cancel_class
+               cancel_class,
+               occupancy
           FROM supplier_product_base
          WHERE del = 0
            AND supplier_id = #{supplierId}

@@ -88,6 +88,7 @@ public class ProductAttributeReader {
                         .productName(str(row.get("supplier_product_name")))
                         .mealSignature(str(row.get("meal_signature")))
                         .cancelClass(str(row.get("cancel_class")))
+                        .occupancy(str(row.get("occupancy")))
                         .build();
                 result.put(key, attr);
                 putLocal(cacheKey(supplierId, key), attr);
@@ -156,6 +157,9 @@ public class ProductAttributeReader {
         private String mealSignature;
         /** {@code CancelClass} 名，如 {@code FREE_CANCELLABLE} */
         private String cancelClass;
+
+        /** 占用规范串，如 {@code 2}、{@code 2-9,4}。与上面两项同为等价类成分（R-2.10） */
+        private String occupancy;
 
         public Room toRoom() {
             return Room.builder().roomId(roomId).roomName(productName).build();

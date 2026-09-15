@@ -1,6 +1,7 @@
 package com.trip.booking.spa.gateway.application.pricing;
 
 import com.trip.booking.spa.gateway.domain.pricing.PriceQuery;
+import com.trip.booking.spa.gateway.domain.product.Product;
 import com.trip.booking.spa.gateway.domain.supplier.SupplierSourceEnum;
 import com.trip.booking.spa.platform.observability.CallStatus;
 import com.trip.booking.spa.platform.observability.MetricNames;
@@ -24,6 +25,9 @@ public abstract class AbstractProductSyncSupportService implements ProductSyncSe
     @Override
     public PricingResult queryPrice(PriceQuery priceReq) {
         PricingResult result = safeQuery(priceReq);
+        // 等价类成分拓到出参上（R-2.10）。收在模板里：新接一家自动具备，
+        // 而各家自己填必然漏——漏了不报错，只是上游那几个字段恒空
+        result.products().forEach(Product::stampEquivalence);
         recordSupplierQuery(priceReq, result);
         return result;
     }
